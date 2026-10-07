@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Module>
+  <Name value="Bannerlord Agents"/>
+  <Id value="BannerlordAgents"/>
+  <Version value="v0.1.0"/>
+  <DefaultModule value="false"/>
+  <ModuleCategory value="Singleplayer"/>
+  <ModuleType value="Community"/>
+  <DependedModules>
+    <DependedModule Id="Native" Optional="false"/>
+    <DependedModule Id="SandBoxCore" Optional="false"/>
+    <DependedModule Id="Sandbox" Optional="false"/>
+    <DependedModule Id="TAOM" Optional="true"/>
+    <DependedModule Id="TAOM_Map" Optional="true"/>
+  </DependedModules>
+  <DependedModuleMetadatas>
+    <DependedModuleMetadata id="Native" order="LoadBeforeThis"/>
+    <DependedModuleMetadata id="SandBoxCore" order="LoadBeforeThis"/>
+    <DependedModuleMetadata id="Sandbox" order="LoadBeforeThis"/>
+    <DependedModuleMetadata id="TAOM.Dependencies" order="LoadBeforeThis" optional="true"/>
+    <DependedModuleMetadata id="TAOM" order="LoadBeforeThis" optional="true"/>
+    <DependedModuleMetadata id="TAOM_Map" order="LoadBeforeThis" optional="true"/>
+  </DependedModuleMetadatas>
+  <SubModules>
+    <SubModule>
+      <Name value="BannerlordAgents"/>
+      <DLLName value="BannerlordAgents.dll"/>
+      <SubModuleClassType value="BannerlordAgents.SubModule"/>
+      <Tags/>
+    </SubModule>
+  </SubModules>
+  <Xmls/>
+</Module>

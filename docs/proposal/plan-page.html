@@ -1,0 +1,1045 @@
+<title>Bannerlord Agents Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+:root{
+  --ground:#F1F2EC;
+  --surface:#FAFAF6;
+  --ink:#1C201A;
+  --muted:#5A6154;
+  --line:#D6DACE;
+  --olive:#4A5B28;
+  --olive-soft:#E2E8D1;
+  --brass:#8C6414;
+  --brass-soft:#F1E6CA;
+  --display:"Barlow Condensed","Arial Narrow","Roboto Condensed",Arial,sans-serif;
+  --sans:"Public Sans",-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#131611;
+    --surface:#1A1E17;
+    --ink:#E3E6DA;
+    --muted:#A1A797;
+    --line:#2E3428;
+    --olive:#A8BE73;
+    --olive-soft:#25301A;
+    --brass:#D8AD56;
+    --brass-soft:#382D16;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#131611;
+  --surface:#1A1E17;
+  --ink:#E3E6DA;
+  --muted:#A1A797;
+  --line:#2E3428;
+  --olive:#A8BE73;
+  --olive-soft:#25301A;
+  --brass:#D8AD56;
+  --brass-soft:#382D16;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--olive);text-underline-offset:2px}
+a:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:2px}
+
+.page{max-width:1180px;margin:0 auto;padding-inline:clamp(16px,4vw,40px);padding-block:40px 64px}
+.top{display:grid;gap:12px;padding-bottom:28px;border-bottom:1px solid var(--line)}
+.label{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(42px,6vw,60px);line-height:1;letter-spacing:.005em;margin:0;text-wrap:balance}
+.lead{font-size:18px;line-height:1.5;max-width:64ch;margin:0}
+.meta{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:0}
+
+.grid{display:grid;grid-template-columns:210px minmax(0,1fr);gap:clamp(24px,4vw,56px);padding-top:28px}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:26px;font-size:14px}
+.dates{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.dates li{display:grid;gap:1px;margin:0}
+.dates b{font-family:var(--display);font-weight:600;font-size:18px;line-height:1.15}
+.dates span{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.dates .due b{color:var(--brass)}
+.roster{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.roster li{margin:0;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.roster b{font-family:var(--display);font-weight:600;font-size:18px;line-height:1.15}
+.toc{display:flex;flex-direction:column;gap:1px;margin-top:8px}
+.toc a{color:var(--ink);text-decoration:none;padding:4px 8px;margin-left:-8px;border-radius:3px}
+.toc a:hover{background:var(--olive-soft);color:var(--olive)}
+
+main{min-width:0;max-width:800px}
+section{padding-block:8px 28px;scroll-margin-top:16px}
+section + section{border-top:1px solid var(--line);padding-top:32px}
+h2{font-family:var(--display);font-weight:600;font-size:34px;line-height:1.05;margin:0 0 14px;text-wrap:balance}
+h3{font-family:var(--display);font-weight:600;font-size:22px;line-height:1.15;margin:26px 0 10px;text-wrap:balance}
+h4{font-family:var(--display);font-weight:600;font-size:18px;margin:18px 0 8px}
+p{margin:0 0 14px;max-width:68ch}
+ul,ol{margin:0 0 14px;padding-left:22px}
+li{margin:5px 0}
+li > ul{margin:4px 0 0}
+blockquote{margin:6px 0 10px;padding:2px 0 2px 14px;border-left:2px solid var(--line);color:var(--ink);font-style:italic;max-width:66ch}
+.c{font-family:var(--mono);font-size:.8em;text-decoration:none;font-style:normal}
+.c:hover{text-decoration:underline}
+
+.howto{background:var(--olive-soft);border-radius:4px;padding:14px 16px;margin:0 0 28px}
+.howto p{margin:0;max-width:none}
+.howto .label{color:var(--olive);margin-bottom:4px}
+
+dl.facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:12px 22px;margin:0}
+dl.facts dt{font-family:var(--mono);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding-top:4px}
+dl.facts dd{margin:0}
+@media (max-width:560px){
+  dl.facts{grid-template-columns:1fr;gap:2px}
+  dl.facts dd{margin-bottom:12px}
+}
+
+.tbl{overflow-x:auto;margin:8px 0 20px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;line-height:1.45}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+thead th{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--ground)}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
+tbody th{font-weight:600}
+tbody th.verb{font-family:var(--mono);font-weight:500;color:var(--olive);white-space:nowrap}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.total td{font-weight:600;background:var(--ground)}
+tr.split td{background:var(--ground);font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-block:6px}
+
+.chip{display:inline-block;font-family:var(--mono);font-size:11.5px;line-height:1.5;padding:1px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent;font-style:normal}
+.chip.solid{background:var(--olive-soft);color:var(--olive)}
+.chip.outline{border-color:var(--olive);color:var(--olive)}
+.chip.brass{border-color:var(--brass);color:var(--brass)}
+.chip.quiet{border-color:var(--line);color:var(--muted)}
+.chip.gate{background:var(--brass-soft);color:var(--brass);white-space:normal}
+
+.figure{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:14px;margin:8px 0 8px}
+.figure svg{display:block;width:100%;min-width:740px;height:auto}
+.figure.small svg{min-width:640px}
+.figcap{font-size:13.5px;color:var(--muted);margin:0 0 22px}
+.dg .box{fill:var(--surface);stroke:var(--line);stroke-width:1.3}
+.dg .box.hl{fill:var(--olive-soft);stroke:var(--olive)}
+.dg .box.agent{fill:var(--olive-soft);stroke:var(--olive)}
+.dg .box.dash{fill:var(--surface);stroke:var(--muted);stroke-dasharray:4 3}
+.dg .box.pk{fill:var(--brass-soft);stroke:var(--brass)}
+.dg .group{fill:none;stroke:var(--olive);stroke-width:1.2;stroke-dasharray:5 4}
+.dg text{font-family:var(--sans);fill:var(--muted);font-size:12.5px}
+.dg .t{fill:var(--ink);font-weight:600;font-size:14px}
+.dg .a{fill:var(--ink);font-weight:600;font-size:13px}
+.dg .row{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;fill:var(--muted)}
+.dg .grp{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;fill:var(--olive)}
+.dg .ln{stroke:var(--muted);stroke-width:1.4;fill:none}
+.dg .poke{stroke:var(--brass);stroke-width:1.4;fill:none;stroke-dasharray:4 3}
+.dg .ahp{fill:var(--muted)}
+.dg .ahb{fill:var(--brass)}
+.dg .note{font-size:11.5px}
+
+.hw{border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:14px 16px;margin:0 0 24px}
+.hw .label{margin-bottom:10px}
+
+ol.comp{list-style:none;padding:0;margin:0;counter-reset:c;display:grid;gap:22px}
+ol.comp > li{counter-increment:c;display:grid;grid-template-columns:30px minmax(0,1fr);gap:0 10px;margin:0}
+ol.comp > li::before{content:counter(c);font-family:var(--display);font-weight:700;font-size:26px;line-height:1.05;color:var(--olive)}
+ol.comp h3{margin:0 0 6px;font-size:21px}
+ol.comp ul{margin:0}
+
+ol.steps{list-style:none;padding:0;margin:6px 0 14px;counter-reset:s;display:grid;gap:8px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;margin:0}
+ol.steps li::before{content:counter(s);font-family:var(--mono);font-size:12px;color:var(--brass);border:1px solid var(--brass);border-radius:999px;width:22px;height:22px;display:grid;place-items:center;margin-top:1px}
+
+.spectrum{margin:8px 0 22px}
+.axis{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.axis i{flex:1;height:1px;background:var(--muted);position:relative}
+.axis i::after{content:"";position:absolute;right:-1px;top:-4px;border-left:7px solid var(--muted);border-top:4.5px solid transparent;border-bottom:4.5px solid transparent}
+.levels{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.levels li{margin:0;border:1px solid var(--line);background:var(--surface);border-radius:4px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.levels li.main{border-color:var(--olive);background:var(--olive-soft)}
+.levels .lv{font-family:var(--display);font-weight:600;font-size:19px;line-height:1.1;margin:0}
+.levels dl{margin:0;display:grid;gap:1px}
+.levels dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.levels dd{margin:0 0 6px;font-size:14px;line-height:1.35}
+.levels .chip{align-self:flex-start;margin-top:auto}
+@media (max-width:720px){.levels{grid-template-columns:1fr 1fr}}
+@media (max-width:440px){.levels{grid-template-columns:1fr}}
+
+.rq{list-style:none;padding:0;display:grid;gap:8px}
+.rq li{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;margin:0}
+.rq b{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--olive);padding-top:2px}
+.rq li.s b{color:var(--muted)}
+
+.hours{display:flex;align-items:center;gap:8px}
+.track{width:64px;height:6px;background:var(--line);border-radius:3px;overflow:hidden;flex:none}
+.track i{display:block;height:100%;background:var(--olive)}
+
+.budget{margin:6px 0 22px}
+.bar{display:flex;height:30px;border-radius:3px;overflow:hidden;border:1px solid var(--line)}
+.bar span{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11.5px;color:var(--olive);background:var(--olive-soft);border-right:2px solid var(--surface);min-width:0}
+.bar span.slack{background:var(--surface);color:var(--muted);border-right:0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0 0;padding:0;list-style:none;font-size:13.5px;color:var(--muted)}
+.legend li{margin:0}
+.legend b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+
+.outline article{padding:20px 0 6px;border-top:1px solid var(--line)}
+.outline article:first-of-type{border-top:0;padding-top:4px}
+.ah{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.ah .n{font-family:var(--display);font-weight:700;font-size:28px;line-height:1;color:var(--olive);min-width:18px}
+.ah h3{margin:0;font-size:23px}
+
+.refs{padding-left:36px;font-size:14.5px;line-height:1.5}
+.refs li{margin:7px 0}
+.refs li::marker{font-family:var(--mono);color:var(--muted);font-size:12.5px}
+.refs a{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+.refs li:target{background:var(--brass-soft);border-radius:3px}
+
+.open{list-style:none;padding:0;display:grid;gap:10px}
+.open li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;margin:0}
+.open li::before{content:"";width:14px;height:14px;margin-top:4px;border:1.5px solid var(--brass);border-radius:3px}
+
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+@media (max-width:880px){
+  .grid{grid-template-columns:1fr;gap:8px}
+  .rail{position:static;gap:16px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+  .dates{flex-direction:row;flex-wrap:wrap;gap:12px 24px}
+  .roster{flex-direction:row;flex-wrap:wrap;gap:6px 20px}
+  .toc{flex-direction:row;flex-wrap:wrap;gap:2px 14px}
+  .toc a{margin-left:0;padding:3px 0}
+}
+</style>
+
+<div class="page">
+  <header class="top">
+    <p class="label">CS 329M · Machine Programming · Fall 2026</p>
+    <h1>Bannerlord Agents Plan</h1>
+    <p class="lead">Several Opus 5.5 agents each command a faction on Bannerlord's campaign map, in war and in diplomacy. Each sees only what its faction can see, and is poked when a player would notice something. The model sets strategy and writes the deterministic tools that carry it out. The study asks where the line between model and code should sit, and which strategist is most feasible for an everyday gamer: a frontier model on a personal subscription, a small model on the gamer's own GPU, or a hybrid of the two.</p>
+    <p class="meta">Prepared Oct 5, 2026 for Mert Karabiyik and the drafting chat · Revised for diplomacy, tool writing, the everyday-gamer comparison and course connections · References checked Oct 5, 2026</p>
+  </header>
+
+  <div class="grid">
+    <aside class="rail" aria-label="Key dates, agents and contents">
+      <div>
+        <p class="label">Key dates</p>
+        <ul class="dates">
+          <li class="due"><b>Proposal</b><span>Tue Oct 6, 5:59pm PT</span></li>
+          <li><b>Checkpoint</b><span>Tue Oct 27</span></li>
+          <li><b>Break</b><span>Nov 23–27</span></li>
+          <li><b>Final report and talk</b><span>Tue Dec 1</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="label">Agents</p>
+        <ul class="roster">
+          <li><b>Mordor</b><span class="chip solid">Core</span></li>
+          <li><b>Harad</b><span class="chip solid">Core</span></li>
+          <li><b>Rhûn</b><span class="chip solid">Core</span></li>
+          <li><b>Gondor</b><span class="chip quiet">Stretch</span></li>
+        </ul>
+      </div>
+      <nav aria-label="Contents">
+        <p class="label">On this page</p>
+        <div class="toc">
+          <a href="#decisions">Decisions</a>
+          <a href="#pillars">Pillar case</a>
+          <a href="#course">Course connections</a>
+          <a href="#system">System</a>
+          <a href="#experiments">Experiments</a>
+          <a href="#gamer">The everyday gamer</a>
+          <a href="#timeline">Timeline</a>
+          <a href="#risks">Risks</a>
+          <a href="#outline">Proposal outline</a>
+          <a href="#references">References</a>
+          <a href="#open">Open items</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main>
+      <div class="howto">
+        <p class="label">For the drafting chat</p>
+        <p>The plan is settled apart from the open items at the end. Write each proposal section from its outline, and cite by the numbers in References. Keep the proposal to 3–5 pages, not counting references.</p>
+      </div>
+
+      <section id="decisions">
+        <h2>Decisions</h2>
+        <dl class="facts">
+          <dt>Team</dt><dd>Solo, 4 units. Mert Karabiyik, mertk@stanford.edu.</dd>
+          <dt>Agents</dt><dd>One agent per faction. The default roster is a coalition of Mordor, Harad and Rhûn. A Gondor agent joins for head-to-head runs as a stretch goal. Every other realm stays on the stock AI.</dd>
+          <dt>Scope</dt><dd>Campaign decisions and diplomacy. No control during battles.</dd>
+          <dt>Vision</dt><dd>Like a player's. An agent sees only what its faction's parties and holdings can spot, plus the notices a ruler receives.</dd>
+          <dt>Decisions</dt><dd>Pokes, not a clock. An agent is poked when a new army comes into view, a notice or a diplomatic offer arrives, a tool asks for orders, an order finishes, or a quiet day passes.</dd>
+          <dt>Control</dt><dd>Four levels, all in the core study: the stock AI; the model with our tools; the model writing its own tools on top of ours, which is the main system; and the model making every move.</dd>
+          <dt>Strategists</dt><dd>Opus 5.5 and Sonnet 5 on a personal subscription, a small local model at two memory sizes, and a hybrid of the two. The study ends with a recommendation for the everyday gamer.</dd>
+          <dt>Teacher</dt><dd>Opus 5.5. Its decisions and its tools train and equip the student.</dd>
+          <dt>Pitch</dt><dd>The proposal is the pitch. There is no separate message to the instructor.</dd>
+          <dt>Framing</dt><dd>Adaptation leads. Intention and invention are both core: the model turns stated goals into strategy, and writes the tools that carry it out. Data sits underneath.</dd>
+          <dt>Game</dt><dd>Bannerlord 1.4.8 with the TAOM v2.0.26 Lord of the Rings pack.</dd>
+        </dl>
+      </section>
+
+      <section id="pillars">
+        <h2>The pillar case</h2>
+        <p>The course frames machine programming as three pillars, with data underneath all of them [<a class="c" href="#r1">1</a>].</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Pillar</th><th scope="col">How the project hits it</th><th scope="col">Role</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Adaptation</th><td>A coalition of agents that exists only on a cloud frontier model is re-implemented for one consumer GPU, which has to serve several agents while it renders the game. Tools cut how often the model is called, which helps it fit. The study ends by matching each strategist option to the hardware and subscriptions everyday gamers actually have [<a class="c" href="#r1">1</a>][<a class="c" href="#r4">4</a>][<a class="c" href="#r5">5</a>].</td><td><span class="chip solid">Lead</span></td></tr>
+              <tr><th scope="row">Intention</th><td>Each faction gets its goal in plain language, such as a cautious Harad that holds its border while Mordor attacks. The model turns that goal into strategy and diplomacy. In the paper's words, intention is "the ability of the machine to understand the programmer's goals through more natural forms of interaction" [<a class="c" href="#r1">1</a>].</td><td><span class="chip outline">Core</span></td></tr>
+              <tr><th scope="row">Invention</th><td>The model writes the deterministic tools its strategy needs, in a small behavior language. Each tool is checked and tested before it runs [<a class="c" href="#r52">52</a>][<a class="c" href="#r7">7</a>]. Tools are discrete state machines, the kind of program the paper says synthesis handles better than neural networks [<a class="c" href="#r1">1</a>].</td><td><span class="chip outline">Core</span></td></tr>
+              <tr><th scope="row">Data</th><td>The training set is a semi-trusted teacher's decisions, tagged by faction. Pokes give natural decision points. The game supplies a built-in check, each faction's outcome, so decisions are filtered by result before training [<a class="c" href="#r21">21</a>][<a class="c" href="#r22">22</a>]. Training on model output carries a collapse risk [<a class="c" href="#r23">23</a>].</td><td><span class="chip brass">Foundation</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="course">
+        <h2>Course connections</h2>
+        <p>The split between the model and deterministic code, and the model's tool writing, both rest on the first two weeks of the course.</p>
+
+        <h3>Week 2 lecture: constrained stochasticity</h3>
+        <p>The Sep 29 lecture is titled "Current AI News, Geometrically Constrained Stochasticity, and Tour of the State of MP" [<a class="c" href="#r61">61</a>]. Gottschlich's written version argues that "language models are stochastic by mathematical necessity (you can't get convergence without it)". What gets called hallucination is bounded error inside that envelope. He presents Deterministic Intent Folding (DIF) as "a deterministic complement" to language models, applied in three places: pre-model data curation, in-epoch error correction, and inference fidelity, a discriminator-style check on model output [<a class="c" href="#r58">58</a>].</p>
+        <p>The project builds that complement into a game agent. The strategist stays stochastic, and deterministic structure bounds it at three points:</p>
+        <ul>
+          <li><b>What it may output:</b> constrained decoding plus a check on every order and every tool before anything runs. This mirrors DIF's inference fidelity.</li>
+          <li><b>What the student learns from:</b> outcome-filtered training data, which mirrors pre-model data curation.</li>
+          <li><b>What actually moves the armies:</b> deterministic tools, some written by the model itself.</li>
+        </ul>
+        <p>The control-level study measures what each step along that line buys. When a student is unsure, it hands the decision to the teacher or keeps its current orders, much as DIF can decline to answer.</p>
+
+        <h3>Week 1 reading: The Three Pillars of Machine Programming</h3>
+        <p>Section 3.2, on invention through machine learning:</p>
+        <blockquote>"However, when it comes to synthesizing programs with significant control structure and that require more discrete reasoning, the techniques from the synthesis community tend to outperform the neural network based techniques." [<a class="c" href="#r1">1</a>]</blockquote>
+        <p>This is the reason for the split. Patrolling, sheltering and relieving a siege are discrete, control-heavy behavior, so they live in programs: tools that we or the model write. The neural model is kept for the judgment calls between them. Letting the model make every move is the comparison that tests the claim.</p>
+
+        <h3>Week 1 reading: Challenges and Paths Towards AI for Software Engineering</h3>
+        <p>Section 3.4, on long-horizon code planning:</p>
+        <blockquote>"The challenge of library learning is to derive a library of useful abstractions from a corpus of programs by abstracting out common reusable features." [<a class="c" href="#r59">59</a>]</blockquote>
+        <p>It adds that a library "must also prioritize ease of use and maintainability, as well as be robust and adaptable to future extensions". The model's tool library is this problem in a game. Each tool is versioned, reused across pokes and runs, and repaired or retired based on its record. Section 3.2 describes LLMs improving code with tool feedback, such as linter or execution feedback. Here the checker, replay tests and in-game results play that role.</p>
+
+        <h3>Where the rest of the course meets the project</h3>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Course item</th><th scope="col">What it brings</th><th scope="col">Where the project uses it</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Week 2 reading: SWE-bench [<a class="c" href="#r60">60</a>]</th><td>A model's patch is judged by running the repository's tests</td><td>A tool the model writes is judged by running it on recorded game states, then in the game</td></tr>
+              <tr><th scope="row">Oct 13 lecture: principles of data [<a class="c" href="#r61">61</a>]</th><td>Ground truth, semi-trust, static and continuous learning</td><td>The teacher's data is semi-trusted and filtered by outcome. The tool library learns continuously, in code.</td></tr>
+              <tr><th scope="row">Oct 27 lecture: performance of MP across cloud, local and hybrid [<a class="c" href="#r61">61</a>]</th><td>Where a model should run</td><td>The everyday-gamer comparison of subscription, local and hybrid strategists</td></tr>
+              <tr><th scope="row">Nov 17 lecture: intent-based programming languages [<a class="c" href="#r61">61</a>]</th><td>Stating what is wanted, not how</td><td>Stated goals in plain language, and the behavior language the model writes tools in</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="system">
+        <h2>System</h2>
+        <p>The system runs two loops. In the play loop, the game bridge watches each faction the way a player would, and pokes that faction's agent when something matters. Between pokes, deterministic tools from a shared library carry out the agent's orders. The agent can add tools of its own to that library. The training loop builds the local student in phase 2.</p>
+        <div class="figure" role="img" aria-label="Play loop: the game exchanges pokes and orders with the game bridge, which has player-like vision and runs the tool library, our tools plus the agents' own, which poke on big events. The bridge sends pokes to the poke scheduler, which keeps a queue per faction and sends them to the Mordor, Harad and Rhûn agents, a coalition with an allied channel; a Gondor agent joins for head-to-head runs. Each agent calls a strategist: Opus 5.5 or Sonnet 5 on a subscription, a local student on one GPU, or a hybrid. Training loop: the scheduler logs every decision from every faction; the log becomes a dataset tagged by faction and goal, which fine-tunes one student that is served to every agent.">
+          <svg class="dg" viewBox="0 0 900 318" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path class="ahp" d="M0,0 L10,5 L0,10 z"></path>
+              </marker>
+            </defs>
+            <text class="row" x="10" y="14">PLAY LOOP · BOTH PHASES</text>
+
+            <rect class="box" x="10" y="50" width="140" height="84" rx="5"></rect>
+            <text x="80" y="80" text-anchor="middle"><tspan class="t">Bannerlord 1.4.8</tspan><tspan x="80" dy="18">TAOM v2.0.26</tspan><tspan x="80" dy="16">others: stock AI</tspan></text>
+
+            <rect class="box" x="176" y="50" width="140" height="84" rx="5"></rect>
+            <text x="246" y="80" text-anchor="middle"><tspan class="t">Game bridge</tspan><tspan x="246" dy="18">player-like vision</tspan><tspan x="246" dy="16">pokes out, orders in</tspan></text>
+
+            <rect class="box" x="342" y="50" width="140" height="84" rx="5"></rect>
+            <text x="412" y="80" text-anchor="middle"><tspan class="t">Poke scheduler</tspan><tspan x="412" dy="18">a queue per faction</tspan><tspan x="412" dy="16">authority and log</tspan></text>
+
+            <rect class="group" x="500" y="20" width="166" height="114" rx="6"></rect>
+            <text class="grp" x="508" y="14">COALITION · ALLIED CHANNEL</text>
+            <rect class="box agent" x="508" y="26" width="150" height="30" rx="4"></rect>
+            <text class="a" x="583" y="46" text-anchor="middle">Mordor agent</text>
+            <rect class="box agent" x="508" y="62" width="150" height="30" rx="4"></rect>
+            <text class="a" x="583" y="82" text-anchor="middle">Harad agent</text>
+            <rect class="box agent" x="508" y="98" width="150" height="30" rx="4"></rect>
+            <text class="a" x="583" y="118" text-anchor="middle">Rhûn agent</text>
+            <rect class="box dash" x="508" y="140" width="150" height="30" rx="4"></rect>
+            <text x="583" y="160" text-anchor="middle">Gondor agent · arena</text>
+
+            <rect class="box hl" x="684" y="34" width="206" height="122" rx="5"></rect>
+            <text x="787" y="56" text-anchor="middle"><tspan class="t">Strategist</tspan><tspan x="787" dy="21">Opus 5.5 · subscription</tspan><tspan x="787" dy="18">Sonnet 5 · subscription</tspan><tspan x="787" dy="18">Local student · one GPU</tspan><tspan x="787" dy="18">Hybrid</tspan></text>
+
+            <line class="ln" x1="152" y1="92" x2="174" y2="92" marker-start="url(#ah)" marker-end="url(#ah)"></line>
+            <line class="ln" x1="318" y1="92" x2="340" y2="92" marker-start="url(#ah)" marker-end="url(#ah)"></line>
+
+            <line class="ln" x1="484" y1="92" x2="494" y2="92" marker-start="url(#ah)"></line>
+            <line class="ln" x1="494" y1="41" x2="494" y2="155"></line>
+            <line class="ln" x1="494" y1="41" x2="506" y2="41" marker-end="url(#ah)"></line>
+            <line class="ln" x1="494" y1="77" x2="506" y2="77" marker-end="url(#ah)"></line>
+            <line class="ln" x1="494" y1="113" x2="506" y2="113" marker-end="url(#ah)"></line>
+            <line class="ln" x1="494" y1="155" x2="506" y2="155" marker-end="url(#ah)"></line>
+
+            <line class="ln" x1="658" y1="41" x2="670" y2="41"></line>
+            <line class="ln" x1="658" y1="77" x2="670" y2="77"></line>
+            <line class="ln" x1="658" y1="113" x2="670" y2="113"></line>
+            <line class="ln" x1="658" y1="155" x2="670" y2="155"></line>
+            <line class="ln" x1="670" y1="41" x2="670" y2="155"></line>
+            <line class="ln" x1="670" y1="95" x2="682" y2="95" marker-end="url(#ah)"></line>
+
+            <rect class="box pk" x="176" y="228" width="140" height="80" rx="5"></rect>
+            <text x="246" y="258" text-anchor="middle"><tspan class="t">Tool library</tspan><tspan x="246" dy="18">ours + agents' own</tspan><tspan x="246" dy="16">poke on big events</tspan></text>
+            <line class="ln" x1="246" y1="136" x2="246" y2="226" marker-start="url(#ah)" marker-end="url(#ah)"></line>
+            <text class="note" x="254" y="178">orders and tools down</text>
+            <text class="note" x="254" y="194">pokes up</text>
+
+            <text class="row" x="342" y="212">TRAINING LOOP · PHASE 2</text>
+            <line class="ln" x1="412" y1="136" x2="412" y2="200"></line>
+            <line class="ln" x1="412" y1="216" x2="412" y2="226" marker-end="url(#ah)"></line>
+            <text class="note" x="420" y="172">every decision, every faction</text>
+
+            <rect class="box" x="342" y="228" width="140" height="80" rx="5"></rect>
+            <text x="412" y="258" text-anchor="middle"><tspan class="t">Decision log</tspan><tspan x="412" dy="18">one record per poke</tspan><tspan x="412" dy="16">tagged by faction</tspan></text>
+
+            <rect class="box" x="508" y="228" width="150" height="80" rx="5"></rect>
+            <text x="583" y="258" text-anchor="middle"><tspan class="t">Dataset</tspan><tspan x="583" dy="18">faction and goal tags</tspan><tspan x="583" dy="16">split by run</tspan></text>
+
+            <rect class="box" x="684" y="228" width="206" height="80" rx="5"></rect>
+            <text x="787" y="258" text-anchor="middle"><tspan class="t">QLoRA fine-tune</tspan><tspan x="787" dy="18">two student sizes</tspan><tspan x="787" dy="16">game closed</tspan></text>
+
+            <line class="ln" x1="484" y1="268" x2="506" y2="268" marker-end="url(#ah)"></line>
+            <line class="ln" x1="660" y1="268" x2="682" y2="268" marker-end="url(#ah)"></line>
+            <line class="ln" x1="787" y1="226" x2="787" y2="158" marker-end="url(#ah)"></line>
+            <text class="note" x="779" y="196" text-anchor="end">served to every agent</text>
+          </svg>
+        </div>
+        <p class="figcap">Pokes reach an agent when its faction sees or hears something a player would notice, or when a tool asks for new orders. The student inherits the teacher's tool library, so part of the teacher's skill reaches it as code.</p>
+
+        <div class="hw">
+          <p class="label">Target hardware: Mert's laptop</p>
+          <dl class="facts">
+            <dt>Laptop</dt><dd>Lenovo Legion (83F5)</dd>
+            <dt>GPU</dt><dd>NVIDIA RTX 5090 Laptop GPU, 24 GB of video memory (24,463 MiB)</dd>
+            <dt>CPU</dt><dd>Intel Core Ultra 9 275HX, 24 cores</dd>
+            <dt>RAM</dt><dd>31.4 GB</dd>
+            <dt>Disk</dt><dd>35 GB free. Clear space before phase 2.</dd>
+            <dt>Python</dt><dd>Not installed yet. Phase 2 needs a Python machine-learning setup, natively or under WSL2.</dd>
+          </dl>
+        </div>
+
+        <ol class="comp">
+          <li>
+            <div>
+              <h3>Game bridge, a C# mod</h3>
+              <ul>
+                <li><b>Vision:</b> a faction sees what its parties and holdings can spot under the game's own spotting rules, plus the notices a ruler gets: war declared, a holding besieged, raided or taken, an army destroyed, a diplomatic offer. A party that drops out of view stays on as a last-seen position with a time.</li>
+                <li><b>State:</b> the view goes out as a compact text report of about 4–8k tokens, and as JSON for logs and training.</li>
+                <li><b>Execution:</b> orders map to the game's own party commands, and diplomatic actions to the game's own diplomatic actions. The stock AI pauses only for commanders holding an order. Order and tool status go into the next poke.</li>
+                <li><b>Primitive moves:</b> move to, enter, leave, engage, besiege, raid, follow and hold. Tools are built from these, and the every-move comparison uses them directly. An agent can order only its own faction's commanders.</li>
+                <li><b>Run control:</b> a fixed starting save, a 60-day horizon, the player parked far away, and fast-forward on. The game pauses while an agent answers a poke (turn-based mode). Live mode, with no pause, measures whether the agents keep up. The game auto-saves and resumes after a crash.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Pokes</h3>
+              <ul>
+                <li>An agent is poked when:
+                  <ul>
+                    <li>an enemy army comes into its faction's view, for the first time or after a long absence;</li>
+                    <li>the ruler gets a notice or a diplomatic offer;</li>
+                    <li>a tool asks for new orders;</li>
+                    <li>an order finishes or fails;</li>
+                    <li>or a full in-game day passes quietly.</li>
+                  </ul>
+                </li>
+                <li>Pokes that land close together are merged into one, which lists everything that triggered it.</li>
+                <li>In the every-move comparison, no tools absorb small events, so a sighting near any commander also pokes the agent.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Tool library and behavior language</h3>
+              <ul>
+                <li>Every order in the main system is a tool. A tool is a small state machine written in a behavior language of states, conditions, actions, settings and poke rules. Conditions use only what the faction can see. Actions are the primitive moves.</li>
+                <li>The bridge runs each tool every in-game hour, deterministically. It makes the moment-to-moment moves and pokes the strategist only when its rules say the plan may need to change.</li>
+                <li>Our nine starting tools are written in the same language the agent uses. That proves the language is expressive before the agent writes anything, and keeps our tools and the agent's directly comparable.</li>
+              </ul>
+              <div class="tbl">
+                <table>
+                  <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th><th scope="col">Pokes the strategist when</th></tr></thead>
+                  <tbody>
+                    <tr><th scope="row" class="verb">defend</th><td>Patrols around a holding, shelters inside from strong armies, strikes weak ones and breaks weak sieges</td><td>A large army enters the area, a strong force besieges, or strength drops below the floor</td></tr>
+                    <tr><th scope="row" class="verb">besiege</th><td>Marches on a holding, waits for named allies, then besieges and assaults it</td><td>A relief army is sighted, or the siege is won or lost</td></tr>
+                    <tr><th scope="row" class="verb">raid</th><td>Raids villages in an area and avoids armies above a set ratio</td><td>A large army spots it, or the area is stripped</td></tr>
+                    <tr><th scope="row" class="verb">hunt</th><td>Chases a named army while it stays in view or was seen recently</td><td>Contact is lost, or the target joins a larger force</td></tr>
+                    <tr><th scope="row" class="verb">gather</th><td>Forms an army at a holding from named commanders</td><td>The army is complete, or a member cannot come</td></tr>
+                    <tr><th scope="row" class="verb">screen</th><td>Watches a stretch of border, which widens the faction's view</td><td>A new army is sighted</td></tr>
+                    <tr><th scope="row" class="verb">garrison</th><td>Enters a holding and stays there</td><td>The holding is besieged</td></tr>
+                    <tr><th scope="row" class="verb">rest</th><td>Recovers and recruits at a holding</td><td>Its ranks are full</td></tr>
+                    <tr><th scope="row" class="verb">free</th><td>Hands the commander back to the stock AI</td><td>Never</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="figure small" role="img" aria-label="The defend tool as a state machine. From Patrol, while the area is quiet, it moves to Shelter when a strong army nears, to Strike when a weak enemy is close, and to Relieve when a weak force besieges the holding, returning to Patrol afterwards. Shelter, Strike and Relieve can each poke the strategist: when a large army enters, a strong force besieges, or strength falls below the floor.">
+                <svg class="dg" viewBox="0 0 780 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <defs>
+                    <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                      <path class="ahp" d="M0,0 L10,5 L0,10 z"></path>
+                    </marker>
+                    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                      <path class="ahb" d="M0,0 L10,5 L0,10 z"></path>
+                    </marker>
+                  </defs>
+                  <rect class="box" x="20" y="85" width="140" height="50" rx="5"></rect>
+                  <text x="90" y="106" text-anchor="middle"><tspan class="t">Patrol</tspan><tspan x="90" dy="17">the area is quiet</tspan></text>
+                  <rect class="box" x="320" y="15" width="170" height="50" rx="5"></rect>
+                  <text x="405" y="36" text-anchor="middle"><tspan class="t">Shelter</tspan><tspan x="405" dy="17">a strong army nears</tspan></text>
+                  <rect class="box" x="320" y="85" width="170" height="50" rx="5"></rect>
+                  <text x="405" y="106" text-anchor="middle"><tspan class="t">Strike</tspan><tspan x="405" dy="17">a weak enemy is close</tspan></text>
+                  <rect class="box" x="320" y="155" width="170" height="50" rx="5"></rect>
+                  <text x="405" y="176" text-anchor="middle"><tspan class="t">Relieve</tspan><tspan x="405" dy="17">weak force besieging</tspan></text>
+                  <line class="ln" x1="162" y1="104" x2="318" y2="40" marker-start="url(#ah2)" marker-end="url(#ah2)"></line>
+                  <line class="ln" x1="162" y1="110" x2="318" y2="110" marker-start="url(#ah2)" marker-end="url(#ah2)"></line>
+                  <line class="ln" x1="162" y1="116" x2="318" y2="180" marker-start="url(#ah2)" marker-end="url(#ah2)"></line>
+                  <rect class="box pk" x="600" y="50" width="170" height="120" rx="5"></rect>
+                  <text x="685" y="78" text-anchor="middle"><tspan class="t">Poke the strategist</tspan><tspan x="685" dy="22">a large army enters</tspan><tspan x="685" dy="18">a strong force besieges</tspan><tspan x="685" dy="18">strength below floor</tspan></text>
+                  <line class="poke" x1="492" y1="40" x2="598" y2="85" marker-end="url(#ahb)"></line>
+                  <line class="poke" x1="492" y1="110" x2="598" y2="110" marker-end="url(#ahb)"></line>
+                  <line class="poke" x1="492" y1="180" x2="598" y2="135" marker-end="url(#ahb)"></line>
+                </svg>
+              </div>
+              <p class="figcap">The defend tool runs on its own between pokes. It changes state as its area changes, and pokes the strategist only when the plan itself may need to change. The agent sets the ratios and the radius.</p>
+
+              <h4>Tools the agent writes</h4>
+              <p>When no tool fits its plan, the agent writes one. Examples: a feint that raids one border to pull defenders away before a siege elsewhere, a screen that falls back toward a named fortress, or a defense that holds two holdings with one army.</p>
+              <ol class="steps">
+                <li><span><b>Write.</b> The agent drafts the tool in the behavior language, with a name, a description, settings, and rules for when to poke.</span></li>
+                <li><span><b>Check.</b> A checker confirms that it uses only allowed actions and visible conditions, that its settings are in range, that every state can be reached and left, and that it has at least one poke rule.</span></li>
+                <li><span><b>Test.</b> The tool runs on recorded game states from earlier runs, in the way SWE-bench runs a patch against a repository's tests [<a class="c" href="#r60">60</a>]. The agent sees the transitions it made.</span></li>
+                <li><span><b>Deploy.</b> The tool joins the library, and the agent assigns it to commanders like any other.</span></li>
+                <li><span><b>Repair or retire.</b> Each tool keeps a record of its pokes and results, which the agent sees in later pokes. It revises tools that underperform and retires tools it no longer uses [<a class="c" href="#r59">59</a>].</span></li>
+              </ol>
+              <p>The library persists across pokes and runs, like Voyager's skill library [<a class="c" href="#r7">7</a>]. The agent never runs free code. Everything it writes stays inside a language the bridge can check and run deterministically.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Poke scheduler</h3>
+              <ul>
+                <li>Keeps a queue of pokes for each faction and sends each agent its poke as it arrives. Agents poked at the same moment run in parallel.</li>
+                <li>Each agent has a time limit. If it misses the limit, its commanders keep their current orders and tools.</li>
+                <li>Orders that arrive together are applied in a fixed faction order, so a run can be replayed.</li>
+                <li>Keeps one log for every agent.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Faction agents</h3>
+              <ul>
+                <li>One per faction, each with its own stated goal and its own strategist.</li>
+                <li>The prompt holds the goal, the rules, the tool library, the poke's triggers, the faction's view, and any messages from allies.</li>
+                <li>The output is a JSON list of orders, any new or revised tools, any diplomatic actions, and an optional message to allies. In the every-move comparison, orders are primitive moves.</li>
+                <li>Each order is checked: every id exists, the commander belongs to the agent's faction, and each tool setting is in range. After one retry, the commander keeps its current order.</li>
+                <li><b>Allied channel:</b> one short message per poke to allies, delivered with their next poke and logged. Turning it off is a stretch comparison.</li>
+                <li>The experiments give each faction two goals in turn: aggressive and cautious.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Diplomacy</h3>
+              <ul>
+                <li><b>Actions:</b> declare war, propose peace, propose or leave an alliance, and call an ally to war, as far as the game and the pack allow. The pack fixes some pairs of realms as permanently hostile, and the bridge refuses any action it forbids.</li>
+                <li><b>Pokes:</b> a war declared on the faction, a peace or alliance offer, or an ally's call to war.</li>
+                <li><b>Between agents:</b> the allied channel also carries structured proposals (offer, accept, reject, counter) as well as free text. Realms on the stock AI answer through the game's own rules.</li>
+                <li><b>Measured:</b> wars started and ended, alliances made and broken, treaties kept, and how often each goal escalates. LLM nation agents have been seen escalating in wargames [<a class="c" href="#r51">51</a>], so this is watched closely.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Dataset</h3>
+              <ul>
+                <li>One record per poke: faction, stated goal, control level, triggers, view, orders, tools written, diplomatic actions, message, reasons, latency, tokens and cost.</li>
+                <li>Outcomes are attached later: whether each order succeeded, each faction's change in territory and strength over the next 7 days, and the coalition's result for the run.</li>
+                <li>Train and test sets are split by run, so correlated states from one run never land on both sides.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Distillation and serving</h3>
+              <ul>
+                <li>One shared student, told its faction and goal in the prompt, at two sizes: one that fits beside the game on an 8 GB card, and one that fits on a 16 GB card. Both are fine-tuned with QLoRA [<a class="c" href="#r25">25</a>] on the laptop GPU while the game is closed.</li>
+                <li>The student inherits the teacher's tool library, so part of the teacher's skill reaches it as code instead of weights. The comparison with a student that has only our tools measures how much.</li>
+                <li>Served at 4 or 8 bits beside the game [<a class="c" href="#r26">26</a>][<a class="c" href="#r28">28</a>], with decoding constrained to valid JSON [<a class="c" href="#r32">32</a>]. Agents poked at the same time share the GPU through batched requests [<a class="c" href="#r27">27</a>][<a class="c" href="#r28">28</a>].</li>
+                <li>Variants: outcome-filtered against unfiltered data, and training with or without the reasons [<a class="c" href="#r17">17</a>]. Stretch: one adapter per faction on a single base model [<a class="c" href="#r45">45</a>][<a class="c" href="#r46">46</a>].</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Hybrid strategist</h3>
+              <ul>
+                <li>The local student answers by default.</li>
+                <li>A poke goes to the subscription model when the student's output fails the checks, when the student is unsure (low token probabilities, or two samples disagree), or when the situation is hard: a new war, a diplomatic offer, a large enemy army at a holding, or a siege of a coalition holding.</li>
+                <li>One allowance per session covers every agent, sized to stay within the subscription's usage limits, so the hardest pending pokes go first [<a class="c" href="#r29">29</a>][<a class="c" href="#r30">30</a>][<a class="c" href="#r31">31</a>].</li>
+              </ul>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section id="experiments">
+        <h2>Experiments</h2>
+        <h3>Research questions</h3>
+        <ul class="rq">
+          <li><b>RQ1</b><span>Where should the line between model and code sit? How do outcomes, model calls and reaction time change from our tools, to the model's own tools, to the model making every move?</span></li>
+          <li><b>RQ2</b><span>Can the model write tools that pass the checks and match or beat ours, and does a tool library carry its skill to a smaller model?</span></li>
+          <li><b>RQ3</b><span>Which strategist is most feasible for an everyday gamer: a frontier model on a personal subscription, a small local model, or a hybrid? The comparison weighs quality, pause time, usage limits and hardware.</span></li>
+          <li><b>RQ4</b><span>How many faction agents can one gaming GPU serve beside the game, and at what cost in latency, video memory and frame rate?</span></li>
+          <li><b>RQ5</b><span>Do each faction's stated goals survive distillation, both in how it fights and in its diplomacy?</span></li>
+          <li class="s"><b>Stretch</b><span>How much does player-like vision cost against a full view? Do allied messages help? Can opposing agents negotiate peace in the arena?</span></li>
+        </ul>
+
+        <h3>Control levels</h3>
+        <div class="spectrum">
+          <div class="axis" aria-hidden="true"><span>Game code decides</span><i></i><span>The model decides</span></div>
+          <ol class="levels">
+            <li>
+              <p class="lv">Stock AI</p>
+              <dl><dt>Strategy and diplomacy</dt><dd>Game code</dd><dt>Moves</dt><dd>Game code</dd><dt>Model calls</dt><dd>None</dd></dl>
+              <span class="chip quiet">Baseline</span>
+            </li>
+            <li>
+              <p class="lv">Model with our tools</p>
+              <dl><dt>Strategy and diplomacy</dt><dd>The model</dd><dt>Moves</dt><dd>Our nine tools</dd><dt>Model calls</dt><dd>On pokes</dd></dl>
+              <span class="chip outline">Core</span>
+            </li>
+            <li class="main">
+              <p class="lv">Model writing its own tools</p>
+              <dl><dt>Strategy and diplomacy</dt><dd>The model</dd><dt>Moves</dt><dd>Our tools plus the ones it writes for its strategy</dd><dt>Model calls</dt><dd>On pokes, plus writing and repairing tools</dd></dl>
+              <span class="chip solid">Main system</span>
+            </li>
+            <li>
+              <p class="lv">Model makes every move</p>
+              <dl><dt>Strategy and diplomacy</dt><dd>The model</dd><dt>Moves</dt><dd>The model</dd><dt>Model calls</dt><dd>On every poke, and there are many more</dd></dl>
+              <span class="chip outline">Core</span>
+            </li>
+          </ol>
+        </div>
+
+        <h3>Conditions</h3>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Condition</th><th scope="col">Who decides</th><th scope="col">Runs on</th></tr></thead>
+            <tbody>
+              <tr class="split"><td colspan="3">Control study (RQ1, RQ2)</td></tr>
+              <tr><th scope="row">Stock AI</th><td>Bannerlord's own campaign AI runs the coalition</td><td>The game</td></tr>
+              <tr><th scope="row">Opus 5.5, our tools</th><td>Three agents set strategy and diplomacy, and our tools make the moves</td><td>Subscription</td></tr>
+              <tr><th scope="row">Opus 5.5, its own tools</th><td>The same, and the agents write tools for their strategy. This is the teacher.</td><td>Subscription</td></tr>
+              <tr><th scope="row">Opus 5.5, every move</th><td>Three agents give every order themselves, as primitive moves</td><td>Subscription</td></tr>
+              <tr class="split"><td colspan="3">Strategist study for the everyday gamer (RQ2, RQ3, RQ5)</td></tr>
+              <tr><th scope="row">Sonnet 5</th><td>Three agents on the faster frontier model, with the tool library</td><td>Subscription</td></tr>
+              <tr><th scope="row">Untrained student</th><td>The larger student as released, with the tool library</td><td>Laptop GPU</td></tr>
+              <tr><th scope="row">Distilled student, 8 GB</th><td>The smaller student, with the teacher's tool library</td><td>Laptop GPU, held to an 8 GB card's room</td></tr>
+              <tr><th scope="row">Distilled student, 16 GB</th><td>The larger student, with the teacher's tool library</td><td>Laptop GPU, held to a 16 GB card's room</td></tr>
+              <tr><th scope="row">Distilled student, our tools only</th><td>The larger student with our nine tools and none of the teacher's</td><td>Laptop GPU</td></tr>
+              <tr><th scope="row">Hybrid</th><td>The larger student, with hard pokes going to Opus 5.5 within a usage allowance</td><td>Laptop GPU and subscription</td></tr>
+              <tr class="split"><td colspan="3">Serving (RQ4)</td></tr>
+              <tr><th scope="row">Scaling test</th><td>1, 2, 3 and 4 student agents, with no outcome scoring</td><td>Laptop GPU</td></tr>
+              <tr class="split"><td colspan="3">Stretch</td></tr>
+              <tr><th scope="row">Full view</th><td>Agents see the whole map instead of their faction's view</td><td>As tested</td></tr>
+              <tr><th scope="row">Channel off</th><td>The coalition without the allied channel</td><td>As tested</td></tr>
+              <tr><th scope="row">Arena</th><td>A Mordor agent against a Gondor agent, including peace talks</td><td>Mixed</td></tr>
+              <tr><th scope="row">Every-move student</th><td>A student trained on every-move decisions</td><td>Laptop GPU</td></tr>
+              <tr><th scope="row">Second provider</th><td>Another provider's frontier model on its subscription</td><td>Subscription</td></tr>
+              <tr><th scope="row">Per-faction adapters</th><td>One base model with an adapter per faction</td><td>Laptop GPU</td></tr>
+              <tr><th scope="row">Human-data mix</th><td>A student trained with Mert's own commands mixed in</td><td>Laptop GPU</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Metrics</h3>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Metric</th><th scope="col">How it is measured</th><th scope="col">Answers</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Outcomes against the stock AI</th><td>For the coalition and each faction: holdings taken minus lost, battles won, field strength and armies lost after 60 days, from the same save</td><td class="num">RQ1–RQ3</td></tr>
+              <tr><th scope="row">Model calls</th><td>Pokes per in-game day and orders per poke, at each control level</td><td class="num">RQ1</td></tr>
+              <tr><th scope="row">Reaction time</th><td>In-game hours from an enemy army's first sighting to a changed order</td><td class="num">RQ1</td></tr>
+              <tr><th scope="row">Tool escalations</th><td>How often each tool pokes the strategist, and how often that changes the plan</td><td class="num">RQ1</td></tr>
+              <tr><th scope="row">Tool writing</th><td>Share of written tools that pass the checks and tests, repairs needed, reuse across runs, and results against our tools</td><td class="num">RQ2</td></tr>
+              <tr><th scope="row">Agreement with the teacher</th><td>Exact and verb-only matches per faction on held-out pokes, split by run</td><td class="num">RQ3</td></tr>
+              <tr><th scope="row">Invalid-output rate</th><td>Share of orders and tools that fail the checks</td><td class="num">RQ3</td></tr>
+              <tr><th scope="row">Pause time</th><td>Seconds the game waits for answers per hour of play, in turn-based mode</td><td class="num">RQ3</td></tr>
+              <tr><th scope="row">Keeping up</th><td>Share of pokes answered before the next one arrives, in live mode</td><td class="num">RQ3</td></tr>
+              <tr><th scope="row">Usage</th><td>Model calls and tokens per hour of play, against what a subscription allows</td><td class="num">RQ3</td></tr>
+              <tr><th scope="row">Video memory and frame rate</th><td>Campaign map with each student size loaded, serving 1 to 4 agents, against no model</td><td class="num">RQ3, RQ4</td></tr>
+              <tr><th scope="row">Answer latency and throughput</th><td>Time from a poke to its answer, and pokes answered per minute, for 1 to 4 agents</td><td class="num">RQ4</td></tr>
+              <tr><th scope="row">Goal fidelity</th><td>The gap between each faction's aggressive and cautious goals, in campaigns and in diplomacy, before and after distillation</td><td class="num">RQ5</td></tr>
+              <tr><th scope="row">Diplomacy</th><td>Wars declared and ended, alliances made and broken, treaties kept, and the share of moves that escalate</td><td class="num">RQ5</td></tr>
+              <tr><th scope="row">Coordination</th><td>Conflicting allied orders per poke (two allies on one target, a shared front left empty) and joint operations</td><td class="num">Stretch</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Protocol</h3>
+        <ul>
+          <li>Every run starts from the same save, and every condition gets the same stated goals.</li>
+          <li>The main comparisons get 5 runs each: the teacher against the stock AI, and the hybrid against subscription-only and local-only play. Other conditions get at least 3.</li>
+          <li>A coalition run takes about 1 hour. Runs go overnight, unattended, and subscription runs are spread across days to stay within usage limits.</li>
+          <li>Turn-based mode measures decision quality and pause time. Live mode measures whether the agents keep up, which is where every-move play should suffer most.</li>
+          <li>Smaller cards are emulated by holding the student to the video memory each card has left once the game has taken its share. The scaling test runs 1, 2, 3 and 4 student agents and records latency, memory and frame rate, without scoring outcomes.</li>
+          <li>Every poke is logged with its triggers, so model calls, reaction times and pause time come straight from the log.</li>
+          <li>Outside comparison point: in Civilization V, cloud-run open models setting strategy won about as often as the built-in AI, at about $0.86 per game [<a class="c" href="#r39">39</a>].</li>
+        </ul>
+
+        <h3>Hypotheses</h3>
+        <ol>
+          <li>With tools, ours or its own, Opus 5.5 beats both the stock AI and its own every-move play, with far fewer model calls. Every-move play loses the most in live mode.</li>
+          <li>Most tools the model writes pass the checks after at most one repair, and they match or beat ours on the strategies they were written for.</li>
+          <li>A student given the teacher's tool library keeps more of the teacher's results than the same student with only our tools.</li>
+          <li>For a gamer with an 8–12 GB card, hybrid gives the best balance of quality, pause time and usage.</li>
+          <li>Batching keeps answer latency well below the sum of single-agent latencies, up to 4 agents.</li>
+          <li>One shared student keeps each faction's aggressive and cautious goals distinct, in both its campaigns and its diplomacy.</li>
+        </ol>
+        <p>Analysis reports the mean and spread across runs for the coalition and each faction, with bootstrap intervals, and states plainly how few runs there are.</p>
+      </section>
+
+      <section id="gamer">
+        <h2>The everyday gamer's choice</h2>
+        <p>The study ends with a recommendation for a typical player. In Valve's September 2026 survey, about 80% of Steam users have at least 8 GB of video memory and about half have at least 12 GB [<a class="c" href="#r44">44</a>]. The table below shows the comparison the experiments will fill in. Every entry in it is an expectation to test, not a result.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Strategist</th><th scope="col">What the player needs</th><th scope="col">Expected strength</th><th scope="col">Expected cost</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Opus 5.5 on a subscription</th><td>A subscription and a connection</td><td>The strongest strategy and diplomacy</td><td>The longest pauses, and usage limits in long sessions</td></tr>
+              <tr><th scope="row">Sonnet 5 on a subscription</th><td>A subscription and a connection</td><td>Shorter pauses at frontier quality</td><td>Some loss against Opus 5.5, and the same usage limits</td></tr>
+              <tr><th scope="row">Local student, 8 GB</th><td>A typical gaming card</td><td>Short pauses, no usage limits, works offline</td><td>The weakest play, and it shares the GPU with the game</td></tr>
+              <tr><th scope="row">Local student, 16 GB</th><td>A high-end card</td><td>Better play, still offline</td><td>Out of reach for most players</td></tr>
+              <tr><th scope="row">Hybrid</th><td>A typical card and a subscription</td><td>Most of the frontier model's quality with few calls</td><td>Needs both, and a rule for what counts as hard</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The proposal predicts that hybrid wins for most players (hypothesis 4). It should also say what result would change that: a local student close to the subscription model's results, or pauses short enough that subscription-only play fits a normal session.</p>
+      </section>
+
+      <section id="timeline">
+        <h2>Timeline</h2>
+        <p>Mert does all of the work. Claude Code helps with implementation, which the course allows. The plan comes to about 90 hours.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Week</th><th scope="col">Hours</th><th scope="col">Work</th><th scope="col">Gate</th></tr></thead>
+            <tbody>
+              <tr><td class="num">Oct 5–11</td><td><span class="hours"><span class="num">10</span><span class="track"><i style="width:83%"></i></span></span></td><td>Proposal. Bridge: player-like vision (spotting, last-seen positions, the ruler's notices), pokes, state export, log format.</td><td><span class="chip gate">Proposal due Tue Oct 6, 5:59pm PT</span></td></tr>
+              <tr><td class="num">Oct 12–18</td><td><span class="hours"><span class="num">12</span><span class="track"><i style="width:100%"></i></span></span></td><td>The behavior language and its interpreter; our first three tools in it (defend, besiege, garrison) with their pokes; primitive moves with faction authority; the stock-AI pause; run control.</td><td></td></tr>
+              <tr><td class="num">Oct 19–25</td><td><span class="hours"><span class="num">12</span><span class="track"><i style="width:100%"></i></span></span></td><td>Remaining tools; poke scheduler and allied channel; diplomatic actions and pokes; Opus 5.5 agents with stated goals; first coalition runs.</td><td></td></tr>
+              <tr><td class="num">Oct 26–Nov 1</td><td><span class="hours"><span class="num">12</span><span class="track"><i style="width:100%"></i></span></span></td><td>Checkpoint; tool writing (checker, replay tests, library records); every-move runs; overnight data collection.</td><td><span class="chip gate">Checkpoint Tue Oct 27: the coalition running on our tools and logging, first numbers against the stock AI</span></td></tr>
+              <tr><td class="num">Nov 2–8</td><td><span class="hours"><span class="num">10</span><span class="track"><i style="width:83%"></i></span></span></td><td>Build the dataset; Python setup; local models at the 8 GB and 16 GB sizes; untrained baseline; Sonnet 5 runs; scaling test.</td><td></td></tr>
+              <tr><td class="num">Nov 9–15</td><td><span class="hours"><span class="num">10</span><span class="track"><i style="width:83%"></i></span></span></td><td>QLoRA fine-tuning of both student sizes; offline agreement per faction; the library and our-tools-only variants.</td><td></td></tr>
+              <tr><td class="num">Nov 16–22</td><td><span class="hours"><span class="num">10</span><span class="track"><i style="width:83%"></i></span></span></td><td>In-game runs: distilled and hybrid coalitions against the stock AI; pause time and usage for the gamer comparison; goal and diplomacy tests.</td><td></td></tr>
+              <tr><td class="num">Nov 23–29</td><td><span class="hours"><span class="num">6</span><span class="track"><i style="width:50%"></i></span></span></td><td>Overnight runs finish; analysis, figures, and the everyday-gamer table.</td><td><span class="chip gate">Break Nov 23–27</span></td></tr>
+              <tr><td class="num">Nov 30–Dec 1</td><td><span class="hours"><span class="num">8</span><span class="track"><i style="width:67%"></i></span></span></td><td>Final report and presentation.</td><td><span class="chip gate">Final report and talk Tue Dec 1</span></td></tr>
+              <tr class="total"><td>Total</td><td class="num">90</td><td colspan="2">Gates: the coalition running on our tools and logging by Oct 27; tool writing, phase 2 and the full comparison by Dec 1.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">Risk</th><th scope="col">Fallback</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Scope: a multi-agent system, a control study, tool writing and a distillation study in one</th><td>Core and stretch are split. Phase 1 covers military orders and diplomacy for a three-faction coalition, starting with three tools. If time runs short, the every-move student and every stretch item go first.</td></tr>
+              <tr><th scope="row">Matching a player's vision exactly is hard</th><td>Start from the game's spotting rules and the ruler's notices, and list any gaps in the report. If it slips, run the checkpoint on a full view and record the change.</td></tr>
+              <tr><th scope="row">Big wars cause floods of pokes</th><td>Merge bursts, cap pokes per faction per in-game hour, and send the quiet-day poke only when nothing else happened.</td></tr>
+              <tr><th scope="row">The behavior language may be too weak for useful tools</th><td>Our nine tools are written in it first, which proves it before the agent writes anything. Extend it where they need more.</td></tr>
+              <tr><th scope="row">Tools the model writes may be broken or unsafe</th><td>No free code, a checker and replay tests before anything runs, and a fallback to our own tool.</td></tr>
+              <tr><th scope="row">The pack fixes many realms as permanently hostile</th><td>Measure diplomacy within what the pack allows, and pick realms where it has room.</td></tr>
+              <tr><th scope="row">Agents may escalate wars by default</th><td>Measure escalation for each goal [<a class="c" href="#r51">51</a>], and report it as a finding.</td></tr>
+              <tr><th scope="row">Subscription usage limits cap the number of runs</th><td>Spread runs across days, run the main comparisons first, and report usage per hour of play as a result in its own right.</td></tr>
+              <tr><th scope="row">One laptop cannot reproduce a weaker GPU's speed</th><td>Memory limits can be emulated; speed cannot. Report frame rate and latency for this GPU only, and say so plainly.</td></tr>
+              <tr><th scope="row">Game stability: the pack is heavy, and crashes and long loads happen</th><td>Auto-save and resume. Restart by hand when needed. Use fewer, longer runs.</td></tr>
+              <tr><th scope="row">Agents interact, so outcomes vary more between runs</th><td>Report the coalition and each faction separately. Keep the order of applying orders fixed. Add runs where the spread is wide.</td></tr>
+              <tr><th scope="row">Opus 5.5 may not beat the stock AI</th><td>The adaptation study still holds. It measures what survives the move at whatever level the teacher plays.</td></tr>
+              <tr><th scope="row">Disk: 35 GB free</th><td>Move archives off the laptop before training.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="outline" class="outline">
+        <h2>Proposal outline</h2>
+        <p>One PDF, 3–5 pages not counting references, due Tue Oct 6 at 5:59pm PT. The required sections are title, team, introduction, related work, timeline and references. Design and experiments are optional, but expected at 4 units.</p>
+        <div class="budget" aria-label="Page budget: introduction 0.75, related work 1, design 1.5, experiments 1, timeline 0.5, leaving 0.25 of 5 pages">
+          <div class="bar">
+            <span style="width:15%">0.75</span><span style="width:20%">1</span><span style="width:30%">1.5</span><span style="width:20%">1</span><span style="width:10%">0.5</span><span class="slack" style="width:5%"></span>
+          </div>
+          <ul class="legend">
+            <li><b>0.75</b> Introduction</li>
+            <li><b>1</b> Related work</li>
+            <li><b>1.5</b> Design</li>
+            <li><b>1</b> Experiments</li>
+            <li><b>0.5</b> Timeline</li>
+            <li><b>4.75</b> of 5 pages</li>
+          </ul>
+        </div>
+
+        <article id="o1">
+          <div class="ah"><span class="n">1</span><h3>Title</h3></div>
+          <ul>
+            <li>Strategy from the Model, Moves from the Code: Tool-Writing LLM Commanders from the Cloud to a Gaming GPU</li>
+            <li>Which Strategist for the Everyday Gamer? Cloud, Local and Hybrid LLM Commanders in Mount &amp; Blade II: Bannerlord</li>
+            <li>A War Council on One GPU: Distilling Tool-Writing Faction Commanders for Mount &amp; Blade II: Bannerlord</li>
+          </ul>
+        </article>
+
+        <article id="o2">
+          <div class="ah"><span class="n">2</span><h3>Team</h3></div>
+          <ul>
+            <li>Mert Karabiyik, mertk@stanford.edu, 4 units, solo.</li>
+          </ul>
+        </article>
+
+        <article id="o3">
+          <div class="ah"><span class="n">3</span><h3>Introduction and motivation</h3><span class="chip quiet">0.75 p</span></div>
+          <ul>
+            <li>Hand-written rules run game opponents. State machines, behavior trees and utility AI "have traditionally dominated the control of non-player characters in games" [<a class="c" href="#r13">13</a>]. Bannerlord's campaign AI and diplomacy are of this kind [<a class="c" href="#r43">43</a>].</li>
+            <li>That makes opponents predictable and exploitable [<a class="c" href="#r13">13</a>]. The claim that they also break when content changes, as with mods, needs its own source or should be framed as the author's observation.</li>
+            <li>LLM agents now play hard games well. CICERO reaches human level in Diplomacy [<a class="c" href="#r6">6</a>], LLM agents beat StarCraft II's built-in AI at level 5, "Harder" [<a class="c" href="#r9">9</a>], and Voyager builds its own skills in Minecraft [<a class="c" href="#r7">7</a>].</li>
+            <li>Strategy games have many sides and are fought with words as well as armies. LLM multi-agent systems [<a class="c" href="#r49">49</a>][<a class="c" href="#r50">50</a>] and nation simulations [<a class="c" href="#r47">47</a>][<a class="c" href="#r51">51</a>] exist, but in text-only settings on cloud models.</li>
+            <li>Full and hard games still defeat most models [<a class="c" href="#r10">10</a>][<a class="c" href="#r11">11</a>]. Strong play needs a frontier model in the cloud, and every added faction multiplies the cost and the waiting [<a class="c" href="#r29">29</a>][<a class="c" href="#r30">30</a>].</li>
+            <li>Three design questions follow:
+              <ul>
+                <li>How much should the model decide, and how much should deterministic code? The course frames the stochastic model as needing a deterministic complement [<a class="c" href="#r58">58</a>], and the Three Pillars paper notes that control-heavy programs suit synthesis better than neural networks [<a class="c" href="#r1">1</a>].</li>
+                <li>Can the model write that code itself?</li>
+                <li>Which setup can an everyday gamer actually run?</li>
+              </ul>
+            </li>
+            <li>The comparison is fair to players: the agents see and act like one. AlphaStar was held to a camera view and an action-rate limit for the same reason [<a class="c" href="#r14">14</a>][<a class="c" href="#r57">57</a>].</li>
+            <li>Gaming PCs can host a small model. About 80% of Steam users have at least 8 GB of video memory, 50% at least 12 GB and 37% at least 16 GB [<a class="c" href="#r44">44</a>]. Quantized small models run locally [<a class="c" href="#r25">25</a>][<a class="c" href="#r26">26</a>][<a class="c" href="#r28">28</a>], and one GPU can serve many requests or adapters at once [<a class="c" href="#r27">27</a>][<a class="c" href="#r45">45</a>][<a class="c" href="#r46">46</a>].</li>
+            <li>Game makers already run small models on the player's PC, for conversation, teammates, everyday character behavior and advice to the player [<a class="c" href="#r33">33</a>–<a class="c" href="#r38">38</a>]. None of them hands a faction's strategy or diplomacy to the model.</li>
+            <li>Machine-programming framing: adaptation [<a class="c" href="#r1">1</a>][<a class="c" href="#r4">4</a>][<a class="c" href="#r5">5</a>], intention [<a class="c" href="#r1">1</a>], invention through tools the model writes [<a class="c" href="#r52">52</a>][<a class="c" href="#r7">7</a>][<a class="c" href="#r59">59</a>], and data [<a class="c" href="#r21">21</a>][<a class="c" href="#r22">22</a>][<a class="c" href="#r23">23</a>]. See the pillar case and course connections.</li>
+            <li>State research questions RQ1 to RQ5 from Experiments, and list the stretch questions in one sentence.</li>
+            <li>Contributions:
+              <ul>
+                <li>A multi-agent command harness for Bannerlord with player-like vision, pokes and diplomacy.</li>
+                <li>A behavior language and tool library that the model extends itself.</li>
+                <li>A dataset of a frontier model's campaign and diplomatic decisions for several factions, with outcomes.</li>
+                <li>Three studies: where control should sit; whether the model's tools carry its skill to a small model; and which strategist suits the everyday gamer.</li>
+              </ul>
+            </li>
+          </ul>
+        </article>
+
+        <article id="o4">
+          <div class="ah"><span class="n">4</span><h3>Related work</h3><span class="chip quiet">1 p</span></div>
+          <ul>
+            <li><b>Machine programming, from the course:</b> the three pillars [<a class="c" href="#r1">1</a>]; Gu et al. on tool feedback and library learning [<a class="c" href="#r59">59</a>]; SWE-bench's test-based judging [<a class="c" href="#r60">60</a>]; constrained stochasticity and a deterministic complement [<a class="c" href="#r58">58</a>]. Also autotuning with ATLAS [<a class="c" href="#r4">4</a>] and FFTW [<a class="c" href="#r5">5</a>], Halide's split of what from how [<a class="c" href="#r2">2</a>], and FlashFill as an intention example [<a class="c" href="#r3">3</a>].</li>
+            <li><b>LLM agents in games:</b> CICERO [<a class="c" href="#r6">6</a>], Voyager [<a class="c" href="#r7">7</a>], Generative Agents [<a class="c" href="#r8">8</a>], StarCraft II [<a class="c" href="#r9">9</a>], CivRealm [<a class="c" href="#r10">10</a>], BALROG [<a class="c" href="#r11">11</a>] and a survey [<a class="c" href="#r12">12</a>]. These run on cloud models, and none measures what deployment costs the game.</li>
+            <li><b>Multi-agent LLM systems, diplomacy and nation simulations:</b> AutoGen [<a class="c" href="#r49">49</a>] and a survey of LLM multi-agent systems [<a class="c" href="#r50">50</a>]; CICERO's negotiation [<a class="c" href="#r6">6</a>]; Richelieu's self-evolving Diplomacy agents [<a class="c" href="#r48">48</a>]; WarAgent's simulated world wars [<a class="c" href="#r47">47</a>]; escalation by LLM nation agents in wargames [<a class="c" href="#r51">51</a>]. All are text-only or board-game settings on cloud models.</li>
+            <li><b>Strategy from the model, moves from code:</b> the options framework for temporal abstraction [<a class="c" href="#r56">56</a>]; tool use with ReAct [<a class="c" href="#r54">54</a>] and Toolformer [<a class="c" href="#r55">55</a>]; SwarmBrain, where an LLM sets StarCraft II strategy and a condition-response state machine handles the units [<a class="c" href="#r53">53</a>]; Vox Deorum, which leaves the battles to the built-in AI [<a class="c" href="#r39">39</a>].</li>
+            <li><b>Models that write their own tools:</b> Code as Policies writes robot control code [<a class="c" href="#r52">52</a>]; Voyager keeps a library of skills it wrote [<a class="c" href="#r7">7</a>]; library learning [<a class="c" href="#r59">59</a>].</li>
+            <li><b>Human-like limits for fair comparison:</b> AlphaStar played through a camera view with a capped action rate [<a class="c" href="#r14">14</a>][<a class="c" href="#r57">57</a>].</li>
+            <li><b>Learned game agents:</b> AlphaStar learned from human replays before reinforcement learning [<a class="c" href="#r14">14</a>]. In DAgger, the teacher labels the states the student actually reaches [<a class="c" href="#r15">15</a>].</li>
+            <li><b>Distilling LLMs and agents:</b> knowledge distillation [<a class="c" href="#r16">16</a>]; Distilling step-by-step [<a class="c" href="#r17">17</a>]; Orca [<a class="c" href="#r18">18</a>]; FireAct [<a class="c" href="#r19">19</a>]; AgentTuning [<a class="c" href="#r20">20</a>]. Outcome filtering with STaR [<a class="c" href="#r21">21</a>] and ReST [<a class="c" href="#r22">22</a>]. The data risk of model collapse [<a class="c" href="#r23">23</a>].</li>
+            <li><b>Local inference, serving and routing:</b> LoRA [<a class="c" href="#r24">24</a>], QLoRA [<a class="c" href="#r25">25</a>], GPTQ, published as OPTQ [<a class="c" href="#r26">26</a>], llama.cpp [<a class="c" href="#r28">28</a>] and constrained decoding [<a class="c" href="#r32">32</a>]. Serving many requests and adapters on one GPU with vLLM [<a class="c" href="#r27">27</a>], S-LoRA [<a class="c" href="#r45">45</a>] and Punica [<a class="c" href="#r46">46</a>]. Routing with FrugalGPT [<a class="c" href="#r29">29</a>], Hybrid LLM [<a class="c" href="#r30">30</a>] and RouteLLM [<a class="c" href="#r31">31</a>].</li>
+            <li><b>Closest prior work:</b>
+              <ul>
+                <li>SwarmBrain [<a class="c" href="#r53">53</a>] splits an LLM strategist from a fast state machine for one StarCraft II player, on a cloud model. The model does not write the state machine, and there is no distillation.</li>
+                <li>PUBG Ally [<a class="c" href="#r37">37</a>][<a class="c" href="#r38">38</a>] distills a teacher's behavior into a 2B model sized to the video memory PUBG leaves free. It is a single shooter teammate, and no frame-rate, memory or quality numbers are published.</li>
+                <li>Vox Deorum [<a class="c" href="#r39">39</a>] lets an LLM set Civilization V strategy while the built-in AI fights the battles. Cloud-run models win about as often as the built-in AI, at about $0.86 per game. There is no distillation and no local model.</li>
+                <li>AI Influence [<a class="c" href="#r42">42</a>], a Bannerlord mod, uses an LLM for dialogue and for war or peace decisions, with no evaluation. Acknowledge it.</li>
+                <li>NVIDIA ACE projects [<a class="c" href="#r33">33</a>–<a class="c" href="#r36">36</a>] cover conversation, companions, everyday character behavior and advice to the player.</li>
+                <li>Chen et al. [<a class="c" href="#r40">40</a>] measure a game's frame rate while an LLM runs on the same phone chip, with no game agent. Munk et al. [<a class="c" href="#r41">41</a>] fine-tune a 1B model on GPT-4o output to write game content, with no frame-rate measurement.</li>
+              </ul>
+            </li>
+            <li><b>Positioning sentence:</b> prior work splits strategy from moves for a single player in the cloud with hand-built controllers [<a class="c" href="#r53">53</a>][<a class="c" href="#r39">39</a>], or distills a single teammate onto the player's GPU without publishing the cost to the game [<a class="c" href="#r37">37</a>]. This project runs several faction agents that see and act like players and conduct diplomacy. Its agents write their own deterministic tools. It measures where the line between model and code should sit, and which strategist an everyday gamer can run. Keep "to our knowledge".</li>
+          </ul>
+        </article>
+
+        <article id="o5">
+          <div class="ah"><span class="n">5</span><h3>Potential design</h3><span class="chip quiet">1.5 p</span></div>
+          <ul>
+            <li>Figure 1: the system, with the play loop and the training loop (see System).</li>
+            <li>Figure 2: the defend tool as a state machine, with the transitions that poke the strategist.</li>
+            <li>A short paragraph per component: player-like vision and pokes; the behavior language and tool library, with the tool table; the tool-writing steps; the poke scheduler; the faction agents and allied channel; diplomacy; the dataset; distillation and serving; the hybrid strategist.</li>
+            <li>The four control levels, from the stock AI to the model making every move.</li>
+            <li>One paragraph tying the design to the course: the deterministic complement and constrained stochasticity [<a class="c" href="#r58">58</a>], synthesis for control-heavy programs [<a class="c" href="#r1">1</a>], and library learning [<a class="c" href="#r59">59</a>].</li>
+            <li>Cite SwarmBrain [<a class="c" href="#r53">53</a>] and Vox Deorum [<a class="c" href="#r39">39</a>] as precedent for splitting strategy from moves.</li>
+            <li>A small box with the target hardware.</li>
+          </ul>
+        </article>
+
+        <article id="o6">
+          <div class="ah"><span class="n">6</span><h3>Potential experiments</h3><span class="chip quiet">1 p</span></div>
+          <ul>
+            <li>Dataset: Opus coalition runs × 2 stated goals × 60 days, with estimated counts of pokes, orders, tools written and diplomatic actions per faction. Split by run, with outcome filtering.</li>
+            <li>Three studies in order:
+              <ul>
+                <li>The control study: our tools, the model's own tools and every move, all against the stock AI.</li>
+                <li>The strategist study for the everyday gamer: Sonnet 5, the untrained student, the distilled students at 8 GB and 16 GB, the our-tools-only student, and hybrid.</li>
+                <li>The scaling test.</li>
+              </ul>
+              Stretch conditions in one paragraph.
+            </li>
+            <li>Protocol: the same starting save and goals for every condition; 5 runs for the main comparisons and at least 3 for the rest; about 1 hour per run, overnight; turn-based mode for quality and pause time, live mode for keeping up; smaller cards emulated by memory limits.</li>
+            <li>A metrics table: metric, how it is measured, and which research question it answers.</li>
+            <li>Hypotheses 1 to 6, with Vox Deorum's results as the outside comparison point for cloud win rate and cost [<a class="c" href="#r39">39</a>].</li>
+            <li>The everyday-gamer table as the expected deliverable, with what result would overturn the hybrid prediction.</li>
+            <li>Analysis: mean and spread across runs for the coalition and each faction, bootstrap intervals, and a plain statement of how few runs there are.</li>
+          </ul>
+        </article>
+
+        <article id="o7">
+          <div class="ah"><span class="n">7</span><h3>Timeline</h3><span class="chip quiet">0.5 p</span></div>
+          <ul>
+            <li>The week-by-week table with hours and gates (see Timeline).</li>
+            <li>Mert does all of the work. Claude Code helps with implementation, which the course allows.</li>
+            <li>A short risk paragraph drawn from Risks.</li>
+          </ul>
+        </article>
+
+        <article id="o8">
+          <div class="ah"><span class="n">8</span><h3>References</h3></div>
+          <ul>
+            <li>The verified list below, renumbered in citation order.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="references">
+        <h2>References</h2>
+        <p>Checked Oct 5, 2026 against arXiv, DOI, the course site and official pages. Corrections already applied: AgentTuning is Findings of ACL 2024; GPTQ appeared at ICLR 2023 as OPTQ; RouteLLM's ICLR title says "from Preference Data"; the game-agent survey is accepted at ACM Computing Surveys but has no DOI yet. References 45, 46, 47, 49, 50, 52, 53 and 55 are cited as arXiv preprints, because no venue could be confirmed for them. For reference 56 the DOI resolves, but the record itself could not be opened. The quotes from references 1, 58 and 59 were checked against the papers and the post.</p>
+
+        <h3>Machine programming</h3>
+        <ol class="refs" start="1">
+          <li id="r1">J. Gottschlich, A. Solar-Lezama, N. Tatbul, et al. The Three Pillars of Machine Programming. MAPL 2018, pp. 69–80. <a href="https://doi.org/10.1145/3211346.3211355">doi.org/10.1145/3211346.3211355</a></li>
+          <li id="r2">J. Ragan-Kelley, C. Barnes, A. Adams, et al. Halide: A Language and Compiler for Optimizing Parallelism, Locality, and Recomputation in Image Processing Pipelines. PLDI 2013, pp. 519–530. <a href="https://doi.org/10.1145/2491956.2462176">doi.org/10.1145/2491956.2462176</a></li>
+          <li id="r3">S. Gulwani. Automating String Processing in Spreadsheets Using Input-Output Examples. POPL 2011, pp. 317–330. <a href="https://doi.org/10.1145/1926385.1926423">doi.org/10.1145/1926385.1926423</a></li>
+          <li id="r4">R. C. Whaley, J. J. Dongarra. Automatically Tuned Linear Algebra Software. SC98, 1998. <a href="https://doi.org/10.1109/SC.1998.10004">doi.org/10.1109/SC.1998.10004</a></li>
+          <li id="r5">M. Frigo, S. G. Johnson. The Design and Implementation of FFTW3. Proc. IEEE 93(2):216–231, 2005. <a href="https://doi.org/10.1109/JPROC.2004.840301">doi.org/10.1109/JPROC.2004.840301</a></li>
+        </ol>
+
+        <h3>LLM agents in games</h3>
+        <ol class="refs" start="6">
+          <li id="r6">Meta FAIR Diplomacy Team, A. Bakhtin, N. Brown, et al. Human-level play in the game of Diplomacy by combining language models with strategic reasoning. Science 378(6624):1067–1074, 2022. <a href="https://doi.org/10.1126/science.ade9097">doi.org/10.1126/science.ade9097</a></li>
+          <li id="r7">G. Wang, Y. Xie, Y. Jiang, et al. Voyager: An Open-Ended Embodied Agent with Large Language Models. TMLR, 2024. <a href="https://openreview.net/forum?id=nfx5IutEed">openreview.net/forum?id=nfx5IutEed</a></li>
+          <li id="r8">J. S. Park, J. C. O'Brien, C. J. Cai, et al. Generative Agents: Interactive Simulacra of Human Behavior. UIST 2023. <a href="https://doi.org/10.1145/3586183.3606763">doi.org/10.1145/3586183.3606763</a></li>
+          <li id="r9">W. Ma, Q. Mi, Y. Zeng, et al. Large Language Models Play StarCraft II: Benchmarks and A Chain of Summarization Approach. NeurIPS 2024. <a href="https://arxiv.org/abs/2312.11865">arxiv.org/abs/2312.11865</a></li>
+          <li id="r10">S. Qi, S. Chen, Y. Li, et al. CivRealm: A Learning and Reasoning Odyssey in Civilization for Decision-Making Agents. ICLR 2024. <a href="https://arxiv.org/abs/2401.10568">arxiv.org/abs/2401.10568</a></li>
+          <li id="r11">D. Paglieri, B. Cupiał, S. Coward, et al. BALROG: Benchmarking Agentic LLM and VLM Reasoning On Games. ICLR 2025. <a href="https://arxiv.org/abs/2411.13543">arxiv.org/abs/2411.13543</a></li>
+          <li id="r12">S. Hu, T. Huang, G. Liu, et al. A Survey on Large Language Model-Based Game Agents. arXiv:2404.02039, 2024; accepted to ACM Computing Surveys. <a href="https://arxiv.org/abs/2404.02039">arxiv.org/abs/2404.02039</a></li>
+        </ol>
+
+        <h3>Game AI and imitation</h3>
+        <ol class="refs" start="13">
+          <li id="r13">G. N. Yannakakis, J. Togelius. Artificial Intelligence and Games. Springer, 2018. <a href="https://doi.org/10.1007/978-3-319-63519-4">doi.org/10.1007/978-3-319-63519-4</a></li>
+          <li id="r14">O. Vinyals, I. Babuschkin, W. M. Czarnecki, et al. Grandmaster level in StarCraft II using multi-agent reinforcement learning. Nature 575:350–354, 2019. <a href="https://doi.org/10.1038/s41586-019-1724-z">doi.org/10.1038/s41586-019-1724-z</a></li>
+          <li id="r15">S. Ross, G. J. Gordon, J. A. Bagnell. A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning. AISTATS 2011, PMLR 15:627–635. <a href="https://proceedings.mlr.press/v15/ross11a.html">proceedings.mlr.press/v15/ross11a.html</a></li>
+        </ol>
+
+        <h3>Distillation and data</h3>
+        <ol class="refs" start="16">
+          <li id="r16">G. Hinton, O. Vinyals, J. Dean. Distilling the Knowledge in a Neural Network. arXiv:1503.02531, 2015. <a href="https://arxiv.org/abs/1503.02531">arxiv.org/abs/1503.02531</a></li>
+          <li id="r17">C.-Y. Hsieh, C.-L. Li, C.-K. Yeh, et al. Distilling Step-by-Step! Outperforming Larger Language Models with Less Training Data and Smaller Model Sizes. Findings of ACL 2023, pp. 8003–8017. <a href="https://doi.org/10.18653/v1/2023.findings-acl.507">doi.org/10.18653/v1/2023.findings-acl.507</a></li>
+          <li id="r18">S. Mukherjee, A. Mitra, G. Jawahar, et al. Orca: Progressive Learning from Complex Explanation Traces of GPT-4. arXiv:2306.02707, 2023. <a href="https://arxiv.org/abs/2306.02707">arxiv.org/abs/2306.02707</a></li>
+          <li id="r19">B. Chen, C. Shu, E. Shareghi, et al. FireAct: Toward Language Agent Fine-tuning. arXiv:2310.05915, 2023. <a href="https://arxiv.org/abs/2310.05915">arxiv.org/abs/2310.05915</a></li>
+          <li id="r20">A. Zeng, M. Liu, R. Lu, et al. AgentTuning: Enabling Generalized Agent Abilities for LLMs. Findings of ACL 2024, pp. 3053–3077. <a href="https://doi.org/10.18653/v1/2024.findings-acl.181">doi.org/10.18653/v1/2024.findings-acl.181</a></li>
+          <li id="r21">E. Zelikman, Y. Wu, J. Mu, et al. STaR: Bootstrapping Reasoning With Reasoning. NeurIPS 2022. <a href="https://arxiv.org/abs/2203.14465">arxiv.org/abs/2203.14465</a></li>
+          <li id="r22">C. Gulcehre, T. Le Paine, S. Srinivasan, et al. Reinforced Self-Training (ReST) for Language Modeling. arXiv:2308.08998, 2023. <a href="https://arxiv.org/abs/2308.08998">arxiv.org/abs/2308.08998</a></li>
+          <li id="r23">I. Shumailov, Z. Shumaylov, Y. Zhao, et al. AI models collapse when trained on recursively generated data. Nature 631:755–759, 2024. <a href="https://doi.org/10.1038/s41586-024-07566-y">doi.org/10.1038/s41586-024-07566-y</a></li>
+        </ol>
+
+        <h3>Local inference and routing</h3>
+        <ol class="refs" start="24">
+          <li id="r24">E. J. Hu, Y. Shen, P. Wallis, et al. LoRA: Low-Rank Adaptation of Large Language Models. ICLR 2022. <a href="https://openreview.net/forum?id=nZeVKeeFYf9">openreview.net/forum?id=nZeVKeeFYf9</a></li>
+          <li id="r25">T. Dettmers, A. Pagnoni, A. Holtzman, et al. QLoRA: Efficient Finetuning of Quantized LLMs. NeurIPS 2023. <a href="https://arxiv.org/abs/2305.14314">arxiv.org/abs/2305.14314</a></li>
+          <li id="r26">E. Frantar, S. Ashkboos, T. Hoefler, et al. OPTQ: Accurate Quantization for Generative Pre-trained Transformers. ICLR 2023. Preprint titled GPTQ, arXiv:2210.17323. <a href="https://openreview.net/forum?id=tcbBPnfwxS">openreview.net/forum?id=tcbBPnfwxS</a></li>
+          <li id="r27">W. Kwon, Z. Li, S. Zhuang, et al. Efficient Memory Management for Large Language Model Serving with PagedAttention. SOSP 2023, pp. 611–626. <a href="https://doi.org/10.1145/3600006.3613165">doi.org/10.1145/3600006.3613165</a></li>
+          <li id="r28">G. Gerganov et al. llama.cpp (software). <a href="https://github.com/ggml-org/llama.cpp">github.com/ggml-org/llama.cpp</a></li>
+          <li id="r29">L. Chen, M. Zaharia, J. Zou. FrugalGPT: How to Use Large Language Models While Reducing Cost and Improving Performance. TMLR, 2024. <a href="https://openreview.net/forum?id=cSimKw5p6R">openreview.net/forum?id=cSimKw5p6R</a></li>
+          <li id="r30">D. Ding, A. Mallick, C. Wang, et al. Hybrid LLM: Cost-Efficient and Quality-Aware Query Routing. ICLR 2024. <a href="https://arxiv.org/abs/2404.14618">arxiv.org/abs/2404.14618</a></li>
+          <li id="r31">I. Ong, A. Almahairi, V. Wu, et al. RouteLLM: Learning to Route LLMs from Preference Data. ICLR 2025. <a href="https://openreview.net/forum?id=8sSqNntaMr">openreview.net/forum?id=8sSqNntaMr</a></li>
+          <li id="r32">B. T. Willard, R. Louf. Efficient Guided Generation for Large Language Models. arXiv:2307.09702, 2023. <a href="https://arxiv.org/abs/2307.09702">arxiv.org/abs/2307.09702</a></li>
+        </ol>
+
+        <h3>Game AI on the player's PC, and the closest prior work</h3>
+        <ol class="refs" start="33">
+          <li id="r33">NVIDIA. Deploy the First On-Device Small Language Model for Improved Game Character Roleplay. NVIDIA Technical Blog, Aug 20, 2024. <a href="https://developer.nvidia.com/blog/deploy-the-first-on-device-small-language-model-for-improved-game-character-roleplay/">developer.nvidia.com/blog/deploy-the-first-on-device-small-language-model-for-improved-game-character-roleplay/</a></li>
+          <li id="r34">NVIDIA. NVIDIA ACE autonomous AI companions (PUBG, NARAKA: BLADEPOINT). GeForce News, Jan 6, 2025. <a href="https://www.nvidia.com/en-us/geforce/news/nvidia-ace-autonomous-ai-companions-pubg-naraka-bladepoint/">nvidia.com/en-us/geforce/news/nvidia-ace-autonomous-ai-companions-pubg-naraka-bladepoint/</a></li>
+          <li id="r35">NVIDIA. NARAKA: BLADEPOINT and inZOI NVIDIA ACE features launch. GeForce News, Mar 13, 2025. <a href="https://www.nvidia.com/en-us/geforce/news/nvidia-ace-naraka-bladepoint-inzoi-launch-this-month/">nvidia.com/en-us/geforce/news/nvidia-ace-naraka-bladepoint-inzoi-launch-this-month/</a></li>
+          <li id="r36">NVIDIA. Build On-Device AI Companions with the NVIDIA ACE Game Agent SDK and Unreal Engine 5 Plugins. NVIDIA Technical Blog, Jun 16, 2026. <a href="https://developer.nvidia.com/blog/build-on-device-ai-companions-with-the-nvidia-ace-game-agent-sdk-and-unreal-engine-5-plugins/">developer.nvidia.com/blog/build-on-device-ai-companions-with-the-nvidia-ace-game-agent-sdk-and-unreal-engine-5-plugins/</a></li>
+          <li id="r37">NVIDIA. Q&amp;A: How KRAFTON Built PUBG Ally, a Co-Playable Character Powered by NVIDIA ACE. NVIDIA Technical Blog, Jun 25, 2026. <a href="https://developer.nvidia.com/blog/how-krafton-built-pubg-ally-a-co-playable-character-powered-by-nvidia-ace/">developer.nvidia.com/blog/how-krafton-built-pubg-ally-a-co-playable-character-powered-by-nvidia-ace/</a></li>
+          <li id="r38">KRAFTON. CES 2025: KRAFTON showcased AI model CPC built with NVIDIA ACE. Press release, Jan 9, 2025. <a href="https://www.krafton.com/en/news/press/ces-2025-krafton-showcased-ai-model-cpc-built-with-nvidia-ace/">krafton.com/en/news/press/ces-2025-krafton-showcased-ai-model-cpc-built-with-nvidia-ace/</a></li>
+          <li id="r39">J. Chen, S. Cheng, C. Gurkan, et al. Vox Deorum: A Hybrid LLM Architecture for 4X / Grand Strategy Game AI, Lessons from Civilization V. arXiv:2512.18564, 2025. <a href="https://arxiv.org/abs/2512.18564">arxiv.org/abs/2512.18564</a></li>
+          <li id="r40">L. Chen, D. Feng, E. Feng, et al. Characterizing Mobile SoC for Accelerating Heterogeneous LLM Inference. SOSP 2025. <a href="https://doi.org/10.1145/3731569.3764808">doi.org/10.1145/3731569.3764808</a></li>
+          <li id="r41">M. I. K. Munk, A. Valdivia, P. Burelli. High-quality generation of dynamic game content via small language models: A proof of concept. FDG 2026. <a href="https://doi.org/10.1145/3815598.3815605">doi.org/10.1145/3815598.3815605</a></li>
+          <li id="r42">AI Influence [AI Diplomacy]. Mount &amp; Blade II: Bannerlord mod, Steam Workshop, Oct 10, 2025. <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3584621421">steamcommunity.com/sharedfiles/filedetails/?id=3584621421</a></li>
+        </ol>
+
+        <h3>Game and hardware</h3>
+        <ol class="refs" start="43">
+          <li id="r43">TaleWorlds Entertainment. Mount &amp; Blade II: Bannerlord (PC). Full release Oct 25, 2022. <a href="https://store.steampowered.com/app/261550/">store.steampowered.com/app/261550/</a> · modding docs <a href="https://moddocs.bannerlord.com/">moddocs.bannerlord.com</a> · API reference <a href="https://apidoc.bannerlord.com/">apidoc.bannerlord.com</a></li>
+          <li id="r44">Valve. Steam Hardware &amp; Software Survey, September 2026. <a href="https://store.steampowered.com/hwsurvey">store.steampowered.com/hwsurvey</a></li>
+        </ol>
+
+        <h3>Serving many agents on one GPU</h3>
+        <ol class="refs" start="45">
+          <li id="r45">Y. Sheng, S. Cao, D. Li, et al. S-LoRA: Serving Thousands of Concurrent LoRA Adapters. arXiv:2311.03285, 2023. <a href="https://arxiv.org/abs/2311.03285">arxiv.org/abs/2311.03285</a></li>
+          <li id="r46">L. Chen, Z. Ye, Y. Wu, et al. Punica: Multi-Tenant LoRA Serving. arXiv:2310.18547, 2023. <a href="https://arxiv.org/abs/2310.18547">arxiv.org/abs/2310.18547</a></li>
+        </ol>
+
+        <h3>Multi-agent LLM systems and nation simulations</h3>
+        <ol class="refs" start="47">
+          <li id="r47">W. Hua, L. Fan, L. Li, et al. War and Peace (WarAgent): Large Language Model-based Multi-Agent Simulation of World Wars. arXiv:2311.17227, 2023. <a href="https://arxiv.org/abs/2311.17227">arxiv.org/abs/2311.17227</a></li>
+          <li id="r48">Z. Guan, X. Kong, F. Zhong, et al. Richelieu: Self-Evolving LLM-Based Agents for AI Diplomacy. NeurIPS 2024. <a href="https://arxiv.org/abs/2407.06813">arxiv.org/abs/2407.06813</a></li>
+          <li id="r49">Q. Wu, G. Bansal, J. Zhang, et al. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation. arXiv:2308.08155, 2023. <a href="https://arxiv.org/abs/2308.08155">arxiv.org/abs/2308.08155</a></li>
+          <li id="r50">T. Guo, X. Chen, Y. Wang, et al. Large Language Model based Multi-Agents: A Survey of Progress and Challenges. arXiv:2402.01680, 2024. <a href="https://arxiv.org/abs/2402.01680">arxiv.org/abs/2402.01680</a></li>
+          <li id="r51">J.-P. Rivera, G. Mukobi, A. Reuel, et al. Escalation Risks from Language Models in Military and Diplomatic Decision-Making. FAccT 2024. <a href="https://arxiv.org/abs/2401.03408">arxiv.org/abs/2401.03408</a></li>
+        </ol>
+
+        <h3>Strategy from the model, moves from code</h3>
+        <ol class="refs" start="52">
+          <li id="r52">J. Liang, W. Huang, F. Xia, et al. Code as Policies: Language Model Programs for Embodied Control. arXiv:2209.07753, 2022. <a href="https://arxiv.org/abs/2209.07753">arxiv.org/abs/2209.07753</a></li>
+          <li id="r53">X. Shao, W. Jiang, F. Zuo, et al. SwarmBrain: Embodied agent for real-time strategy game StarCraft II via large language models. arXiv:2401.17749, 2024. <a href="https://arxiv.org/abs/2401.17749">arxiv.org/abs/2401.17749</a></li>
+          <li id="r54">S. Yao, J. Zhao, D. Yu, et al. ReAct: Synergizing Reasoning and Acting in Language Models. ICLR 2023. <a href="https://arxiv.org/abs/2210.03629">arxiv.org/abs/2210.03629</a></li>
+          <li id="r55">T. Schick, J. Dwivedi-Yu, R. Dessì, et al. Toolformer: Language Models Can Teach Themselves to Use Tools. arXiv:2302.04761, 2023. <a href="https://arxiv.org/abs/2302.04761">arxiv.org/abs/2302.04761</a></li>
+          <li id="r56">R. S. Sutton, D. Precup, S. Singh. Between MDPs and semi-MDPs: A framework for temporal abstraction in reinforcement learning. Artificial Intelligence 112(1–2):181–211, 1999. <a href="https://doi.org/10.1016/S0004-3702(99)00052-1">doi.org/10.1016/S0004-3702(99)00052-1</a></li>
+          <li id="r57">Google DeepMind. AlphaStar: Grandmaster level in StarCraft II using multi-agent reinforcement learning. Blog post, 2019. <a href="https://deepmind.google/discover/blog/alphastar-grandmaster-level-in-starcraft-ii-using-multi-agent-reinforcement-learning/">deepmind.google/discover/blog/alphastar-grandmaster-level-in-starcraft-ii-using-multi-agent-reinforcement-learning/</a></li>
+        </ol>
+
+        <h3>Course readings and lectures</h3>
+        <ol class="refs" start="58">
+          <li id="r58">J. Gottschlich. Why LLMs Don't "Hallucinate": A Lecture on Spherically Constrained Stochasticity and DIF. Substack, May 5, 2026. <a href="https://goju01.substack.com/p/why-llms-dont-hallucinate-a-lecture">goju01.substack.com/p/why-llms-dont-hallucinate-a-lecture</a></li>
+          <li id="r59">A. Gu, N. Jain, W.-D. Li, et al. Challenges and Paths Towards AI for Software Engineering. arXiv:2503.22625, 2025. Week 1 reading, listed on the course site as ICLR 2025 VERIF-AI workshop. <a href="https://arxiv.org/abs/2503.22625">arxiv.org/abs/2503.22625</a></li>
+          <li id="r60">C. E. Jimenez, J. Yang, A. Wettig, et al. SWE-bench: Can Language Models Resolve Real-World GitHub Issues? ICLR 2024. Week 2 reading. <a href="https://arxiv.org/abs/2310.06770">arxiv.org/abs/2310.06770</a></li>
+          <li id="r61">J. Gottschlich. CS 329M: Machine Programming, Stanford University, Fall 2026. Course site and schedule. <a href="https://sites.google.com/view/gottschlich/mp-stanford-cs-329m">sites.google.com/view/gottschlich/mp-stanford-cs-329m</a></li>
+        </ol>
+      </section>
+
+      <section id="open">
+        <h2>Open items</h2>
+        <ul class="open">
+          <li><span>Confirm the roster: a Mordor, Harad and Rhûn coalition, with Gondor for head-to-head runs. Check that the three are allied in the starting save.</span></li>
+          <li><span>Check which diplomatic actions the pack allows between the chosen realms, since its diplomacy rules fix some pairs as permanently hostile.</span></li>
+          <li><span>Check the Week 2 slides for the exact term. The schedule says Geometrically Constrained Stochasticity, while the written lecture says Spherically Constrained Stochasticity.</span></li>
+          <li><span>Confirm from the game's code that the stock AI reads the full game state, before the proposal says the agents play with less information than it does.</span></li>
+          <li><span>Pick the three tools for the checkpoint. Defend, besiege and garrison are suggested.</span></li>
+          <li><span>Decide whether a second provider's frontier model joins the gamer comparison.</span></li>
+          <li><span>Ask on Ed whether the Oct 27 checkpoint is a report or a presentation.</span></li>
+          <li><span>Find the TAOM pack's full name and link for its citation.</span></li>
+          <li><span>Decide whether Mert's own commands stay in as a stretch arm.</span></li>
+          <li><span>Re-add the Steam survey's per-size video memory rows before citing the shares. The 80, 50 and 37% figures are sums of those rows.</span></li>
+          <li><span>Pick a source for the claim that Bannerlord's campaign AI is rule-based: the modding docs, the API reference, or the game's own code.</span></li>
+          <li><span>Open the record for reference 56 and confirm its volume and pages.</span></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer>Prepared by Claude Code on Mert's gaming PC, Oct 5, 2026. Hardware read from the machine the same day.</footer>
+</div>

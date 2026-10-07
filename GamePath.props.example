@@ -1,0 +1,7 @@
+<Project>
+  <!-- Copy this file to GamePath.props (same folder) and point it at your Bannerlord folder,
+       the one that holds bin\ and Modules\. GamePath.props stays on your computer; git ignores it. -->
+  <PropertyGroup>
+    <BannerlordDir>D:\SteamLibrary\steamapps\common\Mount &amp; Blade II Bannerlord</BannerlordDir>
+  </PropertyGroup>
+</Project>

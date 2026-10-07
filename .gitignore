@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+build/
+*.user
+.vs/
+.vscode/
+.idea/
+
+# Your own game folder setting (see GamePath.props.example)
+GamePath.props
+
+# Run logs, datasets and model files stay out of git: too big, and they live on the laptop
+# (see docs/PLAN.md, decision 8)
+runs/
+data/
+models/
+*.gguf
+*.safetensors
+*.jsonl.gz
+
+# Python (phase 2)
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Windows
+Thumbs.db
+desktop.ini

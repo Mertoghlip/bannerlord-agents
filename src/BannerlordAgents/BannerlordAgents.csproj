@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Bannerlord Agents: the game module (the bridge) for the CS 329M project.
+       Its own module, separate from TFAOMFixes: own DLL, own settings, own logs, no shared code.
+       Built against Bannerlord 1.4.8, the version TAOM 2.0.26 requires. -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>BannerlordAgents</AssemblyName>
+    <RootNamespace>BannerlordAgents</RootNamespace>
+    <Version>0.1.0</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ModuleId>BannerlordAgents</ModuleId>
+    <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The game's own assemblies, read from the local install and never copied (Private=false). -->
+  <ItemGroup>
+    <Reference Include="TaleWorlds.Library" HintPath="$(GameBin)\TaleWorlds.Library.dll" Private="false" />
+    <Reference Include="TaleWorlds.Core" HintPath="$(GameBin)\TaleWorlds.Core.dll" Private="false" />
+    <Reference Include="TaleWorlds.CampaignSystem" HintPath="$(GameBin)\TaleWorlds.CampaignSystem.dll" Private="false" />
+    <Reference Include="TaleWorlds.MountAndBlade" HintPath="$(GameBin)\TaleWorlds.MountAndBlade.dll" Private="false" />
+    <Reference Include="TaleWorlds.DotNet" HintPath="$(GameBin)\TaleWorlds.DotNet.dll" Private="false" />
+    <Reference Include="TaleWorlds.Engine" HintPath="$(GameBin)\TaleWorlds.Engine.dll" Private="false" />
+    <Reference Include="TaleWorlds.SaveSystem" HintPath="$(GameBin)\TaleWorlds.SaveSystem.dll" Private="false" />
+    <Reference Include="TaleWorlds.ObjectSystem" HintPath="$(GameBin)\TaleWorlds.ObjectSystem.dll" Private="false" />
+    <Reference Include="TaleWorlds.Localization" HintPath="$(GameBin)\TaleWorlds.Localization.dll" Private="false" />
+    <Reference Include="TaleWorlds.ModuleManager" HintPath="$(GameBin)\TaleWorlds.ModuleManager.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CheckGamePath" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(GameBin)\TaleWorlds.Library.dll')"
+           Text="Bannerlord was not found at '$(BannerlordDir)'. Copy GamePath.props.example to GamePath.props in the repository root and set BannerlordDir to your game folder." />
+  </Target>
+
+  <!-- Lay the module out the way the game expects it, under build\Modules\BannerlordAgents.
+       scripts\deploy.ps1 copies that folder into the game (and refuses while the game is open). -->
+  <Target Name="StageModule" AfterTargets="Build">
+    <ItemGroup>
+      <ModuleBinaries Include="$(TargetPath)" />
+      <ModuleBinaries Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    </ItemGroup>
+    <Copy SourceFiles="module\SubModule.xml" DestinationFolder="$(ModuleStage)" />
+    <Copy SourceFiles="@(ModuleBinaries)" DestinationFolder="$(ModuleStage)\bin\Win64_Shipping_Client" />
+    <Message Importance="high" Text="Module staged at $(ModuleStage)" />
+  </Target>
+
+</Project>

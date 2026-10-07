@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    Where the game is installed. The build reads the game's own DLLs straight from your install; they are
+    never copied into this repository. Default: Steam's usual folder. For any other folder, copy
+    GamePath.props.example to GamePath.props (git ignores it) and edit it, or set BANNERLORD_DIR.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)GamePath.props" Condition="Exists('$(MSBuildThisFileDirectory)GamePath.props')" />
+
+  <PropertyGroup>
+    <BannerlordDir Condition="'$(BannerlordDir)' == '' and '$(BANNERLORD_DIR)' != ''">$(BANNERLORD_DIR)</BannerlordDir>
+    <BannerlordDir Condition="'$(BannerlordDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Mount &amp; Blade II Bannerlord</BannerlordDir>
+    <GameBin>$(BannerlordDir)\bin\Win64_Shipping_Client</GameBin>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>
