@@ -1,0 +1,140 @@
+using System.Collections.Generic;
+
+namespace BannerlordAgents
+{
+    // Plain copies of game state, taken on the game's thread and handed to the worker. Nothing in here points at a
+    // game object, so the worker can read them freely. Field names become the JSON names (snake_case) in the logs;
+    // see protocol/README.md.
+
+    /// <summary>One party as copied on the game's thread.</summary>
+    internal sealed class PartyRow
+    {
+        public string Id;
+        public string Name;
+        public string Faction;
+        public string Leader;
+        public float X, Y;
+        public int Men;
+        public int Wounded;
+        public float Strength;
+        /// <summary>lord, caravan, villager, bandit, garrison, militia or other.</summary>
+        public string Kind;
+        public string InSettlement;
+        /// <summary>The party id of the army's leader, when this party belongs to an army (its own id if it leads).</summary>
+        public string ArmyLeader;
+        /// <summary>Men in the whole army, when this party leads one.</summary>
+        public int ArmyMen;
+        public int ArmyParties;
+        /// <summary>Marching inside someone else's army.</summary>
+        public bool Attached;
+        /// <summary>The game's own name for what the party is doing (GoToSettlement, BesiegeSettlement, ...).</summary>
+        public string Doing;
+        public string TargetSettlement;
+        public string TargetParty;
+        public string Besieging;
+        public bool InBattle;
+        /// <summary>The game's own flag: the player's party can see this one.</summary>
+        public bool SeenByPlayer;
+        /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>
+        public bool Spottable;
+    }
+
+    internal sealed class SettlementRow
+    {
+        public string Id, Name, Kind, Faction;
+        public float X, Y;
+        public string BesiegedBy;
+        public string Besieger;
+        public int Garrison;
+        public int Militia;
+        public string VillageState;
+        public string Bound;
+    }
+
+    internal sealed class FactionRow
+    {
+        public string Id, Name, Ruler;
+        public List<string> AtWar = new List<string>();
+        public List<string> Allies = new List<string>();
+    }
+
+    internal sealed class Sighting
+    {
+        public string Party;
+        public string By;
+        public float Distance;
+    }
+
+    /// <summary>Something a ruler would be told about: a war, a siege, a raid, a holding lost, an army broken.</summary>
+    internal sealed class Notice
+    {
+        public double Hours;
+        public string Kind;
+        public string Text;
+        public List<string> Factions = new List<string>();
+        public string Party;
+    }
+
+    /// <summary>The world as copied once per in-game hour.</summary>
+    internal sealed class Snapshot
+    {
+        public string Campaign;
+        public double Hours;
+        public string Date;
+        public bool Night;
+        public string PlayerFaction, PlayerParty, Watched;
+        public List<PartyRow> Parties = new List<PartyRow>(4096);
+        public Dictionary<string, PartyRow> PartyById = new Dictionary<string, PartyRow>(4096);
+        public List<SettlementRow> Settlements = new List<SettlementRow>(1024);
+        public Dictionary<string, SettlementRow> SettlementById = new Dictionary<string, SettlementRow>(1024);
+        public Dictionary<string, FactionRow> Factions = new Dictionary<string, FactionRow>();
+        public Dictionary<string, string> FactionNames = new Dictionary<string, string>();
+        public HashSet<string> HostileToWatched = new HashSet<string>();
+        public HashSet<string> HostileToPlayer = new HashSet<string>();
+        /// <summary>What the watched realm sees, by party id.</summary>
+        public Dictionary<string, Sighting> WatchedSees;
+        /// <summary>Settlements close enough to the watched realm's eyes for their garrisons to be counted.</summary>
+        public HashSet<string> InspectedByWatched;
+    }
+
+    /// <summary>A party the player could see when a decision was made.</summary>
+    internal sealed class SeenParty
+    {
+        public string Id, Name, Faction, Kind, Doing;
+        public int Men, ArmyMen;
+        public float Strength, X, Y, Distance;
+        public bool Hostile;
+    }
+
+    internal sealed class TargetInfo
+    {
+        public string Kind, Id, Name, Faction;
+        public int Men;
+        public float X, Y;
+    }
+
+    /// <summary>One decision of the player's, as recorded. The worker adds the realm and the recent pokes.</summary>
+    internal sealed class DecisionRecord
+    {
+        public string Type = "decision";
+        public string Kind;
+        public string Text;
+        public double Hours;
+        public string Date;
+        public string Wall;
+        public string Faction;
+        public SeenParty You;
+        public TargetInfo Target;
+        public List<SeenParty> SeenByYou;
+        public object Realm;
+        public List<Trigger> RecentPokes;
+    }
+
+    internal sealed class Trigger
+    {
+        public double Hours;
+        public string Kind;
+        public string Text;
+        public string Party;
+    }
+}

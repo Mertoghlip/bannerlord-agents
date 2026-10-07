@@ -23,6 +23,23 @@
 
 Install 1 (phases 0–4) lands this week, and install 2 (phases 5–6) early next week. Install 3 (phase 7) comes at the end of next week, once the first tools exist. Each install is one restart of the game.
 
+## Running install 1 (in the game since Wed Oct 7, 15:33)
+
+Your three newest saves were copied to `C:\BannerlordArchive\save-backups` before the install, and checked identical to the originals.
+
+1. Start the launcher and tick **Bannerlord Agents**, which sits below your usual mods. Then load your campaign. The first load is slow once.
+2. Open the console with Alt + ~ and type `agents.status`. It should name the Misty Mountain Orcs and their Warlord, and count their lords and holdings. `agents.help` lists every command.
+3. For each phase, the commands are:
+
+| Phase | What to type |
+|---|---|
+| 1 · Watch | `agents.view` prints the orcs' report and the file it is in. `agents.pokes` lists their last pokes. `agents.vision_check` compares our sight rule with the game's own. A yellow message appears on screen whenever the orcs are poked. |
+| 2 · Record | `agents.record show 10` lists your last decisions in plain words. `agents.record off` and `agents.record on` switch it. |
+| 3 · Performance | Play 3 minutes, then type `agents.bridge off`; play 3 more, then `agents.bridge on`. `agents.perf` compares the two. |
+| 4 · One order | `agents.order Throkmaw garrison Caradhras` (any orc lord and any castle they hold; partial names work, accents optional; where two lords share a name, the console shows each one's id to use instead). `agents.orders` shows how it's going; `agents.release Throkmaw` or `agents.release all` ends it. |
+
+Nothing needs sending: I read the files myself. Just tell me which phases you ran, and anything that looked wrong. Everything is in `%LOCALAPPDATA%\BannerlordAgents`, laid out in [protocol/README.md](../protocol/README.md).
+
 ## Ground rules for every phase
 
 - Before the first install, your newest save is copied aside and never touched.

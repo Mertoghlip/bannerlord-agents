@@ -5,3 +5,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Date | Hours | Work | Week (budget) |
 |---|---|---|---|
 | Oct 6 | | Private repository, the separate module, the build plan | 1 (10 h) |
+| Oct 7 | | Plan update (live play, recorder, idle cores, orc tests); first install built, checked outside the game, installed | 1 |

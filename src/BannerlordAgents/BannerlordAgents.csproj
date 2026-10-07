@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -16,6 +16,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- tests/SmokeTest runs the worker's half (views, pokes, reports, records) outside the game -->
+    <InternalsVisibleTo Include="SmokeTest" />
   </ItemGroup>
 
   <!-- The game's own assemblies, read from the local install and never copied (Private=false). -->
@@ -30,6 +35,8 @@
     <Reference Include="TaleWorlds.ObjectSystem" HintPath="$(GameBin)\TaleWorlds.ObjectSystem.dll" Private="false" />
     <Reference Include="TaleWorlds.Localization" HintPath="$(GameBin)\TaleWorlds.Localization.dll" Private="false" />
     <Reference Include="TaleWorlds.ModuleManager" HintPath="$(GameBin)\TaleWorlds.ModuleManager.dll" Private="false" />
+    <!-- The game ships Newtonsoft.Json 13.0.1 in its own bin; use that copy and never ship another. -->
+    <Reference Include="Newtonsoft.Json" HintPath="$(GameBin)\Newtonsoft.Json.dll" Private="false" />
   </ItemGroup>
 
   <Target Name="CheckGamePath" BeforeTargets="ResolveAssemblyReferences">

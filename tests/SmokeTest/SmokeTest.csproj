@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Runs the bridge's worker half (views, pokes, reports, records) on a small made-up world, outside the game.
+       It catches mistakes before an in-game test costs a restart. Run: dotnet run -c Release (from this folder). -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\BannerlordAgents\BannerlordAgents.csproj" />
+    <!-- outside the game these must sit beside the test, so they are copied (into bin only, never into git) -->
+    <Reference Include="TaleWorlds.Library" HintPath="$(GameBin)\TaleWorlds.Library.dll" Private="true" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(GameBin)\Newtonsoft.Json.dll" Private="true" />
+  </ItemGroup>
+
+</Project>

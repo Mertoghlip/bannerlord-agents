@@ -65,4 +65,5 @@ if ($LASTEXITCODE -ge 8) { Write-Host "Copy failed (robocopy code $LASTEXITCODE)
 $global:LASTEXITCODE = 0
 
 Write-Host "Installed $moduleId into $dest" -ForegroundColor Green
-Write-Host 'It stays off in the launcher until you tick it. Tick it only in the experiment module list.'
+Write-Host 'It stays off in the launcher until you tick it: below your usual mods for the recorder and the first tests,'
+Write-Host 'or in the experiment module list for measured runs (docs/PLAN.md, decision 2).'

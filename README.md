@@ -13,10 +13,15 @@ The study asks how much to leave to the model and how much to code. It also asks
 | Folder | What it holds |
 |---|---|
 | `src/BannerlordAgents/` | The bridge, the game module that runs inside the game. It is its own module, separate from TFAOMFixes. |
+| `tests/SmokeTest/` | Runs the bridge's background half on a small made-up world outside the game. Mistakes surface there before they cost an in-game test. |
+| `protocol/` | Every file the module writes, and the fields in each record. |
 | `scripts/` | `deploy.ps1` builds the module and installs it into the game. It refuses while the game is open. |
 | `docs/` | The build plan, the first tests phase by phase, the hours log, and the proposal. |
 
-More arrives as the plan reaches it: `protocol/` (message formats, this week), `src/BannerlordAgents.Core/` (the shared core and the tool engine, week 2), `src/BannerlordAgents.WarRoom/` (the program beside the game where the agents decide, week 3), and `training/` and `analysis/` (Python, November).
+More arrives as the plan reaches it:
+- `src/BannerlordAgents.Core/`: the shared core and the tool engine (week 2).
+- `src/BannerlordAgents.WarRoom/`: the program beside the game where the agents decide (week 3).
+- `training/` and `analysis/`: Python, in November.
 
 ## Setting up on a computer
 
@@ -32,4 +37,4 @@ Nothing from the game itself is stored here. The build reads the game's own file
 
 ## Where the module writes
 
-Its log is `%LOCALAPPDATA%\BannerlordAgents\logs\bridge.log`, never the Documents folder, which OneDrive syncs. In the game's console (Alt + ~), `agents.status` reports what the module is doing.
+Everything goes under `%LOCALAPPDATA%\BannerlordAgents`, never the Documents folder, which OneDrive syncs. That covers its log, its settings, the performance log, and one folder per campaign for the reports, pokes and recordings. [protocol/README.md](protocol/README.md) lists every file. In the game's console (Alt + ~), `agents.status` reports what the module is doing, and `agents.help` lists the commands.

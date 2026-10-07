@@ -104,9 +104,9 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 ### Week 1 · Oct 5–11 · 10 h · see, record, obey
 
 - [x] Private repository, the separate module, the build and install script, this plan
-- [ ] First tests, install 1 ([FIRST-TESTS.md](FIRST-TESTS.md), phases 0–4): the orcs' view and pokes, the recorder, the performance check, and one orc lord ordered by hand
-- [ ] The faction report, as text of about 4–8k tokens and as JSON. One record per poke, as JSON lines.
-- [ ] Message formats written down in `protocol/`
+- [ ] First tests, install 1 ([FIRST-TESTS.md](FIRST-TESTS.md), phases 0–4): the orcs' view and pokes, the recorder, the performance check, and one orc lord ordered by hand. *Built, checked outside the game, and installed Oct 7; waiting for your in-game run.*
+- [x] The faction report, as text and as JSON. One record per poke, as JSON lines.
+- [x] Record formats written down in [protocol/README.md](../protocol/README.md)
 
 **Done when:**
 - the console prints the orcs' report as they see it;

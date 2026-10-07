@@ -8,12 +8,12 @@ namespace BannerlordAgents
     /// <summary>
     /// Entry point of the Bannerlord Agents module, the game side of the CS 329M project.
     ///
-    /// This is its own module on purpose, separate from TFAOMFixes: its own DLL, settings and logs, and no
-    /// shared code, so the project's build never gets mixed up with the personal fixes. Measured runs load it
-    /// with TAOM's modules only.
+    /// This is its own module on purpose, separate from TFAOMFixes: its own DLL, settings and logs, and no shared
+    /// code, so the project's build never gets mixed up with the personal fixes.
     ///
-    /// Version 0.1 only proves that the module loads and that campaign events reach it. The bridge itself
-    /// (faction views, pokes, orders, tools) is built on top of this week by week; see docs/PLAN.md.
+    /// Version 0.2 is the first install of the first tests (docs/FIRST-TESTS.md, phases 0-4): the watched realm's
+    /// view and pokes, the recorder of the player's own decisions, the performance log, and hand orders. All the
+    /// heavy work runs on one background thread kept on the efficiency cores; the game's thread only copies numbers.
     /// </summary>
     public class SubModule : MBSubModuleBase
     {
@@ -22,7 +22,11 @@ namespace BannerlordAgents
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
-            Log.Line("Bannerlord Agents " + Version + " loaded");
+            Settings.Load();
+            Cpu.Detect();
+            Log.Line("Bannerlord Agents " + Version + " loaded. Processor: " + Cpu.Description + ". Settings: watch " + Settings.Watch
+                     + ", bridge " + (Settings.Bridge ? "on" : "off") + ", recorder " + (Settings.Record ? "on" : "off")
+                     + ", performance log " + (Settings.Perf ? "on" : "off"));
         }
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
@@ -37,6 +41,16 @@ namespace BannerlordAgents
                 }
             }
             catch (Exception e) { Log.Line("OnGameStart failed: " + e); }
+        }
+
+        public override void OnGameEnd(Game game)
+        {
+            base.OnGameEnd(game);
+            try
+            {
+                if (game?.GameType is Campaign) { Bridge.Stop(); Log.Line("campaign ended"); }
+            }
+            catch { }
         }
     }
 }
