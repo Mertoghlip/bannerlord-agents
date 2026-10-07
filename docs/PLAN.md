@@ -79,11 +79,15 @@ One line each; the proposal page has the detail.
 
 11. **Your play is data.** The recorder works on the campaign map only, never inside battles.
     - **What a record holds:** each decision you make, with your faction's view at that moment and what you'd just seen. The format is the same as an agent's record, and outcomes are attached afterwards, as for the agents.
-    - **Which decisions:**
+    - **Which decisions:** you rule the Kingdom of Arnor and Gondor as Aragorn, so the recorder covers a ruler's decisions as well as your own party's:
       - where your party goes, and what it attacks, besieges, raids, enters or waits in;
       - the armies you form, and whom you call to them;
-      - your realm's war, peace and alliance decisions, and your votes;
-      - later, the orders you give your clan's and vassals' parties.
+      - your realm's war, peace, alliance and call-to-war decisions;
+      - the orders you give your vassals in conversation: defend a fief, patrol around a fief, patrol their own lands, wait in a fief, go and recruit, or act as they see fit.
+    - **How vassal orders are read:**
+      - Your own mod hands each order to Party AI Controls. The recorder reads it there after every conversation and every in-game hour.
+      - It only reads the list of lords who already hold an order. Asking Party AI Controls about any other lord would quietly create a saved entry for him, so the recorder never does.
+      - This also catches orders you give your clan's parties through Party AI Controls' own screen.
     - **What the records are for:**
       - training data for the small models (Opus only, yours only, or the mix);
       - examples from your own play, picked for the situation at hand, plus a short playbook of how you play, in Opus 5.5's prompt;
@@ -116,11 +120,13 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [ ] The behavior language, and the tool engine in the shared core, with tests that run without the game
 - [ ] defend, besiege and garrison, tried first on the orc lords
 - [ ] Faction authority: an agent orders only its own lords. **free** hands a lord back.
+- [ ] First tests, install 3 (phase 7): Opus 5.5 commands the whole orc realm with those three tools, in your campaign
 - [ ] Run control: a fixed starting save, a 60-day limit, the player parked far away, a fixed speed, and autosave with resume
 - [ ] The starting save for measured runs, and the script that switches module lists
-- [ ] The recorder's second step: realm decisions, and orders to your clan's and vassals' parties
 
-**Done when:** a scripted run hands the orc lords tools, they behave as the tools say for a few days, and the log shows every tool step and every poke.
+**Done when:**
+- a scripted run hands the orc lords tools, they behave as the tools say for a few days, and the log shows every tool step and every poke;
+- Opus 5.5 then runs the whole orc realm on those tools for an evening of your play.
 
 ### Week 3 · Oct 19–25 · 12 h · the coalition plays
 
@@ -173,7 +179,6 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 
 **For the build**
 
-- Whether you rule your realm in this campaign, and how you command vassals (Party AI Controls, or your own orders dialog). The recorder needs this to capture those orders.
 - The Misty Mountain Orcs' lords and holdings in your campaign today, and where they border you. Phase 1 prints this.
 - How hard the campaign map works the processor and the graphics card. Only battle numbers exist so far; phase 3 measures it.
 - Which TAOM realms are Mordor, Harad and Rhûn in the measured runs' starting save, who leads them, and who is at war or allied with whom on day one.
@@ -191,6 +196,16 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - Reference 56's volume and pages; TAOM's full name and link; the Steam video-memory rows.
 - Whether to run the second-provider stretch arm. The human-commands arm is now core.
 - A course link for RQ6: the Oct 13 lecture on data (ground truth against semi-trusted model output, and model collapse).
+
+## Drawing board
+
+Ideas kept for later, not scheduled.
+
+- **Command through the great lords** (Mert, Oct 7).
+  - An agent commands only a realm's most influential lords. They form armies around themselves to mass a defence or lead an offensive, and every other lord stays with the game's own AI.
+  - That means fewer decisions and fewer model calls, and it is closer to how a ruler actually commands.
+  - It would add another point on the line between model and code (RQ1).
+  - Your own play as Aragorn, commanding vassals in conversation, is exactly this kind of command, so the recorder is already collecting data for it.
 
 ## How we work
 

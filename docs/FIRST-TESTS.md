@@ -7,7 +7,8 @@
 - it records how you play;
 - it costs you no frame rate;
 - an orc lord obeys an order without the game's AI pulling him away;
-- Opus 5.5's orders come back while the game keeps running.
+- Opus 5.5's orders come back while the game keeps running;
+- once the first tools exist, Opus 5.5 can run the whole orc realm.
 
 | Phase | What it proves | Install | Your part |
 |---|---|---|---|
@@ -18,8 +19,9 @@
 | 4 · One order by hand | An orc lord obeys, and your save stays clean | 1 | about 30 minutes |
 | 5 · Opus watches | Answer time and usage while the game runs | 2 | normal play |
 | 6 · Opus commands one lord | The live loop works end to end | 2 | 30–60 minutes |
+| 7 · Opus commands the realm | Opus runs a whole realm through tools, live | 3 | an evening of normal play |
 
-Install 1 (phases 0–4) lands this week, and install 2 (phases 5–6) early next week. Each install is one restart of the game.
+Install 1 (phases 0–4) lands this week, and install 2 (phases 5–6) early next week. Install 3 (phase 7) comes at the end of next week, once the first tools exist. Each install is one restart of the game.
 
 ## Ground rules for every phase
 
@@ -75,13 +77,18 @@ Expect one slow load, because the game rebuilds its shaders after any change to 
 
 ## Phase 2 · Record your play
 
-**Built:** the recorder's first step.
-- **What it records:** your party's decisions. That means where you go; what you attack, besiege, raid, enter or wait in; and the armies you form or join.
+**Built:** the recorder.
+- **What it records:**
+  - your party's decisions: where you go; what you attack, besiege, raid, enter or wait in; and the armies you form or join;
+  - your decisions as ruler of the Kingdom of Arnor and Gondor: war, peace, alliances and calls to war;
+  - the orders you give your vassals in conversation. Your own mod hands them to Party AI Controls, and the recorder reads them there after every conversation. It reads only lords who already hold an order, so nothing in Party AI Controls changes.
 - **What each record holds:** your faction's view at that moment, and the pokes you'd just had.
 - **Clicks:** map clicks you correct within moments are merged into one decision. The raw clicks are kept separately.
 - **Control:** `agents.record on`, `off` or `status`.
 
-**You:** play an evening as usual. Afterwards I print a few records in plain words, and you confirm they match what you did. An example of the form, with made-up details: "Day 412, 14:00: you turned from Caras Galadhon toward an orc army near Mount Gram (3,200 against your 2,100), six hours after first seeing it."
+**You:** play an evening as usual. Afterwards I print a few records in plain words, and you confirm they match what you did. Two examples of the form, with made-up details:
+- "Day 412, 14:00: you turned from Caras Galadhon toward an orc army near Mount Gram (3,200 against your 2,100), six hours after first seeing it."
+- "Day 412, 15:00: you told a vassal to defend Fornost while that army was a day's march away."
 
 **Check:** your real decisions are there, and nothing you didn't do is.
 
@@ -152,6 +159,13 @@ It runs as low-priority background work.
 
 ## Phase 6 · Opus commands one orc lord
 
+**Why one lord, not the whole realm:**
+- The tools don't exist yet at this point. Without them, every order is a single move, like "go there" or "attack that". A lord who arrives just stops and waits for the next answer.
+- A whole realm run that way would stand still between answers, and would use far more of your subscription.
+- That is the every-move setup, which the study expects to do worst in live play.
+
+One lord shows whether the live loop works. The whole realm follows in phase 7, once the lords have tools.
+
 **Built:** Opus's orders applied for one lord. They pass the same checks as hand orders, plus the late-order check (plan, decision 4).
 
 **You:** keep that lord in view for a while.
@@ -161,4 +175,22 @@ It runs as low-priority background work.
 - When a late order is refused, the refusal and its reason show up in Opus's next poke.
 - Release hands him back cleanly.
 
-**Then:** the tool engine (week 2) gets tried on the same lords, starting with defend and garrison.
+## Phase 7 · Opus commands the whole orc realm (install 3, end of week 2)
+
+**Needs:**
+- the tool engine with defend, besiege and garrison (week 2);
+- phase 5's usage numbers leaving room in your subscription.
+
+**Built:**
+- Every orc lord is under Opus 5.5, and each holds a tool that keeps him acting between answers.
+- The tools poke Opus when something big happens.
+- The realm's pokes are merged, and the late-order checks are on.
+
+**You:** play an evening as usual, at war with them.
+
+**Check:**
+- Their lords keep moving sensibly while Opus thinks.
+- Pokes per hour and usage stay within what phase 5 showed is affordable.
+- One command hands the whole realm back to the game.
+
+This is the rehearsal for the coalition runs in week 3.
