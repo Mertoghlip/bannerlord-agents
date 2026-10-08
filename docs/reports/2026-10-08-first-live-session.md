@@ -91,6 +91,7 @@ One long chat won't last an evening at this rate. The war room should send each 
 **Pokes:**
 - 125 pokes in 199 in-game hours: almost one every hour, and the "every hour for 12 hours" alarm fired.
 - 87 of them were battles, many small ones, such as a caravan against bandits. That's too noisy.
+- The breakdown, type by type and poke by poke, is in [2026-10-08-pokes.md](2026-10-08-pokes.md).
 
 **Reports:**
 - Each report is about 5,200 tokens, and the 40-party limit cut parties from every one of them.
