@@ -105,6 +105,7 @@ One line each; the proposal page has the detail.
     - **Your control:** you can turn it on or off from the console at any time.
     - **Caveat:** you play one realm of the free peoples, while the agents command orc and eastern realms. Your campaign also runs your personal mods, and the measured runs don't.
 12. **Logs and data stay off OneDrive and out of git.** The bridge writes to `%LOCALAPPDATA%\BannerlordAgents`. Code and documents go to GitHub. Run logs, recordings, datasets and model files don't. Where they get backed up is decided in November.
+13. **Everything the strategists do is logged** (Oct 8, [LOGGING.md](LOGGING.md)). Every poke, answer, order and lord is followed end to end, with heartbeats, alarms the moment a rule breaks, a black box, and a freeze probe that says where the game is stuck. The game's AI's own reasons (the options it weighed, with their scores) are recorded for the watched realm's lords; that is also the baseline for comparing with the game's AI. All of it runs off the game's busy core; the logs report their own cost. The tools and the war room will log into the same record.
 
 ## Week by week
 

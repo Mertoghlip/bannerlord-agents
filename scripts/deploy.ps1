@@ -48,8 +48,16 @@ if ($open) {
 }
 
 if (-not $NoBuild) {
-    dotnet build (Join-Path $repo "src\$moduleId\$moduleId.csproj") -c Release -nologo -v minimal
+    # the module, the freeze probe (staged into the module's probe folder) and the smoke test
+    dotnet build (Join-Path $repo 'BannerlordAgents.sln') -c Release -nologo -v minimal
     if ($LASTEXITCODE -ne 0) { Write-Host 'Build failed; nothing installed.' -ForegroundColor Red; exit $LASTEXITCODE }
+    dotnet build-server shutdown | Out-Null   # leftover build servers hold about 2 GB
+    & (Join-Path $repo 'tests\SmokeTest\bin\Release\SmokeTest.exe') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host 'The smoke test failed; nothing installed. Run tests\SmokeTest\bin\Release\SmokeTest.exe to see which check.' -ForegroundColor Red
+        exit 1
+    }
+    Write-Host 'Smoke test: all checks passed.' -ForegroundColor Green
 }
 
 $stage = Join-Path $repo "build\Modules\$moduleId"

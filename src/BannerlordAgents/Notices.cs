@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.Election;
@@ -18,6 +19,8 @@ namespace BannerlordAgents
     /// </summary>
     internal static class Notices
     {
+        private static int _nextId;
+
         private static List<string> Involved(params IFaction[] factions)
         {
             var list = new List<string>(2);
@@ -35,7 +38,7 @@ namespace BannerlordAgents
         private static void Send(string kind, string text, List<string> factions, string party = null)
         {
             if (!Bridge.Running || (factions.Count == 0 && kind != "party_destroyed")) return;
-            var n = new Notice { Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party };
+            var n = new Notice { Id = Interlocked.Increment(ref _nextId), Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party };
             Background.Post(() => Brain.OnNotice(n));
         }
 

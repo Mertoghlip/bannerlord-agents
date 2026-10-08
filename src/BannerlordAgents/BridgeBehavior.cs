@@ -21,11 +21,15 @@ namespace BannerlordAgents
         public static void Start()
         {
             Running = true;
+            Live.CampaignRunning = true;
             CampaignId = Campaign.Current?.UniqueGameId ?? "unknown";
+            Diag.Count("campaign loads");
+            Watchdog.NewCampaign();
             Orders.Reset();
             Recorder.Reset();
             PacReader.Reset();
             Vision.Reset();
+            LordWatch.Reset();
             Names.Clear();
             Perf.ResetCapture();
             Calendar.Capture();
@@ -35,21 +39,28 @@ namespace BannerlordAgents
             Watched = Resolve(Settings.Watch);
             string id = CampaignId;
             Background.Start();
-            Background.Post(() => Brain.Reset(id));
+            Background.Post("new campaign", () => Brain.Reset(id));
             AgentChannel.Start();
+            GameHooks.Apply();
+            LordWatch.Refresh();
             Log.Line("session started: campaign " + id + ", " + Kingdom.All.Count + " kingdoms, " + MobileParty.All.Count + " parties, "
                      + Settlement.All.Count + " settlements; " + warmed + " names prepared in " + warmMs.ToString("0", Text.Inv) + " ms");
             Log.Line("watching: " + WatchedSummary());
             Log.Line("at load: " + Orders.FrozenAtLoad());
             Log.Line("files for this campaign: " + Paths.Data(id));
             Log.Line("agent channel: " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolder);
+            Diag.Event("session", "campaign started", new { campaign = id, watched = Watched?.StringId, agent = Settings.Agent, detail = Settings.Detail });
+            SelfCheck.Run();
         }
 
         public static void Stop()
         {
             Running = false;
+            Live.CampaignRunning = false;
             Watched = null;
-            Background.Post(Files.FlushAll);
+            Diag.Event("session", "campaign ended");
+            Background.Post("flush", Files.FlushAll);
+            Background.Post("summary", () => Diag.Summary(false));
         }
 
         public static Kingdom Resolve(string watch)
@@ -78,15 +89,18 @@ namespace BannerlordAgents
     }
 
     /// <summary>
-    /// Wires the bridge into the campaign: the hourly copy, the per-tick recorder poll and performance count, the
-    /// save hand-back, and every event the notices and the recorder listen to. Each handler is timed, so the bridge's
-    /// whole cost on the game's thread shows in the performance log.
+    /// Wires the bridge into the campaign: the hourly copy, the per-tick recorder poll and lord watch, the save
+    /// hand-back, and every event the notices and the recorder listen to. Each handler is timed by name and marked
+    /// as running (so a freeze can say whether our code was on the game's thread), and every error is counted.
     /// </summary>
     public class BridgeBehavior : CampaignBehaviorBase
     {
         private DateTime _lastDayAt = DateTime.Now;
         private int _pokesAtDayStart, _decisionsAtDayStart;
-        private static readonly HashSet<string> Failed = new HashSet<string>();
+        private double _lastSightCheck = -1;
+        private int _hoursThisSession;
+        private static readonly Diag.HookStat HourlyHook = Diag.Hook("hourly copy");
+        private static readonly Diag.HookStat TickHook = Diag.Hook("per-tick work");
 
         public override void RegisterEvents()
         {
@@ -125,21 +139,27 @@ namespace BannerlordAgents
         /// <summary>Nothing of ours goes into the save.</summary>
         public override void SyncData(IDataStore dataStore) { }
 
+        /// <summary>Runs one of our handlers: marked as running, timed by name, and any error counted with its trace.</summary>
         private static void Guard(string what, Action a)
         {
             long t = Perf.Now();
+            string before = Watchdog.Doing;
+            Watchdog.Doing = what;
             try { a(); }
-            catch (Exception e)
+            catch (Exception e) { Diag.Error(what, e); }
+            finally
             {
-                if (Failed.Add(what)) Log.Line(what + " failed (logged once per session): " + e);
+                Watchdog.Doing = before;
+                Perf.Add(t);
+                Diag.Took(Diag.Hook(what), t, what != "session start");   // the load's one-off warm-up is not a stutter
             }
-            Perf.Add(t);
         }
 
         private void OnSessionLaunched(CampaignGameStarter starter)
         {
-            Failed.Clear();
             _lastDayAt = DateTime.Now;
+            _lastSightCheck = -1;
+            _hoursThisSession = 0;
             Guard("session start", Bridge.Start);
         }
 
@@ -147,45 +167,75 @@ namespace BannerlordAgents
         {
             if (!Bridge.Running || !Settings.Bridge) return;
             long t = Perf.Now();
+            Watchdog.Doing = "hourly copy";
             try
             {
+                double hours = CampaignTime.Now.ToHours;
+                Watchdog.HourlyBeat(hours);
                 Snapshot snap = Capture.Take(Bridge.Watched, true);
+                if (_lastSightCheck < 0 || hours - _lastSightCheck >= 3)
+                {
+                    _lastSightCheck = hours;
+                    snap.Sight = Vision.Audit();
+                }
                 Orders.Hourly();
+                LordWatch.Refresh();
                 Recorder.PollVassalOrders();
-                Background.Post(() => Brain.OnHour(snap));
+                Background.Post("hourly view and pokes", () => Brain.OnHour(snap));
+                if (++_hoursThisSession == 6 && Reasons.Active && Diag.CountOf("ai:thoughts") == 0 && LordWatch.Count > 0)
+                    Diag.Alarm("ai_reasons_silent", "The AI-reasons hook is attached but recorded nothing in 6 in-game hours, although the watched realm has lords. "
+                                                     + "Another mod may have replaced the game's decision step for them.");
             }
-            catch (Exception e)
+            catch (Exception e) { Diag.Error("hourly copy", e); }
+            finally
             {
-                if (Failed.Add("hourly")) Log.Line("hourly copy failed (logged once per session): " + e);
+                Watchdog.Doing = null;
+                Perf.Capture(t);
+                Diag.Took(HourlyHook, t);
             }
-            Perf.Capture(t);
         }
 
         private void OnTick(float dt)
         {
+            if (Bridge.Running) Watchdog.CampaignBeat(CampaignTime.Now.ToHours);
             Perf.OnTick();
-            Background.DrainToMain();
-            if (!Bridge.Running || !Settings.Bridge) return;
-            Guard("recorder", Recorder.Poll);
+            long t = Perf.Now();
+            Watchdog.Doing = "per-tick work";
+            try
+            {
+                Background.DrainToMain();
+                if (!Bridge.Running || !Settings.Bridge) return;
+                Recorder.Poll();
+                LordWatch.Tick();
+            }
+            catch (Exception e) { Diag.Error("per-tick work", e); }
+            finally
+            {
+                Watchdog.Doing = null;
+                Perf.Add(t);
+                Diag.Took(TickHook, t);
+            }
         }
 
         private void OnDailyTick()
         {
-            try
+            Guard("daily line", () =>
             {
                 DateTime now = DateTime.Now;
                 double seconds = (now - _lastDayAt).TotalSeconds;
                 _lastDayAt = now;
                 double avg = Perf.Captures > 0 ? Perf.CaptureSumMs / Perf.Captures : 0;
                 int pokes = Brain.PokesWatched, decisions = Brain.DecisionsWritten;
-                Log.Line(Text.When(CampaignTime.Now.ToHours) + ": " + seconds.ToString("0.0", Text.Inv) + " s since the previous day; hourly copy "
+                Log.Line(Text.When(CampaignTime.Now.ToHours) + ": " + seconds.ToString("0.0", Text.Inv) + " s since the previous day (speed " + Watchdog.Speed + "); hourly copy "
                          + avg.ToString("0.00", Text.Inv) + " ms on average (max " + Perf.CaptureMaxMs.ToString("0.00", Text.Inv) + "); "
                          + (pokes - _pokesAtDayStart) + " pokes for the watched realm and " + (decisions - _decisionsAtDayStart)
                          + " of your decisions recorded today; worker jobs " + Background.Ran + ", dropped " + Background.Dropped);
+                Diag.Event("day", Text.When(CampaignTime.Now.ToHours), new { real_seconds = Math.Round(seconds, 1), speed = Watchdog.Speed, pokes = pokes - _pokesAtDayStart,
+                                                                             decisions = decisions - _decisionsAtDayStart, hourly_ms_avg = Math.Round(avg, 3) });
                 _pokesAtDayStart = pokes;
                 _decisionsAtDayStart = decisions;
-            }
-            catch { }
+            });
+            if (Bridge.Running) Guard("daily sweep", Orders.DailySweep);
         }
 
         private void OnBeforeSave() => Guard("save hand-back", Orders.HandBackForSave);

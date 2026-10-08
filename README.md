@@ -16,8 +16,9 @@ The study asks how much to leave to the model and how much to code. It also asks
 | `tests/SmokeTest/` | Runs the bridge's background half on a small made-up world outside the game. Mistakes surface there before they cost an in-game test. |
 | `protocol/` | Every file the module writes, and the fields in each record. |
 | `agent/` | Templates for the agent chat's own folder, which lives outside this repository so the agent cannot read the code. `scripts/setup-agent.ps1` installs them. See [docs/AGENT-CHAT.md](docs/AGENT-CHAT.md). |
-| `scripts/` | `deploy.ps1` builds the module and installs it into the game. It refuses while the game is open. |
-| `docs/` | The build plan, the first tests phase by phase, the hours log, and the proposal. |
+| `tools/FreezeProbe/` | A small program outside the game that says where the game is stuck when it freezes. The module starts it by itself; it is installed in the module's `probe` folder. |
+| `scripts/` | `deploy.ps1` builds everything, runs the smoke test, and installs the module into the game; it refuses while the game is open or if a check fails. `probe.ps1` runs the freeze probe by hand. `setup-agent.ps1` prepares the agent chat's folder. |
+| `docs/` | The build plan, the first tests phase by phase, the logs ([LOGGING.md](docs/LOGGING.md)), the hours log, and the proposal. |
 
 More arrives as the plan reaches it:
 - `src/BannerlordAgents.Core/`: the shared core and the tool engine (week 2).
@@ -38,4 +39,4 @@ Nothing from the game itself is stored here. The build reads the game's own file
 
 ## Where the module writes
 
-Everything goes under `%LOCALAPPDATA%\BannerlordAgents`, never the Documents folder, which OneDrive syncs. That covers its log, its settings, the performance log, and one folder per campaign for the reports, pokes and recordings. [protocol/README.md](protocol/README.md) lists every file. In the game's console (Alt + ~), `agents.status` reports what the module is doing, and `agents.help` lists the commands.
+Everything goes under `%LOCALAPPDATA%\BannerlordAgents`, never the Documents folder, which OneDrive syncs. That covers its log, its settings, the performance log, one folder per game launch for the detailed logs, and one folder per campaign for the reports, pokes and recordings. [protocol/README.md](protocol/README.md) lists every file. In the game's console (Alt + ~), `agents.status` reports what the module is doing, `agents.health` lists any alarms, and `agents.help` lists the commands.

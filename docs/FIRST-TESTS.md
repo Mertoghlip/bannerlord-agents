@@ -47,6 +47,8 @@ Your three newest saves were copied to `C:\BannerlordArchive\save-backups` befor
 
 Nothing needs sending: I read the files myself. Just tell me which phases you ran, and anything that looked wrong. Everything is in `%LOCALAPPDATA%\BannerlordAgents`, laid out in [protocol/README.md](../protocol/README.md).
 
+**The logs (since Oct 8, version 0.3).** Everything the strategists do is recorded in detail ([LOGGING.md](LOGGING.md)). A red "[Agents] Problem: ..." line on screen means a serious alarm (at most one a minute). `agents.health` lists the alarms so far and the state right now; `agents.blackbox` writes the black box if something looks wrong and you want me to see that moment. If the game freezes, the freeze probe runs by itself after 20 seconds; if it hangs on a loading screen, `scripts\probe.ps1` runs it by hand.
+
 ## Ground rules for every phase
 
 - Before the first install, your newest save is copied aside and never touched.

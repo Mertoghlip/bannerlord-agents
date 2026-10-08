@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Party;
@@ -51,7 +52,8 @@ namespace BannerlordAgents
             Type sub = null;
             foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
             {
-                try { sub = a.GetType("PartyAIControls.SubModule", false); } catch { }
+                try { sub = a.GetType("PartyAIControls.SubModule", false); }
+                catch (Exception e) { Diag.Swallowed("looking for Party AI Controls", e); }
                 if (sub != null) break;
             }
             if (sub == null) { Status = "Party AI Controls is not loaded, so vassal orders are not recorded"; _gaveUp = true; return false; }
@@ -61,7 +63,7 @@ namespace BannerlordAgents
                 FieldInfo f = sub.GetField("PartySettingsManager", Any);
                 mgr = f != null ? f.GetValue(null) : sub.GetProperty("PartySettingsManager", Any)?.GetValue(null, null);
             }
-            catch { }
+            catch (Exception e) { Diag.Swallowed("reading Party AI Controls", e); }
             if (mgr == null) { Status = "Party AI Controls found, its settings not ready yet"; return false; }
             _withOrders = mgr.GetType().GetProperty("HeroesWithOrders", Any);
             _table = _withOrders == null ? mgr.GetType().GetField("_partySettings", Any) : null;
@@ -77,7 +79,8 @@ namespace BannerlordAgents
             Type t = o.GetType();
             string key = t.FullName + "." + name;
             if (!Props.TryGetValue(key, out PropertyInfo p)) Props[key] = p = t.GetProperty(name, Any);
-            try { return p?.GetValue(o, null); } catch { return null; }
+            try { return p?.GetValue(o, null); }
+            catch (Exception e) { Diag.Swallowed("reading Party AI Controls (" + name + ")", e); return null; }
         }
 
         /// <summary>The orders held right now: hero id to "Behavior|target id".</summary>
@@ -91,7 +94,12 @@ namespace BannerlordAgents
                 items = _withOrders != null ? _withOrders.GetValue(_manager, null) as IEnumerable
                                             : (_table.GetValue(_manager) as IDictionary)?.Values;
             }
-            catch { }
+            catch (Exception e)
+            {
+                Diag.Count("pac:read failed");
+                Diag.Swallowed("reading Party AI Controls' order list", e);
+                Diag.Alarm("pac_read_failed", "Party AI Controls' list of vassal orders could not be read, so your dialogue orders are not being recorded.");
+            }
             if (items == null) return now;
             Kingdom mine = Clan.PlayerClan?.Kingdom;
             foreach (object st in items)
@@ -134,8 +142,13 @@ namespace BannerlordAgents
             }
             _last = new Dictionary<string, string>();
             foreach (var kv in now) _last[kv.Key] = kv.Value.Key;
+            if (changes.Count > 0)
+                Diag.Event("pac", "changes", new { holding = now.Count, changes = changes.Select(c => (c.Hero?.StringId ?? "?") + ": " + (c.Before ?? "none") + " -> " + (c.After ?? "none")).ToList() });
             return changes;
         }
+
+        /// <summary>Whether a lord holds an order in Party AI Controls. Read-only.</summary>
+        public static bool HoldsOrder(Hero h) => OrderOf(h) != null;
 
         /// <summary>The order a lord holds in Party AI Controls, in words, or null. Read-only, like everything here.</summary>
         public static string OrderOf(Hero h)

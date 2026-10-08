@@ -1,26 +1,44 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 
 namespace BannerlordAgents
 {
     /// <summary>
     /// The bridge's one background thread. The game's thread only copies numbers and hands them over here; this
-    /// thread works out views and pokes, builds reports and writes every file. It runs at low priority on the
-    /// efficiency cores (see Cpu), and it never touches a game object.
+    /// thread works out views and pokes, builds reports and writes every file, the logs included. It runs at low
+    /// priority on the efficiency cores (see Cpu), and it never touches a game object. It starts when the module
+    /// loads, so even start-up lines are written off the game's thread.
     /// </summary>
     internal static class Background
     {
-        private static readonly BlockingCollection<Action> Jobs = new BlockingCollection<Action>(new ConcurrentQueue<Action>(), 4096);
+        private struct Job
+        {
+            public string Name;
+            public Action Run;
+        }
+
+        private static readonly BlockingCollection<Job> Jobs = new BlockingCollection<Job>(new ConcurrentQueue<Job>(), 4096);
         private static Thread _thread;
         private static long _onEfficient, _sampled;
+        [ThreadStatic] private static bool _isWorker;
 
         public static string Placement = "not started";
         public static long Ran, Dropped, Failed;
+        /// <summary>The job running now and when it started (Stopwatch ticks, 0 when idle), for the watchdog.</summary>
+        public static volatile string CurrentJob;
+        public static long JobStarted;
+        /// <summary>The slowest job since the health row last read it.</summary>
+        public static long MaxJobTicks;
 
-        /// <summary>Work sent back to the game's thread, such as on-screen messages; drained every campaign tick.</summary>
+        /// <summary>Work sent back to the game's thread, such as agent orders; drained on each campaign tick (only while the clock runs).</summary>
         public static readonly ConcurrentQueue<Action> ToMain = new ConcurrentQueue<Action>();
+        /// <summary>On-screen messages; drained every frame in any state, so alarms show even while paused or in a menu.</summary>
+        public static readonly ConcurrentQueue<Action> ToUi = new ConcurrentQueue<Action>();
 
+        public static bool Running => _thread != null;
+        public static bool IsWorker => _isWorker;
         public static int Queued => Jobs.Count;
         public static double EfficientShare => _sampled == 0 ? double.NaN : (double)_onEfficient / _sampled;
 
@@ -32,10 +50,12 @@ namespace BannerlordAgents
         }
 
         /// <summary>Queues a job. Never blocks the game: if the queue is full, the job is dropped and counted.</summary>
-        public static void Post(Action job)
+        public static void Post(Action job) => Post("work", job);
+
+        public static void Post(string name, Action job)
         {
             if (_thread == null) Start();
-            if (!Jobs.TryAdd(job)) Interlocked.Increment(ref Dropped);
+            if (!Jobs.TryAdd(new Job { Name = name, Run = job })) Interlocked.Increment(ref Dropped);
         }
 
         /// <summary>Runs a job on the worker and waits for its answer. For console commands only.</summary>
@@ -43,30 +63,41 @@ namespace BannerlordAgents
         {
             T value = default(T);
             var done = new ManualResetEventSlim(false);
-            Post(() =>
+            Post("console", () =>
             {
                 try { value = job(); }
                 finally { done.Set(); }
             });
             bool ok = done.Wait(timeoutMs);
+            if (!ok) Diag.Alarm("helper_slow_answer", "The background helper did not answer a console command within " + timeoutMs / 1000 + " s (busy with: " + (CurrentJob ?? "nothing") + ").");
             result = value;
             return ok;
         }
 
-        /// <summary>Called by the game's thread every tick: shows what the worker sent back.</summary>
+        /// <summary>Called by the game's thread on each campaign tick: carries out what the worker sent back.</summary>
         public static void DrainToMain(int max = 8)
         {
             for (int i = 0; i < max && ToMain.TryDequeue(out Action a); i++)
             {
-                try { a(); } catch (Exception e) { Log.Line("main-thread hand-back failed: " + e.Message); }
+                try { a(); } catch (Exception e) { Diag.Error("work handed back to the game's thread", e); }
+            }
+        }
+
+        /// <summary>Called by the game's thread every frame: on-screen messages.</summary>
+        public static void DrainToUi(int max = 4)
+        {
+            for (int i = 0; i < max && ToUi.TryDequeue(out Action a); i++)
+            {
+                try { a(); } catch (Exception e) { Diag.Swallowed("on-screen message", e); }
             }
         }
 
         private static void Loop()
         {
+            _isWorker = true;
             Placement = Cpu.MakeCurrentThreadBackground();
             Log.Line("worker thread started: " + Placement);
-            foreach (Action job in Jobs.GetConsumingEnumerable())
+            foreach (Job job in Jobs.GetConsumingEnumerable())
             {
                 int cpu = Cpu.CurrentProcessor();
                 if (cpu >= 0)
@@ -74,8 +105,15 @@ namespace BannerlordAgents
                     _sampled++;
                     if (Cpu.IsEfficient(cpu)) _onEfficient++;
                 }
-                try { job(); Ran++; }
-                catch (Exception e) { Failed++; Log.Line("worker job failed: " + e); }
+                long t = Stopwatch.GetTimestamp();
+                CurrentJob = job.Name;
+                Interlocked.Exchange(ref JobStarted, t);
+                try { job.Run(); Ran++; }
+                catch (Exception e) { Failed++; Diag.Error("background job '" + job.Name + "'", e); }
+                long d = Stopwatch.GetTimestamp() - t;
+                Interlocked.Exchange(ref JobStarted, 0);
+                CurrentJob = null;
+                if (d > Interlocked.Read(ref MaxJobTicks)) Interlocked.Exchange(ref MaxJobTicks, d);
                 if (Jobs.Count == 0) Files.FlushAll();
             }
         }

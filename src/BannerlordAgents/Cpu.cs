@@ -89,7 +89,8 @@ namespace BannerlordAgents
         public static string MakeCurrentThreadBackground()
         {
             var notes = new List<string>();
-            try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; notes.Add("low priority"); } catch { }
+            try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; notes.Add("low priority"); }
+            catch (Exception e) { notes.Add("low priority refused: " + e.Message); }
             try
             {
                 var state = new ThreadPowerThrottlingState { Version = 1, ControlMask = 1, StateMask = 1 };
@@ -111,9 +112,21 @@ namespace BannerlordAgents
             return string.Join(", ", notes);
         }
 
+        private static bool _noProcessorNumber;
+
         public static int CurrentProcessor()
         {
-            try { return (int)GetCurrentProcessorNumber(); } catch { return -1; }
+            if (_noProcessorNumber) return -1;
+            try { return (int)GetCurrentProcessorNumber(); }
+            catch (Exception e) { _noProcessorNumber = true; Diag.Swallowed("which core a thread runs on", e); return -1; }
+        }
+
+        /// <summary>Processor time used by the calling thread so far, in ms (-1 if Windows does not say).</summary>
+        public static long ThreadCpuMs()
+        {
+            try { if (GetThreadTimes(GetCurrentThread(), out long _, out long _, out long kernel, out long user)) return (kernel + user) / 10000; }
+            catch (Exception e) { Diag.Swallowed("thread processor time", e); }
+            return -1;
         }
 
         private static long[] _idle, _total;
@@ -153,7 +166,7 @@ namespace BannerlordAgents
                 }
                 finally { Marshal.FreeHGlobal(buf); }
             }
-            catch { return null; }
+            catch (Exception e) { Diag.Swallowed("core loads", e); return null; }
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -178,6 +191,9 @@ namespace BannerlordAgents
 
         [DllImport("kernel32.dll")]
         private static extern uint GetCurrentProcessorNumber();
+
+        [DllImport("kernel32.dll")]
+        private static extern bool GetThreadTimes(IntPtr thread, out long creation, out long exit, out long kernel, out long user);
 
         [DllImport("ntdll.dll")]
         private static extern int NtQuerySystemInformation(int informationClass, IntPtr information, int length, out int returnLength);

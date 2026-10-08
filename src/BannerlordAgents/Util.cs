@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
@@ -49,7 +50,7 @@ namespace BannerlordAgents
                 DaysInSeason = Math.Max(1, TaleWorlds.CampaignSystem.CampaignTime.DaysInSeason);
                 SeasonsInYear = Math.Max(1, TaleWorlds.CampaignSystem.CampaignTime.DaysInYear / DaysInSeason);
             }
-            catch { }
+            catch (Exception e) { Diag.Swallowed("reading the calendar", e); }
             for (int i = 0; i < SeasonNames.Length; i++)
             {
                 try
@@ -57,21 +58,28 @@ namespace BannerlordAgents
                     string name = TaleWorlds.Core.GameTexts.FindText("str_season_" + (TaleWorlds.CampaignSystem.CampaignTime.Seasons)i)?.ToString();
                     if (!string.IsNullOrEmpty(name)) SeasonNames[i] = name;
                 }
-                catch { }
+                catch (Exception e) { Diag.Swallowed("reading the season names", e); }
             }
         }
 
         public static string When(double hours)
         {
-            long h = (long)Math.Floor(hours);
-            long day = h / HoursInDay;
-            int hour = (int)(h % HoursInDay);
-            int daysInYear = DaysInSeason * SeasonsInYear;
-            long year = day / daysInYear;
-            int dayOfYear = (int)(day % daysInYear);
-            int season = dayOfYear / DaysInSeason;
+            Parts(hours, out int season, out int day, out long year, out int hour);
             string seasonName = season < SeasonNames.Length ? SeasonNames[season] : "Season " + (season + 1);
-            return seasonName + " " + (dayOfYear % DaysInSeason + 1) + ", " + year + ", " + hour.ToString("00", Text.Inv) + ":00";
+            return seasonName + " " + (day + 1) + ", " + year + ", " + hour.ToString("00", Text.Inv) + ":00";
+        }
+
+        /// <summary>Season (0-based), day of the season (0-based), year and hour, as the game counts them; the self-check compares these with the game's own.</summary>
+        public static void Parts(double hours, out int season, out int day, out long year, out int hour)
+        {
+            long h = (long)Math.Floor(hours);
+            long days = h / HoursInDay;
+            hour = (int)(h % HoursInDay);
+            int daysInYear = DaysInSeason * SeasonsInYear;
+            year = days / daysInYear;
+            int dayOfYear = (int)(days % daysInYear);
+            season = dayOfYear / DaysInSeason;
+            day = dayOfYear % DaysInSeason;
         }
     }
 
@@ -90,12 +98,16 @@ namespace BannerlordAgents
 
     /// <summary>
     /// The worker's open files. Lines are buffered and flushed whenever the worker has nothing else queued. Files
-    /// are shared for reading, so they can be opened while the game writes to them.
+    /// are shared for reading, so they can be opened while the game writes to them. A file that is rewritten whole
+    /// (the agent's poke.txt and report.txt, the reports) is written beside the old one and swapped in, so a reader
+    /// never sees half a file. Failures are counted and reported, never dropped silently.
     /// </summary>
     internal static class Files
     {
         private static readonly Dictionary<string, StreamWriter> Open = new Dictionary<string, StreamWriter>(StringComparer.OrdinalIgnoreCase);
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
+
+        public static int OpenCount => Open.Count;
 
         public static void Append(string path, string line)
         {
@@ -104,43 +116,62 @@ namespace BannerlordAgents
                 if (!Open.TryGetValue(path, out StreamWriter w))
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    w = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite), Utf8);
+                    w = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete), Utf8);
                     Open[path] = w;
                 }
                 w.WriteLine(line);
             }
-            catch (Exception e) { Log.Line("could not write " + path + ": " + e.Message); }
+            catch (Exception e) { Diag.Error("writing " + Path.GetFileName(path), e); }
         }
 
         public static bool IsNew(string path)
         {
             try { return !Open.ContainsKey(path) && (!File.Exists(path) || new FileInfo(path).Length == 0); }
-            catch { return false; }
+            catch (Exception e) { Diag.Swallowed("checking " + Path.GetFileName(path), e); return false; }
         }
 
+        /// <summary>Replaces a whole file at once: written as (name).new, then swapped in (retried if a reader holds it).</summary>
         public static void Overwrite(string path, string text)
         {
+            string tmp = path + ".new";
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllText(path, text, Utf8);
+                if (!File.Exists(path)) { File.WriteAllText(path, text, Utf8); return; }
+                File.WriteAllText(tmp, text, Utf8);
+                for (int i = 0; ; i++)
+                {
+                    try { File.Replace(tmp, path, null, true); return; }
+                    catch (IOException) when (i < 4) { Thread.Sleep(15); }
+                    catch (UnauthorizedAccessException) when (i < 4) { Thread.Sleep(15); }
+                }
             }
-            catch (Exception e) { Log.Line("could not write " + path + ": " + e.Message); }
+            catch (Exception e)
+            {
+                Diag.Swallowed("swapping in " + Path.GetFileName(path), e);
+                try
+                {
+                    File.WriteAllText(path, text, Utf8);
+                    Diag.Count("files:rewritten in place");
+                }
+                catch (Exception e2) { Diag.Error("writing " + Path.GetFileName(path), e2); }
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch (Exception e3) { Diag.Swallowed("removing " + Path.GetFileName(tmp), e3); }
+            }
         }
 
         public static void FlushAll()
         {
-            foreach (StreamWriter w in Open.Values)
+            foreach (KeyValuePair<string, StreamWriter> kv in Open)
             {
-                try { w.Flush(); } catch { }
+                try { kv.Value.Flush(); } catch (Exception e) { Diag.Swallowed("flushing " + Path.GetFileName(kv.Key), e); }
             }
         }
 
         public static void CloseAll()
         {
-            foreach (StreamWriter w in Open.Values)
+            foreach (KeyValuePair<string, StreamWriter> kv in Open)
             {
-                try { w.Dispose(); } catch { }
+                try { kv.Value.Dispose(); } catch (Exception e) { Diag.Swallowed("closing " + Path.GetFileName(kv.Key), e); }
             }
             Open.Clear();
         }

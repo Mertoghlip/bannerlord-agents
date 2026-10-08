@@ -21,6 +21,10 @@ namespace BannerlordAgents
     /// For a realm we apply the same rule from every one of its parties, and from its castles and towns, which look
     /// out with their garrison's sight (or the base 12/6 without one). A realm also always knows who besieges or raids
     /// its own holdings. Game's thread only: the sight range and the spotting ratio come from the game's own model.
+    ///
+    /// For the logs, it counts what it did each hour (eyes, holdings looked over, spotting ratios asked and reused)
+    /// and every time the game's sight model failed and a stand-in value was used; and every few in-game hours it runs
+    /// the sight check for the player's party by itself (Audit), our rule against the game's own view.
     /// </summary>
     internal static class Vision
     {
@@ -32,11 +36,13 @@ namespace BannerlordAgents
 
         private const float Cell = 60f;   // the game's maximum sight range, so a 3x3 block of cells holds every eye in range
         private static readonly Dictionary<string, KeyValuePair<float, double>> Ratios = new Dictionary<string, KeyValuePair<float, double>>();
+        private static VisionStats _stats = new VisionStats();
 
         public static void Reset() => Ratios.Clear();
 
         public static void FactionSees(Kingdom realm, List<MobileParty> live, Snapshot snap)
         {
+            _stats = new VisionStats();
             float baseRange = Campaign.Current.IsNight ? 6f : 12f;
             var eyes = new List<Eye>(256);
             foreach (MobileParty p in live)
@@ -104,6 +110,10 @@ namespace BannerlordAgents
 
             snap.WatchedSees = sees;
             snap.InspectedByWatched = inspected;
+            _stats.Eyes = eyes.Count;
+            _stats.Inspected = inspected.Count;
+            _stats.Seen = sees.Count;
+            snap.Vision = _stats;
         }
 
         /// <summary>The smallest distance-over-sight-range from any eye; below 1 means inside some eye's sight.</summary>
@@ -128,16 +138,32 @@ namespace BannerlordAgents
 
         private static float SightOf(MobileParty p, float fallback)
         {
-            try { return p.SeeingRange; } catch { return fallback; }
+            try { return p.SeeingRange; }
+            catch (Exception e)
+            {
+                _stats.RangeFailed++;
+                Diag.Swallowed("the game's sight range", e);
+                return fallback;
+            }
         }
 
         /// <summary>The game's spotting ratio for a party, kept for two in-game hours (it changes with terrain and size).</summary>
         private static float Ratio(MobileParty p, double now)
         {
-            if (Ratios.TryGetValue(p.StringId, out KeyValuePair<float, double> kv) && now - kv.Value < 2.0) return kv.Key;
+            if (Ratios.TryGetValue(p.StringId, out KeyValuePair<float, double> kv) && now - kv.Value < 2.0)
+            {
+                _stats.RatioCached++;
+                return kv.Key;
+            }
+            _stats.RatioAsked++;
             float ratio;
             try { ratio = Campaign.Current.Models.MapVisibilityModel.GetPartySpottingRatioForMainPartySeeingRange(p); }
-            catch { ratio = 1f; }
+            catch (Exception e)
+            {
+                _stats.RatioFailed++;
+                Diag.Swallowed("the game's spotting ratio", e);
+                ratio = 1f;
+            }
             Ratios[p.StringId] = new KeyValuePair<float, double>(ratio, now);
             return ratio;
         }
@@ -146,46 +172,65 @@ namespace BannerlordAgents
         private static long Key(int x, int y) => ((long)x << 32) ^ (uint)y;
 
         /// <summary>
-        /// The sight check: our rule applied to the player's own party, against the game's own flags.
+        /// The sight check, as numbers: our rule applied to the player's own party, against the game's own flags, for
+        /// every party near the player. Each disagreement keeps the numbers that explain it.
         /// </summary>
-        public static string CheckPlayer()
+        public static SightAudit Audit()
         {
             MobileParty me = MobileParty.MainParty;
-            if (me == null) return "There is no player party.";
-            if (Campaign.Current.TrueSight) return "True sight (a cheat) is on, so the game shows every party. Switch it off and check again.";
+            if (me == null || Campaign.Current.TrueSight) return null;
             float range = me.SeeingRange;
-            int agree = 0, total = 0;
-            var diffs = new List<string>();
+            var a = new SightAudit { Range = range, Night = Campaign.Current.IsNight };
             foreach (MobileParty p in MobileParty.All)
             {
                 if (p == null || p == me || !p.IsActive) continue;
                 float d = p.Position.Distance(me.Position);
                 if (d > range * 1.6f && !p.IsVisible) continue;
-                bool ours = OursForPlayer(p, me, range, 0);
+                bool ours = OursForPlayer(p, me, range, 0, out float ratio);
                 bool game = p.IsVisible;
-                total++;
-                if (ours == game) agree++;
-                else if (diffs.Count < 8)
-                    diffs.Add(Names.Party(p) + " at " + Text.D(d) + ": our rule says " + (ours ? "seen" : "hidden") + ", the game says " + (game ? "seen" : "hidden"));
+                a.Total++;
+                if (ours == game) { a.Agree++; continue; }
+                if (a.Disagree.Count >= 20) continue;
+                a.Disagree.Add(new SightCase
+                {
+                    Id = p.StringId, Name = Names.Party(p), Kind = p.IsLordParty ? "lord" : p.IsBandit ? "bandit" : p.IsCaravan ? "caravan" : p.IsVillager ? "villager" : "other",
+                    Men = p.Party.NumberOfHealthyMembers, Distance = d, Ratio = ratio, Ours = ours, Game = game,
+                    InSettlement = p.CurrentSettlement != null, ArmyMember = p.Army != null && p.Army.LeaderParty != p,
+                    Besieging = p.BesiegedSettlement != null, Raiding = p.MapEvent != null && p.MapEvent.IsRaid
+                });
             }
-            string head = "Your sight range is " + Text.D(range) + ". For the " + total + " parties near you, our rule agrees with the game on " + agree + ".";
-            return diffs.Count == 0 ? head : head + "\n  " + string.Join("\n  ", diffs);
+            return a;
         }
 
-        private static bool OursForPlayer(MobileParty p, MobileParty me, float range, int depth)
+        /// <summary>For the console (agents.vision_check): the same check, in words.</summary>
+        public static string CheckPlayer()
         {
+            MobileParty me = MobileParty.MainParty;
+            if (me == null) return "There is no player party.";
+            if (Campaign.Current.TrueSight) return "True sight (a cheat) is on, so the game shows every party. Switch it off and check again.";
+            SightAudit a = Audit();
+            if (a == null) return "The check could not run.";
+            string head = "Your sight range is " + Text.D(a.Range) + ". For the " + a.Total + " parties near you, our rule agrees with the game on " + a.Agree + ".";
+            if (a.Disagree.Count == 0) return head;
+            return head + "\n  " + string.Join("\n  ", a.Disagree.Take(8).Select(c => c.Name + " at " + Text.D(c.Distance) + " (spotting ratio " + c.Ratio.ToString("0.00", Text.Inv)
+                                                                                     + "): our rule says " + (c.Ours ? "seen" : "hidden") + ", the game says " + (c.Game ? "seen" : "hidden")));
+        }
+
+        private static bool OursForPlayer(MobileParty p, MobileParty me, float range, int depth, out float ratio)
+        {
+            ratio = -1f;
             if (!p.IsActive) return false;
             bool computed = p.CurrentSettlement == null || p.LeaderHero?.ClanBanner != null
                             || (p.MapEvent != null && p.MapEvent.IsSiegeAssault && p.Party.Side == TaleWorlds.Core.BattleSideEnum.Attacker);
             if (!computed) return false;
             if (p.Army != null && p.Army.LeaderParty != null && p.Army.LeaderParty != p && p.Army.LeaderParty.AttachedParties.Contains(p))
-                return depth < 3 && OursForPlayer(p.Army.LeaderParty, me, range, depth + 1);
+                return depth < 3 && OursForPlayer(p.Army.LeaderParty, me, range, depth + 1, out ratio);
             if (p.SiegeEvent != null && Inspected(p.SiegeEvent.BesiegedSettlement, me, range)) return true;
             if (p.MapEvent != null && p.MapEvent.IsRaid && Inspected(p.MapEvent.MapEventSettlement, me, range)) return true;
             float n = p.Position.Distance(me.Position) / range;
+            try { ratio = Campaign.Current.Models.MapVisibilityModel.GetPartySpottingRatioForMainPartySeeingRange(p); }
+            catch (Exception e) { Diag.Swallowed("the game's spotting ratio (sight check)", e); ratio = 1f; }
             if (n >= 1f) return false;
-            float ratio;
-            try { ratio = Campaign.Current.Models.MapVisibilityModel.GetPartySpottingRatioForMainPartySeeingRange(p); } catch { ratio = 1f; }
             return n <= ratio;
         }
 

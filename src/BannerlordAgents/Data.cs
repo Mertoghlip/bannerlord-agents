@@ -68,6 +68,8 @@ namespace BannerlordAgents
     /// <summary>Something a ruler would be told about: a war, a siege, a raid, a holding lost, an army broken.</summary>
     internal sealed class Notice
     {
+        /// <summary>Numbered as it happens, so the logs can follow it to the poke that carried it.</summary>
+        public int Id;
         public double Hours;
         public string Kind;
         public string Text;
@@ -95,6 +97,36 @@ namespace BannerlordAgents
         public Dictionary<string, Sighting> WatchedSees;
         /// <summary>Settlements close enough to the watched realm's eyes for their garrisons to be counted.</summary>
         public HashSet<string> InspectedByWatched;
+
+        // for the logs (docs/LOGGING.md)
+        /// <summary>When the copy began (UTC ticks), so the logs can say how long the worker took after it.</summary>
+        public long Wall;
+        /// <summary>The copy's parts on the game's thread, in ms: realms, holdings, parties, hostility, sight, names.</summary>
+        public double[] PartsMs;
+        public VisionStats Vision;
+        /// <summary>Every few in-game hours: our sight rule against the game's own, for the player's party.</summary>
+        public SightAudit Sight;
+    }
+
+    internal sealed class VisionStats
+    {
+        public int Eyes, Inspected, Seen, RatioAsked, RatioCached, RatioFailed, RangeFailed;
+    }
+
+    internal sealed class SightAudit
+    {
+        public float Range;
+        public bool Night;
+        public int Total, Agree;
+        public List<SightCase> Disagree = new List<SightCase>();
+    }
+
+    internal sealed class SightCase
+    {
+        public string Id, Name, Kind;
+        public float Distance, Ratio;
+        public int Men;
+        public bool Ours, Game, InSettlement, ArmyMember, Besieging, Raiding;
     }
 
     /// <summary>A party the player could see when a decision was made.</summary>
@@ -130,6 +162,9 @@ namespace BannerlordAgents
         public List<SeenParty> SeenByYou;
         public object Realm;
         public List<Trigger> RecentPokes;
+        /// <summary>For movements: in-game hours from the first click of this course to the decision, and quick corrections merged into it.</summary>
+        public double? SettleHours;
+        public int? Corrections;
     }
 
     internal sealed class Trigger
@@ -138,5 +173,7 @@ namespace BannerlordAgents
         public string Kind;
         public string Text;
         public string Party;
+        /// <summary>The notice it came from, if any.</summary>
+        public int? Notice;
     }
 }

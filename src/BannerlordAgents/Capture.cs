@@ -18,6 +18,7 @@ namespace BannerlordAgents
 
         public static Snapshot Take(Kingdom watched, bool withVision)
         {
+            long t0 = Perf.Now();
             Campaign c = Campaign.Current;
             IFaction player = Clan.PlayerClan?.MapFaction;
             var snap = new Snapshot
@@ -28,7 +29,8 @@ namespace BannerlordAgents
                 Date = DateText(),
                 PlayerFaction = player?.StringId,
                 PlayerParty = MobileParty.MainParty?.StringId,
-                Watched = watched?.StringId
+                Watched = watched?.StringId,
+                Wall = DateTime.UtcNow.Ticks
             };
             var factions = new Dictionary<string, IFaction>();
 
@@ -43,6 +45,7 @@ namespace BannerlordAgents
                 snap.Factions[k.StringId] = row;
                 factions[k.StringId] = k;
             }
+            long t1 = Perf.Now();
 
             foreach (Settlement s in Settlement.All)
             {
@@ -74,6 +77,7 @@ namespace BannerlordAgents
                 snap.SettlementById[r.Id] = r;
                 if (f != null && !factions.ContainsKey(f.StringId)) factions[f.StringId] = f;
             }
+            long t2 = Perf.Now();
 
             var live = new List<MobileParty>(4096);
             foreach (MobileParty p in MobileParty.All)
@@ -86,6 +90,7 @@ namespace BannerlordAgents
                 IFaction f = p.MapFaction;
                 if (f != null && !factions.ContainsKey(f.StringId)) factions[f.StringId] = f;
             }
+            long t3 = Perf.Now();
 
             foreach (KeyValuePair<string, IFaction> kv in factions)
             {
@@ -94,7 +99,9 @@ namespace BannerlordAgents
                 if (player != null && kv.Value != player && FactionManager.IsAtWarAgainstFaction(kv.Value, player)) snap.HostileToPlayer.Add(kv.Key);
             }
 
+            long t4 = Perf.Now();
             if (withVision && watched != null) Vision.FactionSees(watched, live, snap);
+            long t5 = Perf.Now();
 
             // Names only where someone may read them: lords, the two realms' own parties, and anything seen.
             for (int i = 0; i < live.Count; i++)
@@ -104,8 +111,12 @@ namespace BannerlordAgents
                     || (snap.WatchedSees != null && snap.WatchedSees.ContainsKey(r.Id)))
                     r.Name = Names.Party(live[i]);
             }
+            long t6 = Perf.Now();
+            snap.PartsMs = new[] { Ms(t0, t1), Ms(t1, t2), Ms(t2, t3), Ms(t3, t4), Ms(t4, t5), Ms(t5, t6) };
             return snap;
         }
+
+        private static double Ms(long a, long b) => (b - a) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
 
         public static PartyRow Row(MobileParty p)
         {
@@ -144,7 +155,8 @@ namespace BannerlordAgents
 
         public static string DateText()
         {
-            try { return CampaignTime.Now.ToString(); } catch { return ""; }
+            try { return CampaignTime.Now.ToString(); }
+            catch (Exception e) { Diag.Swallowed("the game's date text", e); return ""; }
         }
     }
 }

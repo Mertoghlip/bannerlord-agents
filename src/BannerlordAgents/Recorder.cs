@@ -41,8 +41,13 @@ namespace BannerlordAgents
         private static double _pendingSince, _lastCommittedAt;
         private static string _talkedTo;
         private static double _talkedAt = -1;
+        private static bool _chain, _inArmy;
+        private static double _chainStart;
+        private static int _correctionsBase;
 
         public static int Clicks, Corrections, Committed;
+        private static double _settle = -1;
+        private static int _merged;
 
         private static bool On => Bridge.Running && Settings.Bridge && Settings.Record;
 
@@ -51,6 +56,7 @@ namespace BannerlordAgents
             _have = _pending = _haveCommitted = false;
             _talkedTo = null;
             _talkedAt = -1;
+            _chain = _inArmy = false;
             Clicks = Corrections = Committed = 0;
         }
 
@@ -61,7 +67,15 @@ namespace BannerlordAgents
             if (!On) return;
             MobileParty mp = MobileParty.MainParty;
             if (mp == null || !mp.IsActive) return;
-            if (mp.AttachedTo != null) { _have = false; return; }   // marching in someone else's army: not the player's call
+            if (mp.AttachedTo != null)   // marching in someone else's army: not the player's call
+            {
+                if (!_inArmy) { _inArmy = true; Diag.Event("recorder", "paused", new { why = "you march in " + Names.Party(mp.AttachedTo) + "'s army" }); }
+                _have = false;
+                _pending = false;
+                _chain = false;
+                return;
+            }
+            if (_inArmy) { _inArmy = false; Diag.Event("recorder", "resumed"); }
             double t = CampaignTime.Now.ToHours;
             Intent now = Read(mp);
             if (!_have) { _current = now; _have = true; return; }
@@ -78,6 +92,7 @@ namespace BannerlordAgents
                 bool repeat = _haveCommitted && Same(now, _lastCommitted) && t - _lastCommittedAt < 6;
                 if (IsIntent(now) && !repeat)
                 {
+                    if (!_chain) { _chain = true; _chainStart = t; _correctionsBase = Corrections; }
                     if (_pending) Corrections++;
                     _pendingIntent = now;
                     _pendingSince = t;
@@ -90,7 +105,11 @@ namespace BannerlordAgents
                 _lastCommitted = _pendingIntent;
                 _lastCommittedAt = t;
                 _haveCommitted = true;
+                _settle = _chain ? t - _chainStart : SettleHours;
+                _merged = _chain ? Corrections - _correctionsBase : 0;
+                _chain = false;
                 CommitMove(mp, _pendingIntent);
+                _settle = -1;
             }
         }
 
@@ -274,6 +293,9 @@ namespace BannerlordAgents
         private static void Emit(string kind, string text, TargetInfo target, string lord = null, string verb = null)
         {
             MobileParty me = MobileParty.MainParty;
+            double? settle = null;
+            int? merged = null;
+            if (_settle >= 0) { settle = Math.Round(_settle, 3); merged = _merged; _settle = -1; }
             var d = new DecisionRecord
             {
                 Kind = kind,
@@ -286,9 +308,12 @@ namespace BannerlordAgents
                 Verb = verb,
                 You = me != null ? Seen(me, me) : null,
                 Target = target,
-                SeenByYou = me != null ? SeenNow(me) : null
+                SeenByYou = me != null ? SeenNow(me) : null,
+                SettleHours = settle,
+                Corrections = merged
             };
             Committed++;
+            Diag.Event("decision", kind, new { text, settle_hours = settle, corrections = merged, seen = d.SeenByYou?.Count });
             Background.Post(() => Brain.WriteDecision(d));
         }
 
