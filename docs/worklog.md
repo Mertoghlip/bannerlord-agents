@@ -8,3 +8,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Oct 7 | | Plan update (live play, recorder, idle cores, orc tests); first install built, checked outside the game, installed | 1 |
 | Oct 7 | | Agent channel and agent chat; direct vassal orders checked; module ticked in the launcher | 1 |
 | Oct 8 | | The strategists' logs (version 0.3): watchdog, black box, freeze probe, fog and sight checks, order tracing, the game AI's reasons, the movement watcher; five fixes found while planning | 1 |
+| Oct 8 | | First live session (phases 0, 1, 2, 5): the agent in shadow mode; ghost-troop crashes traced and fixed in the fixes mod; report written | 1 |

@@ -22,6 +22,7 @@
 | 7 · Opus commands the realm | Opus runs a whole realm through tools, live | 3 | an evening of normal play |
 
 - **Install 1** has been in the game since Oct 7. It now also carries the agent channel, so phases 0 to 6 can all run on it.
+- **Oct 8, first live session:** phases 0, 1, 2 and 5 ran. The report is [reports/2026-10-08-first-live-session.md](reports/2026-10-08-first-live-session.md). Phases 3, 4 and 6 are still to run.
 - **The agent** for phases 5 and 6 is a separate Claude Code chat: see [AGENT-CHAT.md](AGENT-CHAT.md).
 - **Phase 7** needs the first tools, so it waits for install 3 at the end of next week.
 
