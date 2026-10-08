@@ -21,6 +21,9 @@ namespace SmokeTest
             string dir = Paths.Data(campaign);
             try { Directory.Delete(dir, true); } catch { }
             Settings.Notify = false;
+            string agentDir = Path.Combine(dir, "agent");
+            Settings.Agent = "shadow";
+            Settings.AgentDir = agentDir;
 
             Brain.Reset(campaign);
             Brain.OnHour(World(1000, playerSeen: false));                    // first look
@@ -56,6 +59,25 @@ namespace SmokeTest
             string decisions = Read(Path.Combine(dir, "record", "decisions.jsonl"));
             Check(decisions.Contains("\"realm\"") && decisions.Contains("\"recent_pokes\""), "the decision record carries the realm and the recent pokes");
             Check(File.Exists(Path.Combine(dir, "reports", "orcs_latest.txt")), "the latest report file exists");
+            Check(now.Contains("Bolg [lord_bolg]") && now.Contains("Orc Castle [castle_orc]"), "the report shows ids in brackets for orders");
+
+            // the agent channel: what the agent reads, and one answer file read back and receipted
+            string pokesLog = Read(Path.Combine(agentDir, "pokes.log"));
+            Check(pokesLog.Split('\n').Count(l => l.StartsWith("#")) == 3, "pokes.log has one line per poke");
+            string pokeTxt = Read(Path.Combine(agentDir, "poke.txt"));
+            Check(pokeTxt.StartsWith("POKE #3") && pokeTxt.Contains("SHADOW") && pokeTxt.Contains("WHY YOU ARE ASKED NOW"), "poke.txt carries the number, the mode and the reasons");
+            Check(File.Exists(Path.Combine(agentDir, "report.txt")), "report.txt is refreshed every hour");
+            string answer = Path.Combine(agentDir, "orders", "answer-3.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(answer));
+            File.WriteAllText(answer, "{\"poke\": 3, \"orders\": [{\"lord\": \"lord_bolg\", \"do\": \"garrison\", \"target\": \"castle_orc\", \"why\": \"hold\"},"
+                                      + " {\"lord\": \"Azog\", \"do\": \"engage\", \"target\": \"main_party\"}], \"note\": \"test\"}");
+            bool parsed = AgentChannel.Parse(answer, out int poke, out List<AgentChannel.AgentOrder> orders, out string error);
+            Check(parsed && poke == 3 && orders.Count == 2 && orders[1].Do == "engage" && orders[0].Poke == 3, "an answer file is read: " + (error ?? orders.Count + " orders for poke " + poke));
+            AgentChannel.Receipt(orders[0], "checked", "valid: Bolg garrisons Orc Castle (shadow mode: not carried out)", 1002.5);
+            Files.FlushAll();
+            string receipts = Read(Path.Combine(agentDir, "receipts.log"));
+            Check(receipts.Contains("CHECKED") && receipts.Contains("Answered") && receipts.Contains("after poke #3"), "the receipt says what happened and how long the answer took");
+            Check(!AgentChannel.Parse(answer + ".missing", out _, out _, out _), "a missing or broken file is reported, not guessed at");
 
             Console.WriteLine(_failures == 0 ? "\nALL CHECKS PASSED" : "\n" + _failures + " CHECK(S) FAILED");
             Console.WriteLine("files: " + dir);

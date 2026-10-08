@@ -15,6 +15,7 @@ The study asks how much to leave to the model and how much to code. It also asks
 | `src/BannerlordAgents/` | The bridge, the game module that runs inside the game. It is its own module, separate from TFAOMFixes. |
 | `tests/SmokeTest/` | Runs the bridge's background half on a small made-up world outside the game. Mistakes surface there before they cost an in-game test. |
 | `protocol/` | Every file the module writes, and the fields in each record. |
+| `agent/` | Templates for the agent chat's own folder, which lives outside this repository so the agent cannot read the code. `scripts/setup-agent.ps1` installs them. See [docs/AGENT-CHAT.md](docs/AGENT-CHAT.md). |
 | `scripts/` | `deploy.ps1` builds the module and installs it into the game. It refuses while the game is open. |
 | `docs/` | The build plan, the first tests phase by phase, the hours log, and the proposal. |
 

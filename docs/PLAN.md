@@ -38,7 +38,9 @@ One line each; the proposal page has the detail.
 | The bridge (game module) | Runs inside the game. Works out what each faction can see, spots the moments that need a decision, carries out orders, and runs the tools hour by hour. | `src/BannerlordAgents` | C# | now |
 | The recorder (part of the bridge) | Logs your decisions on the campaign map, with what your faction could see at that moment, in the same format as the agents' records | `src/BannerlordAgents` | C# | now |
 | The shared core | The message formats and the tool engine, which reads, checks and runs a tool. Used both by the bridge and by tests outside the game. | `src/BannerlordAgents.Core` | C# | Oct 12 |
-| The war room | The program beside the game where the agents decide: a queue per faction, the calls to the models, the checks, the master log, and tool writing | `src/BannerlordAgents.WarRoom` | C# | first slice Oct 12, in full Oct 19 |
+| The agent channel (part of the bridge) | Files through which an agent plays a realm: pokes and reports in, order files out, a receipt for every order | `src/BannerlordAgents` | C# | Oct 7 |
+| The agent chat | A separate Claude Code chat that plays the orcs through the channel, for the first tests | outside the repository; templates in `agent/` | — | Oct 7 |
+| The war room | The program beside the game where the agents decide: a queue per faction, the calls to the models, the checks, the master log, and tool writing. It takes over the agent channel from the chat. | `src/BannerlordAgents.WarRoom` | C# | Oct 19 |
 | Message formats | The exact shape of everything the bridge and the war room send each other, written down once | `protocol/` | JSON | this week |
 | Training and serving | Builds datasets from the logs and your recordings, fine-tunes the small models, and runs them beside the game | `training/` | Python | Nov 2 |
 | Analysis | The numbers, charts and the everyday-gamer table for the report | `analysis/` | Python | Oct 26 |
@@ -69,6 +71,9 @@ One line each; the proposal page has the detail.
 6. **Everything that runs during play is C#.** The war room is a C# program like the bridge, so the tool engine is one piece of code used in both places. A tool that passes the checks outside the game behaves the same way inside it. A player would need only the mod and one small program. Python arrives in November for training and charts.
 7. **The bridge and the war room talk over a private connection on the laptop,** one message per line. Neither waits on the other: the game carries on whatever the war room is doing.
 8. **The models are reached through Claude Code, on your subscription,** with no API key. The war room hands it the prompt and reads the orders back as JSON.
+   - For the first tests, the agent is a separate Claude Code chat ([AGENT-CHAT.md](AGENT-CHAT.md)). It has its own folder outside this repository, its own instructions, and no memory of the chat that builds the mod.
+   - It plays only through the agent channel: pokes and reports in, order files out, a receipt for every order. That makes it an independent test of the whole loop.
+   - The war room program takes over the same channel in week 3.
 9. **The game's own commands do the moving.**
    - Every primitive move maps to a command the 1.4.8 game already has: go to, engage, besiege, raid, defend, patrol, escort and hold.
    - For a lord holding our order, the game's AI is told to stop making its own decisions. The game still lets such a lord fight an enemy attacking the very place he was sent to; we keep that.
@@ -84,7 +89,11 @@ One line each; the proposal page has the detail.
       - the armies you form, and whom you call to them;
       - your realm's war, peace, alliance and call-to-war decisions;
       - the orders you give your vassals in conversation: defend a fief, patrol around a fief, patrol their own lands, wait in a fief, go and recruit, or act as they see fit.
-    - **How vassal orders are read:**
+    - **Vassal orders without Party AI Controls (checked Oct 7, [notes](notes/vassal-orders.md)):**
+      - They can go straight to the lord, with the bridge's own orders, which are the agents' orders. Party AI Controls itself uses the same game commands underneath.
+      - `agents.vassal` does this now and records the order with the agents' verbs.
+      - Moving the dialogue onto that path is your call.
+    - **How dialogue orders are read meanwhile:**
       - Your own mod hands each order to Party AI Controls. The recorder reads it there after every conversation and every in-game hour.
       - It only reads the list of lords who already hold an order. Asking Party AI Controls about any other lord would quietly create a saved entry for him, so the recorder never does.
       - This also catches orders you give your clan's parties through Party AI Controls' own screen.
@@ -116,7 +125,7 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 
 ### Week 2 · Oct 12–18 · 12 h · Opus live, and tools
 
-- [ ] First tests, install 2 (phases 5–6): Opus 5.5 watching the orcs live without acting, then commanding one orc lord
+- [ ] First tests, phases 5–6, with the agent chat (the agent channel came with install 1): Opus 5.5 watching the orcs live without acting, then commanding one orc lord
 - [ ] The behavior language, and the tool engine in the shared core, with tests that run without the game
 - [ ] defend, besiege and garrison, tried first on the orc lords
 - [ ] Faction authority: an agent orders only its own lords. **free** hands a lord back.

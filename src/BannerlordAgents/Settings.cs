@@ -21,6 +21,14 @@ namespace BannerlordAgents
         public static bool Perf = true;
         /// <summary>On-screen messages when the watched realm is poked or a hand order changes.</summary>
         public static bool Notify = true;
+        /// <summary>The agent channel: off, shadow (orders checked and logged, not carried out) or live.</summary>
+        public static string Agent = "off";
+        /// <summary>In live mode, which of the watched realm's lords obey the agent: "all", or hero ids/names, comma-separated.</summary>
+        public static string AgentLords = "all";
+        /// <summary>Where the agent channel lives; empty means %LOCALAPPDATA%\BannerlordAgents\agent.</summary>
+        public static string AgentDir = "";
+
+        public static string AgentFolder => string.IsNullOrWhiteSpace(AgentDir) ? Path.Combine(Paths.Root, "agent") : AgentDir.Trim();
 
         private static string FilePath => Path.Combine(Paths.Root, "settings.txt");
 
@@ -44,6 +52,9 @@ namespace BannerlordAgents
                         case "record": Record = On(value, Record); break;
                         case "perf": Perf = On(value, Perf); break;
                         case "notify": Notify = On(value, Notify); break;
+                        case "agent": Agent = Mode(value); break;
+                        case "agent_lords": AgentLords = value.Length > 0 ? value : "all"; break;
+                        case "agent_dir": AgentDir = value; break;
                     }
                 }
             }
@@ -61,9 +72,19 @@ namespace BannerlordAgents
                 sb.AppendLine("record = " + (Record ? "on" : "off"));
                 sb.AppendLine("perf = " + (Perf ? "on" : "off"));
                 sb.AppendLine("notify = " + (Notify ? "on" : "off"));
+                sb.AppendLine("# agent channel: off, shadow (orders checked, not carried out) or live; agent_lords = all or hero ids/names");
+                sb.AppendLine("agent = " + Agent);
+                sb.AppendLine("agent_lords = " + AgentLords);
+                sb.AppendLine("agent_dir = " + AgentDir);
                 File.WriteAllText(FilePath, sb.ToString());
             }
             catch (Exception e) { Log.Line("settings could not be saved: " + e.Message); }
+        }
+
+        public static string Mode(string value)
+        {
+            string v = (value ?? "").Trim().ToLowerInvariant();
+            return v == "shadow" || v == "live" ? v : "off";
         }
 
         public static bool On(string value, bool fallback)

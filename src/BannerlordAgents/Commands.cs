@@ -22,7 +22,10 @@ namespace BannerlordAgents
             "  agents.bridge on|off             all of the bridge's work, for the before/after comparison\n" +
             "  agents.watch <realm>             choose the realm under watch\n" +
             "  agents.notify on|off             on-screen messages for pokes and hand orders\n" +
-            "  agents.order <lord> <verb> <target>, agents.orders, agents.release <lord>|all";
+            "  agents.order <lord> <verb> <target>  a hand order for a lord of the watched realm\n" +
+            "  agents.vassal <lord> <verb> <target> an order for one of your own lords, recorded as your decision\n" +
+            "  agents.orders, agents.release <lord>|all\n" +
+            "  agents.agent [off|shadow|live [lords]|dir <folder>]  the agent channel (the agent chat's orders)";
 
         [CommandLineFunctionality.CommandLineArgumentFunction("status", "agents")]
         public static string Status(List<string> args)
@@ -38,7 +41,10 @@ namespace BannerlordAgents
                           + Recorder.Clicks + " changes of course (" + Recorder.Corrections + " quick corrections merged); written " + Brain.DecisionsWritten);
                 lines.Add("  vassal orders: " + PacReader.Status);
                 lines.Add("  pokes this session: " + Brain.PokesWatched + " for the watched realm, " + Brain.PokesPlayer + " for you");
-                lines.Add("  hand orders active: " + Orders.Count);
+                lines.Add("  orders active (hand, agent and yours): " + Orders.Count);
+                lines.Add("  agent channel: " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolder + ". This session: "
+                          + AgentChannel.AnswerFiles + " answer files, " + AgentChannel.OrdersReceived + " orders (" + AgentChannel.Applied + " applied, "
+                          + AgentChannel.Checked + " checked only, " + AgentChannel.Refused + " refused)");
                 lines.Add("  hourly copy on the game's thread: last " + Perf.CaptureLastMs.ToString("0.00", Text.Inv) + " ms, average "
                           + avg.ToString("0.00", Text.Inv) + " ms, max " + Perf.CaptureMaxMs.ToString("0.00", Text.Inv) + " ms over " + Perf.Captures + " hours");
                 lines.Add("  files: " + Paths.Data(Bridge.CampaignId));
@@ -146,6 +152,38 @@ namespace BannerlordAgents
 
         [CommandLineFunctionality.CommandLineArgumentFunction("order", "agents")]
         public static string Order(List<string> args) => Orders.Give(args);
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("vassal", "agents")]
+        public static string Vassal(List<string> args) => Orders.GiveVassal(args);
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("agent", "agents")]
+        public static string Agent(List<string> args)
+        {
+            string what = args != null && args.Count > 0 ? args[0].ToLowerInvariant() : "";
+            switch (what)
+            {
+                case "off":
+                case "shadow":
+                    Settings.Agent = what;
+                    break;
+                case "live":
+                    Settings.Agent = "live";
+                    Settings.AgentLords = args.Count > 1 ? string.Join(" ", args.Skip(1)) : "all";
+                    break;
+                case "dir":
+                    if (args.Count < 2) return "Agent channel folder: " + Settings.AgentFolder;
+                    Settings.AgentDir = string.Join(" ", args.Skip(1));
+                    break;
+                case "":
+                    return "Agent channel: " + AgentChannel.ModeText() + "\n  folder: " + Settings.AgentFolder
+                           + "\n  usage: agents.agent off | shadow | live [lord, lord, ...] | dir <folder>";
+                default:
+                    return "Usage: agents.agent off | shadow | live [lord, lord, ...] | dir <folder>";
+            }
+            Settings.Save();
+            Log.Line("agent channel set: " + Settings.Agent + ", lords " + Settings.AgentLords + ", folder " + Settings.AgentFolder);
+            return "Agent channel: " + AgentChannel.ModeText() + "\n  folder: " + Settings.AgentFolder;
+        }
 
         [CommandLineFunctionality.CommandLineArgumentFunction("orders", "agents")]
         public static string OrdersList(List<string> args) => Orders.List();

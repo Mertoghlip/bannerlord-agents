@@ -25,7 +25,7 @@ namespace BannerlordAgents
 
     internal sealed class ViewParty
     {
-        public string Id, Name, Faction, FactionName, Relation, Kind, Doing, Near, SeenBy, NearestHolding;
+        public string Id, Lord, Name, Faction, FactionName, Relation, Kind, Doing, Near, SeenBy, NearestHolding;
         public int Men, ArmyMen, ArmyParties;
         public float Strength, X, Y, NearDistance, HoldingDistance;
         public double SeenHours;
@@ -126,7 +126,7 @@ namespace BannerlordAgents
             sb.AppendLine("REPORT FOR " + v.FactionName.ToUpperInvariant());
             sb.AppendLine("Ruler: " + (v.Ruler ?? "unknown") + ". " + Text.When(v.Hours) + ", " + (v.Night ? "night." : "daytime."));
             sb.AppendLine("At war with: " + (v.AtWar.Count > 0 ? string.Join(", ", v.AtWar) : "no one") + ". Allies: " + (v.Allies.Count > 0 ? string.Join(", ", v.Allies) : "none") + ".");
-            sb.AppendLine("Distances are in map units. A party is seen only within sight of your lords, castles and towns.");
+            sb.AppendLine("Distances are in map units. A party is seen only within sight of your lords, castles and towns. Ids in [brackets] are what orders should name.");
 
             if (triggers != null && triggers.Count > 0)
             {
@@ -138,13 +138,13 @@ namespace BannerlordAgents
             foreach (ViewParty f in v.Forces)
             {
                 string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
-                sb.AppendLine("- " + f.Name + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + ".");
+                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + ".");
             }
 
             sb.AppendLine().AppendLine("YOUR HOLDINGS (" + v.Holdings.Count + ")");
             foreach (ViewHolding h in v.Holdings)
             {
-                var line = new StringBuilder("- " + h.Name + " (" + h.Kind + ")");
+                var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ")");
                 if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + ", militia " + Text.N(h.Militia));
                 if (!string.IsNullOrEmpty(h.Status)) line.Append("; " + h.Status);
                 if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Text.D(h.ThreatDistance));
@@ -158,7 +158,7 @@ namespace BannerlordAgents
                 string size = p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) + " men" : Text.N(p.Men) + " men";
                 string where = p.NearestHolding == null ? Where(p)
                              : Text.D(p.HoldingDistance) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? " (" + Where(p) + ")" : "");
-                sb.AppendLine("- " + p.Relation.ToUpperInvariant() + " " + p.Name + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
+                sb.AppendLine("- " + p.Relation.ToUpperInvariant() + " " + p.Name + Tag(p) + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
                     + "; " + where + "; " + p.Doing + "; seen by " + p.SeenBy + ".");
             }
             if (v.OthersInView > 0) sb.AppendLine("- Also in view: " + v.OthersInView + " caravans, villagers and other small parties.");
@@ -167,7 +167,7 @@ namespace BannerlordAgents
             {
                 sb.AppendLine().AppendLine("SEEN EARLIER, NOW OUT OF SIGHT (" + v.LastSeen.Count + ")");
                 foreach (ViewParty p in v.LastSeen)
-                    sb.AppendLine("- " + p.Name + " (" + p.FactionName + "): " + Text.N(p.ArmyMen > 0 ? p.ArmyMen : p.Men) + " men, last seen " + Where(p)
+                    sb.AppendLine("- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + Text.N(p.ArmyMen > 0 ? p.ArmyMen : p.Men) + " men, last seen " + Where(p)
                         + ", " + Math.Round(v.Hours - p.SeenHours) + " hours ago, " + p.Doing + ".");
             }
 
@@ -175,7 +175,7 @@ namespace BannerlordAgents
             {
                 sb.AppendLine().AppendLine("ENEMY HOLDINGS NEAR YOUR LANDS (" + v.Frontier.Count + ")");
                 foreach (ViewHolding h in v.Frontier)
-                    sb.AppendLine("- " + h.Name + " (" + h.Kind + ", " + h.FactionName + "): " + (h.Garrison >= 0 ? "garrison " + Text.N(h.Garrison) : "garrison not in sight")
+                    sb.AppendLine("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ", " + h.FactionName + "): " + (h.Garrison >= 0 ? "garrison " + Text.N(h.Garrison) : "garrison not in sight")
                         + (string.IsNullOrEmpty(h.Status) ? "" : "; " + h.Status) + ".");
             }
 
@@ -201,7 +201,7 @@ namespace BannerlordAgents
         {
             var vp = new ViewParty
             {
-                Id = r.Id, Name = r.Name ?? r.Id, Faction = r.Faction, FactionName = FactionName(s, r.Faction), Relation = relation,
+                Id = r.Id, Lord = r.Leader, Name = r.Name ?? r.Id, Faction = r.Faction, FactionName = FactionName(s, r.Faction), Relation = relation,
                 Kind = r.Kind, Men = r.Men, ArmyMen = r.ArmyMen, ArmyParties = r.ArmyParties, Strength = r.Strength,
                 X = r.X, Y = r.Y, Doing = Doing(s, r), SeenBy = seen?.By, SeenHours = s.Hours
             };
@@ -262,6 +262,8 @@ namespace BannerlordAgents
                 default: return "idle";
             }
         }
+
+        private static string Tag(ViewParty p) => " [" + (p.Lord ?? p.Id) + "]";
 
         private static string Where(ViewParty p) => p.Near != null ? (p.NearDistance < 1f ? "at " + p.Near : Text.D(p.NearDistance) + " from " + p.Near) : "in the wilds";
 

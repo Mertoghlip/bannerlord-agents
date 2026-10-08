@@ -87,6 +87,30 @@ A movement counts as a decision once it has held for a quarter of an in-game hou
 | Order | `type`: "order", `event` (issued, arrived, reissued, ended), `hours`, `lord`, `lord_name`, `verb`, `place`, `target`, `reissued`, `text` |
 | Notice | `hours`, `kind` (as the trigger kinds above), `text`, `factions` (the realms told), `party` |
 
+## Agent channel
+
+The channel lives in the folder set by `agent_dir` in `settings.txt`, now `C:\Users\karab\Projects\orc-war-council\channel`. It is used when `agent` is `shadow` or `live`.
+
+| File | Written by | Contents |
+|---|---|---|
+| `pokes.log` | bridge | one line per poke of the watched realm: `#12 \| Summer 3, 1085, 14:00 \| <first trigger> (and N more)` |
+| `poke.txt` | bridge | `POKE #12, <date>`, how to answer, the mode, then the full report. It is written before the poke's line appears in `pokes.log`. |
+| `report.txt` | bridge | `SITUATION AT <date>` and the mode, then the report without triggers. Refreshed every in-game hour. |
+| `orders\*.json` | agent | one answer per file, in the form shown below. Each file is read once and moved to `orders\done\`. |
+| `receipts.log` | bridge | one line per order (APPLIED, CHECKED in shadow mode, or REFUSED, with the reason and the answer time), and later lines for what became of agent orders (arrived, reissued, ended) |
+
+An answer file:
+
+```json
+{"poke": 12, "orders": [{"lord": "lord_MM1_2", "do": "garrison", "target": "castle_MM1", "why": "..."}], "note": "..."}
+```
+
+- `lord` and `target` take the ids shown in [brackets] in the report, or names.
+- `do` is one of `goto`, `garrison`, `patrol`, `defend`, `engage`, `besiege`, `raid`, `recruit`, `hold` or `free`.
+- A bare list of orders, or a single order object, is accepted too.
+
+Every receipt is also kept in the campaign's `orders.jsonl` as a record with `type` "agent_receipt". It has `poke`, `file`, `index`, `lord`, `do`, `target`, `why`, `status`, `reason`, `hours`, `answer_seconds`, `answer_game_hours` and `mode`. Orders the player gives through `agents.vassal` become decision records of kind `vassal_order`, with `lord` and `verb` fields.
+
 ## Performance log columns
 
 | Column | Meaning |

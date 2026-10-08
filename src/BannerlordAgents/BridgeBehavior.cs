@@ -36,11 +36,13 @@ namespace BannerlordAgents
             string id = CampaignId;
             Background.Start();
             Background.Post(() => Brain.Reset(id));
+            AgentChannel.Start();
             Log.Line("session started: campaign " + id + ", " + Kingdom.All.Count + " kingdoms, " + MobileParty.All.Count + " parties, "
                      + Settlement.All.Count + " settlements; " + warmed + " names prepared in " + warmMs.ToString("0", Text.Inv) + " ms");
             Log.Line("watching: " + WatchedSummary());
             Log.Line("at load: " + Orders.FrozenAtLoad());
             Log.Line("files for this campaign: " + Paths.Data(id));
+            Log.Line("agent channel: " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolder);
         }
 
         public static void Stop()

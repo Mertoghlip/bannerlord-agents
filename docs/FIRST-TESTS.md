@@ -17,11 +17,15 @@
 | 2 · Record your play | Your decisions are captured correctly | 1 | an evening of normal play, then a 5-minute read |
 | 3 · Performance | No frame-rate cost, and our work stays off the busy core | 1 | 10 minutes |
 | 4 · One order by hand | An orc lord obeys, and your save stays clean | 1 | about 30 minutes |
-| 5 · Opus watches | Answer time and usage while the game runs | 2 | normal play |
-| 6 · Opus commands one lord | The live loop works end to end | 2 | 30–60 minutes |
+| 5 · Opus watches | Answer time and usage while the game runs | 1, plus the agent chat | normal play |
+| 6 · Opus commands one lord | The live loop works end to end | 1, plus the agent chat | 30–60 minutes |
 | 7 · Opus commands the realm | Opus runs a whole realm through tools, live | 3 | an evening of normal play |
 
-Install 1 (phases 0–4) lands this week, and install 2 (phases 5–6) early next week. Install 3 (phase 7) comes at the end of next week, once the first tools exist. Each install is one restart of the game.
+- **Install 1** has been in the game since Oct 7. It now also carries the agent channel, so phases 0 to 6 can all run on it.
+- **The agent** for phases 5 and 6 is a separate Claude Code chat: see [AGENT-CHAT.md](AGENT-CHAT.md).
+- **Phase 7** needs the first tools, so it waits for install 3 at the end of next week.
+
+Each install is one restart of the game.
 
 ## Running install 1 (in the game since Wed Oct 7, 15:33)
 
@@ -37,6 +41,9 @@ Your three newest saves were copied to `C:\BannerlordArchive\save-backups` befor
 | 2 · Record | `agents.record show 10` lists your last decisions in plain words. `agents.record off` and `agents.record on` switch it. |
 | 3 · Performance | Play 3 minutes, then type `agents.bridge off`; play 3 more, then `agents.bridge on`. `agents.perf` compares the two. |
 | 4 · One order | `agents.order Throkmaw garrison Caradhras` (any orc lord and any castle they hold; partial names work, accents optional; where two lords share a name, the console shows each one's id to use instead). `agents.orders` shows how it's going; `agents.release Throkmaw` or `agents.release all` ends it. |
+| 5 · Opus watches | Open the agent chat ([AGENT-CHAT.md](AGENT-CHAT.md)). The bridge is already in shadow mode, which `agents.agent` confirms. |
+| 6 · Opus commands one lord | `agents.agent live Throkmaw` (any one lord). `agents.agent shadow` goes back, and `agents.release all` hands every lord back to the game. |
+| Your vassals | `agents.vassal <your lord> defend <your castle>` orders one of your own lords directly, with the agents' orders, and records it as your decision ([notes](notes/vassal-orders.md)). |
 
 Nothing needs sending: I read the files myself. Just tell me which phases you ran, and anything that looked wrong. Everything is in `%LOCALAPPDATA%\BannerlordAgents`, laid out in [protocol/README.md](../protocol/README.md).
 
@@ -151,20 +158,13 @@ This also gives the first campaign-map numbers for the busy core and the idle on
 - Load the save you made in step 4. The log reports no lord still held by us.
 - If his target falls, or he's beaten or captured, the order ends with that reason in the log.
 
-## Phase 5 · Opus 5.5 watches (install 2)
+## Phase 5 · Opus 5.5 watches (install 1 and the agent chat)
 
-**Needs once:** Claude Code's command-line program installed and signed in to your Claude account.
+**Needs once:** the agent chat, opened and seeded as in [AGENT-CHAT.md](AGENT-CHAT.md).
 
-**Built:** the war room's first slice. It is a small program beside the game that:
-- takes the orcs' pokes;
-- sends their report to Opus 5.5 through Claude Code;
-- logs the orders that come back, without applying them.
+**Built:** the agent channel. The bridge writes the orcs' pokes and report into the agent's folder. The agent answers each poke with an orders file. In shadow mode, every order is checked against the game and receipted, and none is carried out.
 
-It runs as low-priority background work.
-
-**First, without the game:** time Opus 5.5 on reports captured in phase 1. Record the answer time, how many answers are valid, and the usage.
-
-**You:** play as usual.
+**You:** play as usual. Glance at the agent chat now and then.
 
 **Measured:**
 - answer time, in seconds and in in-game hours at your usual speed;
@@ -183,7 +183,7 @@ It runs as low-priority background work.
 
 One lord shows whether the live loop works. The whole realm follows in phase 7, once the lords have tools.
 
-**Built:** Opus's orders applied for one lord. They pass the same checks as hand orders, plus the late-order check (plan, decision 4).
+**Built:** `agents.agent live <lord>`. Opus's orders are carried out for that one lord. They pass the same checks as hand orders, and are checked again on arrival (plan, decision 4).
 
 **You:** keep that lord in view for a while.
 

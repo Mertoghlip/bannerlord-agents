@@ -259,9 +259,19 @@ namespace BannerlordAgents
             }
         }
 
+        /// <summary>
+        /// An order the player gave one of their own lords through the bridge (agents.vassal): recorded with the same
+        /// verbs the agents use, so the player's orders and the agents' are directly comparable.
+        /// </summary>
+        public static void OnOwnOrder(Hero lord, string verb, Settlement place, MobileParty target, string text)
+        {
+            if (!On) return;
+            Emit("vassal_order", text, place != null ? Target(place) : Target(target), lord?.StringId, verb);
+        }
+
         // ---------- writing ----------
 
-        private static void Emit(string kind, string text, TargetInfo target)
+        private static void Emit(string kind, string text, TargetInfo target, string lord = null, string verb = null)
         {
             MobileParty me = MobileParty.MainParty;
             var d = new DecisionRecord
@@ -272,6 +282,8 @@ namespace BannerlordAgents
                 Date = Capture.DateText(),
                 Wall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                 Faction = Clan.PlayerClan?.MapFaction?.StringId,
+                Lord = lord,
+                Verb = verb,
                 You = me != null ? Seen(me, me) : null,
                 Target = target,
                 SeenByYou = me != null ? SeenNow(me) : null

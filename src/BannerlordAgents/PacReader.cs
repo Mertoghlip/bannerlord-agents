@@ -137,6 +137,14 @@ namespace BannerlordAgents
             return changes;
         }
 
+        /// <summary>The order a lord holds in Party AI Controls, in words, or null. Read-only, like everything here.</summary>
+        public static string OrderOf(Hero h)
+        {
+            if (h == null || !Resolve()) return null;
+            Dictionary<string, KeyValuePair<string, object>> now = Read(out _);
+            return now.TryGetValue(h.StringId, out KeyValuePair<string, object> kv) ? Words(kv.Key, kv.Value) : null;
+        }
+
         public static string TargetId(object target)
         {
             if (target is Settlement s) return s.StringId;

@@ -123,6 +123,8 @@ namespace BannerlordAgents
         public string Date;
         public string Wall;
         public string Faction;
+        /// <summary>For orders the player gives a lord: the lord's hero id and the verb (the agents' own verbs).</summary>
+        public string Lord, Verb;
         public SeenParty You;
         public TargetInfo Target;
         public List<SeenParty> SeenByYou;

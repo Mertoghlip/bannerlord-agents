@@ -1,0 +1,35 @@
+{
+  "model": "claude-opus-5-5",
+  "autoMemoryEnabled": false,
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Write(./channel/orders/**)",
+      "Write(./journal.md)",
+      "Edit(./journal.md)",
+      "Bash(tail -n 0 -F channel/pokes.log)"
+    ],
+    "deny": [
+      "Read(//c/Users/karab/Projects/bannerlord-agents/**)",
+      "Read(C:/Users/karab/Projects/bannerlord-agents/**)",
+      "Read(//c/BannerlordArchive/**)",
+      "Read(C:/BannerlordArchive/**)",
+      "Read(//c/Program Files (x86)/Steam/**)",
+      "Read(C:/Program Files (x86)/Steam/**)",
+      "Read(//c/Users/karab/AppData/Local/BannerlordAgents/**)",
+      "Read(C:/Users/karab/AppData/Local/BannerlordAgents/**)",
+      "Read(//c/Users/karab/.claude/projects/**)",
+      "Read(C:/Users/karab/.claude/projects/**)",
+      "Edit(./CLAUDE.md)",
+      "Write(./CLAUDE.md)",
+      "Edit(./.claude/**)",
+      "Write(./.claude/**)",
+      "WebFetch",
+      "WebSearch",
+      "Agent"
+    ]
+  }
+}

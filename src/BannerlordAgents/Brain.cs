@@ -55,6 +55,7 @@ namespace BannerlordAgents
             Latest = null;
             DecisionsWritten = PokesWatched = PokesPlayer = 0;
             _dir = Paths.Data(campaign);
+            AgentChannel.Reset();
         }
 
         public static Memory Get(string fid)
@@ -85,6 +86,8 @@ namespace BannerlordAgents
                 Process(s, s.Watched, s.WatchedSees, s.HostileToWatched, false);
             if (s.PlayerFaction != null)
                 Process(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true);
+            if (AgentChannel.On && s.Watched != null && s.WatchedSees != null)
+                AgentChannel.OnHour(s.Hours, Views.Report(Views.Build(s, s.Watched, s.WatchedSees, s.HostileToWatched, Get(s.Watched)), null));
         }
 
         /// <summary>The game's own flags for what the player's party sees, as sightings.</summary>
@@ -169,11 +172,13 @@ namespace BannerlordAgents
             }
 
             PokesWatched++;
+            int number = PokesWatched;
             View v = Views.Build(s, fid, sees, hostile, m);
             string report = Views.Report(v, triggers);
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
-                Json.Line(new { Type = "poke", Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
+                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
+            if (AgentChannel.On) AgentChannel.OnPoke(number, s.Hours, triggers, report);
 
             string line = Text.When(s.Hours) + ": " + v.FactionName + " poked. " + triggers[0].Text
                           + (triggers.Count > 1 ? " (and " + (triggers.Count - 1) + " more)" : "");
