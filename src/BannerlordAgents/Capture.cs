@@ -83,7 +83,7 @@ namespace BannerlordAgents
             foreach (MobileParty p in MobileParty.All)
             {
                 if (p == null || !p.IsActive) continue;
-                PartyRow r = Row(p);
+                PartyRow r = Row(p, watched != null && p.MapFaction == watched);
                 live.Add(p);
                 snap.Parties.Add(r);
                 snap.PartyById[r.Id] = r;
@@ -118,7 +118,8 @@ namespace BannerlordAgents
 
         private static double Ms(long a, long b) => (b - a) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
 
-        public static PartyRow Row(MobileParty p)
+        /// <summary>One party as plain numbers. For the watched realm's own lords (own) a few more, which its tools need.</summary>
+        public static PartyRow Row(MobileParty p, bool own)
         {
             var r = new PartyRow { Id = p.StringId, X = Text.R1(p.Position.X), Y = Text.R1(p.Position.Y) };
             r.Faction = p.MapFaction?.StringId;
@@ -129,6 +130,12 @@ namespace BannerlordAgents
                    : p.IsGarrison ? "garrison" : p.IsMilitia ? "militia" : "other";
             // the game recomputes a party's strength whenever its roster changes, so only ask where a report needs it
             if (p.IsLordParty || p.IsBandit) r.Strength = (float)Math.Round(party.EstimatedStrength);
+            if (p.IsLordParty) r.Speed = Text.R1(p.LastCalculatedBaseSpeed);   // the speed the game last worked out: a field, not a new sum
+            if (own && p.IsLordParty)
+            {
+                r.SizeLimit = party.PartySizeLimit;
+                r.FoodDays = p.GetNumDaysForFoodToLast();
+            }
             Hero leader = p.LeaderHero;
             r.Leader = leader?.StringId;
             Settlement inside = p.CurrentSettlement;
@@ -137,7 +144,12 @@ namespace BannerlordAgents
             if (army != null)
             {
                 r.ArmyLeader = army.LeaderParty?.StringId;
-                if (army.LeaderParty == p) { r.ArmyMen = army.TotalHealthyMembers; r.ArmyParties = army.Parties.Count; }
+                if (army.LeaderParty == p)
+                {
+                    r.ArmyMen = army.TotalHealthyMembers;
+                    r.ArmyParties = army.Parties.Count;
+                    r.ArmyStrength = (float)Math.Round(army.EstimatedStrength);
+                }
                 else r.Attached = p.AttachedTo != null;
             }
             int b = (int)p.DefaultBehavior;

@@ -28,7 +28,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>The fog check of one report: every line must be something the realm owns, sees, remembers or knows from the map.</summary>
-        public static List<string> Fog(View v, string report, Dictionary<string, Sighting> sees, HashSet<string> inspected)
+        public static List<string> Fog(View v, string report, Dictionary<string, Sighting> sees, HashSet<string> inspected, IEnumerable<string> known = null)
         {
             var problems = new List<string>();
             foreach (ViewParty p in v.Seen)
@@ -51,6 +51,8 @@ namespace BannerlordAgents
                 if (p.Lord != null) allowed.Add(p.Lord);
             }
             foreach (ViewHolding h in v.Holdings.Concat(v.Frontier)) allowed.Add(h.Id);
+            // beyond the report's own lists: everything in sight (past the 40-party list), remembered, or named by an order in force
+            if (known != null) foreach (string id in known) if (id != null) allowed.Add(id);
             foreach (Match m in Brackets.Matches(report ?? ""))
             {
                 string id = m.Groups[1].Value;
@@ -61,9 +63,9 @@ namespace BannerlordAgents
         }
 
         /// <summary>Runs the fog check and raises the alarm for anything that leaked.</summary>
-        public static void CheckReport(View v, string report, Dictionary<string, Sighting> sees, HashSet<string> inspected, string which)
+        public static void CheckReport(View v, string report, Dictionary<string, Sighting> sees, HashSet<string> inspected, string which, IEnumerable<string> known = null)
         {
-            List<string> problems = Fog(v, report, sees, inspected);
+            List<string> problems = Fog(v, report, sees, inspected, known);
             Diag.Count("fog:reports");
             if (problems.Count == 0) return;
             Diag.Count("fog:leaks", problems.Count);

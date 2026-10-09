@@ -1,0 +1,30 @@
+{
+  "tool": "relieve",
+  "kind": "army",
+  "about": "Breaks a siege of one of your castles or towns: it waits where it is until strong enough, then strikes the besiegers (the garrison joins the battle). Best with an army, for example gather, then relieve.",
+  "calls_back": "it strikes, it is still too weak to strike, the siege ends, or the holding falls",
+  "at": "own_fort",
+  "settings": {
+    "strike_at": [1.0, 0.3, 4, "strike when its strength is this many times the besiegers'"],
+    "wait_hours": [72, 6, 240, "how long to wait for enough strength before giving up"]
+  },
+  "start": "watch",
+  "states": {
+    "watch": { "about": "watching {at}", "do": "hold",
+      "when": [
+        { "if": "not ours(at)", "go": "over", "poke": "{at} fell before {me} could relieve it." },
+        { "if": "besieged(at) and strength >= siege_strength(at) * strike_at", "go": "strike", "poke": "{me} is striking the besiegers of {at}: strength {strength} against {siege_strength(at)}." },
+        { "if": "besieged(at)", "go": "wait", "poke": "{me} is too weak to strike the besiegers of {at} yet: strength {strength} against {siege_strength(at)}." } ] },
+    "wait": { "about": "waiting for the strength to relieve {at}", "do": "hold",
+      "when": [
+        { "if": "not ours(at)", "go": "over", "poke": "{at} fell before {me} could relieve it." },
+        { "if": "not besieged(at)", "go": "over", "poke": "The siege of {at} is over." },
+        { "if": "strength >= siege_strength(at) * strike_at", "go": "strike", "poke": "{me} is striking the besiegers of {at}: strength {strength} against {siege_strength(at)}." },
+        { "if": "hours_in_state >= wait_hours", "go": "over", "poke": "{me} waited {wait_hours} hours without the strength to relieve {at}." } ] },
+    "strike": { "about": "striking the besiegers of {at}", "do": "engage besieger(at)",
+      "when": [
+        { "if": "not ours(at)", "go": "over", "poke": "{at} fell." },
+        { "if": "not besieged(at)", "go": "over", "poke": "The siege of {at} is broken." } ] },
+    "over": { "about": "done at {at}", "end": "hold" }
+  }
+}

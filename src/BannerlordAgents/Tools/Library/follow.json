@@ -1,0 +1,12 @@
+{
+  "tool": "follow",
+  "kind": "move",
+  "about": "Stays with another of your lords, as an escort.",
+  "target": "own_lord",
+  "start": "follow",
+  "states": {
+    "follow": { "about": "following {target}", "do": "follow target",
+      "when": [ { "if": "gone(target)", "go": "over", "poke": "{target}'s party is gone, so {me} stopped following." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

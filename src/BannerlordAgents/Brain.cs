@@ -62,8 +62,34 @@ namespace BannerlordAgents
             Latest = null;
             DecisionsWritten = PokesWatched = PokesPlayer = 0;
             _dir = Paths.Data(campaign);
+            Tools.Runner.Reset();
             AgentChannel.Reset(_dir);
+            AgentChannel.WriteLibrary();
             Audit.Reset();
+        }
+
+        /// <summary>A tool's call-back (worker): a notice for the watched realm, so it reaches the agent with this hour's poke.</summary>
+        public static void ToolNotice(string text, string party, double hours, string place = null)
+        {
+            string fid = Latest?.Watched;
+            if (fid == null) return;
+            OnNotice(new Notice { Id = NoticeIds.Next(), Hours = hours, Kind = "tool", Text = text, Factions = { fid }, Party = party, Place = place });
+        }
+
+        /// <summary>Every id the agent may legitimately be shown this hour beyond the report's own lists (for the fog check).</summary>
+        private static IEnumerable<string> Known(Snapshot s, Dictionary<string, Sighting> sees, Memory m, Tools.World w)
+        {
+            foreach (string id in sees.Keys)
+            {
+                yield return id;
+                if (s.PartyById.TryGetValue(id, out PartyRow r) && r.Leader != null) yield return r.Leader;
+            }
+            foreach (KeyValuePair<string, ViewParty> kv in m.LastSeen)
+            {
+                yield return kv.Key;
+                if (kv.Value.Lord != null) yield return kv.Value.Lord;
+            }
+            if (w != null) foreach (string id in Tools.Runner.Ids(w)) if (id != null) yield return id;
         }
 
         public static Memory Get(string fid)
@@ -104,6 +130,8 @@ namespace BannerlordAgents
             Audit.CheckSnapshot(s);
             Audit.Sight(s);
             if (s.Sight != null) Audit.PlayerSight(s.Sight, s.Hours);
+            // the tools first: their call-backs of this hour go out with this hour's poke
+            if (s.Watched != null && s.WatchedSees != null) Tools.Runner.OnHour(s);
             if (s.Watched != null && s.WatchedSees != null)
                 Process(s, s.Watched, s.WatchedSees, s.HostileToWatched, false);
             if (s.PlayerFaction != null)
@@ -111,9 +139,11 @@ namespace BannerlordAgents
             DropOrphanNotices(s);
             if (AgentChannel.On && s.Watched != null && s.WatchedSees != null)
             {
-                View v = Views.Build(s, s.Watched, s.WatchedSees, s.HostileToWatched, Get(s.Watched));
-                string report = Views.Report(v, null);
-                Audit.CheckReport(v, report, s.WatchedSees, s.InspectedByWatched, "hourly report");
+                Memory m = Get(s.Watched);
+                View v = Views.Build(s, s.Watched, s.WatchedSees, s.HostileToWatched, m);
+                Tools.World w = Tools.Runner.WorldFor(s);
+                string report = Views.Report(v, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true });
+                Audit.CheckReport(v, report, s.WatchedSees, s.InspectedByWatched, "hourly report", Known(s, s.WatchedSees, m, w));
                 AgentChannel.OnHour(s.Hours, report);
             }
         }
@@ -202,7 +232,7 @@ namespace BannerlordAgents
                 m.LastSeen.Remove(id);
 
             foreach (Notice n in m.Pending)
-                triggers.Add(new Trigger { Hours = n.Hours, Kind = n.Kind, Text = n.Text, Party = n.Party, Notice = n.Id });
+                triggers.Add(new Trigger { Hours = n.Hours, Kind = n.Kind, Text = n.Text, Party = n.Party, Place = n.Place, Notice = n.Id });
             m.Pending.Clear();
 
             if (triggers.Count == 0)
@@ -233,8 +263,20 @@ namespace BannerlordAgents
             PokesWatched++;
             int number = AgentChannel.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
             View v = Views.Build(s, fid, sees, hostile, m);
-            string report = Views.Report(v, triggers);
-            Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number);
+            Tools.World w = Tools.Runner.WorldFor(s);
+            var extras = new ReportExtras
+            {
+                Since = AgentChannel.On ? AgentChannel.SinceLastAnswer(number) : null, LastAnswered = AgentChannel.LastAnswered,
+                InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = AgentChannel.On
+            };
+            string report = Views.Report(v, triggers, extras);
+            Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, Known(s, sees, m, w));
+            if (AgentChannel.On)
+            {
+                // the look-ups go out before the poke, so they are there when the agent wakes
+                try { AgentChannel.WriteLookups(Facts.Lookups(w, m.LastSeen)); }
+                catch (Exception e) { Diag.Error("writing the look-up files", e); }
+            }
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
                 Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);

@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -21,6 +21,11 @@
   <ItemGroup>
     <!-- tests/SmokeTest runs the worker's half (views, pokes, reports, records) outside the game -->
     <InternalsVisibleTo Include="SmokeTest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- the tool library (docs/TOOLS.md): the behavior language's tools, built into the DLL -->
+    <EmbeddedResource Include="Tools\Library\*.json" />
   </ItemGroup>
 
   <!-- The game's own assemblies, read from the local install and never copied (Private=false). -->

@@ -8,7 +8,7 @@ The logs follow every poke, every answer, every order and every lord from start 
 - a summary at the end, and a command for the state right now;
 - a switch between everyday and full detail.
 
-Installed with version 0.3 of the module (Oct 8). The record formats are in [protocol/README.md](../protocol/README.md).
+Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' and armies' records. The record formats are in [protocol/README.md](../protocol/README.md).
 
 ## What the logs show
 
@@ -78,6 +78,19 @@ Installed with version 0.3 of the module (Oct 8). The record formats are in [pro
   - a released lord whose AI is still switched off;
   - something else switching the AI back on for a lord we hold.
 
+### Tools and armies (since 0.4, Oct 8)
+- **Every tool, start to finish** (`tool` events, [TOOLS.md](TOOLS.md)):
+  - how it began: the tool, the lord, the places and lords, the settings, and the next order;
+  - each step from state to state, with the rule that fired and the move made;
+  - each call-back to the agent, each shelter from danger and each return, each change of settings;
+  - how it ended, and after how many steps and in-game hours.
+- **Every move a tool makes** (`order` events, "moved"): what the game was told, and whether it took.
+- **Every army** (`army` events): the leader, the meeting place, the lords called, the influence price, and the clan's influence before.
+- **Alarm** for a tool in the library that fails the checker, at every load.
+
+### The war room
+The war room keeps its own logs, beside the game's: every call with its times and tokens, the prompt, Claude Code's full event stream, and the answer ([WARROOM.md](WARROOM.md)).
+
 ### Who moved a lord, and why the game's AI chose
 These are the only two pieces that hook into the game's code instead of reading it. Each has its own switch.
 - **The movement watcher** (full detail only):
@@ -88,7 +101,7 @@ These are the only two pieces that hook into the game's code instead of reading 
   - When it changes plan: up to eight of the options it weighed, with their scores.
   - When it keeps its plan: the plan, and the best other option with its score.
   - The game moves to its best option only when a random roll falls under that option's score and the score clears a small bar; the log gives both.
-- **Every plan change:** `lords.log` also gets a line whenever the game changes what a lord of the watched realm is doing, whether or not anyone orders him.
+- **Every plan change:** `lords.log` also gets a line whenever the game changes what a lord of the watched realm is doing, whether or not anyone orders them.
 
 ### Saves
 - At every save: which lords were handed back, checked free before the game wrote, and taken back after. `handbacks.jsonl` keeps the list.
@@ -133,7 +146,8 @@ Each summary reports what the logging itself cost on the game's thread.
 
 `%LOCALAPPDATA%\BannerlordAgents\logs\`:
 - `bridge.log`: the readable story, across launches;
-- `sessions\(date-time)\`: one folder per game launch. The newest 30 are kept, 2 GB at most in all.
+- `sessions\(date-time)\`: one folder per game launch. The newest 30 are kept, 2 GB at most in all;
+- `warroom\`: the war room's calls ([WARROOM.md](WARROOM.md)).
 
 | File in a session folder | What it holds |
 |---|---|
@@ -145,7 +159,7 @@ Each summary reports what the logging itself cost on the game's thread.
 | `errors.log` | full traces of the first errors of each kind |
 | `blackbox-*.txt`, `freeze-*.txt`, `crash-*.txt`, `watchdog.log` | only when something goes wrong |
 
-The agent cannot read any of this: its settings block the whole folder.
+The agent cannot read any of this: a war room call can read only the channel folder. (The agent chat's settings blocked the whole folder.)
 
 ## Commands
 
@@ -162,6 +176,6 @@ Outside the game, `scripts\probe.ps1` runs the probe on the running game, for ex
 
 ## What the logs cannot see
 
-- **What the agent reads outside its folder, at the moment it does:** this shows only afterwards, in Claude Code's own record of the agent chat. A small program to line that record up with these logs comes after the first session.
+- **What the agent chat read outside its folder:** for the first session this shows only in Claude Code's own record of the chat. Since Oct 8 the war room keeps every call's event stream, so each read the agent tries, and each one refused, is in its logs.
 - **Inside battles:** by design. Battle results arrive as notices.
 - **The engine's own reasons:** the probe names where in the engine a thread is, as an address; what that code does needs the disassembly tools from the battle work.

@@ -1,0 +1,17 @@
+{
+  "tool": "screen",
+  "kind": "tool",
+  "about": "Patrols around a holding on the border, which widens what your realm can see.",
+  "calls_back": "a new enemy army comes within radius",
+  "at": "any_holding",
+  "settings": {
+    "radius": [25, 5, 80, "how far around the holding to watch, in map units"]
+  },
+  "init": { "reported": "none" },
+  "start": "watch",
+  "states": {
+    "watch": { "about": "screening around {at}", "do": "patrol at",
+      "when": [
+        { "if": "army_near(at, radius) != none and army_near(at, radius) != reported", "go": "watch", "set": { "reported": "army_near(at, radius)" }, "poke": "{me}'s screen near {at} sees an enemy army: {army_near(at, radius)}, strength {strength_of(army_near(at, radius))}, {distance(army_near(at, radius), at)} from {at}." } ] }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "tool": "hunt",
+  "kind": "tool",
+  "about": "Chases an enemy lord or army while it is in view, and searches where it was last seen when it is not.",
+  "calls_back": "contact is lost, the target is gone, or it joins a force too strong to attack",
+  "target": "enemy_lord",
+  "settings": {
+    "lose_hours": [6, 1, 48, "give up when the target has not been seen for this many hours"],
+    "bigger_ratio": [1.2, 0.3, 5, "stop when the target's force grows to this many times its strength"]
+  },
+  "start": "chase",
+  "states": {
+    "chase": { "about": "hunting {target}", "do": "engage target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
+        { "if": "strength_of(target) > strength * bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: {strength_of(target)} against {strength}." },
+        { "if": "not in_view(target)", "go": "search" } ] },
+    "search": { "about": "searching for {target} where it was last seen", "do": "toward target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
+        { "if": "in_view(target)", "go": "chase" },
+        { "if": "seen_ago(target) > lose_hours", "go": "over", "poke": "{me} lost track of {target}." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

@@ -6,7 +6,7 @@
 - the bridge sees what the orcs would see, and notices what they'd notice;
 - it records how you play;
 - it costs you no frame rate;
-- an orc lord obeys an order without the game's AI pulling him away;
+- an orc lord obeys an order without the game's AI pulling them away;
 - Opus 5.5's orders come back while the game keeps running;
 - once the first tools exist, Opus 5.5 can run the whole orc realm.
 
@@ -17,18 +17,48 @@
 | 2 · Record your play | Your decisions are captured correctly | 1 | an evening of normal play, then a 5-minute read |
 | 3 · Performance | No frame-rate cost, and our work stays off the busy core | 1 | 10 minutes |
 | 4 · One order by hand | An orc lord obeys, and your save stays clean | 1 | about 30 minutes |
-| 5 · Opus watches | Answer time and usage while the game runs | 1, plus the agent chat | normal play |
-| 6 · Opus commands one lord | The live loop works end to end | 1, plus the agent chat | 30–60 minutes |
-| 7 · Opus commands the realm | Opus runs a whole realm through tools, live | 3 | an evening of normal play |
+| 5 · Opus watches | Answer time and usage while the game runs | 1, plus the agent | normal play |
+| 6 · Opus commands one lord | The live loop works end to end | 1, plus the agent | 30–60 minutes |
+| 7 · Opus commands the realm | Opus runs a whole realm through tools, live | 0.4, plus the war room | an evening of normal play |
 
-- **Install 1** has been in the game since Oct 7. It now also carries the agent channel, so phases 0 to 6 can all run on it.
+- **Install 1** has been in the game since Oct 7, and carries the agent channel, so phases 0 to 6 can all run on it. Versions 0.3 and 0.3.1 (Oct 8) added the logs and cut the pokes.
 - **Oct 8, first live session:** phases 0, 1, 2 and 5 ran. The report is [reports/2026-10-08-first-live-session.md](reports/2026-10-08-first-live-session.md). Phases 3, 4 and 6 are still to run.
-- **The agent** for phases 5 and 6 is a separate Claude Code chat: see [AGENT-CHAT.md](AGENT-CHAT.md).
-- **Phase 7** needs the first tools, so it waits for install 3 at the end of next week.
+- **Version 0.4 (in the game since Oct 8, 21:14)** brings the tools, the armies and the war room, a week early, so phase 7 can run now. [Testing version 0.4](#testing-version-04-opus-commands-the-orcs-with-tools) says how.
+- **The agent** is the war room since Oct 8 ([WARROOM.md](WARROOM.md)). The agent chat of the first session ([AGENT-CHAT.md](AGENT-CHAT.md)) is retired.
 
 Each install is one restart of the game.
 
-## Running install 1 (in the game since Wed Oct 7, 15:33)
+## Testing version 0.4: Opus commands the orcs with tools
+
+**Set up already (Oct 8, 21:14):**
+- the bridge is in **live** mode for **every** orc lord, answering through `C:\Users\karab\Projects\orc-war-council\warroom`;
+- the war room is running in the background on this laptop. To run it yourself instead: `powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1`, which runs in its window until Ctrl+C.
+
+**You:**
+1. Close the old agent chat: the VS Code window open on `orc-war-council`. It would only wake every 30 minutes and find nothing.
+2. Start the game with Bannerlord Agents ticked, and load your campaign.
+3. In the console (Alt + ~):
+   - `agents.agent` says LIVE, all lords, with the folder above;
+   - `agents.tools` says 16 orders and no problems.
+4. Play as usual, at war with the orcs. Once or twice, march toward an orc holding.
+
+**What to watch:**
+- **Cyan messages** when the agent gives an order (an army included), when a lord arrives, and when an order ends, with the reason.
+- **`agents.orders`:** every orc lord holding an order, its order, and the move it is making right now: into a castle to shelter, after an enemy, to a village for food.
+- **Armies:** when the agent gathers one, the game's own army forms at once, and the called lords march to the meeting place.
+- **Your approach:** orc lords near your army should take shelter in a castle or town, and come out again once you leave.
+- **Answer time:** each receipt line gives the seconds from poke to answer.
+
+**Not yet seen in a real game** (the smoke test covers each one on a made-up world):
+- an army formed by the agent, with its lords marching to it;
+- a held lord sheltering from you, and going to buy food;
+- a lord stopping near an enemy holding, rather than inside it;
+- an idle army breaking up after about two days, as the game does;
+- answer time with the new, longer pokes.
+
+**Stop at any time:** `agents.agent shadow` stops new orders from being carried out, and `agents.release all` hands every orc lord back to the game at once. Closing the war room alone stops new answers, but the lords keep their current orders until released.
+
+## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.4 since Oct 8, 21:14)
 
 Your three newest saves were copied to `C:\BannerlordArchive\save-backups` before the install, and checked identical to the originals.
 
@@ -41,9 +71,10 @@ Your three newest saves were copied to `C:\BannerlordArchive\save-backups` befor
 | 1 · Watch | `agents.view` prints the orcs' report and the file it is in. `agents.pokes` lists their last pokes. `agents.vision_check` compares our sight rule with the game's own. A yellow message appears on screen whenever the orcs are poked. |
 | 2 · Record | `agents.record show 10` lists your last decisions in plain words. `agents.record off` and `agents.record on` switch it. |
 | 3 · Performance | Play 3 minutes, then type `agents.bridge off`; play 3 more, then `agents.bridge on`. `agents.perf` compares the two. |
-| 4 · One order | `agents.order Throkmaw garrison Caradhras` (any orc lord and any castle they hold; partial names work, accents optional; where two lords share a name, the console shows each one's id to use instead). `agents.orders` shows how it's going; `agents.release Throkmaw` or `agents.release all` ends it. |
-| 5 · Opus watches | Open the agent chat ([AGENT-CHAT.md](AGENT-CHAT.md)). The bridge is already in shadow mode, which `agents.agent` confirms. |
+| 4 · One order | `agents.order Throkmaw garrison Caradhras` (any orc lord and any castle they hold; partial names work, accents optional; where two lords share a name, the console shows each one's id to use instead). `agents.orders` shows how it's going; `agents.release Throkmaw` or `agents.release all` ends it. Since 0.4, every order of the library works by hand, with settings and lords: `agents.tools` lists them ([TOOLS.md](TOOLS.md)). |
+| 5 · Opus watches | Start the war room ([WARROOM.md](WARROOM.md)) and type `agents.agent shadow`: every order is checked and none is carried out. |
 | 6 · Opus commands one lord | `agents.agent live Throkmaw` (any one lord). `agents.agent shadow` goes back, and `agents.release all` hands every lord back to the game. |
+| 7 · Opus commands the realm | `agents.agent live` (every lord; set already). |
 | Your vassals | `agents.vassal <your lord> defend <your castle>` orders one of your own lords directly, with the agents' orders, and records it as your decision ([notes](notes/vassal-orders.md)). |
 
 Nothing needs sending: I read the files myself. Just tell me which phases you ran, and anything that looked wrong. Everything is in `%LOCALAPPDATA%\BannerlordAgents`, laid out in [protocol/README.md](../protocol/README.md).
@@ -151,24 +182,24 @@ This also gives the first campaign-map numbers for the busy core and the idle on
 
 **You:**
 1. Pick an orc lord near your army.
-2. Order him to garrison an orc castle, and watch for three in-game days.
-3. Order him to patrol around it.
+2. Order that lord to garrison an orc castle, and watch for three in-game days.
+3. Order the same lord to patrol around it.
 4. Save the game by hand.
-5. Release him.
+5. Release the lord.
 
 **Check:**
-- He goes there and stays. The game's AI doesn't pull him away, except to fight an enemy attacking the very castle he's guarding.
-- After release, he goes back to making his own plans.
+- The lord goes there and stays. The game's AI doesn't pull them away, except to fight an enemy attacking the very castle they're guarding.
+- After release, the lord goes back to making their own plans.
 - Load the save you made in step 4. The log reports no lord still held by us.
-- If his target falls, or he's beaten or captured, the order ends with that reason in the log.
+- If the target falls, or the lord is beaten or captured, the order ends with that reason in the log.
 
-## Phase 5 · Opus 5.5 watches (install 1 and the agent chat)
+## Phase 5 · Opus 5.5 watches (install 1 and the agent)
 
-**Needs once:** the agent chat, opened and seeded as in [AGENT-CHAT.md](AGENT-CHAT.md).
+**Needs once:** the agent. On Oct 8 that was the agent chat ([AGENT-CHAT.md](AGENT-CHAT.md)); since then it is the war room ([WARROOM.md](WARROOM.md)).
 
 **Built:** the agent channel. The bridge writes the orcs' pokes and report into the agent's folder. The agent answers each poke with an orders file. In shadow mode, every order is checked against the game and receipted, and none is carried out.
 
-**You:** play as usual. Glance at the agent chat now and then.
+**You:** play as usual. Glance at the agent now and then.
 
 **Measured:**
 - answer time, in seconds and in in-game hours at your usual speed;
@@ -192,22 +223,24 @@ One lord shows whether the live loop works. The whole realm follows in phase 7, 
 **You:** keep that lord in view for a while.
 
 **Check:**
-- He follows Opus's orders.
+- The lord follows Opus's orders.
 - When a late order is refused, the refusal and its reason show up in Opus's next poke.
-- Release hands him back cleanly.
+- Release hands the lord back cleanly.
 
-## Phase 7 · Opus commands the whole orc realm (install 3, end of week 2)
+## Phase 7 · Opus commands the whole orc realm (version 0.4, since Oct 8)
 
 **Needs:**
-- the tool engine with defend, besiege and garrison (week 2);
-- phase 5's usage numbers leaving room in your subscription.
+- the tool engine and the tools: built in version 0.4, a week ahead of the plan ([TOOLS.md](TOOLS.md));
+- the war room, for short answers ([WARROOM.md](WARROOM.md));
+- phase 5's usage numbers leaving room in your subscription. On Oct 8 the first session used 6% of the 5-hour limit.
 
 **Built:**
-- Every orc lord is under Opus 5.5, and each holds a tool that keeps him acting between answers.
-- The tools poke Opus when something big happens.
+- Every orc lord is under Opus 5.5, and each holds a tool that keeps the lord acting between answers.
+- The tools poke Opus when something big happens. A lord the agent has not ordered stays with the game's own AI.
+- Opus can form armies with the game's own rules, and order them like a single lord.
 - The realm's pokes are merged, and the late-order checks are on.
 
-**You:** play an evening as usual, at war with them.
+**You:** play an evening as usual, at war with them. The steps are in [Testing version 0.4](#testing-version-04-opus-commands-the-orcs-with-tools).
 
 **Check:**
 - Their lords keep moving sensibly while Opus thinks.

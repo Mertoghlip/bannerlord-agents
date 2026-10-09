@@ -119,3 +119,69 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Expected:** about 58 of the first session's 125 pokes, 7 a day instead of 15, plus a few for lords who come close while in view.
 - **Checks:** the smoke test passed in full; 253 game references, 0 missing; the installed DLL has sha256 `0E13B00DB78F626D…`.
 - **Outside the repository:** the agent's instructions were reinstalled into its folder. They tell it what no longer pokes, and take effect when the agent chat is restarted.
+
+### 20:24 · The agent's folder readied for the war room (outside the repository)
+- **What:** `scripts/setup-agent.ps1 -Mode live`, in its new form (part of version 0.4.0, below):
+  - the bridge's settings: `agent = live`, `agent_lords = all`, and `agent_dir = C:\Users\karab\Projects\orc-war-council\warroom` (until then shadow mode and `...\channel`);
+  - in the agent's folder: `warroom-system.md`, the war room's instructions for the agent; the channel folder `warroom\`, with `orders\done`, `lookups\` and the order library `tools.txt`;
+  - `warroom.txt`, the war room's settings: Opus 5.5 at high effort, thinking capped at 3,000 tokens (5,000 for an urgent poke), 120 s at most per call;
+  - the journal: the agent chat's journal is kept as `journal-chat-20261008.md`. `journal.md` carries over its plan in three sections (standing plan, lords and their tasks, lessons), reworded for the new orders, without its list of problems.
+- **Why:** Mert's "turn the agent on and let's begin testing": Opus 5.5 commands every orc lord, live.
+
+### 21:14 · Version 0.4.0: tools, armies and the war room · commit pending (installed 20:59, again 21:10 and 21:14)
+- **What:**
+  - **The behavior language and the tool engine** (`src/BannerlordAgents/Tools`, [TOOLS.md](TOOLS.md)):
+    - a tool is a small JSON file of settings, states, rules and call-backs, read by a checker before it runs;
+    - tools run every in-game hour on the helper thread, and see only the realm's own view;
+    - for now the engine sits in the bridge as game-free code; it moves into the shared core when the war room needs it.
+  - **The library, 16 orders:**
+    - moves: goto, patrol, engage, follow, leave, recruit, hold;
+    - tools: defend, garrison, besiege, raid, hunt, screen, rest;
+    - armies: gather, relieve.
+    - Every order carries two rules: shelter from an enemy 1.5 times stronger within 8 (the game switches off a held lord's own fleeing), and buy food with under two days left.
+  - **Armies by the game's own rules:** gather forms the army at once (`Kingdom.CreateArmy`) at the meeting place the agent names, at the game's influence price and with its rules on who may be called. Add, release and disband change it. Orders to the leader move the whole army.
+  - **Changing orders without re-planning:** adjust changes only the settings, then gives the next order, and an empty answer leaves everything standing.
+  - **What the agent reads:**
+    - every poke gains three sections: WHAT CHANGED SINCE YOUR LAST ANSWER, YOUR ORDERS IN FORCE, and READY-MADE FACTS;
+    - look-up files for every holding, lord and known enemy;
+    - the library itself, as `tools.txt`.
+  - **The war room** (`src/BannerlordAgents.WarRoom`, [WARROOM.md](WARROOM.md)) makes one fresh Claude Code call per poke, with the thinking capped. It replaces the agent chat a week early, and replay mode measures answer time on recorded pokes.
+  - **The console:** `agents.tools` lists the library, and `agents.order` takes settings and lords.
+  - **The smoke test** grows to 67 checks, tools included.
+- **Why:** Mert's asks of Oct 8:
+  - the tools to create and order armies;
+  - answers as fast as possible;
+  - changing single orders instead of re-planning the whole realm at every poke.
+
+  Moving lords between fronts was put off.
+- **Measured** (replays of the first session's pokes; Opus 5.5, high effort, thinking capped at 3,000):
+
+  | Poke | War room | Agent chat |
+  |---|---|---|
+  | #6 | 28 s | not answered |
+  | #10 | 15 s | 93 s |
+  | #54 | 11 s | 53 s |
+  | #83 | 15 s | 21 s |
+  | #124 | 24 s | 33 s |
+
+  - The median answer took 15 s, against 53 s.
+  - Answer time follows the thinking at about 110 tokens a second.
+  - Fast mode is off for this account ("extra usage" is disabled).
+- **Bugs found and fixed on the way:**
+  - The war room's first calls hung for 240 s. Claude Code lingers after answering, and the war room missed the result line, whose parts come in any order. Now the result ends a call, and a call silent for 45 s is asked once more.
+  - A runaway answer on poke #6 ran to 19,000 characters. The instructions promised look-ups to a replay call that had no tools, so the model typed tool calls as text. The look-ups section is now dropped whenever reading is off, and a runaway is stopped and asked once more.
+  - An answer holding two JSON objects was read across both. Now the last complete object wins, and the instructions ask for one.
+  - The small model thought 8,800 tokens (85 s) even at low effort. The thinking cap (Claude Code's MAX_THINKING_TOKENS) is what bounds it: the same call then took 10 s.
+  - Recruit accepted castles, which give no recruits (fixed for the 21:10 install).
+  - A tool's first rules waited an hour, and the logs showed a tool's settings as they were later, not at the moment.
+  - Log and console lines that called every lord "he" now say "the lord" (21:14 install).
+- **Checks:** the smoke test passed in full (67 checks), with 292 game references and 0 missing. The installed DLL has sha256 `C01CD6034D5C608B…` (`346CD41F5119D59E…` at 20:59, `EBDC30CDABF86E4F…` at 21:10).
+- **Outside the repository:**
+  - the order library `tools.txt` was rewritten at each install;
+  - the war room was started at 21:18 in its own minimized window ("War room"). It runs at below-normal priority and waits for the game.
+- **Not yet seen in a game** (the smoke test covers each on a made-up world):
+  - an army formed by the agent;
+  - held lords sheltering and buying food;
+  - a lord stopping near an enemy holding;
+  - an idle army breaking up after about two days;
+  - answer time with the new, longer pokes.

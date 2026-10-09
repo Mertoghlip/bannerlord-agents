@@ -1,0 +1,526 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Newtonsoft.Json.Linq;
+
+namespace BannerlordAgents.Tools
+{
+    /// <summary>One move for the game's thread: a verb and what it acts on (a holding, a party, or a point for toward).</summary>
+    internal struct Move
+    {
+        public string Verb, Place, Party;
+        public float X, Y;
+
+        public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party
+                                    && (Verb != "toward" || (Math.Abs(X - o.X) < 1f && Math.Abs(Y - o.Y) < 1f));
+
+        public override string ToString() => Verb + (Place != null ? " " + Place : "") + (Party != null ? " " + Party : "") + (Verb == "toward" ? " (" + X + ", " + Y + ")" : "");
+    }
+
+    /// <summary>A tool order as the game's thread checked it: ids only, so the worker can run it.</summary>
+    internal sealed class ToolOrder
+    {
+        public string Tool, Lord, LordName, Party, At, Target, Why, Source = "agent", Words;
+        public readonly List<string> Lords = new List<string>();
+        public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        public JObject Then;
+        public int Poke = -1;
+    }
+
+    internal sealed class ToolInstance
+    {
+        public int Id;
+        public ToolOrder Order;
+        public ToolDef Def;
+        public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, object> Memory = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        public string State;
+        public double StateSince, Started;
+        public bool Entered, Finished;
+        public Move Current, Pending;
+        public bool HasCurrent, HasPending;
+        /// <summary>The safety rule: where the lord shelters and from whom; or where it buys food.</summary>
+        public string Shelter, ShelterFrom, SupplyAt;
+        public double AsideSince;
+        public int Steps;
+        public string LastStep;
+    }
+
+    /// <summary>
+    /// Runs every tool and move the agent (or the console) has given the watched realm's lords: once an in-game hour,
+    /// after the hourly copy, each lord's rules are checked against the realm's own view (World) and its move changed
+    /// when a rule fires. The moves are made on the game's thread (Orders.ToolMove); the call-backs become notices,
+    /// so they reach the agent with the next poke. Two rules hold for every order:
+    /// - safety: a held lord does not flee by itself (the game switches its quick reactions off), so when an enemy
+    ///   caution times stronger comes within danger_radius, it shelters in the nearest friendly castle or town and
+    ///   resumes when the danger has passed;
+    /// - food: with under two days of food it goes to the nearest friendly town or village to buy more, then resumes.
+    /// Worker thread only (docs/TOOLS.md).
+    /// </summary>
+    internal static class Runner
+    {
+        private static readonly Dictionary<int, ToolInstance> ById = new Dictionary<int, ToolInstance>();
+        private static int _lastId;
+
+        // The game's thread, as the runner reaches it. The smoke test puts its own catchers here, so the runner can be
+        // tried on a made-up world without the game.
+        public static Action<int, Move> MoveSink = (id, m) => Background.ToMain.Enqueue(() => Orders.ToolMove(id, m));
+        public static Action<int, string> ReleaseSink = (id, why) => Background.ToMain.Enqueue(() => Orders.ToolRelease(id, why));
+        public static Action<int, JObject> ThenSink = (id, then) => Background.ToMain.Enqueue(() => Orders.ToolThen(id, then));
+
+        public static int Count => ById.Count;
+
+        public static void Reset()
+        {
+            if (ById.Count > 0) Diag.Event("tool", "cleared", new { count = ById.Count });
+            ById.Clear();
+        }
+
+        /// <summary>A fresh id for a tool instance (game's thread, when it takes an order).</summary>
+        public static int NewId() => System.Threading.Interlocked.Increment(ref _lastId);
+
+        public static ToolInstance ForParty(string partyId) => ById.Values.FirstOrDefault(t => t.Order.Party == partyId);
+
+        public static List<ToolInstance> All() => ById.Values.ToList();
+
+        // ---------- messages from the game's thread ----------
+
+        /// <summary>The game's thread took a tool order (the lord is held): start it, with the latest view if there is one.</summary>
+        public static void Start(int id, ToolOrder o)
+        {
+            ToolDef def = Library.Get(o.Tool);
+            if (def == null) { Diag.Alarm("tool_unknown", "A tool order named a tool that does not exist: " + o.Tool + "."); return; }
+            foreach (ToolInstance old in ById.Values.Where(t => t.Order.Party == o.Party && t.Id != id).ToList())
+            {
+                ById.Remove(old.Id);
+                Diag.Event("tool", "replaced", new { id = old.Id, by = id, lord = o.Lord, tool = old.Def.Name });
+            }
+            var t = new ToolInstance { Id = id, Order = o, Def = def, Started = Diag.Hours };
+            foreach (SettingDef s in def.Settings.Values) t.Settings[s.Name] = o.Settings.TryGetValue(s.Name, out double v) ? Math.Max(s.Min, Math.Min(s.Max, v)) : s.Default;
+            ById[id] = t;
+            Diag.Count("tool:started");
+            Diag.Count("tool started:" + def.Name);
+            Diag.Event("tool", "started", new { id, tool = def.Name, lord = o.Lord, party = o.Party, at = o.At, target = o.Target, lords = o.Lords.ToList(), settings = new Dictionary<string, double>(t.Settings), then = o.Then?.ToString(Newtonsoft.Json.Formatting.None), poke = o.Poke, source = o.Source });
+            Snapshot s0 = Brain.Latest;
+            if (s0 != null && s0.Watched != null)
+            {
+                World w = WorldFor(s0);
+                Step(t, w);
+            }
+        }
+
+        /// <summary>The game's thread ended the hold (the lord was captured, released, replaced...): forget the tool.</summary>
+        public static void Ended(int id, string why)
+        {
+            if (!ById.TryGetValue(id, out ToolInstance t)) return;
+            ById.Remove(id);
+            Diag.Count("tool:ended");
+            Diag.Event("tool", "ended", new { id, tool = t.Def.Name, lord = t.Order.Lord, why, state = t.State, steps = t.Steps, hours = Math.Round(Diag.Hours - t.Started, 1) });
+        }
+
+        /// <summary>adjust: new numbers for a lord's current tool, checked against its ranges; the state is kept.</summary>
+        public static void Adjust(int id, Dictionary<string, double> settings, AgentChannel.AgentOrder a)
+        {
+            double hours = Diag.Hours;
+            if (!ById.TryGetValue(id, out ToolInstance t)) { AgentChannel.Receipt(a, "refused", "that lord holds no tool to adjust any more", hours); return; }
+            if (settings.Count == 0) { AgentChannel.Receipt(a, "refused", "adjust needs settings, for example {\"radius\": 25}. " + t.Def.Name + " has: " + SettingNames(t.Def), hours); return; }
+            var notes = new List<string>();
+            foreach (KeyValuePair<string, double> kv in settings)
+            {
+                if (!t.Def.Settings.TryGetValue(kv.Key, out SettingDef sd)) { AgentChannel.Receipt(a, "refused", t.Def.Name + " has no setting '" + kv.Key + "'; it has " + SettingNames(t.Def), hours); return; }
+                double v = Math.Max(sd.Min, Math.Min(sd.Max, kv.Value));
+                if (Math.Abs(v - kv.Value) > 1e-9) notes.Add(kv.Key + " kept to " + ToolDef.Num(v) + " (its range is " + ToolDef.Num(sd.Min) + " to " + ToolDef.Num(sd.Max) + ")");
+                t.Settings[sd.Name] = v;
+            }
+            Diag.Event("tool", "adjusted", new { id, tool = t.Def.Name, lord = t.Order.Lord, settings = new Dictionary<string, double>(t.Settings) });
+            AgentChannel.Receipt(a, "applied", t.Order.LordName + "'s " + t.Def.Name + " now has " + string.Join(", ", settings.Keys.Select(k => k + " " + ToolDef.Num(t.Settings[k])))
+                                               + (notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : ""), hours);
+        }
+
+        private static string SettingNames(ToolDef d) => string.Join(", ", d.Settings.Keys);
+
+        // ---------- every in-game hour ----------
+
+        public static void OnHour(Snapshot s)
+        {
+            if (ById.Count == 0 || s.Watched == null) return;
+            World w = WorldFor(s);
+            foreach (ToolInstance t in ById.Values.ToList())
+            {
+                try { Step(t, w); }
+                catch (Exception e)
+                {
+                    Diag.Count("tool:errors");
+                    Diag.Error("running " + t.Def.Name + " for " + t.Order.LordName, e);
+                }
+            }
+        }
+
+        public static World WorldFor(Snapshot s) => new World(s, s.Watched, s.WatchedSees, Brain.Get(s.Watched).LastSeen);
+
+        private static void Step(ToolInstance t, World w)
+        {
+            PartyRow me = w.Party(t.Order.Party);
+            if (me == null || me.Attached) return;   // gone (the game's thread ends the order and tells us), or marching in another's army
+            var scope = new Scope(t, w);
+            if (!t.Entered)
+            {
+                foreach (var kv in t.Def.Init) t.Memory[kv.Key] = kv.Value.Eval(scope);
+                Enter(t, t.Def.Start, scope, w);
+                Log(t, "start", t.Def.Start, null);
+            }
+            // the rules run in the hour a tool starts too, so a first step that decides at once (go in, or stop close) does
+            if (!Safety(t, me, w, scope) && !Supply(t, me, w, scope) && !t.Finished)
+                Rules(t, scope, w);
+            Issue(t, w);
+        }
+
+        private static void Rules(ToolInstance t, Scope scope, World w)
+        {
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { t.State };
+            for (int hop = 0; hop < 3 && !t.Finished; hop++)
+            {
+                StateDef st = t.Def.States[t.State];
+                TransitionDef fired = null;
+                foreach (TransitionDef tr in st.When)
+                    if (tr.If != null && Expr.Truthy(tr.If.Eval(scope))) { fired = tr; break; }
+                if (fired == null) return;
+                foreach (var kv in fired.Set) t.Memory[kv.Key] = kv.Value.Eval(scope);
+                if (fired.Poke != null) Poke(t, Template.Fill(fired.Poke, scope, v => Show(v, w)), w);
+                string from = t.State;
+                if (string.Equals(fired.Go, from, StringComparison.OrdinalIgnoreCase))
+                {
+                    // a rule that stays in its state only remembers something (and maybe calls back): once an hour
+                    Log(t, from, from, fired.IfText);
+                    return;
+                }
+                Enter(t, fired.Go, scope, w);
+                Log(t, from, fired.Go, fired.IfText);
+                if (!visited.Add(fired.Go)) return;
+            }
+        }
+
+        private static void Enter(ToolInstance t, string state, Scope scope, World w)
+        {
+            t.State = t.Def.States.ContainsKey(state) ? t.Def.States[state].Name : state;
+            t.StateSince = w.Hours;
+            t.Entered = true;
+            StateDef st = t.Def.States[t.State];
+            if (st.End != null) { Finish(t, st.End, w); return; }
+            t.Pending = Resolve(t, st.Do, scope, w);
+            t.HasPending = true;
+        }
+
+        /// <summary>The move a state makes, worked out now: a holding, a party, or the point a party was last seen at.</summary>
+        private static Move Resolve(ToolInstance t, ActionDef a, Scope scope, World w)
+        {
+            if (a == null) return new Move { Verb = "hold" };
+            ToolDef.Verbs.TryGetValue(a.Verb, out string kind);
+            if (kind == "none") return new Move { Verb = a.Verb };
+            object v = a.Arg?.Eval(scope);
+            string id = v as string;
+            if (kind == "holding")
+            {
+                if (w.Holding(id) != null) return new Move { Verb = a.Verb, Place = id };
+            }
+            else if (a.Verb == "toward")
+            {
+                if (id != null && w.Where(id, out float x, out float y)) return new Move { Verb = "toward", Party = id, X = x, Y = y };
+            }
+            else if (id != null && w.Party(id) != null) return new Move { Verb = a.Verb, Party = w.Lead(w.Party(id)).Id };
+            Diag.Count("tool:no target");
+            Diag.Event("tool", "no target", new { id = t.Id, tool = t.Def.Name, state = t.State, @do = a.ToString(), value = Expr.Show(v) });
+            return new Move { Verb = "hold" };
+        }
+
+        /// <summary>A state that ends the tool: the next order (then) starts, or the lord is freed, or holds where it is.</summary>
+        private static void Finish(ToolInstance t, string end, World w)
+        {
+            t.Finished = true;
+            if (t.Order.Then != null)
+            {
+                Diag.Event("tool", "then", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, next = t.Order.Then.ToString(Newtonsoft.Json.Formatting.None) });
+                ThenSink(t.Id, t.Order.Then);
+                return;
+            }
+            if (end == "free")
+            {
+                ReleaseSink(t.Id, "the " + t.Def.Name + " is done");
+                return;
+            }
+            t.Pending = new Move { Verb = "hold" };
+            t.HasPending = true;
+        }
+
+        private static void Issue(ToolInstance t, World w)
+        {
+            if (!t.HasPending) return;
+            t.HasPending = false;
+            Move m = t.Pending;
+            if (t.HasCurrent && t.Current.Same(m)) return;
+            t.Current = m;
+            t.HasCurrent = true;
+            MoveSink(t.Id, m);
+        }
+
+        // ---------- the two rules every order carries ----------
+
+        private static bool Safety(ToolInstance t, PartyRow me, World w, Scope scope)
+        {
+            double caution = t.Def.Safety && t.Settings.TryGetValue("caution", out double c) ? c : 0;
+            double radius = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
+            double mine = World.StrengthOf(me);
+            var spare = new HashSet<string> { t.Order.Target, t.Current.Party, scope.Get("target") as string };
+            if (t.Shelter != null)
+            {
+                bool still = caution > 0 && w.EnemiesNear(me.Id, radius * 1.5).Any(e => !spare.Contains(e.Id) && World.StrengthOf(e) >= caution * Math.Max(1, mine));
+                if (still || w.Hours - t.AsideSince < 2) return true;
+                string was = t.Shelter;
+                t.Shelter = t.ShelterFrom = null;
+                Log(t, "sheltering", t.State, "the danger passed");
+                Resume(t, scope, w);
+                Diag.Event("tool", "resumed", new { id = t.Id, lord = t.Order.Lord, from = was });
+                return false;
+            }
+            if (caution <= 0 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
+            PartyRow danger = w.EnemiesNear(me.Id, radius).Where(e => !spare.Contains(e.Id) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
+                               .OrderByDescending(World.StrengthOf).FirstOrDefault();
+            if (danger == null) return false;
+            SettlementRow fort = w.NearestFort(me.Id);
+            if (fort == null) return false;
+            t.Shelter = fort.Id;
+            t.ShelterFrom = danger.Id;
+            t.AsideSince = w.Hours;
+            t.Pending = new Move { Verb = "enter", Place = fort.Id };
+            t.HasPending = true;
+            Diag.Count("tool:sheltered");
+            Poke(t, t.Order.LordName + " is sheltering in " + w.Name(fort.Id) + " from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against "
+                    + Text.N((int)mine) + "); the order resumes once the danger has passed.", w);
+            Log(t, t.State, "sheltering", "an enemy " + ToolDef.Num(caution) + " times stronger within " + ToolDef.Num(radius));
+            return true;
+        }
+
+        private static bool Supply(ToolInstance t, PartyRow me, World w, Scope scope)
+        {
+            if (t.SupplyAt != null)
+            {
+                bool inside = me.InSettlement == t.SupplyAt;
+                if (!(inside && (me.FoodDays >= 6 || w.Hours - t.AsideSince >= 8)) && w.Hours - t.AsideSince < 24) return true;
+                Log(t, "buying food", t.State, inside ? "food bought (" + me.FoodDays + " days)" : "gave up after a day");
+                t.SupplyAt = null;
+                Resume(t, scope, w);
+                return false;
+            }
+            if (me.FoodDays < 0 || me.FoodDays >= 2 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
+            SettlementRow at = w.NearestSupply(me.Id);
+            if (at == null) return false;
+            t.SupplyAt = at.Id;
+            t.AsideSince = w.Hours;
+            t.Pending = new Move { Verb = "enter", Place = at.Id };
+            t.HasPending = true;
+            Diag.Count("tool:food runs");
+            Log(t, t.State, "buying food", me.FoodDays + " days of food left");
+            return true;
+        }
+
+        /// <summary>Back to the order after a detour: the state's own move again (or holding, if the tool had finished).</summary>
+        private static void Resume(ToolInstance t, Scope scope, World w)
+        {
+            StateDef st = t.Def.States[t.State];
+            t.Pending = t.Finished || st.Do == null ? new Move { Verb = "hold" } : Resolve(t, st.Do, scope, w);
+            t.HasPending = true;
+            t.HasCurrent = false;
+        }
+
+        // ---------- what the agent hears ----------
+
+        private static void Poke(ToolInstance t, string text, World w)
+        {
+            Diag.Count("tool:call-backs");
+            Brain.ToolNotice(text, t.Order.Party, w.Hours, t.Order.At);
+            AgentChannel.Event("tool: " + text);
+        }
+
+        private static void Log(ToolInstance t, string from, string to, string why)
+        {
+            t.Steps++;
+            t.LastStep = from + " -> " + to + (why != null ? " (" + why + ")" : "");
+            Diag.Count("tool:steps");
+            Diag.Event("tool", "step", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, from, to, why, move = t.HasPending ? t.Pending.ToString() : null });
+        }
+
+        /// <summary>A value as the agent reads it: names for ids, whole numbers with separators.</summary>
+        public static string Show(object v, World w)
+        {
+            if (v is string id) return w.Name(id);
+            if (v is double d && !double.IsNaN(d)) return Math.Abs(d) >= 10 ? Text.N((int)Math.Round(d)) : Expr.Show(d);
+            return Expr.Show(v);
+        }
+
+        /// <summary>The orders in force, for every poke: each lord's tool, where it stands, and its numbers if not the defaults.</summary>
+        public static string InForce(World w)
+        {
+            if (ById.Count == 0) return "- None. Every lord follows their own judgment.";
+            var sb = new StringBuilder();
+            foreach (ToolInstance t in ById.Values.OrderBy(x => x.Order.LordName))
+            {
+                var scope = new Scope(t, w);
+                StateDef st = t.State != null && t.Def.States.TryGetValue(t.State, out StateDef s) ? s : null;
+                string doing = t.Shelter != null ? "sheltering in " + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom) + " (resumes once it has passed)"
+                             : t.SupplyAt != null ? "buying food at " + w.Name(t.SupplyAt) + " (resumes after)"
+                             : st?.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : (t.State ?? "starting");
+                var what = new StringBuilder(t.Def.Name);
+                if (t.Order.At != null) what.Append(" " + w.Name(t.Order.At) + " [" + t.Order.At + "]");
+                if (t.Order.Target != null) what.Append(" " + w.Name(t.Order.Target) + " [" + w.Tag(t.Order.Target) + "]");
+                if (t.Order.Lords.Count > 0) what.Append(" with " + string.Join(", ", t.Order.Lords.Select(p => w.Name(p) + " [" + w.Tag(p) + "]")));
+                List<string> changed = t.Settings.Where(kv => t.Def.Settings.TryGetValue(kv.Key, out SettingDef sd) && Math.Abs(sd.Default - kv.Value) > 1e-9)
+                                                 .Select(kv => kv.Key + " " + ToolDef.Num(kv.Value)).ToList();
+                PartyRow me = w.Party(t.Order.Party);
+                string army = me != null && me.ArmyLeader == me.Id
+                    ? "; leads an army of " + Text.N(World.MenOf(me)) + " men" + (scope.Get("army_coming") is double c && c > 0 ? " (" + c + " lords still coming)" : "")
+                    : "";
+                sb.AppendLine("- " + t.Order.LordName + " [" + t.Order.Lord + "]: " + what + ". Now " + doing + "; since " + Text.When(t.StateSince) + army
+                              + (changed.Count > 0 ? "; settings " + string.Join(", ", changed) : "")
+                              + (t.Order.Then != null ? "; then " + ThenText(t.Order.Then, w) : "") + ".");
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        private static string ThenText(JObject then, World w)
+        {
+            string id = (string)then["at"] ?? (string)then["target"];
+            string shown = id == null ? "" : w.Holding(id) != null ? " " + w.Name(id) + " [" + id + "]" : " " + id;
+            return ((string)then["do"] ?? "?") + shown;
+        }
+
+        /// <summary>Every id the orders in force name, so the fog check knows the agent was shown them.</summary>
+        public static IEnumerable<string> Ids(World w)
+        {
+            foreach (ToolInstance t in ById.Values)
+            {
+                yield return t.Order.Lord;
+                if (t.Order.At != null) yield return t.Order.At;
+                if (t.Order.Target != null) yield return w.Tag(t.Order.Target);
+                foreach (string p in t.Order.Lords) yield return w.Tag(p);
+            }
+        }
+
+        // ---------- what a tool's rules can read ----------
+
+        private sealed class Scope : IScope
+        {
+            private readonly ToolInstance _t;
+            private readonly World _w;
+
+            public Scope(ToolInstance t, World w)
+            {
+                _t = t;
+                _w = w;
+            }
+
+            private PartyRow Me => _w.Party(_t.Order.Party);
+
+            private string Id(object v) => v as string;
+            private SettlementRow H(object v) => _w.Holding(v as string);
+
+            private double ArmyCount(bool comingOnly)
+            {
+                PartyRow me = Me;
+                if (me == null || me.ArmyLeader != me.Id) return 0;
+                int n = 0;
+                foreach (PartyRow r in _w.S.Parties)
+                    if (r.ArmyLeader == me.Id && (!comingOnly || (!r.Attached && r.Id != me.Id))) n++;
+                return n;
+            }
+
+            public object Get(string name)
+            {
+                PartyRow me = Me;
+                switch (name.ToLowerInvariant())
+                {
+                    case "me": return _t.Order.Party;
+                    case "at": return _t.Order.At;
+                    case "target": return _t.Memory.TryGetValue("target", out object m) ? m : _t.Order.Target;
+                    case "strength": return World.StrengthOf(me);
+                    case "men": return (double)World.MenOf(me);
+                    case "ranks": return me != null && me.SizeLimit > 0 ? (double)me.Men / me.SizeLimit : 1.0;
+                    case "wounded": return me != null && me.Men + me.Wounded > 0 ? (double)me.Wounded / (me.Men + me.Wounded) : 0.0;
+                    case "food_days": return me != null && me.FoodDays >= 0 ? (double)me.FoodDays : (object)null;
+                    case "hours_in_state": return _w.Hours - _t.StateSince;
+                    case "hours_running": return _w.Hours - _t.Started;
+                    case "in_army": return me?.ArmyLeader != null;
+                    case "leads_army": return me != null && me.ArmyLeader == me.Id;
+                    case "army_lords": return ArmyCount(false);
+                    case "army_coming": return ArmyCount(true);
+                    case "army_complete": return me != null && me.ArmyLeader == me.Id && ArmyCount(true) == 0 && ArmyCount(false) > 1;
+                    case "in_settlement": return me?.InSettlement != null;
+                    case "besieging": return me?.Besieging != null;
+                    case "lords": return (double)_t.Order.Lords.Count;
+                }
+                if (_t.Settings.TryGetValue(name, out double v)) return v;
+                if (_t.Memory.TryGetValue(name, out object o)) return o;
+                return null;
+            }
+
+            public object Call(string fn, object[] a)
+            {
+                PartyRow me = Me;
+                switch (fn.ToLowerInvariant())
+                {
+                    case "distance": return Nan(_w.Distance(Id(a[0]), Id(a[1])));
+                    case "hours_to": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return double.IsNaN(d) ? null : (object)(d / World.Speed(me)); }
+                    case "inside": return me != null && Id(a[0]) != null && me.InSettlement == Id(a[0]);
+                    case "within": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return !double.IsNaN(d) && d <= Expr.Number(a[1]); }
+                    case "besieged": return _w.Besieged(H(a[0]));
+                    case "siege_strength": return _w.SiegeStrength(H(a[0]));
+                    case "besieger":
+                        {
+                            SettlementRow h = H(a[0]);
+                            if (h?.Besieger == null) return null;
+                            return h.Faction == _w.Realm || _w.InView(h.Besieger) ? h.Besieger : null;
+                        }
+                    case "raided": return H(a[0])?.VillageState == "BeingRaided";
+                    case "looted": return H(a[0])?.VillageState == "Looted";
+                    case "ours": return H(a[0])?.Faction == _w.Realm;
+                    case "hostile": return _w.HostileFaction(H(a[0])?.Faction);
+                    case "friendly": { SettlementRow h = H(a[0]); return h != null && (h.Faction == _w.Realm || _w.Ally(h.Faction)); }
+                    case "fort": return World.IsFort(H(a[0]));
+                    case "enemies_near": return (double)_w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Count;
+                    case "enemy_strength_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Sum(World.StrengthOf);
+                    case "strongest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
+                    case "weakest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
+                    case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;
+                    case "army_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
+                    case "strength_of": return _w.KnownStrength(Id(a[0]));
+                    case "men_of": { int? n = _w.KnownMen(Id(a[0])); return n.HasValue ? (object)(double)n.Value : null; }
+                    case "in_view": return _w.InView(Id(a[0]));
+                    case "seen_ago": return _w.SeenAgo(Id(a[0]));
+                    case "gone": return _w.Gone(Id(a[0]));
+                    case "nearest_fort": return _w.NearestFort(_t.Order.Party)?.Id;
+                    case "nearest_supply": return _w.NearestSupply(_t.Order.Party)?.Id;
+                    case "next_village": return _w.NextVillage(Id(a[0]), Expr.Number(a[1]))?.Id;
+                    case "lords_count": return (double)_t.Order.Lords.Count(p => _w.Party(p) != null);
+                    case "lords_arrived":
+                        {
+                            int n = 0;
+                            foreach (string p in _t.Order.Lords)
+                            {
+                                PartyRow r = _w.Party(p);
+                                if (r == null) continue;
+                                if ((me != null && r.ArmyLeader == me.Id) || _w.Distance(p, _t.Order.Party) <= 8) n++;
+                            }
+                            return (double)n;
+                        }
+                    case "min": return Nan(Math.Min(Expr.Number(a[0]), Expr.Number(a[1])));
+                    case "max": return Nan(Math.Max(Expr.Number(a[0]), Expr.Number(a[1])));
+                    case "pick": return Expr.Truthy(a[0]) ? a[1] : a[2];
+                    case "round": return Nan(Math.Round(Expr.Number(a[0])));
+                }
+                throw new InvalidOperationException("no function " + fn);
+            }
+
+            private static object Nan(double d) => double.IsNaN(d) ? null : (object)d;
+        }
+    }
+}

@@ -1,0 +1,9 @@
+{
+  "tool": "hold",
+  "kind": "move",
+  "about": "Stops where the lord is, until you give another order.",
+  "start": "hold",
+  "states": {
+    "hold": { "about": "holding position", "do": "hold" }
+  }
+}

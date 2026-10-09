@@ -24,7 +24,6 @@ namespace BannerlordAgents
     /// </summary>
     internal static class Notices
     {
-        private static int _nextId;
 
         /// <summary>Who led each side when a battle began: by its end the loser may already be a prisoner, the party nameless.</summary>
         private sealed class Opened
@@ -57,10 +56,10 @@ namespace BannerlordAgents
             return list;
         }
 
-        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null)
+        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null)
         {
             if (!Bridge.Running || (factions.Count == 0 && kind != "party_destroyed")) return;
-            var n = new Notice { Id = Interlocked.Increment(ref _nextId), Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet };
+            var n = new Notice { Id = NoticeIds.Next(), Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place };
             Background.Post(() => Brain.OnNotice(n));
         }
 
@@ -105,10 +104,10 @@ namespace BannerlordAgents
             MobileParty lead = se.BesiegerCamp?.LeaderParty;
             List<string> defenders = Involved(s.MapFaction);
             Send("besieged", Names.Settlement(s) + " is besieged by " + Names.Party(lead) + " (" + F(lead?.MapFaction) + "), " + Text.N(Men(lead)) + " men.",
-                 defenders, lead?.StringId);
+                 defenders, lead?.StringId, place: s.StringId);
             List<string> attackers = Involved(lead?.MapFaction);
             attackers.RemoveAll(defenders.Contains);
-            Send("siege_started", Names.Party(lead) + " laid siege to " + Names.Settlement(s) + " (" + F(s.MapFaction) + ").", attackers, lead?.StringId);
+            Send("siege_started", Names.Party(lead) + " laid siege to " + Names.Settlement(s) + " (" + F(s.MapFaction) + ").", attackers, lead?.StringId, place: s.StringId);
         }
 
         /// <summary>The game says "being raided" when the raiders arrive and again once the village's defenders are beaten: only the first is news.</summary>
@@ -127,14 +126,14 @@ namespace BannerlordAgents
                     foreach (string old in Raids.Where(x => now - x.Value >= 24).Select(x => x.Key).ToList()) Raids.Remove(old);
             }
             Send("raided", Names.Settlement(s) + " is being raided by " + Names.Party(raider) + " (" + F(raider?.MapFaction) + ").",
-                 Involved(s.MapFaction), raider?.StringId, quiet);
+                 Involved(s.MapFaction), raider?.StringId, quiet, s.StringId);
         }
 
         public static void OnVillageLooted(Village v)
         {
             Settlement s = v?.Settlement;
             if (s == null) return;
-            Send("looted", Names.Settlement(s) + " was looted.", Involved(s.MapFaction));
+            Send("looted", Names.Settlement(s) + " was looted.", Involved(s.MapFaction), place: s.StringId);
         }
 
         public static void OnOwnerChanged(Settlement s, bool openToClaim, Hero newOwner, Hero oldOwner, Hero capturer,
@@ -143,7 +142,7 @@ namespace BannerlordAgents
             IFaction now = newOwner?.MapFaction, before = oldOwner?.MapFaction;
             if (s == null || now == before) return;
             Send("holding_changed", Names.Settlement(s) + " passed from " + F(before) + " to " + F(now)
-                 + (capturer != null ? ", taken by " + Names.Hero(capturer) : "") + ".", Involved(now, before));
+                 + (capturer != null ? ", taken by " + Names.Hero(capturer) : "") + ".", Involved(now, before), place: s.StringId);
         }
 
         public static void OnArmyDispersed(Army army, Army.ArmyDispersionReason reason, bool isPlayersArmy)
@@ -190,7 +189,8 @@ namespace BannerlordAgents
             string winner = me.WinningSide == BattleSideEnum.Attacker ? attacker : defender;
             string what = me.IsSiegeAssault ? "Assault" : me.IsRaid ? "Fight over a raid" : "Battle";
             string place = me.MapEventSettlement != null ? " at " + Names.Settlement(me.MapEventSettlement) : "";
-            Send("battle", what + place + ": " + attacker + " (" + F(a) + ") against " + defender + " (" + F(d) + "); " + winner + " won.", involved, null, Small(me, start));
+            Send("battle", what + place + ": " + attacker + " (" + F(a) + ") against " + defender + " (" + F(d) + "); " + winner + " won.", involved, null, Small(me, start),
+                 me.MapEventSettlement?.StringId);
         }
 
         /// <summary>A side's leader by name; for a lord taken in the battle, the name from when it began.</summary>

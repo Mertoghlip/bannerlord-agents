@@ -35,6 +35,12 @@ namespace BannerlordAgents
         public bool InBattle;
         /// <summary>The village it is raiding right now (not just marching to).</summary>
         public string Raiding;
+        /// <summary>For an army's leader: the whole army's strength, the game's own estimate.</summary>
+        public float ArmyStrength;
+        /// <summary>Map units per in-game hour, as the game last worked it out (lords only).</summary>
+        public float Speed;
+        /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts.</summary>
+        public int SizeLimit, FoodDays = -1;
         /// <summary>The game's own flag: the player's party can see this one.</summary>
         public bool SeenByPlayer;
         /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>
@@ -67,6 +73,13 @@ namespace BannerlordAgents
         public float Distance;
     }
 
+    /// <summary>Notice numbers, shared by the game's thread (events) and the worker (the tools' call-backs). Game-free.</summary>
+    internal static class NoticeIds
+    {
+        private static int _next;
+        public static int Next() => System.Threading.Interlocked.Increment(ref _next);
+    }
+
     /// <summary>Something a ruler would be told about: a war, a siege, a raid, a holding lost, an army broken.</summary>
     internal sealed class Notice
     {
@@ -77,6 +90,8 @@ namespace BannerlordAgents
         public string Text;
         public List<string> Factions = new List<string>();
         public string Party;
+        /// <summary>The holding it is about, if any (a siege, a raid, a holding taken, a battle at a holding, a tool's place).</summary>
+        public string Place;
         /// <summary>
         /// Why it is kept to the logs instead of poking anyone (a fight with bandits, a caravan or villagers; a raid
         /// already announced; a lost party whose lord's capture already says it), or null when it pokes.
@@ -180,6 +195,8 @@ namespace BannerlordAgents
         public string Kind;
         public string Text;
         public string Party;
+        /// <summary>The holding it is about, if any.</summary>
+        public string Place;
         /// <summary>The notice it came from, if any.</summary>
         public int? Notice;
     }

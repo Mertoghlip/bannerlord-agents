@@ -1,6 +1,8 @@
-# The agent chat
+# The agent chat (retired Oct 8)
 
-For the first tests with Opus 5.5 (phases 5 to 7), the orc agent is a separate Claude Code chat. It has:
+> **Replaced by the war room** on Oct 8 ([WARROOM.md](WARROOM.md)): one fresh, short call per poke, from the same folder and through the same channel, with a median answer of 15 s instead of 53 s. The bridge now writes to `orc-war-council\warroom`, so the chat below would find nothing new in `channel\`. This page records how the first live session (Oct 8) was run.
+
+For the first tests with Opus 5.5 (phase 5 on Oct 8), the orc agent was a separate Claude Code chat. It has:
 - its own folder outside this repository, so it cannot read the code;
 - its own instructions;
 - no memory of the chat that builds the mod.

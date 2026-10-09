@@ -1,0 +1,10 @@
+{
+  "tool": "patrol",
+  "kind": "move",
+  "about": "Patrols around a holding until you give another order.",
+  "at": "any_holding",
+  "start": "patrol",
+  "states": {
+    "patrol": { "about": "patrolling around {at}", "do": "patrol at" }
+  }
+}

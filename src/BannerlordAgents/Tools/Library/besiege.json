@@ -1,0 +1,33 @@
+{
+  "tool": "besiege",
+  "kind": "tool",
+  "about": "Marches on an enemy castle or town, waits near it for the named lords if you give any, then besieges it. The game assaults once the siege engines are ready.",
+  "calls_back": "a relief army comes near, the siege is won, or it is broken",
+  "at": "enemy_fort",
+  "lords": true,
+  "settings": {
+    "wait_hours": [24, 0, 96, "how long to wait near it for the named lords"],
+    "relief_ratio": [1.0, 0.2, 5, "call back when an enemy army this many times its strength comes near"],
+    "relief_radius": [15, 3, 50, "how near counts for that, in map units"]
+  },
+  "init": { "reported": "none" },
+  "start": "march",
+  "states": {
+    "march": { "about": "marching on {at}", "do": "near at",
+      "when": [
+        { "if": "not hostile(at)", "go": "over", "poke": "{at} is no longer an enemy holding." },
+        { "if": "within(at, 6)", "go": "muster" } ] },
+    "muster": { "about": "waiting near {at} for {lords_count()} lords ({lords_arrived()} arrived)", "do": "hold",
+      "when": [
+        { "if": "not hostile(at)", "go": "over", "poke": "{at} is no longer an enemy holding." },
+        { "if": "lords_count() == 0 or lords_arrived() >= lords_count()", "go": "siege" },
+        { "if": "hours_in_state >= wait_hours", "go": "siege", "poke": "{me} waited {wait_hours} hours near {at}; {lords_arrived()} of {lords_count()} lords came. Besieging now." } ] },
+    "siege": { "about": "besieging {at}", "do": "besiege at",
+      "when": [
+        { "if": "ours(at)", "go": "over", "poke": "{at} is taken." },
+        { "if": "not hostile(at)", "go": "over", "poke": "{at} is no longer an enemy holding." },
+        { "if": "hours_in_state > 6 and not besieging and not within(at, 3)", "go": "over", "poke": "The siege of {at} was broken." },
+        { "if": "army_near(at, relief_radius) != none and army_near(at, relief_radius) != reported and strength_of(army_near(at, relief_radius)) >= strength * relief_ratio", "go": "siege", "set": { "reported": "army_near(at, relief_radius)" }, "poke": "A relief army is coming to {at}: {army_near(at, relief_radius)}, strength {strength_of(army_near(at, relief_radius))} against {me}'s {strength}." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

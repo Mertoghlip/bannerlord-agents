@@ -39,9 +39,19 @@ namespace BannerlordAgents
             public string File;
             public int Index;
             public int Poke = -1;
-            public string Lord, Do, Target, Why;
+            public string Lord, Do, Target, At, Why;
+            public readonly List<string> Lords = new List<string>();
+            public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            /// <summary>The order to start when this one finishes (same lord).</summary>
+            public JObject Then;
             public DateTime Received;
         }
+
+        /// <summary>The keys of an order that are not settings; any other number in an order is taken as a setting.</summary>
+        private static readonly HashSet<string> OrderKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "lord", "do", "order", "verb", "target", "at", "place", "why", "lords", "settings", "then", "poke"
+        };
 
         private sealed class PokeInfo
         {
@@ -65,6 +75,10 @@ namespace BannerlordAgents
         private static DateTime _waitingSince = DateTime.MinValue;
         private static int _waitingFor = -1;
         private static bool _silenceAlarmed, _scanAlarmed;
+        /// <summary>The newest poke the agent has answered this session, and what happened since, for the next poke.</summary>
+        private static int _lastAnswered = -1;
+        private static readonly List<KeyValuePair<int, List<string>>> PokeReasons = new List<KeyValuePair<int, List<string>>>();
+        private static readonly List<KeyValuePair<DateTime, string>> Lines = new List<KeyValuePair<DateTime, string>>();
 
         /// <summary>When the folder was last checked (Stopwatch ticks); the watchdog alarms if this stops.</summary>
         public static long LastScan;
@@ -104,6 +118,9 @@ namespace BannerlordAgents
             _waitingSince = DateTime.MinValue;
             _waitingFor = -1;
             _silenceAlarmed = false;
+            _lastAnswered = -1;
+            PokeReasons.Clear();
+            Lines.Clear();
             AnswerFiles = OrdersReceived = Applied = Checked = Refused = 0;
             _shownFile = dataDir != null ? Path.Combine(dataDir, "ids_shown.txt") : null;
             try
@@ -197,10 +214,50 @@ namespace BannerlordAgents
 
         // ---------- what the agent reads ----------
 
+        /// <summary>The newest poke the agent answered this session (-1 before its first answer).</summary>
+        public static int LastAnswered => _lastAnswered;
+
+        /// <summary>
+        /// What the agent has not heard since its last answer: the reasons of the pokes that came after the one it
+        /// answered (the current poke's own reasons are in WHY YOU ARE ASKED NOW), and what became of its orders.
+        /// </summary>
+        public static string SinceLastAnswer(int current)
+        {
+            if (_lastAnswered < 0 || !Pokes.TryGetValue(_lastAnswered, out PokeInfo last))
+                return "- This is the first poke you answer in this game session; the report below has everything.";
+            var sb = new StringBuilder();
+            var seen = new HashSet<string>();
+            int shown = 0, more = 0;
+            foreach (KeyValuePair<int, List<string>> kv in PokeReasons)
+            {
+                if (kv.Key <= _lastAnswered || kv.Key >= current) continue;
+                foreach (string r in kv.Value)
+                {
+                    if (!seen.Add(r)) continue;
+                    if (shown >= 40) { more++; continue; }
+                    sb.AppendLine("- (#" + kv.Key + ") " + r);
+                    shown++;
+                }
+            }
+            if (more > 0) sb.AppendLine("- ... and " + more + " more.");
+            if (shown == 0) sb.AppendLine("- No other pokes came since your last answer (to #" + _lastAnswered + ").");
+            // the tools' call-backs are already among the reasons above
+            List<string> lines = Lines.Where(l => l.Key >= last.Wall && !l.Value.StartsWith("tool: ", StringComparison.Ordinal)).Select(l => l.Value).ToList();
+            if (lines.Count > 0)
+            {
+                sb.AppendLine("What became of your orders since then:");
+                foreach (string l in lines.Skip(Math.Max(0, lines.Count - 30))) sb.AppendLine("- " + l);
+                if (lines.Count > 30) sb.AppendLine("- (" + (lines.Count - 30) + " earlier lines are in receipts.log)");
+            }
+            return sb.ToString().TrimEnd();
+        }
+
         public static void OnPoke(int n, double hours, List<Trigger> triggers, string report)
         {
             _lastPoke = n;
             Pokes[n] = new PokeInfo { Wall = DateTime.Now, Hours = hours };
+            PokeReasons.Add(new KeyValuePair<int, List<string>>(n, triggers.Select(t => t.Text).ToList()));
+            if (PokeReasons.Count > 300) PokeReasons.RemoveRange(0, PokeReasons.Count - 300);
             if (_waitingSince == DateTime.MinValue) { _waitingSince = DateTime.Now; _waitingFor = n; }
             Paths.Ensure(OrdersDir);
             string head = "POKE #" + n + ", " + Text.When(hours) + "\n"
@@ -342,6 +399,7 @@ namespace BannerlordAgents
             _silenceAlarmed = false;
             _waitingSince = DateTime.MinValue;
             _waitingFor = -1;
+            if (poke >= 0 && pi != null && poke > _lastAnswered) _lastAnswered = poke;
 
             EnsureBefore(null);
             if (poke >= 0 && poke <= _before && !Pokes.ContainsKey(poke))
@@ -372,7 +430,7 @@ namespace BannerlordAgents
         /// <summary>An id the agent was never shown: made up, or learned outside its folder (the independence check).</summary>
         private static void CheckIds(AgentOrder o)
         {
-            foreach (string v in new[] { o.Lord, o.Target })
+            foreach (string v in new[] { o.Lord, o.Target, o.At }.Concat(o.Lords))
             {
                 if (string.IsNullOrWhiteSpace(v)) continue;
                 string s = v.Trim().Trim('[', ']');
@@ -438,19 +496,47 @@ namespace BannerlordAgents
             else if (root is JArray arr) list = arr;
             else { error = "expected an object with \"orders\""; return false; }
 
-            DateTime now = DateTime.Now;
             int i = 0;
             foreach (JToken t in list)
             {
                 i++;
                 if (!(t is JObject o)) continue;
-                orders.Add(new AgentOrder
-                {
-                    File = Path.GetFileName(path), Index = i, Poke = (int?)o["poke"] ?? poke, Received = now,
-                    Lord = (string)o["lord"], Do = (string)(o["do"] ?? o["order"] ?? o["verb"]), Target = (string)o["target"], Why = (string)o["why"]
-                });
+                AgentOrder a = OrderFrom(o, null, poke, Path.GetFileName(path));
+                a.Index = i;
+                orders.Add(a);
             }
             return true;
+        }
+
+        /// <summary>
+        /// One order from its JSON: lord, do, at (a holding) or target (a lord), lords (a list), settings (numbers, also
+        /// accepted at the order's top level), why, and then (the next order, for the same lord). Also used for "then".
+        /// </summary>
+        public static AgentOrder OrderFrom(JObject o, string lord, int poke, string file)
+        {
+            var a = new AgentOrder
+            {
+                File = file, Index = 1, Poke = (int?)o["poke"] ?? poke, Received = DateTime.Now,
+                Lord = (string)o["lord"] ?? lord, Do = (string)(o["do"] ?? o["order"] ?? o["verb"]),
+                Target = Str(o["target"]), At = Str(o["at"] ?? o["place"]), Why = (string)o["why"], Then = o["then"] as JObject
+            };
+            JToken lords = o["lords"];
+            if (lords is JArray arr) a.Lords.AddRange(arr.Select(Str).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
+            else if (lords != null && lords.Type == JTokenType.String) a.Lords.AddRange(((string)lords).Split(',').Select(x => x.Trim()).Where(x => x.Length > 0));
+            if (o["settings"] is JObject set)
+                foreach (JProperty p in set.Properties())
+                    if (p.Value.Type == JTokenType.Integer || p.Value.Type == JTokenType.Float) a.Settings[p.Name] = (double)p.Value;
+            foreach (JProperty p in o.Properties())
+                if (!OrderKeys.Contains(p.Name) && (p.Value.Type == JTokenType.Integer || p.Value.Type == JTokenType.Float)) a.Settings[p.Name] = (double)p.Value;
+            return a;
+        }
+
+        /// <summary>An id written as a string, a number or ["id"].</summary>
+        private static string Str(JToken t)
+        {
+            if (t == null || t.Type == JTokenType.Null) return null;
+            if (t is JArray a) return a.Count > 0 ? Str(a[0]) : null;
+            return ((string)t)?.Trim().Trim('[', ']');
         }
 
         private static DateTime SafeCreation(string f)
@@ -513,8 +599,48 @@ namespace BannerlordAgents
 
         private static void Line(string text)
         {
+            Lines.Add(new KeyValuePair<DateTime, string>(DateTime.Now, text));
+            if (Lines.Count > 400) Lines.RemoveRange(0, Lines.Count - 400);
             Files.Append(Path.Combine(Dir, "receipts.log"), DateTime.Now.ToString("HH:mm:ss") + "  " + text);
             Files.FlushAll();
+        }
+
+        /// <summary>The library of orders the agent can give, written into the channel once a session (the war room reads it too).</summary>
+        public static void WriteLibrary()
+        {
+            if (!On) return;
+            List<string> problems = Tools.Library.Problems();
+            if (problems.Count > 0)
+                Diag.Alarm("tool_library", "The tool library has " + problems.Count + " problems, so some orders will not work: " + string.Join("; ", problems.Take(3)) + ".", true);
+            Files.Overwrite(Path.Combine(Dir, "tools.txt"), Tools.Library.Text());
+            Diag.Event("tool", "library written", new { tools = Tools.Library.All.Count, problems });
+        }
+
+        /// <summary>The look-up files, one per id, for details on request; files no longer written are removed.</summary>
+        public static void WriteLookups(Dictionary<string, string> files)
+        {
+            if (!On || files == null) return;
+            string dir = Paths.Ensure(Path.Combine(Dir, "lookups"));
+            var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, string> kv in files)
+            {
+                string name = Safe(kv.Key) + ".txt";
+                keep.Add(name);
+                Files.Overwrite(Path.Combine(dir, name), kv.Value);
+            }
+            try
+            {
+                foreach (string f in Directory.GetFiles(dir, "*.txt"))
+                    if (!keep.Contains(Path.GetFileName(f))) System.IO.File.Delete(f);
+            }
+            catch (Exception e) { Diag.Swallowed("tidying the look-up files", e); }
+        }
+
+        private static string Safe(string id)
+        {
+            var sb = new StringBuilder(id.Length);
+            foreach (char c in id) sb.Append(char.IsLetterOrDigit(c) || c == '_' || c == '-' ? c : '_');
+            return sb.ToString();
         }
 
         // ---------- the watchdog's checks (its own thread; reads plain fields only) ----------

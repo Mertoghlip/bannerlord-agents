@@ -1,11 +1,11 @@
 # Build plan
 
-Started Tue Oct 6, 2026, the day the proposal went in; updated Wed Oct 7. This is the working plan: the checkboxes are the to-do list, and it changes as the work does. The proposal-stage plan, with the experiments in full and the references, is in [proposal/plan-page.html](proposal/plan-page.html).
+Started Tue Oct 6, 2026, the day the proposal went in; updated Thu Oct 8. This is the working plan: the checkboxes are the to-do list, and it changes as the work does. The proposal-stage plan, with the experiments in full and the references, is in [proposal/plan-page.html](proposal/plan-page.html).
 
 ## Where things stand
 
 - **Proposal:** submitted Tue Oct 6. The repository and the separate module were set up Oct 6–7.
-- **Now:** the first tests, on the Misty Mountain Orcs in your own campaign. They are laid out phase by phase in [FIRST-TESTS.md](FIRST-TESTS.md).
+- **Now:** the first tests, on the Misty Mountain Orcs in your own campaign. They are laid out phase by phase in [FIRST-TESTS.md](FIRST-TESTS.md). Since Oct 8 (version 0.4) the tools, armies and war room are in, so Opus 5.5 commands the whole orc realm live (phase 7), a week ahead of the plan.
 - **Checkpoint, Tue Oct 27:** the Mordor, Harad and Rhûn coalition playing on our tools, every decision logged, first numbers against the game's own AI, and a first look at your recorded play.
 - **Final report and talk, Tue Dec 1:** tool writing, the trained small models, what your play adds, and the full comparison for the everyday gamer.
 - **Budget:** about 90 hours. [worklog.md](worklog.md) keeps the count.
@@ -39,8 +39,9 @@ One line each; the proposal page has the detail.
 | The recorder (part of the bridge) | Logs your decisions on the campaign map, with what your faction could see at that moment, in the same format as the agents' records | `src/BannerlordAgents` | C# | now |
 | The shared core | The message formats and the tool engine, which reads, checks and runs a tool. Used both by the bridge and by tests outside the game. | `src/BannerlordAgents.Core` | C# | Oct 12 |
 | The agent channel (part of the bridge) | Files through which an agent plays a realm: pokes and reports in, order files out, a receipt for every order | `src/BannerlordAgents` | C# | Oct 7 |
-| The agent chat | A separate Claude Code chat that plays the orcs through the channel, for the first tests | outside the repository; templates in `agent/` | — | Oct 7 |
-| The war room | The program beside the game where the agents decide: a queue per faction, the calls to the models, the checks, the master log, and tool writing. It takes over the agent channel from the chat. | `src/BannerlordAgents.WarRoom` | C# | Oct 19 |
+| The agent chat | A separate Claude Code chat that played the orcs through the channel in the first session. Retired Oct 8. | outside the repository; templates in `agent/` | — | Oct 7 |
+| The tool engine (part of the bridge, for now) | The behavior language, its checker, the order library and the runner that carries out tools hour by hour | `src/BannerlordAgents/Tools` | C# | Oct 8 |
+| The war room | The program beside the game where the agents decide: a queue per faction, the calls to the models, the checks, the master log, and tool writing. It took over the agent channel from the chat on Oct 8, for one realm. | `src/BannerlordAgents.WarRoom` | C# | Oct 8 |
 | Message formats | The exact shape of everything the bridge and the war room send each other, written down once | `protocol/` | JSON | this week |
 | Training and serving | Builds datasets from the logs and your recordings, fine-tunes the small models, and runs them beside the game | `training/` | Python | Nov 2 |
 | Analysis | The numbers, charts and the everyday-gamer table for the report | `analysis/` | Python | Oct 26 |
@@ -54,7 +55,7 @@ One line each; the proposal page has the detail.
    - **Your campaign:** your usual mods plus Bannerlord Agents, which records your play and hosts the tests on the orcs.
    - **Measured runs:** only the base game, TAOM's own modules and Bannerlord Agents, from a fixed starting save. Your personal mods change how the game's own AI recruits, garrisons and makes peace, so they would blur the comparison with that AI.
    - A small script switches between the two module lists (week 2). Each switch costs one slow load while the game rebuilds its shaders.
-3. **Nothing of ours goes into your save.** The mod keeps its orders, tool states and records in its own files. There is one catch, found in the game's code: the switch that stops a lord making his own decisions is saved with the game. So the mod hands its lords back to the game just before every save, autosaves included, and takes them back right after. Every save stays one the game could have made without the mod, so switching the mod off is always safe. After loading any save, all orders are cleared.
+3. **Nothing of ours goes into your save.** The mod keeps its orders, tool states and records in its own files. There is one catch, found in the game's code: the switch that stops a lord making their own decisions is saved with the game. So the mod hands its lords back to the game just before every save, autosaves included, and takes them back right after. Every save stays one the game could have made without the mod, so switching the mod off is always safe. After loading any save, all orders are cleared.
 
 ### How it runs
 
@@ -71,12 +72,12 @@ One line each; the proposal page has the detail.
 6. **Everything that runs during play is C#.** The war room is a C# program like the bridge, so the tool engine is one piece of code used in both places. A tool that passes the checks outside the game behaves the same way inside it. A player would need only the mod and one small program. Python arrives in November for training and charts.
 7. **The bridge and the war room talk over a private connection on the laptop,** one message per line. Neither waits on the other: the game carries on whatever the war room is doing.
 8. **The models are reached through Claude Code, on your subscription,** with no API key. The war room hands it the prompt and reads the orders back as JSON.
-   - For the first tests, the agent is a separate Claude Code chat ([AGENT-CHAT.md](AGENT-CHAT.md)). It has its own folder outside this repository, its own instructions, and no memory of the chat that builds the mod.
+   - For the first session (Oct 8), the agent was a separate Claude Code chat ([AGENT-CHAT.md](AGENT-CHAT.md)), with its own folder outside this repository, its own instructions, and no memory of the chat that builds the mod.
    - It plays only through the agent channel: pokes and reports in, order files out, a receipt for every order. That makes it an independent test of the whole loop.
-   - The war room program takes over the same channel in week 3.
+   - **Since Oct 8 the war room program answers instead** ([WARROOM.md](WARROOM.md)), a week early: the chat took a median of 53 s an answer, because its conversation grew with every poke and its thinking had no limit. The war room makes one fresh call per poke, from the same folder and through the same channel, so the independence holds. The agent reads only its channel.
 9. **The game's own commands do the moving.**
    - Every primitive move maps to a command the 1.4.8 game already has: go to, engage, besiege, raid, defend, patrol, escort and hold.
-   - For a lord holding our order, the game's AI is told to stop making its own decisions. The game still lets such a lord fight an enemy attacking the very place he was sent to; we keep that.
+   - For a lord holding our order, the game's AI is told to stop making its own decisions. The game still lets such a lord fight an enemy attacking the very place they were sent to; we keep that.
    - Diplomacy uses the game's own war, peace, alliance and call-to-war actions.
 10. **We work out each faction's view ourselves,** using the game's own sight rules: each party's sight range, and how hard the other party is to spot. The game itself tracks only what *your* party can see. That gives us a free check, because for your party our rule must agree with the game's.
 
@@ -95,7 +96,7 @@ One line each; the proposal page has the detail.
       - Moving the dialogue onto that path is your call.
     - **How dialogue orders are read meanwhile:**
       - Your own mod hands each order to Party AI Controls. The recorder reads it there after every conversation and every in-game hour.
-      - It only reads the list of lords who already hold an order. Asking Party AI Controls about any other lord would quietly create a saved entry for him, so the recorder never does.
+      - It only reads the list of lords who already hold an order. Asking Party AI Controls about any other lord would quietly create a saved entry for that lord, so the recorder never does.
       - This also catches orders you give your clan's parties through Party AI Controls' own screen.
     - **What the records are for:**
       - training data for the small models (Opus only, yours only, or the mix);
@@ -126,11 +127,15 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 
 ### Week 2 · Oct 12–18 · 12 h · Opus live, and tools
 
-- [ ] First tests, phases 5–6, with the agent chat (the agent channel came with install 1): Opus 5.5 watching the orcs live without acting, then commanding one orc lord
-- [ ] The behavior language, and the tool engine in the shared core, with tests that run without the game
-- [ ] defend, besiege and garrison, tried first on the orc lords
-- [ ] Faction authority: an agent orders only its own lords. **free** hands a lord back.
-- [ ] First tests, install 3 (phase 7): Opus 5.5 commands the whole orc realm with those three tools, in your campaign
+- [ ] First tests, phases 5–6, with the agent chat (the agent channel came with install 1): Opus 5.5 watching the orcs live without acting, then commanding one orc lord. *Phase 5 ran Oct 8 with the agent chat.*
+- [x] The behavior language, and the tool engine, with tests that run without the game. *Version 0.4, Oct 8 ([TOOLS.md](TOOLS.md)). The engine is game-free code inside the bridge for now (`src/BannerlordAgents/Tools`); it moves into the shared core when the war room needs it too.*
+- [x] defend, besiege and garrison. *Built Oct 8 with every move (go to, patrol, engage, follow, leave, recruit, hold) and raid, hunt, screen and rest from week 3; each order carries a safety and a food rule.*
+- [x] Armies, moved up from week 3: gather, relieve, add, release, disband, by the game's own rules and influence price
+- [x] Changing orders without re-planning: adjust, next orders (then), empty answers, and the orders in force in every poke
+- [x] Look-ups and ready-made facts: one file per holding, lord and known enemy, and the soonest lords for what a poke is about
+- [x] The war room's call path, moved up from week 3: one fresh Claude Code call per poke, with the thinking capped; median answer 15 s against 53 on recorded pokes ([WARROOM.md](WARROOM.md))
+- [x] Faction authority: an agent orders only its own lords. **free** hands a lord back.
+- [ ] First tests, phase 7: Opus 5.5 commands the whole orc realm with those tools, in your campaign. *Set up Oct 8, 21:14.*
 - [ ] Run control: a fixed starting save, a 60-day limit, the player parked far away, a fixed speed, and autosave with resume
 - [ ] The starting save for measured runs, and the script that switches module lists
 
@@ -140,8 +145,9 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 
 ### Week 3 · Oct 19–25 · 12 h · the coalition plays
 
-- [ ] raid, hunt, gather, screen and rest
-- [ ] The full war room: queues per faction, merged pokes, late-order checks, the master log
+- [x] raid, hunt, gather, screen and rest *(built Oct 8 with the week 2 tools)*
+- [ ] Fronts: moving lords between the realm's fronts (put off on Oct 8)
+- [ ] The full war room: queues per faction, merged pokes, late-order checks, the master log. *The single-realm call path runs since Oct 8.*
 - [ ] Faction agents: the prompt (goal, rules, tool library, triggers, view, allies' messages), orders back as JSON, the checks, and one retry
 - [ ] The allied channel. Diplomacy: actions and pokes, refusing whatever the pack forbids.
 - [ ] Opus 5.5 agents for Mordor, Harad and Rhûn, live. Stock-AI runs from the same save.

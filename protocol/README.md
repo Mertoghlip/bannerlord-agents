@@ -1,8 +1,8 @@
-# Record formats (install 1, with the logs of version 0.3)
+# Record formats (install 1, with the logs of version 0.3 and the tools of 0.4)
 
 Everything the bridge writes is JSON, one object per line (JSON Lines). Names are snake_case, and empty fields are left out. `hours` is in-game hours since the calendar began. `date` is the game's own date text, and `wall` is the real clock.
 
-The formats for the war room (agents' orders, tool definitions) arrive in weeks 2 and 3.
+The agents' answers are under [Agent channel](#agent-channel) below. Tool definitions are in [docs/TOOLS.md](../docs/TOOLS.md), and the war room's own logs in [docs/WARROOM.md](../docs/WARROOM.md).
 
 ## Where the files are
 
@@ -12,13 +12,14 @@ The formats for the war room (agents' orders, tool definitions) arrive in weeks 
 |---|---|---|
 | `logs\bridge.log` | human-readable log | carries across launches; past 8 MB the old one becomes `bridge_prev.log`; alarms start with `!!` |
 | `logs\sessions\<date-time>\` | game launch | the detailed logs (below, and [docs/LOGGING.md](../docs/LOGGING.md)); the newest 30 launches are kept, 2 GB at most in all |
+| `logs\warroom\` | war room call | `calls.jsonl` (one line per call: the poke, model, effort, thinking cap, seconds, tokens, orders, retries and denied reads), `calls\<date>\<time>-poke-N\` (the prompt, Claude Code's event stream and the answer), `warroom-<date>.log`, `system-<hash>.md` ([docs/WARROOM.md](../docs/WARROOM.md)) |
 | `settings.txt` | settings | `watch`, `bridge`, `record`, `perf`, `notify`, `agent`, `agent_lords`, `agent_dir`, `sighting_distance` (30: enemy lords further than this from all the realm's holdings poke only when heading for one or chasing its parties), `detail` (full or everyday), `witness`, `ai_reasons`, `screen_alarms`, `answer_alarm_minutes`, `freeze_probe`; the console commands change these |
 | `perf\perf_<yyyyMMdd>.csv` | second of campaign-map play | see the columns below |
 | `data\<campaign id>\pokes_<realm id>.jsonl` | poke of the watched realm | carries the full view and the report text |
 | `data\<campaign id>\reports\<realm id>_latest.txt` | the latest poke's report | overwritten each poke |
 | `data\<campaign id>\reports\<realm id>_now.txt` | the report from `agents.view` | overwritten each time |
 | `data\<campaign id>\notices.jsonl` | ruler notice | for the watched realm and the player's realm; `quiet` says why one was kept to the logs instead of poking (see below) |
-| `data\<campaign id>\orders.jsonl` | hand-order event | issued, arrived, reissued, ended |
+| `data\<campaign id>\orders.jsonl` | order event | issued, arrived, reissued, ended; for hand, agent and vassal orders, tools included |
 | `data\<campaign id>\record\decisions.jsonl` | decision of the player's | with what the player could see |
 | `data\<campaign id>\record\events.jsonl` | event around the player | entered or left a settlement, attacked, realm votes, vassal orders ended |
 | `data\<campaign id>\record\clicks.jsonl` | change of the player's course | raw, before corrections are merged |
@@ -99,29 +100,44 @@ A movement counts as a decision once it has held for a quarter of an in-game hou
 |---|---|
 | Event | `type`: "event", `kind` (entered, left, attacked, joined_your_army, realm_decided, vassal_order_ended), `text`, `hours`, `date` |
 | Click | `type`: "click", `hours`, `wall`, `behavior` (the game's own name), `settlement`, `party`, `x`, `y` |
-| Order | `type`: "order", `event` (issued, arrived, reissued, ended), `id` (numbered per session), `source`, `poke`, `hours`, `lord`, `lord_name`, `verb`, `place`, `target`, `reissued`, `text` |
-| Notice | `id`, `hours`, `kind` (as the trigger kinds above), `text`, `factions` (the realms told), `party` |
+| Order | `type`: "order", `event` (issued, arrived, reissued, ended), `id` (numbered per session), `source`, `poke`, `hours`, `lord`, `lord_name`, `verb` (the current move), `tool` (for the agent's and the console's orders), `place`, `target`, `reissued`, `text` |
+| Notice | `id`, `hours`, `kind` (as the trigger kinds above, plus `tool` for a tool's call-back), `text`, `factions` (the realms told), `party`, `place` (the holding it is about), `quiet` |
 
 ## Agent channel
 
-The channel lives in the folder set by `agent_dir` in `settings.txt`, now `C:\Users\karab\Projects\orc-war-council\channel`. It is used when `agent` is `shadow` or `live`.
+The channel lives in the folder set by `agent_dir` in `settings.txt`, now `C:\Users\karab\Projects\orc-war-council\warroom` (the war room's; until Oct 8 the agent chat's `...\channel`). It is used when `agent` is `shadow` or `live`.
 
 | File | Written by | Contents |
 |---|---|---|
 | `pokes.log` | bridge | one line per poke of the watched realm: `#12 \| Summer 3, 1085, 14:00 \| <first trigger> (and N more)` |
-| `poke.txt` | bridge | `POKE #12, <date>`, how to answer, the mode, then the full report. It is written before the poke's line appears in `pokes.log`. |
-| `report.txt` | bridge | `SITUATION AT <date>` and the mode, then the report without triggers. Refreshed every in-game hour. |
-| `orders\*.json` | agent | one answer per file, in the form shown below. Each file is read once and moved to `orders\done\`. |
-| `receipts.log` | bridge | one line per order (APPLIED, CHECKED in shadow mode, or REFUSED, with the reason and the answer time), and later lines for what became of agent orders (arrived, reissued, ended). Also: RECEIVED, at once, for a file read while the game's clock is stopped (its orders are answered when the clock runs again); SET ASIDE for a file written before the game session began (moved unread to `orders\stale\`); REFUSED for every order in a file answering a poke from before the last load; UNREADABLE for a file that is not valid JSON after five tries. |
+| `poke.txt` | bridge | `POKE #12, <date>`, how to answer, the mode, then the report with the poke's sections (below). It is written before the poke's line appears in `pokes.log`. |
+| `report.txt` | bridge | `SITUATION AT <date>` and the mode, then the report without triggers, with the orders in force. Refreshed every in-game hour. |
+| `tools.txt` | bridge | the order library the agent reads: every move, tool and army order with what it takes, its settings and ranges, and when it calls back. Written at every campaign load (and by `scripts\setup-agent.ps1`). |
+| `lookups\<id>.txt` | bridge | one file per holding of the realm, lord of the realm and enemy it knows of (README.txt says what is in each), rewritten before each poke |
+| `orders\*.json` | agent (war room) | one answer per file, in the form shown below. Each file is read once and moved to `orders\done\`. |
+| `receipts.log` | bridge | one line per order (APPLIED, CHECKED in shadow mode, or REFUSED, with the reason and the answer time), and later lines for what became of agent orders (ended, and `tool:` lines for every call-back). Also: RECEIVED, at once, for a file read while the game's clock is stopped (its orders are answered when the clock runs again); SET ASIDE for a file written before the game session began (moved unread to `orders\stale\`); REFUSED for every order in a file answering a poke from before the last load; UNREADABLE for a file that is not valid JSON after five tries. |
+
+The poke's sections, after WHY YOU ARE ASKED NOW (since 0.4):
+- **WHAT CHANGED SINCE YOUR LAST ANSWER (to poke #K):** the reasons of every poke after #K, then "What became of your orders since then" (the receipts written since poke #K was).
+- **YOUR ORDERS IN FORCE:** one line per held lord: the order with its ids, what it is doing now, since when, settings that differ from the defaults, and its next order (then).
+- **READY-MADE FACTS:** for up to four things the poke is about, the realm's lords soonest to it (strength, rough hours, free or ordered) and enemies near it; then the count of free lords.
+- In YOUR LORDS AND ARMIES, a held lord's line ends with "(your order: <tool>)".
 
 An answer file:
 
 ```json
-{"poke": 12, "orders": [{"lord": "lord_MM1_2", "do": "garrison", "target": "castle_MM1", "why": "..."}], "note": "..."}
+{"poke": 12, "orders": [
+  {"lord": "lord_MM1_2", "do": "defend", "at": "castle_MM1", "radius": 25, "why": "..."},
+  {"lord": "lord_MM1_5", "do": "gather", "at": "castle_MM1", "lords": ["lord_MM1_6", "lord_MM1_7"], "then": {"do": "relieve", "at": "town_MM2"}},
+  {"lord": "lord_MM1_9", "do": "adjust", "settings": {"caution": 0}}],
+ "note": "..."}
 ```
 
-- `lord` and `target` take the ids shown in [brackets] in the report, or names.
-- `do` is one of `goto`, `garrison`, `patrol`, `defend`, `engage`, `besiege`, `raid`, `recruit`, `hold` or `free`.
+- `lord`, `at` (a holding), `target` (a lord) and `lords` (a list) take the ids shown in [brackets], or names. `target` and `at` stand in for each other where a tool takes only one.
+- `do` is any order of the library in `tools.txt` (docs/TOOLS.md), or `free`, `release`, `add`, `disband`, `adjust`.
+- Settings are numbers: in `"settings": {...}`, or as any other number at the order's top level.
+- `then` is an order without a lord (it is the same lord's), checked against the game when it starts.
+- `"orders": []` is a valid answer: nothing changes.
 - A bare list of orders, or a single order object, is accepted too.
 
 Every receipt is also kept in the campaign's `orders.jsonl` as a record with `type` "agent_receipt". It has `poke`, `file`, `index`, `lord`, `do`, `target`, `why`, `status`, `reason`, `hours`, `answer_seconds`, `answer_game_hours`, `waited_seconds` (when the order waited at least 2 s for the game's clock) and `mode`.
@@ -146,7 +162,9 @@ One folder per game launch, `logs\sessions\<yyyyMMdd-HHmmss>\`. What each file i
 | `notice`, `poke` | every notice with its `id` (and `quiet` when kept from the agent); every poke with its triggers, the notices it carried, its size by section, and its delay |
 | `sighting` | an enemy lord newly seen far off, not poked for (`far off`: distance, nearest holding, what the lord was doing); a lord seen with a new party |
 | `answer` | each answer file (written, read, seconds after its poke, newer pokes already out, duplicate), each receipt, files set aside or unreadable, ids never shown |
-| `order` | issued (with the words, and the lord's state before and after), checked (shadow), hour, arrived, reissued (with who turned him away), ended, after release, refused at the door, lord lookup |
+| `order` | issued (with the words, and the lord's state before and after), checked (shadow), hour, arrived, moved (a tool's new move, and whether the game took it), reissued (with who turned the lord away), replaced, ended, after release, refused at the door, lord lookup |
+| `tool` | library written (with any problems the checker found), started (tool, lord, places, lords, settings, next order), step (from, to, the rule that fired, the move), no target, sheltered and resumed (the safety rule), adjusted, then, replaced, ended (why, steps, hours), cleared |
+| `army` | formed (leader, place, lords called, influence cost and the clan's influence before, army type) |
 | `lord` | a change in what a lord of the watched realm (or a lord we hold) is doing |
 | `ai` | the game's AI weighing its options: kept plan (the best other option), changed plan or called an army (the options and their scores, the bar) |
 | `witness` | the movement watcher: who changed the plan of a lord holding our order, with the call trail |
@@ -157,7 +175,7 @@ One folder per game launch, `logs\sessions\<yyyyMMdd-HHmmss>\`. What each file i
 
 **`health.csv`**, one row a minute: `time`, `game_hours`, `state`, `speed`, `clock_running`, `window`, `frames`, `campaign_ticks`, `our_ms_on_game_thread`, `top_hooks_ms`, `slowest_call_ms`, `slowest_call`, `helper_jobs_total`, `helper_queued`, `helper_slowest_job_ms`, `helper_cpu_ms`, `helper_on_efficiency_cores`, `orders_held`, `pokes`, `answers`, `waiting_for_answer_s`, `alarms_total`, `errors_total`, `gc0`, `gc1`, `gc2` (collections that minute), `private_mb`, `threads`, `handles`, `open_files`, `names_cached`, `trace_mb`.
 
-**`lords.log`**: one line per event, `<game date>  <lord> [<id>]: <what>`. The game's AI weighing options: `weighed N options and kept his plan: ... (best other: ... 0.120)`, or `changed plan: A -> B` followed by an `options:` line (up to eight, with scores) and a `best ... against a bar of ...` line.
+**`lords.log`**: one line per event, `<game date>  <lord> [<id>]: <what>`. The game's AI weighing options: `weighed N options and kept the plan: ... (best other: ... 0.120)`, or `changed plan: A -> B` followed by an `options:` line (up to eight, with scores) and a `best ... against a bar of ...` line.
 
 **`freeze-*.txt`**: the freeze probe's report: a verdict (BUSY in a loop, BUSY moving around, or WAITING, with the share of a core), ten samples of where the main thread was, its call trail (module+offset, Windows functions by name, C# methods by name), the busiest threads, and the C# stacks.
 

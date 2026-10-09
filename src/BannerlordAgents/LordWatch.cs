@@ -81,7 +81,7 @@ namespace BannerlordAgents
                 if (!x.Gone)
                 {
                     x.Gone = true;
-                    Line(x, "his party is gone");
+                    Line(x, "the party is gone");
                 }
                 return;
             }
@@ -112,7 +112,7 @@ namespace BannerlordAgents
             if (off != x.AiOff)
             {
                 bool ours = Orders.TookSwitch(p);
-                Add(ref changes, (off ? "the game's AI was switched off for him" : "the game's AI was switched back on for him") + (ours ? " (by us)" : " (not by us)"));
+                Add(ref changes, (off ? "the game's AI was switched off for this lord" : "the game's AI was switched back on for this lord") + (ours ? " (by us)" : " (not by us)"));
                 if (!ours && x.Ordered && !off)
                     Diag.Alarm("switch_by_other", "Something other than us switched the game's AI back on for " + x.Name + ", who holds our order. The order is re-applied each hour.", false,
                                new { lord = x.Lord });
@@ -149,7 +149,7 @@ namespace BannerlordAgents
         {
             Watched x = Lords.FirstOrDefault(l => l.Party != null && l.Party.StringId == r.Party);
             string who = x != null ? x.Name + " [" + x.Lord + "]" : r.Party;
-            Diag.Lord(Text.When(Diag.Hours) + "  " + who + ": his plan was changed by " + Friendly(r.Culprit) + (r.MainThread ? "" : ", from another thread") + ".");
+            Diag.Lord(Text.When(Diag.Hours) + "  " + who + ": the plan was changed by " + Friendly(r.Culprit) + (r.MainThread ? "" : ", from another thread") + ".");
             Orders.Witnessed(r.Party, Friendly(r.Culprit));
         }
 

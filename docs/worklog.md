@@ -11,3 +11,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Oct 8 | | First live session (phases 0, 1, 2, 5): the agent in shadow mode; ghost-troop crashes traced and fixed in the fixes mod; report written | 1 |
 | Oct 8 | | Why the orcs were poked 125 times: every poke sorted by type, battles by who fought whom, and what each cut would save | 1 |
 | Oct 8 | | Version 0.3.1, fewer pokes: small fights and far-off lords cut, three wording fixes; installed. The change log started ([CHANGELOG.md](CHANGELOG.md)) | 1 |
+| Oct 8 | | Version 0.4.0: the behavior language and tool engine, 16 orders with safety and food rules, armies by the game's rules, orders in force, ready-made facts and look-ups; the war room (one call per poke, thinking capped: median 15 s against 53 on replays); installed, and the agent set live for the whole orc realm | 1 |

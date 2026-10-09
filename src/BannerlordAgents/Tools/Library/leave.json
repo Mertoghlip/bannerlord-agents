@@ -1,0 +1,11 @@
+{
+  "tool": "leave",
+  "kind": "move",
+  "about": "Leaves the holding the lord is in, and waits just outside.",
+  "start": "leave",
+  "states": {
+    "leave": { "about": "leaving", "do": "leave",
+      "when": [ { "if": "not in_settlement", "go": "out" } ] },
+    "out": { "about": "outside", "end": "hold" }
+  }
+}

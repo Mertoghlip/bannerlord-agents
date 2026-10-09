@@ -1,0 +1,24 @@
+{
+  "tool": "rest",
+  "kind": "tool",
+  "about": "Goes inside a holding of yours or an ally's to heal and fill the ranks, and stays until it has.",
+  "calls_back": "the ranks are full and the wounded have healed, or it has rested max_days",
+  "at": "friendly_holding",
+  "settings": {
+    "full": [0.95, 0.3, 1, "the share of full ranks that counts as full"],
+    "max_days": [5, 1, 15, "the longest it rests, in days"]
+  },
+  "start": "go",
+  "states": {
+    "go": { "about": "going to rest at {at}", "do": "recruit at",
+      "when": [
+        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly, so {me} did not rest there." },
+        { "if": "inside(at)", "go": "rest" } ] },
+    "rest": { "about": "resting at {at}", "do": "recruit at",
+      "when": [
+        { "if": "ranks >= full and wounded < 0.1", "go": "over", "poke": "{me} has rested at {at}: {men} men, ranks at {round(ranks * 100)}%." },
+        { "if": "hours_in_state >= max_days * 24", "go": "over", "poke": "{me} rested {max_days} days at {at}: {men} men, ranks at {round(ranks * 100)}%." },
+        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

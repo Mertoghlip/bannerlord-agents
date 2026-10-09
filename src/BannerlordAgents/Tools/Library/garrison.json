@@ -1,0 +1,21 @@
+{
+  "tool": "garrison",
+  "kind": "tool",
+  "about": "Goes inside one of your or an ally's castles or towns and stays there.",
+  "calls_back": "the holding is besieged, or it falls",
+  "at": "friendly_fort",
+  "init": { "reported": "false" },
+  "start": "go",
+  "states": {
+    "go": { "about": "going to garrison {at}", "do": "enter at",
+      "when": [
+        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly, so {me} did not garrison it." },
+        { "if": "inside(at)", "go": "inside" } ] },
+    "inside": { "about": "garrisoning {at}", "do": "enter at",
+      "when": [
+        { "if": "not friendly(at)", "go": "over", "poke": "{at} fell." },
+        { "if": "besieged(at) and not reported", "go": "inside", "set": { "reported": "true" }, "poke": "{at} is besieged by {besieger(at)} (strength {siege_strength(at)}); {me} is inside with strength {strength}." },
+        { "if": "reported and not besieged(at)", "go": "inside", "set": { "reported": "false" }, "poke": "The siege of {at} is over; {me} is still inside." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

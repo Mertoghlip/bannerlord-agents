@@ -1,0 +1,19 @@
+{
+  "tool": "engage",
+  "kind": "move",
+  "about": "Attacks an enemy lord or army; if it slips out of view, goes to where it was last seen.",
+  "target": "enemy_lord",
+  "start": "chase",
+  "states": {
+    "chase": { "about": "attacking {target}", "do": "engage target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
+        { "if": "not in_view(target)", "go": "search" } ] },
+    "search": { "about": "looking for {target} where it was last seen", "do": "toward target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
+        { "if": "in_view(target)", "go": "chase" },
+        { "if": "seen_ago(target) > 6", "go": "over", "poke": "{me} lost track of {target}." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

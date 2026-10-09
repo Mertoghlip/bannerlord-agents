@@ -6,6 +6,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using BannerlordAgents;
+using BannerlordAgents.Tools;
+using Newtonsoft.Json.Linq;
 
 namespace SmokeTest
 {
@@ -26,6 +28,7 @@ namespace SmokeTest
         private static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "--spin") return Spin();
+            if (args.Length > 1 && args[0] == "--library") return ExportLibrary(args[1]);
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-smoketest");
             try { Directory.Delete(root, true); } catch { /* first run */ }
             Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
@@ -160,6 +163,8 @@ namespace SmokeTest
             string cutPokes = Read(Path.Combine(dir, "pokes_orcs.jsonl"));
             Check(cutPokes.Contains("\"party\":\"lord_far\"") && cutPokes.Contains("\"party\":\"lord_drifter\""), "each of those pokes names its lord");
 
+            ToolTests(dir, agentDir);
+
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");
             Files.Overwrite(swap, "first");
@@ -187,6 +192,159 @@ namespace SmokeTest
             Console.WriteLine(_failures == 0 ? "\nALL CHECKS PASSED" : "\n" + _failures + " CHECK(S) FAILED");
             Console.WriteLine("files: " + root);
             return _failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// The tools (docs/TOOLS.md) on a made-up world, with the game's thread replaced by catchers: the library's own
+        /// checks, the language, defend sheltering and striking, the safety rule, an army gathering and its next order,
+        /// adjust, the orders in force, the ready-made facts, the look-ups, and the agent's new order format.
+        /// </summary>
+        private static void ToolTests(string dir, string agentDir)
+        {
+            var moves = new List<KeyValuePair<int, Move>>();
+            var released = new List<int>();
+            var thens = new List<KeyValuePair<int, JObject>>();
+            Runner.MoveSink = (id, m) => moves.Add(new KeyValuePair<int, Move>(id, m));
+            Runner.ReleaseSink = (id, why) => released.Add(id);
+            Runner.ThenSink = (id, then) => thens.Add(new KeyValuePair<int, JObject>(id, then));
+
+            List<string> problems = Library.Problems();
+            Check(problems.Count == 0, "the tool library passes its own checks" + (problems.Count > 0 ? ": " + string.Join("; ", problems) : ""));
+            Check(Library.All.Count == 16, "the library holds 16 orders (7 moves, 7 tools, 2 for armies), got " + Library.All.Count);
+            var scope = new TestScope();
+            Check(Expr.Truthy(Expr.Parse("2 + 3 * 4 == 14 and not false and twice(x) >= 4").Eval(scope)), "the language: sums, comparisons, and/not, names and functions");
+            Check(!Expr.Truthy(Expr.Parse("none < 3 or missing > 0").Eval(scope)), "a comparison with something unknown is false, so no rule fires on a missing fact");
+            ToolDef bad = ToolDef.FromJson("{\"tool\":\"bad\",\"start\":\"a\",\"states\":{\"a\":{\"do\":\"fly at\",\"when\":[{\"if\":\"teleport(x)\",\"go\":\"b\"}]}}}", "bad");
+            Check(bad.Problems.Count >= 3, "the checker catches a made-up move, a made-up function and a missing state (" + bad.Problems.Count + " problems)");
+            Check(Library.Text().Contains("**gather**") && Library.Text().Contains("caution"), "the agent's library lists every order with its settings");
+
+            // defend: patrols, shelters from an army too strong for it, comes out once it has gone, strikes a weak lord
+            var bolg = new PartyRow { Id = "p_bolg", Leader = "lord_bolg", Name = "Bolg", Faction = "orcs", Kind = "lord", Men = 300, SizeLimit = 320, Strength = 400, Speed = 5, FoodDays = 10, X = 104, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(3000, bolg));
+            var d = new ToolOrder { Tool = "defend", Lord = "lord_bolg", LordName = "Bolg", Party = "p_bolg", At = "castle_orc" };
+            Runner.Start(901, d);
+            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "patrol" && m.Value.Place == "castle_orc"), "defend starts by patrolling around its holding");
+            var host = new PartyRow { Id = "p_host", Leader = "lord_host", Name = "Theoden", Faction = "player_k", Kind = "lord", Men = 1500, ArmyMen = 2000, ArmyParties = 4, ArmyStrength = 2600, Strength = 900, Speed = 4, X = 112, Y = 102, Doing = "GoToSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            moves.Clear();
+            Brain.OnHour(ToolWorld(3001, bolg, host));
+            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"), "defend shelters inside from an army too strong for it");
+            moves.Clear();
+            bolg.InSettlement = "castle_orc";
+            for (int h = 3002; h <= 3005; h++) Brain.OnHour(ToolWorld(h, bolg));
+            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "patrol"), "and patrols again some hours after the army has gone");
+            bolg.InSettlement = null;
+            var scout = new PartyRow { Id = "p_scout", Leader = "lord_scout", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 60, Strength = 80, Speed = 6, X = 108, Y = 96, Doing = "Hold", Spottable = true };
+            moves.Clear();
+            Brain.OnHour(ToolWorld(3006, bolg, scout));
+            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "engage" && m.Value.Party == "p_scout"), "defend strikes a weak enemy lord in its area");
+
+            // the safety rule: a lord on a plain move shelters from an enemy far stronger, in the nearest friendly castle
+            var azog = new PartyRow { Id = "p_azog", Leader = "lord_azog", Name = "Azog", Faction = "orcs", Kind = "lord", Men = 200, SizeLimit = 250, Strength = 260, Speed = 5, FoodDays = 10, X = 130, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(3007, bolg, azog));
+            moves.Clear();
+            Runner.Start(902, new ToolOrder { Tool = "goto", Lord = "lord_azog", LordName = "Azog", Party = "p_azog", At = "castle_men" });
+            Check(moves.Any(m => m.Key == 902 && m.Value.Verb == "near" && m.Value.Place == "castle_men"), "goto to an enemy holding stops close to it, not inside");
+            var hunter = new PartyRow { Id = "p_hunter", Leader = "lord_hunter", Name = "Elrohir", Faction = "player_k", Kind = "lord", Men = 500, Strength = 700, Speed = 6, X = 133, Y = 101, Doing = "Hold", Spottable = true };
+            moves.Clear();
+            Brain.OnHour(ToolWorld(3008, bolg, azog, hunter));
+            Check(moves.Any(m => m.Key == 902 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "a lord on an order shelters in the nearest friendly castle from an enemy far stronger");
+            Check(Runner.InForce(Runner.WorldFor(ToolWorld(3008, bolg, azog, hunter))).Contains("sheltering in Orc Keep from Elrohir"), "the orders in force say who is sheltering, and from whom");
+
+            // gather, then relieve: the army forms once its lord has come, and the next order starts
+            var ugluk = new PartyRow { Id = "p_ug", Leader = "lord_ug", Name = "Ugluk", Faction = "orcs", Kind = "lord", Men = 200, Strength = 250, ArmyLeader = "p_ug", ArmyMen = 350, ArmyParties = 2, ArmyStrength = 450, Speed = 4, FoodDays = 10, X = 139, Y = 101, Doing = "Hold", Spottable = true };
+            var lugdush = new PartyRow { Id = "p_lug", Leader = "lord_lug", Name = "Lugdush", Faction = "orcs", Kind = "lord", Men = 150, Strength = 200, ArmyLeader = "p_ug", Speed = 4, FoodDays = 10, X = 120, Y = 100, Doing = "EscortParty", Spottable = true };
+            Brain.OnHour(ToolWorld(3009, ugluk, lugdush));
+            var g = new ToolOrder { Tool = "gather", Lord = "lord_ug", LordName = "Ugluk", Party = "p_ug", At = "castle_two", Then = JObject.Parse("{\"do\":\"relieve\",\"at\":\"castle_orc\"}") };
+            g.Lords.Add("p_lug");
+            moves.Clear();
+            Runner.Start(903, g);
+            Check(moves.Any(m => m.Key == 903 && m.Value.Verb == "near" && m.Value.Place == "castle_two"), "gather waits close to the meeting place");
+            Brain.OnHour(ToolWorld(3010, ugluk, lugdush));
+            Check(thens.Count == 0, "and keeps waiting while a called lord is still on the way");
+            lugdush.Attached = true;
+            lugdush.X = 139;
+            Brain.OnHour(ToolWorld(3011, ugluk, lugdush));
+            Check(thens.Any(t => t.Key == 903 && (string)t.Value["do"] == "relieve"), "once the army has formed, its next order (then) starts");
+            Files.FlushAll();
+            string notes = Read(Path.Combine(dir, "notices.jsonl"));
+            Check(notes.Contains("Enemies too strong for Bolg") && notes.Contains("is sheltering in Orc Keep from Elrohir") && notes.Contains("army has formed at Orc Keep"),
+                  "every call-back goes to the agent as a notice");
+
+            // adjust: new numbers for a running tool, kept to their range
+            Runner.Adjust(901, new Dictionary<string, double> { ["radius"] = 500 }, new AgentChannel.AgentOrder { File = "test.json", Index = 1, Lord = "lord_bolg", Do = "adjust", Received = DateTime.Now });
+            Files.FlushAll();
+            Check(Read(Path.Combine(agentDir, "receipts.log")).Contains("radius 80 (radius kept to 80"), "adjust changes a tool's numbers, kept to their range");
+
+            // the poke: what changed since the last answer, the orders in force, the ready-made facts; and the look-ups
+            string poke = Read(Path.Combine(agentDir, "poke.txt"));
+            Check(poke.Contains("WHAT CHANGED SINCE YOUR LAST ANSWER (to poke #60)"), "the poke says what changed since the agent's last answer");
+            Check(poke.Contains("YOUR ORDERS IN FORCE") && poke.Contains("Bolg [lord_bolg]: defend Orc Castle [castle_orc]"), "the poke lists the orders in force, with ids");
+            Check(poke.Contains("READY-MADE FACTS") && poke.Contains("Your lords leading parties:"), "the poke has the ready-made facts");
+            Check(poke.Contains("Ugluk [lord_ug]: army of 350 men in 2 parties") && poke.Contains("(your order: gather)"), "the lords' list marks who holds an order");
+            string look = Path.Combine(agentDir, "lookups");
+            Check(File.Exists(Path.Combine(look, "castle_orc.txt")) && File.Exists(Path.Combine(look, "lord_ug.txt")) && File.Exists(Path.Combine(look, "README.txt")),
+                  "a look-up file for each holding and lord");
+            Check(Read(Path.Combine(look, "castle_orc.txt")).Contains("Ugluk [lord_ug]") && Read(Path.Combine(look, "lord_ug.txt")).Contains("Hours to your holdings"),
+                  "a holding's look-up lists the lords who can get there, and a lord's the hours to each holding");
+            Check(Diag.CountOf("fog:leaks") == 0, "the new sections pass the fog check (" + Diag.CountOf("fog:reports") + " reports checked)");
+
+            // the agent's new order format: places, lords, settings (also at the top level), and a next order
+            string file = Path.Combine(agentDir, "orders", "v2-test.json");
+            File.WriteAllText(file, "{\"poke\": 70, \"orders\": [{\"lord\": \"lord_bolg\", \"do\": \"defend\", \"at\": \"castle_orc\", \"radius\": 25},"
+                                    + " {\"lord\": \"lord_ug\", \"do\": \"gather\", \"at\": \"castle_two\", \"lords\": [\"lord_lug\"], \"settings\": {\"wait_hours\": 24},"
+                                    + " \"then\": {\"do\": \"relieve\", \"at\": \"castle_orc\"}}, {\"lord\": \"lord_azog\", \"do\": \"adjust\", \"caution\": 0}]}");
+            bool ok = AgentChannel.Parse(file, out int pn, out List<AgentChannel.AgentOrder> orders, out string error);
+            File.Delete(file);
+            Check(ok && pn == 70 && orders.Count == 3 && orders[0].At == "castle_orc" && orders[0].Settings["radius"] == 25 && orders[1].Lords.Count == 1
+                  && orders[1].Settings["wait_hours"] == 24 && (string)orders[1].Then["do"] == "relieve" && orders[2].Settings["caution"] == 0,
+                  "the agent's new orders are read: places, lords, settings and a next order" + (error != null ? " (" + error + ")" : ""));
+
+            Runner.Reset();
+        }
+
+        private sealed class TestScope : IScope
+        {
+            public object Get(string name) => name == "x" ? (object)2.0 : null;
+            public object Call(string fn, object[] a) => fn == "twice" ? (object)(Expr.Number(a[0]) * 2) : null;
+        }
+
+        /// <summary>A small orc realm for the tools: two castles and a village of theirs, a castle and a village of the player's.</summary>
+        private static Snapshot ToolWorld(double hours, params PartyRow[] parties)
+        {
+            var s = new Snapshot { Campaign = "smoketest", Hours = hours, Date = "Summer 9, 1085", PlayerFaction = "player_k", PlayerParty = "main_party", Watched = "orcs" };
+            s.Factions["orcs"] = new FactionRow { Id = "orcs", Name = "Misty Mountain Orcs", Ruler = "Azog", AtWar = { "player_k" } };
+            s.Factions["player_k"] = new FactionRow { Id = "player_k", Name = "Kingdom of Arnor and Gondor", Ruler = "Aragorn", AtWar = { "orcs" } };
+            s.FactionNames["orcs"] = "Misty Mountain Orcs";
+            s.FactionNames["player_k"] = "Kingdom of Arnor and Gondor";
+            s.HostileToWatched.Add("player_k");
+            s.HostileToPlayer.Add("orcs");
+            Add(s, new SettlementRow { Id = "castle_orc", Name = "Orc Castle", Kind = "castle", Faction = "orcs", X = 100, Y = 100, Garrison = 450, Militia = 120 });
+            Add(s, new SettlementRow { Id = "castle_two", Name = "Orc Keep", Kind = "castle", Faction = "orcs", X = 140, Y = 100, Garrison = 200, Militia = 80 });
+            Add(s, new SettlementRow { Id = "village_orc", Name = "Orc Village", Kind = "village", Faction = "orcs", X = 110, Y = 104, Militia = 40, Bound = "castle_orc", VillageState = "Normal" });
+            Add(s, new SettlementRow { Id = "castle_men", Name = "Fornost", Kind = "castle", Faction = "player_k", X = 170, Y = 100, Garrison = 600, Militia = 200 });
+            Add(s, new SettlementRow { Id = "village_men", Name = "Bree", Kind = "village", Faction = "player_k", X = 160, Y = 110, Militia = 30, Bound = "castle_men", VillageState = "Normal" });
+            s.WatchedSees = new Dictionary<string, Sighting>();
+            foreach (PartyRow r in parties)
+            {
+                Add(s, r);
+                if (r.Faction != "orcs") s.WatchedSees[r.Id] = new Sighting { Party = r.Id, By = "Bolg", Distance = 10f };
+            }
+            s.InspectedByWatched = new HashSet<string> { "castle_orc", "castle_two", "village_orc" };
+            return s;
+        }
+
+        /// <summary>
+        /// "SmokeTest --library file": writes the agent's order library (the same text the bridge writes into the channel
+        /// as tools.txt) without the game, so the war room has it before the first game session.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int ExportLibrary(string path)
+        {
+            List<string> problems = Library.Problems();
+            if (problems.Count > 0) { Console.WriteLine("The tool library has problems: " + string.Join("; ", problems)); return 1; }
+            File.WriteAllText(path, Library.Text(), new System.Text.UTF8Encoding(false));
+            Console.WriteLine("Order library written: " + path + " (" + Library.All.Count + " orders)");
+            return 0;
         }
 
         /// <summary>A stand-in for a frozen game: one thread spins in a named method, the main thread waits.</summary>

@@ -42,6 +42,14 @@ namespace BannerlordAgents
         public float ThreatDistance;
     }
 
+    /// <summary>The sections a poke adds before the report: what changed since the agent's last answer, its orders in force, ready-made facts.</summary>
+    internal sealed class ReportExtras
+    {
+        public string Since, InForce, Facts;
+        public int LastAnswered = -1;
+        public bool Lookups;
+    }
+
     /// <summary>Builds views and reports on the worker, from a snapshot. No game objects here.</summary>
     internal static class Views
     {
@@ -120,25 +128,32 @@ namespace BannerlordAgents
             return v;
         }
 
-        public static string Report(View v, List<Trigger> triggers)
+        public static string Report(View v, List<Trigger> triggers, ReportExtras x = null)
         {
             var sb = new StringBuilder(16 * 1024);
             sb.AppendLine("REPORT FOR " + v.FactionName.ToUpperInvariant());
             sb.AppendLine("Ruler: " + (v.Ruler ?? "unknown") + ". " + Text.When(v.Hours) + ", " + (v.Night ? "night." : "daytime."));
             sb.AppendLine("At war with: " + (v.AtWar.Count > 0 ? string.Join(", ", v.AtWar) : "no one") + ". Allies: " + (v.Allies.Count > 0 ? string.Join(", ", v.Allies) : "none") + ".");
-            sb.AppendLine("Distances are in map units. A party is seen only within sight of your lords, castles and towns. Ids in [brackets] are what orders should name.");
+            sb.AppendLine("Distances are in map units. A party is seen only within sight of your lords, castles and towns. Ids in [brackets] are what orders should name."
+                          + (x != null && x.Lookups ? " More on any id: lookups/<id>.txt." : ""));
 
             if (triggers != null && triggers.Count > 0)
             {
                 sb.AppendLine().AppendLine("WHY YOU ARE ASKED NOW");
                 foreach (Trigger t in triggers) sb.AppendLine("- " + t.Text);
             }
+            if (x?.Since != null)
+                sb.AppendLine().AppendLine("WHAT CHANGED SINCE YOUR LAST ANSWER" + (x.LastAnswered >= 0 ? " (to poke #" + x.LastAnswered + ")" : "")).AppendLine(x.Since);
+            if (x?.InForce != null) sb.AppendLine().AppendLine("YOUR ORDERS IN FORCE").AppendLine(x.InForce);
+            if (x?.Facts != null) sb.AppendLine().AppendLine("READY-MADE FACTS").AppendLine(x.Facts);
 
             sb.AppendLine().AppendLine("YOUR LORDS AND ARMIES (" + v.Forces.Count + ", " + Text.N(v.Forces.Sum(f => f.ArmyMen > 0 ? f.ArmyMen : f.Men)) + " men)");
             foreach (ViewParty f in v.Forces)
             {
                 string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
-                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + ".");
+                Tools.ToolInstance held = Tools.Runner.ForParty(f.Id);
+                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing
+                              + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
             }
 
             sb.AppendLine().AppendLine("YOUR HOLDINGS (" + v.Holdings.Count + ")");
@@ -202,7 +217,7 @@ namespace BannerlordAgents
             var vp = new ViewParty
             {
                 Id = r.Id, Lord = r.Leader, Name = r.Name ?? r.Id, Faction = r.Faction, FactionName = FactionName(s, r.Faction), Relation = relation,
-                Kind = r.Kind, Men = r.Men, ArmyMen = r.ArmyMen, ArmyParties = r.ArmyParties, Strength = r.Strength,
+                Kind = r.Kind, Men = r.Men, ArmyMen = r.ArmyMen, ArmyParties = r.ArmyParties, Strength = r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength,
                 X = r.X, Y = r.Y, Doing = Doing(s, r), SeenBy = seen?.By, SeenHours = s.Hours
             };
             SettlementRow near = NearestSettlement(s, r.X, r.Y, out float nd);

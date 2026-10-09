@@ -294,7 +294,7 @@ namespace BannerlordAgents
             double bar = best == null ? 0
                 : ((best.B == AiBehavior.PatrolAroundPoint || best.B == AiBehavior.GoToSettlement) ? 0.03 : 0.1) * (best.Army ? 2 : t.ArmyLeader ? 0.33 : 1);
             string plan = changed ? "changed plan: " + Words(s, t.BeforeB, t.BeforeTarget, null) + " -> " + Words(s, t.AfterB, t.AfterTarget, null)
-                                  : "kept his plan: " + Words(s, t.AfterB, t.AfterTarget, null);
+                                  : "kept the plan: " + Words(s, t.AfterB, t.AfterTarget, null);
             if (!changed && !t.ArmyCalled)
             {
                 // the common case, kept short: at high game speed the lords think many times a minute
@@ -309,7 +309,7 @@ namespace BannerlordAgents
                 return;
             }
             Diag.Lord(Text.When(t.Hours) + "  " + t.LordName + " [" + t.Lord + "] weighed " + t.Options.Length + " options and " + plan
-                      + (t.ArmyCalled ? "; he called an army" : "") + ".");
+                      + (t.ArmyCalled ? "; the lord called an army" : "") + ".");
             if (sorted.Count > 0)
                 Diag.Lord("    options: " + string.Join(" | ", sorted.Take(8).Select(o => Words(s, o.B, o.Target, o) + " " + o.Score.ToString("0.000", inv)
                                                                                        + (o.Army ? " (gathering an army)" : "")))

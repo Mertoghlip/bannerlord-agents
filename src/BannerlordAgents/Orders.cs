@@ -1,35 +1,35 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Helpers;
+using Newtonsoft.Json.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.Library;
+using BannerlordAgents.Tools;
 
 namespace BannerlordAgents
 {
     /// <summary>
-    /// Orders for lords, from three sources that share one path:
-    /// - "hand": the console (agents.order), for the watched realm's lords (first tests, phase 4);
-    /// - "agent": the agent chat's order files, for the watched realm's lords (phases 5-7, see AgentChannel);
+    /// Orders for lords, from three sources:
+    /// - "agent": the agent's answer files (AgentChannel), for the watched realm's lords;
+    /// - "hand": the console (agents.order), the same orders typed by hand, for testing;
     /// - "you": the player ordering their own vassals directly (agents.vassal), recorded as the player's decision.
     ///
-    /// A lord holding an order is moved with the game's own commands, and the game's AI is told to stop making his
-    /// decisions for him. This is exactly how Party AI Controls carries out its own orders, and how the game's quests
-    /// script their parties: the only thing in the game that honours the switch is the hourly decision step
-    /// (AiPartyThinkBehavior), which skips the party.
+    /// The agent's and the console's orders are moves and tools of the behavior language (docs/TOOLS.md): the lord is
+    /// held here, and the tool runner on the worker (Tools.Runner) decides each move from the realm's own view; this
+    /// side makes the moves, re-issues them when the game turns the lord away, and ends the hold when the lord is lost.
+    /// Armies are formed, joined, left and broken up here, by the game's own rules and influence prices. Vassal orders
+    /// keep the simple one-step verbs.
     ///
-    /// That switch is SAVED with the game (MobilePartyAi.DoNotMakeNewDecisions is a saveable property). So just
-    /// before every save, autosaves included, every ordered lord is handed back to the game, checked, and taken back
-    /// right after: a save never holds a lord frozen by us, and removing the mod is always safe. Orders live only in
-    /// memory and are cleared whenever a campaign is loaded; at each load the mod checks that no lord it handed back
-    /// at an earlier save came back frozen.
+    /// A held lord is moved with the game's own commands, and the game's AI is told to stop making his decisions. That
+    /// switch is SAVED with the game (MobilePartyAi.DoNotMakeNewDecisions is a saveable property), so just before every
+    /// save, autosaves included, every held lord is handed back to the game, checked, and taken back right after: a save
+    /// never holds a lord frozen by us. Orders live only in memory and are cleared whenever a campaign is loaded.
     ///
-    /// Every order is traced start to finish (docs/LOGGING.md): the words it came from, the lord's state before and
-    /// after the command (did the game take it?), its distance to the target every hour, every time the game turned
-    /// him away and who did it, the end and its reason, and the first hours after release.
-    /// Game's thread only.
+    /// Every order is traced start to finish (docs/LOGGING.md). Game's thread only.
     /// </summary>
     internal static class Orders
     {
@@ -44,6 +44,12 @@ namespace BannerlordAgents
             public string Verb;
             public Settlement Place;
             public MobileParty Target;
+            /// <summary>For "toward": the point it marches to.</summary>
+            public float X, Y;
+            /// <summary>A tool order: its runner instance and its name (0 and null for a plain vassal order).</summary>
+            public int ToolId;
+            public string Tool;
+            public string ToolText;
             public double Since;
             public double ArrivedAt = -1;
             public int Reissued;
@@ -62,13 +68,24 @@ namespace BannerlordAgents
             public int Checks;
         }
 
+        /// <summary>The one-step verbs of vassal orders (agents.vassal).</summary>
         public static readonly string[] Verbs = { "goto", "garrison", "patrol", "defend", "engage", "besiege", "raid", "recruit", "hold" };
 
+        /// <summary>Order words that are not tools: they act at once.</summary>
+        private static readonly string[] Plain = { "free", "release", "adjust", "add", "disband" };
+
         public const string Usage =
-            "Usage: agents.order <lord> <verb> <target>\n" +
+            "Usage: agents.order <lord> <order> <place or lord> [setting=value ...] [lords=name,name]\n" +
+            "  moves: goto, patrol, engage, follow, leave, recruit, hold, free\n" +
+            "  tools: defend, garrison, besiege, raid, hunt, screen, rest; armies: gather, relieve, add, release, disband; adjust\n" +
+            "  examples: agents.order Throkmaw defend Caradhras radius=25\n" +
+            "            agents.order Krumbash gather Methedras lords=Naglur,Vughza\n" +
+            "  agents.tools lists every order with its settings. Names can be partial, accents optional, or ids.";
+
+        private const string VassalUsage =
+            "Usage: agents.vassal <your lord> <verb> <target>\n" +
             "  verbs: goto <place>, garrison <castle or town>, patrol <place>, defend <place>, engage <lord>, besiege <castle or town>,\n" +
-            "         raid <village>, recruit <town or village>, hold\n" +
-            "  example: agents.order Throkmaw garrison Caradhras    (names or ids; names can be partial, accents optional)";
+            "         raid <village>, recruit <town or village>, hold";
 
         private const double RecruitDays = 3;
         private const double StuckHours = 6;
@@ -102,101 +119,149 @@ namespace BannerlordAgents
 
         // ---------- the three doors ----------
 
-        /// <summary>agents.order: a hand order for one of the watched realm's lords.</summary>
+        /// <summary>agents.order: the agent's orders, typed by hand for one of the watched realm's lords (always carried out).</summary>
         public static string Give(List<string> args)
         {
             if (Campaign.Current == null) return "Load a campaign first.";
             Kingdom realm = Bridge.Watched;
             if (realm == null) return "No realm is under watch, so there is no one to order. Choose one with agents.watch.";
-            if (!Split(args, out string lordWords, out string verb, out string targetWords)) return Usage;
-            Hero lord = FindLord(realm, lordWords, out string error);
-            if (lord == null) return Refusal("hand", lordWords, verb, targetWords, error);
-            HandOrder o = Prepare(lord, verb, targetWords, realm, out error);
-            if (o == null) return Refusal("hand", lordWords, verb, targetWords, error);
-            Start(o, lordWords + " " + verb + " " + targetWords);
-            return "Order given: " + Describe(o) + ".\nThe game's AI is held off him until the order ends or you release him (agents.release "
-                   + FirstWord(Names.Hero(lord)) + ").";
+            if (args == null || args.Count < 2) return Usage;
+            int vi = args.FindIndex(x => Library.Get(x) != null || Plain.Contains(x.ToLowerInvariant()));
+            if (vi <= 0) return Usage;
+            var a = new AgentChannel.AgentOrder { File = "console", Index = 1, Received = DateTime.Now, Lord = string.Join(" ", args.Take(vi)), Do = args[vi].ToLowerInvariant() };
+            var target = new List<string>();
+            foreach (string w in args.Skip(vi + 1))
+            {
+                int eq = w.IndexOf('=');
+                if (eq > 0)
+                {
+                    string k = w.Substring(0, eq).Trim().ToLowerInvariant(), v = w.Substring(eq + 1).Trim();
+                    if (k == "lords") a.Lords.AddRange(v.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0));
+                    else if (double.TryParse(v, System.Globalization.NumberStyles.Float, Text.Inv, out double d)) a.Settings[k] = d;
+                    else return "'" + w + "': a setting takes a number, for example radius=25.";
+                }
+                else target.Add(w);
+            }
+            a.Target = target.Count > 0 ? string.Join(" ", target) : null;
+            string status = "refused";
+            string reason = Issue(a, realm, "hand", true, ref status);
+            if (status == "posted") return "Sent to the tool runner; the answer appears in the agent's receipts and the log.";
+            return (status == "applied" ? "Order given: " : "Refused: ") + reason + (status == "applied" ? ".\nagents.orders shows how it goes; agents.release " + a.Lord + " ends it." : "");
         }
 
-        /// <summary>agents.vassal: the player orders one of their own lords directly, with the same verbs as the agents.</summary>
+        /// <summary>agents.vassal: the player orders one of their own lords directly, with the one-step verbs.</summary>
         public static string GiveVassal(List<string> args)
         {
             if (Campaign.Current == null) return "Load a campaign first.";
             Kingdom realm = Clan.PlayerClan?.Kingdom;
             if (realm == null) return "You are not in a realm, so there are no vassals to order.";
             if (!Split(args, out string lordWords, out string verb, out string targetWords))
-                return Usage.Replace("agents.order", "agents.vassal").Replace("Throkmaw garrison Caradhras", "<your lord> defend <your castle>");
+                return VassalUsage.Replace("agents.order", "agents.vassal");
             Hero lord = FindLord(realm, lordWords, out string error);
             if (lord == null) return Refusal("you", lordWords, verb, targetWords, error);
             if (lord == Hero.MainHero) return "That is you.";
             string pac = PacReader.OrderOf(lord);
             if (pac != null)
                 return Refusal("you", lordWords, verb, targetWords, Names.Hero(lord) + " already holds an order from your dialogue (Party AI Controls: " + pac
-                       + "). Release him there first (\"Act as you see fit\"), so the two do not fight each hour.");
+                       + "). Release the lord there first (\"Act as you see fit\"), so the two do not fight each hour.");
             HandOrder o = Prepare(lord, verb, targetWords, realm, out error);
             if (o == null) return Refusal("you", lordWords, verb, targetWords, error);
             o.Source = "you";
             Start(o, lordWords + " " + verb + " " + targetWords);
             Recorder.OnOwnOrder(o.Lord, o.Verb, o.Place, o.Target, "You ordered " + Describe(o) + ".");
-            return "Order given: " + Describe(o) + ". Recorded as your decision. Release him with agents.release " + FirstWord(Names.Hero(lord)) + ".";
+            return "Order given: " + Describe(o) + ". Recorded as your decision. Release the lord with agents.release " + FirstWord(Names.Hero(lord)) + ".";
         }
 
-        /// <summary>One order from the agent chat (AgentChannel). Posts the receipt's status and reason.</summary>
+        /// <summary>One order from the agent's answer file (AgentChannel). Posts the receipt's status and reason.</summary>
         public static void FromAgent(AgentChannel.AgentOrder a)
         {
             string status = "refused", reason;
-            try { reason = AgentIssue(a, ref status); }
+            try
+            {
+                Kingdom realm = Bridge.Watched;
+                reason = realm == null ? "no realm is under watch" : Issue(a, realm, "agent", false, ref status);
+            }
             catch (Exception e)
             {
                 reason = "it could not be carried out (" + e.Message + ")";
                 Diag.Error("carrying out an agent's order", e);
             }
+            if (status == "posted") return;   // the tool runner writes this one's receipt
             double hours = CampaignTime.Now.ToHours;
             string s = status, r = reason;
             Background.Post("agent receipt", () => AgentChannel.Receipt(a, s, r, hours));
         }
 
-        private static string AgentIssue(AgentChannel.AgentOrder a, ref string status)
+        /// <summary>
+        /// One order of the agent's (or typed by hand): checked against the game as it stands, then carried out, checked
+        /// only (shadow mode), or refused. Sets status to applied, checked, refused, or posted (the runner answers).
+        /// </summary>
+        private static string Issue(AgentChannel.AgentOrder a, Kingdom realm, string source, bool forceLive, ref string status)
         {
-            Kingdom realm = Bridge.Watched;
-            if (realm == null) return "no realm is under watch";
             if (string.IsNullOrWhiteSpace(a.Lord)) return "the order names no lord";
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;
             string verb = (a.Do ?? "").Trim().ToLowerInvariant();
-            bool live = Settings.Agent == "live" && ObeysAgent(lord);
-            bool shadow = Settings.Agent == "shadow";
+            bool live = forceLive || (Settings.Agent == "live" && ObeysAgent(lord));
+            bool shadow = !forceLive && Settings.Agent == "shadow";
+            MobileParty party = lord.PartyBelongedTo;
+            string name = Names.Hero(lord);
 
-            if (verb == "free" || verb == "release")
+            if (verb == "free" || (verb == "release" && a.Lords.Count == 0))
             {
                 HandOrder held = Active.FirstOrDefault(x => x.Lord == lord);
-                if (shadow) { status = "checked"; return "valid: " + Names.Hero(lord) + " would be left to his own judgment (shadow mode: not carried out)"; }
+                if (shadow) { status = "checked"; return "valid: " + name + " would be left to their own judgment (shadow mode: not carried out)"; }
                 if (!live) return NotYours(lord);
                 if (held != null)
                 {
-                    End(held, "released by the agent", "released by the agent");
+                    End(held, "released by the " + (source == "hand" ? "console" : "agent"), "released");
                     Active.Remove(held);
                     Changed();
                 }
                 status = "applied";
-                return Names.Hero(lord) + " follows his own judgment again";
+                return name + " follows their own judgment again";
             }
+            if (party == null || party.LeaderHero != lord || !party.IsActive) return name + " is not leading a party right now.";
+            if (party.AttachedTo != null && party.Army?.LeaderParty != party)
+                return name + " marches in " + Names.Party(party.Army?.LeaderParty) + "'s army. Order the army's leader instead.";
 
-            HandOrder o = Prepare(lord, verb, a.Target, realm, out error);
+            if (verb == "adjust")
+            {
+                HandOrder held = Active.FirstOrDefault(x => x.Lord == lord && x.ToolId > 0);
+                if (held == null) return name + " holds no tool to adjust; give an order instead";
+                if (shadow) { status = "checked"; return "valid: " + name + "'s " + held.Tool + " would get new settings (shadow mode: not carried out)"; }
+                if (!live) return NotYours(lord);
+                int id = held.ToolId;
+                var settings = new Dictionary<string, double>(a.Settings, StringComparer.OrdinalIgnoreCase);
+                Background.Post("tool adjust", () => Runner.Adjust(id, settings, a));
+                status = "posted";
+                return null;
+            }
+            if (verb == "add" || verb == "release" || verb == "disband") return ArmyChange(verb, lord, party, a, realm, shadow, live, ref status);
+
+            ToolDef def = Library.Get(verb);
+            if (def == null)
+                return "'" + verb + "' is not an order. Orders: " + string.Join(", ", Library.All.Keys.OrderBy(k => k)) + ", " + string.Join(", ", Plain) + ".";
+            ToolOrder o = PrepareTool(lord, party, def, a, realm, out error, out List<string> notes);
             if (o == null) return error;
+            o.Source = source;
+            string words = ((a.Lord ?? "") + " " + verb + " " + (a.At ?? a.Target ?? "")).Trim();
+            o.Words = words;
+            if (def.Name == "gather") return Gather(lord, party, def, o, a, realm, shadow, live, notes, ref status);
+            string text = DescribeTool(def, o);
             if (shadow)
             {
                 status = "checked";
-                Diag.Event("order", "checked", new { source = "agent", poke = a.Poke, lord = lord.StringId, verb, place = o.Place?.StringId, target = o.Target?.StringId, state = State(o.Party, o) });
-                return "valid: " + Describe(o) + " (shadow mode: not carried out)";
+                Diag.Event("order", "checked", new { source, poke = a.Poke, lord = lord.StringId, tool = def.Name, at = o.At, target = o.Target, lords = o.Lords, settings = o.Settings });
+                return "valid: " + text + Notes(notes) + " (shadow mode: not carried out)";
             }
             if (!live) return NotYours(lord);
-            o.Source = "agent";
-            o.Poke = a.Poke;
-            Start(o, (a.Lord ?? "") + " " + (a.Do ?? "") + " " + (a.Target ?? ""));
+            StartTool(lord, party, def, o, realm, words);
             status = "applied";
-            return Describe(o);
+            return text + Notes(notes);
         }
+
+        private static string Notes(List<string> notes) => notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : "";
 
         private static bool ObeysAgent(Hero lord)
         {
@@ -238,11 +303,406 @@ namespace BannerlordAgents
             if (Active.Count == 0) return "No lord holds an order from us.";
             double now = CampaignTime.Now.ToHours;
             return string.Join("\n", Active.Select(o =>
-                "- #" + o.Id + " [" + o.Source + "] " + Describe(o) + "; for " + Math.Round(now - o.Since, 1).ToString(Text.Inv) + " in-game hours"
+                "- #" + o.Id + " [" + o.Source + "] " + (o.ToolId > 0 ? o.ToolText + "; now " : "") + Describe(o) + "; for " + Math.Round(now - o.Since, 1).ToString(Text.Inv) + " in-game hours"
                 + (o.Arrived ? ", arrived" : DistanceText(o)) + "; turned back to the order " + o.Reissued + " times; now: " + Doing(o.Party)));
         }
 
-        // ---------- shared steps ----------
+        // ---------- tools: checked here, run by the worker, moved here ----------
+
+        /// <summary>Checks a tool order's lord, places, lords and numbers against the game as it stands; ids only leave.</summary>
+        private static ToolOrder PrepareTool(Hero lord, MobileParty party, ToolDef def, AgentChannel.AgentOrder a, Kingdom realm, out string error, out List<string> notes)
+        {
+            error = null;
+            notes = new List<string>();
+            var o = new ToolOrder { Tool = def.Name, Lord = lord.StringId, LordName = Names.Hero(lord), Party = party.StringId, Why = a.Why, Then = a.Then, Poke = a.Poke };
+            if (def.At != null)
+            {
+                string words = a.At ?? a.Target;
+                if (string.IsNullOrWhiteSpace(words)) { error = def.Name + " needs \"at\": " + ToolDef.Plain(def.At) + "."; return null; }
+                Settlement s = FindSettlement(words, out error);
+                if (s == null) return null;
+                error = CheckAt(def.At, s, realm);
+                if (error != null) return null;
+                o.At = s.StringId;
+            }
+            if (def.Target != null)
+            {
+                string words = a.Target ?? a.At;
+                if (string.IsNullOrWhiteSpace(words)) { error = def.Name + " needs \"target\": " + ToolDef.Plain(def.Target) + "."; return null; }
+                MobileParty t = FindParty(words, out error);
+                if (t == null) return null;
+                if (def.Target == "enemy_lord" && !FactionManager.IsAtWarAgainstFaction(t.MapFaction, realm)) { error = Names.Party(t) + " is not at war with " + Names.Faction(realm) + "."; return null; }
+                if (def.Target == "own_lord" && (t.MapFaction != realm || t == party)) { error = Names.Party(t) + " is not another lord of " + Names.Faction(realm) + "."; return null; }
+                if (t.AttachedTo != null && t.Army?.LeaderParty != null)
+                {
+                    notes.Add(Names.Party(t) + " marches in " + Names.Party(t.Army.LeaderParty) + "'s army, so the order is for that army");
+                    t = t.Army.LeaderParty;
+                }
+                o.Target = t.StringId;
+            }
+            if (def.Lords)
+                foreach (string w in a.Lords)
+                {
+                    Hero h = FindLord(realm, w, out error);
+                    if (h == null) return null;
+                    MobileParty p = h.PartyBelongedTo;
+                    if (p == null || p.LeaderHero != h) { error = Names.Hero(h) + " is not leading a party right now."; return null; }
+                    if (p == party) { error = Names.Hero(h) + " is the lord being ordered."; return null; }
+                    if (!o.Lords.Contains(p.StringId)) o.Lords.Add(p.StringId);
+                }
+            else if (a.Lords.Count > 0) notes.Add(def.Name + " takes no lords, so they were left out");
+            foreach (KeyValuePair<string, double> kv in a.Settings)
+            {
+                if (!def.Settings.TryGetValue(kv.Key, out SettingDef sd))
+                {
+                    error = def.Name + " has no setting '" + kv.Key + "'" + (def.Settings.Count > 0 ? "; it has " + string.Join(", ", def.Settings.Keys) : "") + ".";
+                    return null;
+                }
+                double v = Math.Max(sd.Min, Math.Min(sd.Max, kv.Value));
+                if (Math.Abs(v - kv.Value) > 1e-9) notes.Add(kv.Key + " kept to " + ToolDef.Num(v) + ", its range is " + ToolDef.Num(sd.Min) + " to " + ToolDef.Num(sd.Max));
+                o.Settings[sd.Name] = v;
+            }
+            if (a.Then != null)
+            {
+                string next = ((string)a.Then["do"] ?? "").Trim().ToLowerInvariant();
+                if (Library.Get(next) == null && next != "free" && next != "disband") { error = "the next order (then) is not an order: '" + next + "'."; return null; }
+            }
+            return o;
+        }
+
+        /// <summary>Is this holding the kind the tool asks for, for this realm? Null when it is; else why not.</summary>
+        private static string CheckAt(string kind, Settlement s, Kingdom realm)
+        {
+            bool own = s.MapFaction == realm;
+            bool allied = !own && s.MapFaction is Kingdom k && realm.AlliedKingdoms.Contains(k);
+            bool hostile = s.MapFaction != null && FactionManager.IsAtWarAgainstFaction(s.MapFaction, realm);
+            string n = Names.Settlement(s);
+            switch (kind)
+            {
+                case "own_fort": return own && s.IsFortification ? null : n + " is not one of " + Names.Faction(realm) + "'s castles or towns.";
+                case "own_holding": return own ? null : n + " is not " + Names.Faction(realm) + "'s.";
+                case "own_town_or_village": return own && (s.IsTown || s.IsVillage) ? null : n + " is not one of " + Names.Faction(realm) + "'s towns or villages.";
+                case "friendly_town_or_village": return (own || allied) && (s.IsTown || s.IsVillage) ? null : n + " is not a town or village of " + Names.Faction(realm) + " or an ally (only those give recruits).";
+                case "friendly_fort": return (own || allied) && s.IsFortification ? null : n + " is not a castle or town of " + Names.Faction(realm) + " or an ally.";
+                case "friendly_holding": return own || allied ? null : n + " is not " + Names.Faction(realm) + "'s or an ally's.";
+                case "enemy_fort": return hostile && s.IsFortification ? null : n + " is not an enemy castle or town.";
+                case "enemy_village": return hostile && s.IsVillage ? null : n + " is not an enemy village.";
+                case "enemy_holding": return hostile ? null : n + " is not an enemy holding.";
+                default: return null;
+            }
+        }
+
+        /// <summary>Holds the lord for a tool and hands the tool to the runner, which makes the first move.</summary>
+        private static void StartTool(Hero lord, MobileParty party, ToolDef def, ToolOrder o, Kingdom realm, string words)
+        {
+            int id = Runner.NewId();
+            var h = new HandOrder
+            {
+                Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = o.Source, Poke = o.Poke, Verb = "hold",
+                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours
+            };
+            object before = State(party, null);
+            ReplaceHeld(party, h.Id);
+            Apply(h);
+            Active.Add(h);
+            AfterRelease.RemoveAll(r => r.Party == party);
+            Changed();
+            h.LastProgressAt = CampaignTime.Now.ToHours;
+            Diag.Count("order:issued");
+            Diag.Count("order source:" + h.Source);
+            Note(h, "issued", h.ToolText, new { words, before, tool = def.Name, at = o.At, target = o.Target, lords = o.Lords, settings = o.Settings, then = o.Then?.ToString(Newtonsoft.Json.Formatting.None) });
+            Say("Order: " + h.ToolText + ".", Colors.Cyan);
+            Background.Post("tool start", () => Runner.Start(id, o));
+        }
+
+        /// <summary>Whatever order the party held before ends here, quietly: the new one replaces it.</summary>
+        private static void ReplaceHeld(MobileParty party, int byId)
+        {
+            foreach (HandOrder old in Active.Where(x => x.Party == party).ToList())
+            {
+                Active.Remove(old);
+                Diag.Event("order", "replaced", new { id = old.Id, by = byId, lord = old.Lord?.StringId, tool = old.Tool });
+                if (old.ToolId > 0)
+                {
+                    int tid = old.ToolId;
+                    Background.Post("tool replaced", () => Runner.Ended(tid, "replaced by a new order"));
+                }
+            }
+        }
+
+        /// <summary>The runner's next move for a tool's lord (from the worker).</summary>
+        public static void ToolMove(int toolId, Move m)
+        {
+            HandOrder o = Active.FirstOrDefault(x => x.ToolId == toolId);
+            if (o == null || o.Party == null || !o.Party.IsActive) return;   // the order ended meanwhile
+            o.Verb = m.Verb;
+            o.Place = m.Place != null ? Settlement.Find(m.Place) : null;
+            o.Target = m.Party != null ? FindPartyById(m.Party) : null;
+            o.X = m.X;
+            o.Y = m.Y;
+            o.Arrived = false;
+            o.ArrivedAt = -1;
+            o.ReissueTimes.Clear();
+            o.StuckAlarmed = o.FightAlarmed = false;
+            if (!Possible(o)) o.Verb = "hold";
+            Apply(o);
+            o.BestDistance = Distance(o) ?? float.MaxValue;
+            o.LastProgressAt = CampaignTime.Now.ToHours;
+            Diag.Event("order", "moved", new { id = o.Id, tool = o.Tool, lord = o.Lord?.StringId, move = m.ToString(), made = Describe(o), took = OnCourse(o) });
+            Log.Line("order #" + o.Id + " [" + o.Source + "] " + o.Tool + ": " + Describe(o));
+        }
+
+        /// <summary>A tool finished and frees its lord (from the worker).</summary>
+        public static void ToolRelease(int toolId, string why)
+        {
+            HandOrder o = Active.FirstOrDefault(x => x.ToolId == toolId);
+            if (o == null) return;
+            End(o, why, "tool done");
+            Active.Remove(o);
+            Changed();
+        }
+
+        /// <summary>A tool finished and its next order (then) starts for the same lord, checked against the game as it stands now.</summary>
+        public static void ToolThen(int toolId, JObject then)
+        {
+            HandOrder o = Active.FirstOrDefault(x => x.ToolId == toolId);
+            if (o == null || o.Lord == null) return;
+            Kingdom realm = o.Realm ?? Bridge.Watched;
+            var a = AgentChannel.OrderFrom(then, o.Lord.StringId, o.Poke, "then");
+            string status = "refused";
+            string reason;
+            try { reason = realm == null ? "no realm is under watch" : Issue(a, realm, o.Source, true, ref status); }
+            catch (Exception e) { reason = "it could not be carried out (" + e.Message + ")"; Diag.Error("starting a next order", e); }
+            if (status != "applied" && status != "posted")
+            {
+                // the next order no longer fits: the lord stops, and the agent hears why
+                End(o, "its next order was refused: " + reason, "then refused");
+                Active.Remove(o);
+                Changed();
+            }
+            double hours = CampaignTime.Now.ToHours;
+            if (o.Source == "agent" && status != "posted")
+            {
+                string s = status, r = reason;
+                Background.Post("agent receipt", () => AgentChannel.Receipt(a, s, r, hours));
+            }
+        }
+
+        /// <summary>Can the current move still be made? If not, the lord holds and the tool decides next hour.</summary>
+        private static bool Possible(HandOrder o)
+        {
+            Kingdom realm = o.Realm;
+            switch (o.Verb)
+            {
+                case "engage": return o.Target != null && o.Target.IsActive && realm != null && FactionManager.IsAtWarAgainstFaction(o.Target.MapFaction, realm);
+                case "follow": return o.Target != null && o.Target.IsActive && o.Target != o.Party;
+                case "goto":
+                case "enter":
+                case "recruit":
+                case "garrison":
+                    return o.Place != null && (realm == null || o.Place.MapFaction == null || !FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm));
+                case "besiege":
+                case "raid":
+                    return o.Place != null && realm != null && o.Place.MapFaction != null && FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm);
+                case "near":
+                case "patrol":
+                case "defend":
+                    return o.Place != null;
+                default: return true;
+            }
+        }
+
+        private static string DescribeTool(ToolDef def, ToolOrder o)
+        {
+            string lord = o.LordName;
+            string at = o.At != null ? Names.Settlement(Settlement.Find(o.At)) : null;
+            string target = o.Target != null ? Names.Party(FindPartyById(o.Target)) : null;
+            string with = o.Lords.Count > 0 ? string.Join(", ", o.Lords.Select(p => Names.Party(FindPartyById(p)))) : null;
+            string text;
+            switch (def.Name)
+            {
+                case "goto": text = lord + " goes to " + at; break;
+                case "patrol": text = lord + " patrols around " + at; break;
+                case "engage": text = lord + " attacks " + target; break;
+                case "follow": text = lord + " follows " + target; break;
+                case "leave": text = lord + " leaves the holding"; break;
+                case "recruit": text = lord + " fills the ranks at " + at; break;
+                case "hold": text = lord + " holds position"; break;
+                case "gather": text = lord + " gathers an army at " + at + " with " + with; break;
+                default:
+                    text = lord + " " + def.Name + (at != null ? " " + at : "") + (target != null ? " " + target : "") + (with != null ? ", with " + with : ""); break;
+            }
+            List<string> set = o.Settings.Select(kv => kv.Key + " " + ToolDef.Num(kv.Value)).ToList();
+            if (set.Count > 0) text += " (" + string.Join(", ", set) + ")";
+            if (o.Then != null) text += ", then " + ((string)o.Then["do"] ?? "?") + (o.Then["at"] != null ? " " + (string)o.Then["at"] : o.Then["target"] != null ? " " + (string)o.Then["target"] : "");
+            return text;
+        }
+
+        // ---------- armies ----------
+
+        /// <summary>gather: forms an army under the lord at a meeting place, from named lords, at the game's influence price.</summary>
+        private static string Gather(Hero lord, MobileParty lp, ToolDef def, ToolOrder o, AgentChannel.AgentOrder a, Kingdom realm, bool shadow, bool live,
+                                     List<string> notes, ref string status)
+        {
+            string name = Names.Hero(lord);
+            if (lp.Army != null) return name + " is already in an army" + (lp.Army.LeaderParty == lp ? " (and leads it: use add to call more lords)" : "") + ".";
+            if (lord.Clan == null || lord.Clan.Kingdom != realm) return name + "'s clan is not a clan of " + Names.Faction(realm) + ".";
+            if (lord.Clan.IsUnderMercenaryService) return name + "'s clan serves as mercenaries, and the game does not let mercenaries lead armies.";
+            if (o.Lords.Count == 0) return "gather needs lords to call, for example \"lords\": [\"lord_X\", \"lord_Y\"].";
+            List<MobileParty> members = Callable(lp, o.Lords, realm, out string problem, out int cost);
+            if (members == null) return problem;
+            float influence = lord.Clan.Influence;
+            if (cost > influence) return "calling " + members.Count + " lords costs " + cost + " influence, and " + name + "'s clan has " + (int)influence + ". Call fewer lords, or nearer ones.";
+            Settlement place = Settlement.Find(o.At);
+            string who = string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero)));
+            int men = lp.Party.NumberOfHealthyMembers + members.Sum(m => m.Party.NumberOfHealthyMembers);
+            string text = name + " calls " + who + " to " + Names.Settlement(place) + " (" + (members.Count + 1) + " lords, " + Text.N(men) + " men) for " + cost
+                          + " influence; the clan has " + (int)influence;
+            if (o.Then != null) text += "; then " + ((string)o.Then["do"] ?? "?") + (o.Then["at"] != null ? " " + (string)o.Then["at"] : o.Then["target"] != null ? " " + (string)o.Then["target"] : "");
+            if (shadow)
+            {
+                status = "checked";
+                return "valid: " + text + Notes(notes) + " (shadow mode: not carried out)";
+            }
+            if (!live) return NotYours(lord);
+            foreach (MobileParty m in members) ReleaseHeld(m, "called to " + name + "'s army");
+            Army.ArmyTypes type = ArmyTypeFor(o.Then);
+            Witness.Ours = true;
+            try { realm.CreateArmy(lord, place, type, new MBList<MobileParty>(members)); }
+            finally { Witness.Ours = false; }
+            Army army = lp.Army;
+            if (army == null) return "the game did not form the army (no reason given)";
+            army.AiBehaviorObject = place;   // meet where the agent said, not where the game would choose
+            Diag.Count("army:formed");
+            Diag.Event("army", "formed", new { leader = lord.StringId, place = place.StringId, members = members.Select(m => m.LeaderHero.StringId).ToList(), cost, influence_before = (int)influence, type = type.ToString() });
+            StartTool(lord, lp, def, o, realm, o.Words);
+            status = "applied";
+            return text + Notes(notes);
+        }
+
+        /// <summary>add, release (with lords) and disband, for a lord who leads an army.</summary>
+        private static string ArmyChange(string verb, Hero lord, MobileParty lp, AgentChannel.AgentOrder a, Kingdom realm, bool shadow, bool live, ref string status)
+        {
+            string name = Names.Hero(lord);
+            Army army = lp.Army;
+            if (army == null || army.LeaderParty != lp) return name + " leads no army" + (verb == "add" ? "; use gather to form one" : "") + ".";
+            if (verb == "disband")
+            {
+                if (shadow) { status = "checked"; return "valid: " + name + "'s army would break up (shadow mode: not carried out)"; }
+                if (!live) return NotYours(lord);
+                Witness.Ours = true;
+                try { DisbandArmyAction.ApplyByObjectiveFinished(army); }
+                finally { Witness.Ours = false; }
+                Diag.Count("army:disbanded");
+                status = "applied";
+                return name + "'s army breaks up; its lords go back to their own judgment";
+            }
+            if (a.Lords.Count == 0) return verb + " needs lords, for example \"lords\": [\"lord_X\"].";
+            var ids = new List<string>();
+            foreach (string w in a.Lords)
+            {
+                Hero h = FindLord(realm, w, out string error);
+                if (h == null) return error;
+                MobileParty p = h.PartyBelongedTo;
+                if (p == null || p.LeaderHero != h) return Names.Hero(h) + " is not leading a party right now.";
+                ids.Add(p.StringId);
+            }
+            if (verb == "add")
+            {
+                List<MobileParty> members = Callable(lp, ids, realm, out string problem, out int cost);
+                if (members == null) return problem;
+                float influence = lord.Clan?.Influence ?? 0;
+                if (cost > influence) return "calling them costs " + cost + " influence, and " + name + "'s clan has " + (int)influence + ".";
+                string who = string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero)));
+                if (shadow) { status = "checked"; return "valid: " + name + " would call " + who + " into the army for " + cost + " influence (shadow mode: not carried out)"; }
+                if (!live) return NotYours(lord);
+                foreach (MobileParty m in members)
+                {
+                    ReleaseHeld(m, "called to " + name + "'s army");
+                    m.Army = army;   // the game charges the influence and marches them to the leader
+                }
+                Diag.Count("army:added", members.Count);
+                status = "applied";
+                return name + " calls " + who + " into the army for " + cost + " influence";
+            }
+            // release: lords leave the army and decide for themselves again
+            var leaving = new List<MobileParty>();
+            foreach (string id in ids)
+            {
+                MobileParty p = FindPartyById(id);
+                if (p == null || p.Army != army || p == lp) return Names.Party(p) + " is not in " + name + "'s army.";
+                leaving.Add(p);
+            }
+            string gone = string.Join(", ", leaving.Select(m => Names.Hero(m.LeaderHero)));
+            if (shadow) { status = "checked"; return "valid: " + gone + " would leave " + name + "'s army (shadow mode: not carried out)"; }
+            if (!live) return NotYours(lord);
+            foreach (MobileParty p in leaving) p.Army = null;
+            Diag.Count("army:released", leaving.Count);
+            status = "applied";
+            return gone + " left " + name + "'s army";
+        }
+
+        /// <summary>The lords who can be called to the leader's army, by the game's own rules, and the influence it costs; null and why when one cannot.</summary>
+        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out string problem, out int cost)
+        {
+            problem = null;
+            cost = 0;
+            var members = new List<MobileParty>();
+            var problems = new List<string>();
+            float far = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
+            foreach (string id in partyIds)
+            {
+                MobileParty m = FindPartyById(id);
+                string why = CannotCall(leader, m, realm, far);
+                if (why != null) { problems.Add(why); continue; }
+                members.Add(m);
+                cost += Campaign.Current.Models.ArmyManagementCalculationModel.CalculatePartyInfluenceCost(leader, m);
+            }
+            if (problems.Count > 0) { problem = "these lords cannot be called: " + string.Join("; ", problems) + "."; return null; }
+            return members;
+        }
+
+        private static string CannotCall(MobileParty leader, MobileParty m, Kingdom realm, float far)
+        {
+            if (m == null || !m.IsActive || m.LeaderHero == null) return "one of them is not leading a party";
+            string n = Names.Hero(m.LeaderHero);
+            if (m == leader) return n + " leads the army";
+            if (m.MapFaction != realm) return n + " is not of " + Names.Faction(realm);
+            if (m.Army != null) return n + " is already in an army";
+            if (m.LeaderHero == realm.Leader) return n + " rules the realm and cannot be called into another lord's army";
+            if (m.MapEvent != null) return n + " is in a battle";
+            if (m.CurrentSettlement?.SiegeEvent != null) return n + " is inside a besieged holding";
+            if (m.BesiegedSettlement != null) return n + " is besieging " + Names.Settlement(m.BesiegedSettlement);
+            if (m.IsDisbanding) return n + "'s party is breaking up";
+            float d = DistanceHelper.GetDistanceBetweenMobilePartyToMobileParty(m, leader, m.NavigationCapability, out _);
+            if (d > far) return n + " is too far away to be called (" + (int)d + ", the game allows " + (int)far + ")";
+            return null;
+        }
+
+        private static Army.ArmyTypes ArmyTypeFor(JObject then)
+        {
+            switch (((string)then?["do"] ?? "").ToLowerInvariant())
+            {
+                case "besiege": return Army.ArmyTypes.Besieger;
+                case "raid": return Army.ArmyTypes.Raider;
+                case "defend":
+                case "relieve":
+                case "garrison": return Army.ArmyTypes.Defender;
+                default: return Army.ArmyTypes.Patrolling;
+            }
+        }
+
+        /// <summary>A lord we hold who is called into an army: the hold ends, so the game can march him to it.</summary>
+        private static void ReleaseHeld(MobileParty p, string why)
+        {
+            HandOrder held = Active.FirstOrDefault(x => x.Party == p);
+            if (held == null) return;
+            End(held, why, "called to an army");
+            Active.Remove(held);
+            Changed();
+        }
+
+        // ---------- plain orders: the one-step verbs (vassal orders) ----------
 
         private static bool Split(List<string> args, out string lordWords, out string verb, out string targetWords)
         {
@@ -272,7 +732,7 @@ namespace BannerlordAgents
             var o = new HandOrder { Party = party, Lord = lord, Realm = realm, Verb = verb, Since = CampaignTime.Now.ToHours };
             targetWords = (targetWords ?? "").Trim();
             if (verb == "hold") return o;
-            if (targetWords.Length == 0) { error = "Which " + (verb == "engage" ? "lord" : "place") + "?\n" + Usage; return null; }
+            if (targetWords.Length == 0) { error = "Which " + (verb == "engage" ? "lord" : "place") + "?\n" + VassalUsage; return null; }
             if (verb == "engage")
             {
                 o.Target = FindParty(targetWords, out error);
@@ -290,11 +750,7 @@ namespace BannerlordAgents
         {
             o.Id = ++_nextId;
             object before = State(o.Party, null);
-            foreach (HandOrder old in Active.Where(x => x.Party == o.Party).ToList())
-            {
-                Active.Remove(old);
-                Diag.Event("order", "replaced", new { id = old.Id, by = o.Id, lord = old.Lord?.StringId });
-            }
+            ReplaceHeld(o.Party, o.Id);
             Apply(o);
             bool took = OnCourse(o);
             Active.Add(o);
@@ -315,7 +771,8 @@ namespace BannerlordAgents
             }
         }
 
-        /// <summary>Once an in-game hour.</summary>
+        // ---------- every in-game hour ----------
+
         public static void Hourly()
         {
             double now = CampaignTime.Now.ToHours;
@@ -324,7 +781,7 @@ namespace BannerlordAgents
             {
                 HandOrder o = Active[i];
                 string end, key;
-                try { end = EndReason(o, now, out key); }
+                try { end = o.ToolId > 0 ? LordGone(o, out key) : EndReason(o, now, out key); }
                 catch (Exception e)
                 {
                     end = "it could not be checked (" + e.Message + ")";
@@ -340,17 +797,27 @@ namespace BannerlordAgents
                 }
                 MobileParty p = o.Party;
                 float? d = Distance(o);
-                Diag.Event("order", "hour", new { id = o.Id, lord = o.Lord?.StringId, verb = o.Verb, arrived = o.Arrived, reissued = o.Reissued, state = State(p, o) });
+                Diag.Event("order", "hour", new { id = o.Id, lord = o.Lord?.StringId, tool = o.Tool, verb = o.Verb, arrived = o.Arrived, reissued = o.Reissued, state = State(p, o) });
                 if (p.MapEvent != null || (p.BesiegedSettlement != null && o.Verb != "besiege")) continue;   // busy fighting; look again next hour
-                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit") && p.CurrentSettlement == o.Place)
+                if (o.ToolId > 0 && !Possible(o))
+                {
+                    // the move cannot be made any more (its target is gone); the lord holds and the tool decides next hour
+                    if (o.Verb != "hold") { o.Verb = "hold"; Apply(o); }
+                    continue;
+                }
+                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter") && p.CurrentSettlement == o.Place)
                 {
                     if (!o.Arrived)
                     {
                         o.Arrived = true;
                         o.ArrivedAt = now;
                         Diag.Count("order:arrived");
-                        Note(o, "arrived", Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place), new { hours_taken = Math.Round(now - o.Since, 1) });
-                        Say(Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place) + ".", Colors.Cyan);
+                        if (o.ToolId > 0) Diag.Event("order", "arrived", new { id = o.Id, tool = o.Tool, lord = o.Lord?.StringId, place = o.Place?.StringId });
+                        else
+                        {
+                            Note(o, "arrived", Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place), new { hours_taken = Math.Round(now - o.Since, 1) });
+                            Say(Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place) + ".", Colors.Cyan);
+                        }
                     }
                     Hold(p);
                     continue;
@@ -366,12 +833,12 @@ namespace BannerlordAgents
                     Apply(o);
                     LastCulprit.TryGetValue(p.StringId, out string who);
                     Note(o, "reissued", "the game had " + Names.Hero(o.Lord) + " " + was + "; order given again (" + o.Reissued + ")" + (who != null ? "; last changed by " + who : ""),
-                         new { was, who, took = OnCourse(o) });
+                         new { was, who, took = OnCourse(o) }, quiet: o.ToolId > 0);
                     if (o.ReissueTimes.Count >= 3 && !o.FightAlarmed)
                     {
                         o.FightAlarmed = true;
                         Diag.Count("order:fought");
-                        Diag.Alarm("order_fought", "Something keeps turning " + Names.Hero(o.Lord) + " from his order (\"" + Describe(o) + "\"): given again "
+                        Diag.Alarm("order_fought", "Something keeps turning " + Names.Hero(o.Lord) + " from the order (\"" + Describe(o) + "\"): given again "
                                                    + o.ReissueTimes.Count + " times in " + StuckHours + " in-game hours" + (who != null ? "; last changed by " + who : "") + ".",
                                    false, new { id = o.Id });
                     }
@@ -392,7 +859,7 @@ namespace BannerlordAgents
         /// <summary>Is he getting closer? No progress for 6 in-game hours, away from his target and out of battle, is an alarm.</summary>
         private static void Progress(HandOrder o, float? d, double now)
         {
-            if (!d.HasValue || o.Arrived || o.Verb == "hold") return;
+            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow") return;
             if (d.Value < o.BestDistance - 0.5f)
             {
                 o.BestDistance = d.Value;
@@ -405,7 +872,7 @@ namespace BannerlordAgents
                 o.StuckAlarmed = true;
                 Diag.Count("order:stuck");
                 Diag.Alarm("order_stuck", Names.Hero(o.Lord) + " has not got any closer to " + TargetName(o) + " for " + StuckHours + " in-game hours (" + Doing(o.Party) + ", "
-                                          + Text.D(d.Value) + " away). He may be stuck on the map.", false, new { id = o.Id, distance = Math.Round(d.Value, 1) });
+                                          + Text.D(d.Value) + " away). The lord may be stuck on the map.", false, new { id = o.Id, distance = Math.Round(d.Value, 1) });
             }
         }
 
@@ -421,13 +888,13 @@ namespace BannerlordAgents
                 bool off = p.Ai.DoNotMakeNewDecisions;
                 string pac = off ? PacReader.OrderOf(r.Lord) : null;
                 Diag.Lord(Text.When(now) + "  " + Names.Hero(r.Lord) + " [" + r.Lord.StringId + "], " + Math.Round(now - r.At) + " h after release: " + Doing(p)
-                          + (off ? (pac != null ? "; held by Party AI Controls (" + pac + ")" : "; the game's AI is STILL switched off for him") : "; deciding for himself") + ".");
+                          + (off ? (pac != null ? "; held by Party AI Controls (" + pac + ")" : "; the game's AI is STILL switched off for this lord") : "; deciding for themselves") + ".");
                 Diag.Event("order", "after release", new { lord = r.Lord.StringId, hours = Math.Round(now - r.At, 1), doing = Doing(p), ai_off = off, held_by_pac = pac });
-                if (off && pac == null)
+                if (off && pac == null && !Active.Any(x => x.Party == p))
                 {
                     Diag.Count("order:held after release");
-                    Diag.Alarm("held_after_release", Names.Hero(r.Lord) + " was released " + Math.Round(now - r.At) + " in-game hours ago, but the game's AI is still switched off for him, "
-                                                     + "so he will never decide anything for himself. agents.release " + FirstWord(Names.Hero(r.Lord)) + " frees him again.", true,
+                    Diag.Alarm("held_after_release", Names.Hero(r.Lord) + " was released " + Math.Round(now - r.At) + " in-game hours ago, but the game's AI is still switched off, "
+                                                     + "so this lord will never decide anything alone. agents.release " + FirstWord(Names.Hero(r.Lord)) + " frees them again.", true,
                                new { lord = r.Lord.StringId });
                     AfterRelease.RemoveAt(i);
                     continue;
@@ -453,14 +920,14 @@ namespace BannerlordAgents
                     if (o.Party.Ai.DoNotMakeNewDecisions)
                     {
                         _handBackClean = false;
-                        Diag.Alarm("save_unclean", Names.Hero(o.Lord) + " could not be handed back to the game before the save; this save may hold him with the game's AI switched off.", true);
+                        Diag.Alarm("save_unclean", Names.Hero(o.Lord) + " could not be handed back to the game before the save; this save may hold the lord with the game's AI switched off.", true);
                     }
                 }
                 catch (Exception e)
                 {
                     _handBackClean = false;
                     Diag.Error("handing a lord back before a save", e);
-                    Diag.Alarm("save_unclean", "A lord could not be handed back to the game before the save (" + e.Message + "); this save may hold him frozen.", true);
+                    Diag.Alarm("save_unclean", "A lord could not be handed back to the game before the save (" + e.Message + "); this save may hold that lord frozen.", true);
                 }
             }
         }
@@ -564,7 +1031,7 @@ namespace BannerlordAgents
                 Diag.Alarm("held_by_other", "Something other than us has switched off the game's AI for " + orcs.Count + " lords of the watched realm: " + string.Join(", ", orcs) + ".");
         }
 
-        // ---------- the order itself ----------
+        // ---------- the move itself ----------
 
         private static void Apply(HandOrder o)
         {
@@ -577,10 +1044,22 @@ namespace BannerlordAgents
                 {
                     case "goto":
                     case "garrison":
+                    case "enter":
                     case "recruit": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
+                    case "near":
+                        p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, 6f, 3f), p.NavigationCapability);
+                        break;
+                    case "toward":
+                        p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(new CampaignVec2(new Vec2(o.X, o.Y), true), nav, 2f), p.NavigationCapability);
+                        break;
+                    case "leave":
+                        if (p.CurrentSettlement != null) LeaveSettlementAction.ApplyForParty(p);
+                        p.SetMoveModeHold();
+                        break;
                     case "patrol": SetPartyAiAction.GetActionForPatrollingAroundSettlement(p, o.Place, nav, false, false); break;
                     case "defend": SetPartyAiAction.GetActionForDefendingSettlement(p, o.Place, nav, false, false); break;
                     case "engage": SetPartyAiAction.GetActionForEngagingParty(p, o.Target, nav, false); break;
+                    case "follow": SetPartyAiAction.GetActionForEscortingParty(p, o.Target, nav, false, false); break;
                     case "besiege": SetPartyAiAction.GetActionForBesiegingSettlement(p, o.Place, nav, false); break;
                     case "raid": SetPartyAiAction.GetActionForRaidingSettlement(p, o.Place, nav, false, false); break;
                     case "hold": p.SetMoveModeHold(); break;
@@ -599,10 +1078,15 @@ namespace BannerlordAgents
             {
                 case "goto":
                 case "garrison":
+                case "enter":
                 case "recruit": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
+                case "near": return o.Place != null && (b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f;
+                case "toward": return b == AiBehavior.GoToPoint || b == AiBehavior.Hold;
+                case "leave": return p.CurrentSettlement == null;
                 case "patrol": return b == AiBehavior.PatrolAroundPoint && p.TargetSettlement == o.Place;
                 case "defend": return (b == AiBehavior.DefendSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
                 case "engage": return b == AiBehavior.EngageParty && p.TargetParty == o.Target;
+                case "follow": return b == AiBehavior.EscortParty && p.TargetParty == o.Target;
                 case "besiege": return p.BesiegedSettlement == o.Place || (b == AiBehavior.BesiegeSettlement && p.TargetSettlement == o.Place);
                 case "raid": return (b == AiBehavior.RaidSettlement && p.TargetSettlement == o.Place) || (p.MapEvent != null && p.MapEvent.IsRaid);
                 case "hold": return b == AiBehavior.Hold;
@@ -610,17 +1094,27 @@ namespace BannerlordAgents
             }
         }
 
-        private static string EndReason(HandOrder o, double now, out string key)
+        /// <summary>For a tool's lord: only the lord's own fate ends the order; the tool decides about its moves.</summary>
+        private static string LordGone(HandOrder o, out string key)
         {
             key = null;
             Hero h = o.Lord;
             MobileParty p = o.Party;
             Kingdom realm = o.Realm;
-            if (h == null || !h.IsAlive) { key = "died"; return "he died"; }
-            if (h.IsPrisoner) { key = "captured"; return "he was taken prisoner"; }
-            if (p == null || !p.IsActive || p.LeaderHero != h) { key = "party gone"; return "his party is gone"; }
-            if (realm == null || h.MapFaction != realm) { key = "left the realm"; return "he is no longer in " + Names.Faction(realm); }
-            if (p.AttachedTo != null && p.Army?.LeaderParty != p) { key = "joined an army"; return "he joined another lord's army"; }
+            if (h == null || !h.IsAlive) { key = "died"; return "the lord died"; }
+            if (h.IsPrisoner) { key = "captured"; return "the lord was taken prisoner"; }
+            if (p == null || !p.IsActive || p.LeaderHero != h) { key = "party gone"; return "the lord's party is gone"; }
+            if (realm == null || h.MapFaction != realm) { key = "left the realm"; return "the lord is no longer in " + Names.Faction(realm); }
+            if (p.AttachedTo != null && p.Army?.LeaderParty != p) { key = "joined an army"; return "the lord joined another lord's army"; }
+            return null;
+        }
+
+        private static string EndReason(HandOrder o, double now, out string key)
+        {
+            string gone = LordGone(o, out key);
+            if (gone != null) return gone;
+            Kingdom realm = o.Realm;
+            MobileParty p = o.Party;
             switch (o.Verb)
             {
                 case "garrison":
@@ -634,7 +1128,7 @@ namespace BannerlordAgents
                     if (o.Verb == "recruit")
                     {
                         PartyBase party = p.Party;
-                        if (party.PartySizeLimit > 0 && party.NumberOfAllMembers >= party.PartySizeLimit * 0.98f) { key = "ranks full"; return "his ranks are full"; }
+                        if (party.PartySizeLimit > 0 && party.NumberOfAllMembers >= party.PartySizeLimit * 0.98f) { key = "ranks full"; return "the ranks are full"; }
                         if (o.Place.IsUnderSiege || (o.Place.IsVillage && o.Place.Village.VillageState != Village.VillageStates.Normal))
                         {
                             key = "no recruits there";
@@ -662,8 +1156,8 @@ namespace BannerlordAgents
                     }
                     break;
                 case "engage":
-                    if (o.Target == null || !o.Target.IsActive) { key = "target gone"; return "his target is gone"; }
-                    if (!FactionManager.IsAtWarAgainstFaction(o.Target.MapFaction, realm)) { key = "target no longer an enemy"; return "his target is no longer an enemy"; }
+                    if (o.Target == null || !o.Target.IsActive) { key = "target gone"; return "the target is gone"; }
+                    if (!FactionManager.IsAtWarAgainstFaction(o.Target.MapFaction, realm)) { key = "target no longer an enemy"; return "the target is no longer an enemy"; }
                     break;
             }
             return null;
@@ -684,12 +1178,19 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Error("releasing a lord", e); stillOff = true; }
             Diag.Count("order:ended");
             Diag.Count("order end:" + (key ?? "other"));
-            Note(o, "ended", why, new { key, hours_held = Math.Round(CampaignTime.Now.ToHours - o.Since, 1), state = State(o.Party, o) });
+            // a tool that finished has already called the agent back in its own words
+            Note(o, "ended", why, new { key, hours_held = Math.Round(CampaignTime.Now.ToHours - o.Since, 1), state = State(o.Party, o) }, quiet: key == "tool done");
             Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
             if (stillOff)
-                Diag.Alarm("release_failed", Names.Hero(o.Lord) + "'s order ended, but the game's AI could not be switched back on for him.", true, new { id = o.Id });
+                Diag.Alarm("release_failed", Names.Hero(o.Lord) + "'s order ended, but the game's AI could not be switched back on for this lord.", true, new { id = o.Id });
             if (o.Party != null && o.Party.IsActive && o.Lord != null)
                 AfterRelease.Add(new Released { Party = o.Party, Lord = o.Lord, At = CampaignTime.Now.ToHours });
+            if (o.ToolId > 0)
+            {
+                int tid = o.ToolId;
+                string w = why;
+                Background.Post("tool ended", () => Runner.Ended(tid, w));
+            }
         }
 
         private static string Refused(string verb, Settlement s, Kingdom realm)
@@ -739,11 +1240,21 @@ namespace BannerlordAgents
                 .Select(p => p.LeaderHero).Distinct().ToList();
             Hero found = Pick(lords, words, h => Names.Hero(h), h => h.StringId, out List<Hero> pool);
             // some lords share a name (the orcs have two Dushgars), so the game's id is shown too and is accepted
+            if (found == null && pool.Count <= 1)
+            {
+                // a lord the realm has but who leads no party (a prisoner, or in a holding): say so plainly
+                Hero h = Hero.Find((words ?? "").Trim().Trim('[', ']'));
+                if (h != null && h.MapFaction == realm)
+                {
+                    error = Names.Hero(h) + (h.IsPrisoner ? " is a prisoner" : " is not leading a party right now") + ".";
+                    Diag.Event("order", "lord lookup", new { words, found = (string)null, candidates = 0, why = error });
+                    return null;
+                }
+            }
             error = found != null ? null
                 : pool.Count > 1 ? "'" + words + "' matches several lords: " + string.Join(", ", pool.Take(12).Select(h => Names.Hero(h) + " (" + h.StringId + ")"))
                                    + ". Use more of the name, or the id in brackets."
-                : "No lord of " + Names.Faction(realm) + " leading a party matches '" + words + "'. Some of them: "
-                  + string.Join(", ", lords.Take(25).Select(h => Names.Hero(h) + " (" + h.StringId + ")")) + ".";
+                : "No lord of " + Names.Faction(realm) + " leading a party matches '" + words + "'.";
             Diag.Event("order", "lord lookup", new { words, found = found?.StringId, candidates = pool.Count });
             return found;
         }
@@ -761,21 +1272,45 @@ namespace BannerlordAgents
         /// <summary>A lord's party by its lord's name or id, or by the party's own id.</summary>
         private static MobileParty FindParty(string words, out string error)
         {
+            string w = (words ?? "").Trim().Trim('[', ']');
             List<MobileParty> lords = MobileParty.AllLordParties.Where(p => p != null && p.IsActive && p.LeaderHero != null).ToList();
-            MobileParty byHero = lords.FirstOrDefault(p => string.Equals(p.LeaderHero.StringId, words, StringComparison.OrdinalIgnoreCase));
+            MobileParty byHero = lords.FirstOrDefault(p => string.Equals(p.LeaderHero.StringId, w, StringComparison.OrdinalIgnoreCase));
             if (byHero != null) { error = null; return byHero; }
-            MobileParty found = Pick(lords, words, p => Names.Party(p), p => p.StringId, out List<MobileParty> pool);
+            MobileParty byId = FindPartyById(w);
+            if (byId != null && byId.IsActive) { error = null; return byId; }
+            MobileParty found = Pick(lords, w, p => Names.Party(p), p => p.StringId, out List<MobileParty> pool);
+            if (found == null && pool.Count <= 1)
+            {
+                Hero h = Hero.Find(w);
+                if (h != null && h.PartyBelongedTo?.LeaderHero != h)
+                {
+                    error = Names.Hero(h) + (h.IsPrisoner ? " is a prisoner" : h.IsDead ? " is dead" : " leads no party right now") + ", so there is no party to target.";
+                    return null;
+                }
+            }
             error = found != null ? null
                 : pool.Count > 1 ? "'" + words + "' matches several lords: " + string.Join(", ", pool.Take(12).Select(p => Names.Party(p) + " (" + p.LeaderHero.StringId + ")")) + "."
-                : "No lord's party matches '" + words + "'.";
+                : "No lord's party matches '" + words + "': the lord may have been beaten, captured, or left the map.";
             return found;
+        }
+
+        private static MobileParty FindPartyById(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            try { return Campaign.Current.CampaignObjectManager.Find<MobileParty>(id); }
+            catch (Exception e)
+            {
+                Diag.Swallowed("finding a party by id", e);
+                return MobileParty.All.FirstOrDefault(p => p.StringId == id);
+            }
         }
 
         /// <summary>Exact name or id first, then names starting with the words, then names containing them.</summary>
         private static T Pick<T>(List<T> items, string words, Func<T, string> name, Func<T, string> id, out List<T> pool) where T : class
         {
-            string q = Text.Plain(words);
-            pool = items.Where(x => Text.Plain(name(x)) == q || string.Equals(id(x), words.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+            string w = (words ?? "").Trim().Trim('[', ']');
+            string q = Text.Plain(w);
+            pool = items.Where(x => Text.Plain(name(x)) == q || string.Equals(id(x), w, StringComparison.OrdinalIgnoreCase)).ToList();
             if (pool.Count == 1) return pool[0];
             if (pool.Count == 0) pool = items.Where(x => Text.Plain(name(x)).StartsWith(q, StringComparison.Ordinal)).ToList();
             if (pool.Count == 1) return pool[0];
@@ -789,23 +1324,29 @@ namespace BannerlordAgents
             switch (o.Verb)
             {
                 case "goto": return lord + " goes to " + Names.Settlement(o.Place);
-                case "garrison": return lord + " garrisons " + Names.Settlement(o.Place);
+                case "garrison":
+                case "enter": return lord + " goes inside " + Names.Settlement(o.Place);
+                case "near": return lord + " goes close to " + Names.Settlement(o.Place);
+                case "toward": return lord + " marches to where " + Names.Party(o.Target) + " was last seen";
+                case "leave": return lord + " leaves the holding";
                 case "patrol": return lord + " patrols around " + Names.Settlement(o.Place);
                 case "defend": return lord + " defends " + Names.Settlement(o.Place);
                 case "engage": return lord + " attacks " + Names.Party(o.Target);
+                case "follow": return lord + " follows " + Names.Party(o.Target);
                 case "besiege": return lord + " besieges " + Names.Settlement(o.Place);
                 case "raid": return lord + " raids " + Names.Settlement(o.Place);
-                case "recruit": return lord + " fills his ranks at " + Names.Settlement(o.Place);
-                default: return lord + " holds his position";
+                case "recruit": return lord + " fills the ranks at " + Names.Settlement(o.Place);
+                default: return lord + " holds position";
             }
         }
 
-        private static string TargetName(HandOrder o) => o.Place != null ? Names.Settlement(o.Place) : o.Target != null ? Names.Party(o.Target) : "his target";
+        private static string TargetName(HandOrder o) => o.Place != null ? Names.Settlement(o.Place) : o.Target != null ? Names.Party(o.Target) : "the target";
 
         private static float? Distance(HandOrder o)
         {
             MobileParty p = o.Party;
             if (p == null || !p.IsActive) return null;
+            if (o.Verb == "toward") return p.Position.ToVec2().Distance(new Vec2(o.X, o.Y));
             if (o.Place != null) return p.Position.Distance(o.Place.Position);
             if (o.Target != null && o.Target.IsActive) return p.Position.Distance(o.Target.Position);
             return null;
@@ -839,34 +1380,35 @@ namespace BannerlordAgents
             };
         }
 
-        private static void Note(HandOrder o, string what, string text, object extra = null)
+        private static void Note(HandOrder o, string what, string text, object extra = null, bool quiet = false)
         {
             var rec = new
             {
                 Type = "order", Event = what, Id = o.Id, o.Source, Poke = o.Poke >= 0 ? o.Poke : (int?)null, Hours = CampaignTime.Now.ToHours,
-                Lord = o.Lord?.StringId, LordName = Names.Hero(o.Lord), Realm = o.Realm?.StringId, o.Verb, Place = o.Place?.StringId,
+                Lord = o.Lord?.StringId, LordName = Names.Hero(o.Lord), Realm = o.Realm?.StringId, o.Verb, o.Tool, Place = o.Place?.StringId,
                 Target = o.Target?.StringId, o.Reissued, Text = text
             };
             Background.Post("order record", () => Brain.WriteOrder(rec));
-            Diag.Event("order", what, new { id = o.Id, source = o.Source, poke = o.Poke >= 0 ? o.Poke : (int?)null, lord = o.Lord?.StringId, verb = o.Verb,
+            Diag.Event("order", what, new { id = o.Id, source = o.Source, poke = o.Poke >= 0 ? o.Poke : (int?)null, lord = o.Lord?.StringId, verb = o.Verb, tool = o.Tool,
                                             place = o.Place?.StringId, target = o.Target?.StringId, text, extra });
             Log.Line("order #" + o.Id + " " + what + " [" + o.Source + "]: " + text);
+            if (quiet) return;
             if (o.Source == "agent" && what != "issued")
             {
-                string line = "order " + what + ": " + text + (what == "reissued" ? "" : ".");
+                string line = "order " + what + ": " + (what == "ended" ? Names.Hero(o.Lord) + "'s " + (o.Tool ?? "order") + " ended: " + text : text) + (what == "reissued" ? "" : ".");
                 Background.Post("agent receipt", () => AgentChannel.Event(line));
             }
             // the watched realm hears when one of its orders finishes or fails, as a poke trigger
             if (o.Realm != null && o.Realm == Bridge.Watched && (what == "arrived" || what == "ended"))
                 Notices.Order(what == "arrived" ? "order_arrived" : "order_ended",
-                              what == "arrived" ? text + " as ordered." : "The order \"" + Describe(o) + "\" ended: " + text + ".", o.Party?.StringId);
+                              what == "arrived" ? text + " as ordered." : "The order \"" + (o.ToolText ?? Describe(o)) + "\" ended: " + text + ".", o.Party?.StringId);
         }
 
         /// <summary>Keeps the watchers in step with the orders held: the plain copy for the logs, the movement watcher and the lord watch.</summary>
         private static void Changed()
         {
             Live.OrdersHeld = Active.Count;
-            Live.OrdersText = Active.Count == 0 ? "none" : string.Join("; ", Active.Select(o => "#" + o.Id + " [" + o.Source + "] " + Describe(o)));
+            Live.OrdersText = Active.Count == 0 ? "none" : string.Join("; ", Active.Select(o => "#" + o.Id + " [" + o.Source + "] " + (o.ToolText ?? Describe(o))));
             Witness.Watch(Active.Where(o => o.Party != null).Select(o => o.Party).Distinct().ToArray());
             LordWatch.Refresh();
         }

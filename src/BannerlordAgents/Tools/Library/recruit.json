@@ -1,0 +1,19 @@
+{
+  "tool": "recruit",
+  "kind": "move",
+  "about": "Goes to a town or village of yours or an ally's and fills the ranks there, for up to three days.",
+  "at": "friendly_town_or_village",
+  "start": "go",
+  "states": {
+    "go": { "about": "going to recruit at {at}", "do": "recruit at",
+      "when": [
+        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly, so {me} did not recruit there." },
+        { "if": "inside(at)", "go": "stay" } ] },
+    "stay": { "about": "recruiting at {at}", "do": "recruit at",
+      "when": [
+        { "if": "ranks >= 0.98", "go": "over", "poke": "{me}'s ranks are full ({men} men)." },
+        { "if": "hours_in_state >= 72", "go": "over", "poke": "{me} recruited three days at {at}: {men} men, ranks at {round(ranks * 100)}%." },
+        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

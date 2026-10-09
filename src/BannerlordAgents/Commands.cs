@@ -44,7 +44,8 @@ namespace BannerlordAgents
             "  agents.bridge on|off             all of the bridge's work, for the before/after comparison\n" +
             "  agents.watch <realm>             choose the realm under watch\n" +
             "  agents.notify on|off             on-screen messages for pokes and hand orders\n" +
-            "  agents.order <lord> <verb> <target>  a hand order for a lord of the watched realm\n" +
+            "  agents.order <lord> <order> <place or lord> [setting=value] [lords=a,b]  the agent's orders and tools, by hand\n" +
+            "  agents.tools [name]              every order and tool the agent can give, with its settings\n" +
             "  agents.vassal <lord> <verb> <target> an order for one of your own lords, recorded as your decision\n" +
             "  agents.orders, agents.release <lord>|all\n" +
             "  agents.agent [off|shadow|live [lords]|dir <folder>]  the agent channel (the agent chat's orders)\n" +
@@ -228,6 +229,20 @@ namespace BannerlordAgents
 
         [CommandLineFunctionality.CommandLineArgumentFunction("order", "agents")]
         public static string Order(List<string> args) => Cmd("order", args, () => Orders.Give(args));
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("tools", "agents")]
+        public static string ToolsCmd(List<string> args) => Cmd("tools", args, () =>
+        {
+            List<string> problems = Tools.Library.Problems();
+            string head = problems.Count == 0 ? "The tool library: " + Tools.Library.All.Count + " orders, all checked.\n"
+                                              : "The tool library has " + problems.Count + " problems: " + string.Join("; ", problems) + "\n";
+            if (args != null && args.Count > 0)
+            {
+                Tools.ToolDef d = Tools.Library.Get(args[0]);
+                return d == null ? "No order called '" + args[0] + "'. agents.tools lists them all." : head + d.Describe();
+            }
+            return head + Tools.Library.Text();
+        });
 
         [CommandLineFunctionality.CommandLineArgumentFunction("vassal", "agents")]
         public static string Vassal(List<string> args) => Cmd("vassal", args, () => Orders.GiveVassal(args));
