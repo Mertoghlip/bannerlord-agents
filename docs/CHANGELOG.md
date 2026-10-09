@@ -257,7 +257,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - at the first poke (11:47:48) the war room took the old journal over as the notes of campaign `Ah2auppicLLJ` (`orc-war-council\memory\Ah2auppicLLJ\`) and renamed it `journal-before-memory-20261009-1147.md`;
   - the bridge started `chronicle_mistymountainorcs.jsonl` in the campaign's folder.
 
-### 11:55 · Version 0.5.1: army fixes · commit pending (installed 11:55)
+### 11:55 · Version 0.5.1: army fixes · commit 8111644 (installed 11:55)
 - **What:**
   - gather judges its army from the next hour on, and a new "fail" ending keeps an army that truly broke up from starting its next order, setting its lord free;
   - gather and add form the army with the lords who can come, naming the ones left out;
