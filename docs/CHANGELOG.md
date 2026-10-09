@@ -108,7 +108,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** `docs/reports/2026-10-08-pokes.md`: every poke by type, the battles by who fought whom, and what each cut would save.
 - **Finding:** 100 of the 122 battles were small fights, and the cuts would take the 125 pokes to 58.
 
-### 17:14 · Version 0.3.1, fewer pokes · installed 17:14
+### 17:14 · Version 0.3.1, fewer pokes · commit f47a05b (installed 17:14)
 - **What:**
   - a battle pokes only when fought at a town, castle or village (an assault, a sally, a raid) or with lords on both sides. Fights with bandits, caravans and villagers go to the logs only, marked as not poked;
   - an enemy lord pokes only within 30 of one of the realm's holdings (the new setting `sighting_distance`), or when heading for, besieging or raiding one, or chasing one of its parties. Armies always poke. A lord who comes close while already in view now pokes too, which the old rule missed;
