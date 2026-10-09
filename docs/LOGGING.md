@@ -8,7 +8,7 @@ The logs follow every poke, every answer, every order and every lord from start 
 - a summary at the end, and a command for the state right now;
 - a switch between everyday and full detail.
 
-Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' and armies' records. The record formats are in [protocol/README.md](../protocol/README.md).
+Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' and armies' records, and 0.5 the realm's chronicle. The record formats are in [protocol/README.md](../protocol/README.md).
 
 ## What the logs show
 
@@ -88,8 +88,12 @@ Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' a
 - **Every army** (`army` events): the leader, the meeting place, the lords called, the influence price, and the clan's influence before.
 - **Alarm** for a tool in the library that fails the checker, at every load.
 
+### The realm's memory (since 0.5, Oct 9)
+- **At every load** (`chronicle` events): how many entries of the game's own history log were read, how many were about the watched realm, any that could not be read, and the time it took on the game's thread; then the chronicle's lines, how many were cut because an earlier save was loaded, and how many came from the game's log.
+- **The chronicle itself** is the record: one dated line per thing the realm learned, in the campaign's folder ([MEMORY.md](MEMORY.md)). `agents.chronicle [n]` prints its last lines.
+
 ### The war room
-The war room keeps its own logs, beside the game's: every call with its times and tokens, the prompt, Claude Code's full event stream, and the answer ([WARROOM.md](WARROOM.md)).
+The war room keeps its own logs, beside the game's: every call with its times and tokens, the prompt, Claude Code's full event stream, and the answer; and every rewrite of the story so far, with what the memory carried into each answer ([WARROOM.md](WARROOM.md)).
 
 ### Who moved a lord, and why the game's AI chose
 These are the only two pieces that hook into the game's code instead of reading it. Each has its own switch.

@@ -53,7 +53,11 @@ namespace BannerlordAgents
 
         public static string Dir => _dir ?? (_dir = Paths.Data("unknown"));
 
-        public static void Reset(string campaign)
+        /// <summary>
+        /// A campaign was loaded. loadedAt is the in-game hour of its save, so the chronicle can be cut back to it;
+        /// history, the game's own lines about the watched realm (GameHistory), to start its chronicle.
+        /// </summary>
+        public static void Reset(string campaign, double loadedAt = double.NaN, string realm = null, List<ChronicleEntry> history = null)
         {
             Files.FlushAll();
             Mem.Clear();
@@ -62,6 +66,7 @@ namespace BannerlordAgents
             Latest = null;
             DecisionsWritten = PokesWatched = PokesPlayer = 0;
             _dir = Paths.Data(campaign);
+            Chronicle.Reset(_dir, loadedAt, realm, history);
             Tools.Runner.Reset();
             AgentChannel.Reset(_dir);
             AgentChannel.WriteLibrary();
@@ -106,17 +111,19 @@ namespace BannerlordAgents
             if (n.Kind == "party_destroyed" && n.Party != null)
                 foreach (Memory m in Mem.Values) m.LastSeen.Remove(n.Party);
             Files.Append(Path.Combine(Dir, "notices.jsonl"), Json.Line(n));
+            Chronicle.FromNotice(n);
             if (n.Quiet != null)
             {
-                // kept to the logs: no poke, and not in the report's news either
+                // kept to the logs: no poke, not in the chronicle, and not in the report's news either
                 Diag.Count("quiet");
                 Diag.Count("quiet:" + n.Quiet);
                 return;
             }
+            if (n.RecordOnly) Diag.Count("notice:record only");
             foreach (string f in n.Factions.Distinct())
             {
                 Memory m = Get(f);
-                m.Pending.Add(n);
+                if (!n.RecordOnly) m.Pending.Add(n);
                 m.News.Add(n);
                 m.News.RemoveAll(x => n.Hours - x.Hours > 48);
             }
@@ -130,6 +137,7 @@ namespace BannerlordAgents
             Audit.CheckSnapshot(s);
             Audit.Sight(s);
             if (s.Sight != null) Audit.PlayerSight(s.Sight, s.Hours);
+            if (s.Watched != null) Chronicle.Ensure(s.Watched, Views.FactionName(s, s.Watched), s.Hours);
             // the tools first: their call-backs of this hour go out with this hour's poke
             if (s.Watched != null && s.WatchedSees != null) Tools.Runner.OnHour(s);
             if (s.Watched != null && s.WatchedSees != null)
@@ -210,13 +218,16 @@ namespace BannerlordAgents
                 if (first || (m.LastClose.TryGetValue(r.Id, out double last) && s.Hours - last < OutOfSightHours)) continue;
                 int men = r.ArmyMen > 0 ? r.ArmyMen : r.Men;
                 string where = vp.NearestHolding != null ? Text.D(vp.HoldingDistance) + " from " + vp.NearestHolding : "near " + (vp.Near ?? "nowhere known");
-                triggers.Add(new Trigger
+                var sighting = new Trigger
                 {
                     Hours = s.Hours, Kind = "enemy_in_view", Party = r.Id,
                     Text = "Enemy " + (r.ArmyMen > 0 ? "army" : "lord") + " in view: " + vp.Name + " (" + vp.FactionName + "), "
                            + Text.N(men) + " men, " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + "."
-                });
+                };
+                triggers.Add(sighting);
                 if (!isPlayer) Sighted(m, s, r, vp);
+                // an enemy army coming into view is history; a lord passing by is not
+                if (!isPlayer && r.ArmyMen > 0) Chronicle.Line(s.Hours, "sighting", sighting.Text, party: r.Id);
             }
             foreach (string id in close) m.LastClose[id] = s.Hours;
             foreach (string id in m.LastClose.Where(x => s.Hours - x.Value > ForgetHours).Select(x => x.Key).ToList()) m.LastClose.Remove(id);
@@ -280,7 +291,13 @@ namespace BannerlordAgents
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
                 Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
-            if (AgentChannel.On) AgentChannel.OnPoke(number, s.Hours, triggers, report);
+            if (AgentChannel.On)
+                AgentChannel.OnPoke(number, s.Hours, triggers, report, new
+                {
+                    Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
+                    LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
+                    LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.Count
+                });
 
             Dictionary<string, int> sizes = Audit.Sizes(report, out int tokens);
             Diag.Count("pokes");

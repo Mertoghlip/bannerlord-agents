@@ -38,6 +38,7 @@ namespace BannerlordAgents
             "  agents.health                    alarms so far and the state right now (the logs' own view)\n" +
             "  agents.view                      the watched realm's report as of now (and the file it is in)\n" +
             "  agents.pokes [n]                 the watched realm's last pokes\n" +
+            "  agents.chronicle [n]             the last lines of the watched realm's chronicle, its memory of the war\n" +
             "  agents.vision_check              our sight rule against the game's own, for your party\n" +
             "  agents.record [on|off|show [n]]  the recorder of your own decisions\n" +
             "  agents.perf [on|off]             performance summary; on/off for the once-a-second log\n" +
@@ -151,6 +152,13 @@ namespace BannerlordAgents
         {
             int n = args != null && args.Count > 0 && int.TryParse(args[0], out int x) ? x : 10;
             return Background.Ask(() => Brain.ShowPokes(n), Wait, out string result) ? result : "The worker did not answer within 5 seconds.";
+        });
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("chronicle", "agents")]
+        public static string ChronicleLines(List<string> args) => Cmd("chronicle", args, () =>
+        {
+            int n = args != null && args.Count > 0 && int.TryParse(args[0], out int x) ? x : 15;
+            return Background.Ask(() => Chronicle.Last(n), Wait, out string result) ? result : "The worker did not answer within 5 seconds.";
         });
 
         [CommandLineFunctionality.CommandLineArgumentFunction("vision_check", "agents")]

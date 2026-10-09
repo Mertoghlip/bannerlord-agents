@@ -30,7 +30,9 @@ namespace BannerlordAgents
                 PlayerFaction = player?.StringId,
                 PlayerParty = MobileParty.MainParty?.StringId,
                 Watched = watched?.StringId,
-                Wall = DateTime.UtcNow.Ticks
+                Wall = DateTime.UtcNow.Ticks,
+                LoadId = Bridge.LoadId,
+                LoadedAt = Bridge.LoadedAt
             };
             var factions = new Dictionary<string, IFaction>();
 

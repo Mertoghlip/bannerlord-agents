@@ -17,9 +17,10 @@ namespace BannerlordAgents.WarRoom
     }
 
     /// <summary>
-    /// One fresh, headless Claude Code call on the subscription: the system prompt from a file, the poke on standard
-    /// input, the answer and its usage as JSON. No session is kept, no project instructions are loaded (safe mode), and
-    /// the only tool is Read, inside the channel folder (anything outside is refused without asking).
+    /// One headless Claude Code call on the subscription: the system prompt from a file, the message on standard input,
+    /// the answer and its usage as JSON. No session is kept (except the one long conversation of the conversation
+    /// memory), no project instructions are loaded (safe mode), and the only tool is Read, inside the channel folder
+    /// (anything outside is refused without asking).
     /// </summary>
     internal static class Claude
     {
@@ -56,7 +57,12 @@ namespace BannerlordAgents.WarRoom
         /// <summary>No answer is this long (the longest so far was under 6,000 characters); past it, the call is stopped.</summary>
         public const int RunawayChars = 16000;
 
-        public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0)
+        /// <summary>
+        /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on
+        /// (resume true), for the one-long-conversation memory; without one, nothing is kept. A cancelled call is stopped.
+        /// </summary>
+        public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
+                                     string sessionId = null, bool resume = false, CancellationToken cancel = default)
         {
             var r = new CallResult();
             var psi = new ProcessStartInfo(exe)
@@ -76,8 +82,14 @@ namespace BannerlordAgents.WarRoom
             {
                 "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--prompt-suggestions", "false",
                 "--model", model, "--effort", effort, "--system-prompt-file", systemFile,
-                "--tools", read ? "Read" : "", "--safe-mode", "--permission-prompts", "none", "--no-session-persistence"
+                "--tools", read ? "Read" : "", "--safe-mode", "--permission-prompts", "none"
             }) psi.ArgumentList.Add(a);
+            if (sessionId == null) psi.ArgumentList.Add("--no-session-persistence");
+            else
+            {
+                psi.ArgumentList.Add(resume ? "--resume" : "--session-id");
+                psi.ArgumentList.Add(sessionId);
+            }
             if (thinkingCap > 0) psi.Environment["MAX_THINKING_TOKENS"] = thinkingCap.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var sw = Stopwatch.StartNew();
             Process p;
@@ -119,6 +131,7 @@ namespace BannerlordAgents.WarRoom
                 string stopped = null;
                 while (!got.Wait(500))
                 {
+                    if (cancel.IsCancellationRequested) { stopped = "cancelled"; break; }
                     if (sw.Elapsed.TotalSeconds > timeoutSeconds) { stopped = "the call took over " + timeoutSeconds + " s and was stopped"; break; }
                     if (sw.ElapsedMilliseconds - Interlocked.Read(ref lastEvent) > StallSeconds * 1000L) { stopped = "stalled: nothing came for " + StallSeconds + " s"; break; }
                     lock (events)

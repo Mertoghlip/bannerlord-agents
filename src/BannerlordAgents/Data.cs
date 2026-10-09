@@ -97,12 +97,34 @@ namespace BannerlordAgents
         /// already announced; a lost party whose lord's capture already says it), or null when it pokes.
         /// </summary>
         public string Quiet;
+        /// <summary>Goes into the realm's chronicle, and so its recent history, without poking: a lord set free, an army of its own formed.</summary>
+        public bool RecordOnly;
+    }
+
+    /// <summary>
+    /// One line of a realm's chronicle (Chronicle): something it learned, and when. Game-free; the worker writes it to
+    /// the campaign's folder and the agent channel.
+    /// </summary>
+    internal sealed class ChronicleEntry
+    {
+        public double Hours;
+        public string Date;
+        /// <summary>The notice kind (war, besieged, battle, ...), sighting, order, refused, or the game's own entry kind.</summary>
+        public string Kind;
+        public string Text;
+        public string Place;
+        public string Party;
+        /// <summary>"game" for a line from the game's own history log, read at the first load; empty for our own.</summary>
+        public string From;
     }
 
     /// <summary>The world as copied once per in-game hour.</summary>
     internal sealed class Snapshot
     {
         public string Campaign;
+        /// <summary>This load of the campaign, and the in-game hour of the save it came from (Bridge.LoadId, Bridge.LoadedAt).</summary>
+        public string LoadId;
+        public double LoadedAt = double.NaN;
         public double Hours;
         public string Date;
         public bool Night;

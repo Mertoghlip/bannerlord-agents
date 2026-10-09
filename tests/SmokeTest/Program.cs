@@ -56,7 +56,13 @@ namespace SmokeTest
             File.WriteAllText(old, "{\"poke\": 57, \"orders\": [{\"lord\": \"lord_bolg\", \"do\": \"hold\"}]}");
             File.SetLastWriteTime(old, DateTime.Now.AddHours(-1));
 
-            Brain.Reset(campaign);
+            // the game's own history of the orcs (GameHistory) starts their chronicle: two lines from before the session
+            var history = new List<ChronicleEntry>
+            {
+                new ChronicleEntry { Hours = 900, Kind = "game:DeclareWar", Text = "Misty Mountain Orcs has declared war on Kingdom of Arnor and Gondor.", From = "game" },
+                new ChronicleEntry { Hours = 950, Kind = "game:TakePrisoner", Text = "Grakmaw has been taken prisoner by Galenor.", From = "game" }
+            };
+            Brain.Reset(campaign, double.NaN, "orcs", history);
             Brain.OnHour(World(1000, playerSeen: false));                    // first look
             Brain.OnHour(World(1001, playerSeen: true));                     // the player's army comes into view
             Brain.OnNotice(new Notice { Id = 1, Hours = 1001.5, Kind = "raided", Text = "Orc Village is being raided by Aragorn (Arnor and Gondor).", Factions = { "orcs" }, Party = "main_party" });
@@ -128,6 +134,26 @@ namespace SmokeTest
             Check(receipts.Contains("CHECKED") && receipts.Contains("Answered") && receipts.Contains("after poke #60"), "the receipt says what happened and how long the answer took");
             Check(!AgentChannel.Parse(answer + ".missing", out _, out _, out _), "a missing or broken file is reported, not guessed at");
 
+            // the chronicle (docs/MEMORY.md): the game's own history first, then every notice that poked, and the orders
+            AgentChannel.Receipt(orders[0], "applied", "Bolg garrison Orc Castle", 1002.6);
+            AgentChannel.Receipt(orders[1], "refused", "Azog cannot attack lord_ghost_9: no such lord", 1002.7);
+            Files.FlushAll();
+            string chronicleData = Read(Path.Combine(dir, "chronicle_orcs.jsonl"));
+            string chronicleText = Read(Path.Combine(agentDir, "chronicle.txt"));
+            Check(chronicleText.StartsWith("THE CHRONICLE OF MISTY MOUNTAIN ORCS") && chronicleText.Contains("declared war on Kingdom of Arnor and Gondor. (from the game's records)")
+                  && chronicleText.IndexOf("taken prisoner by Galenor", StringComparison.Ordinal) < chronicleText.IndexOf("Orc Village is being raided", StringComparison.Ordinal),
+                  "the chronicle starts with the game's own history, older lines first, marked as such");
+            Check(chronicleData.Contains("\"kind\":\"raided\"") && chronicleText.Contains("You ordered: Bolg garrison Orc Castle. Why: hold.")
+                  && chronicleText.Contains("was refused: Azog cannot attack lord_ghost_9") && !chronicleText.Contains("CHECKED"),
+                  "the chronicle keeps every notice that poked, and the orders carried out or refused (not shadow mode's checks)");
+            Check(File.Exists(Path.Combine(agentDir, "chronicle.jsonl")) && Read(Path.Combine(agentDir, "chronicle.jsonl")).Contains("\"hours\":950"),
+                  "the war room gets the chronicle with its hours (chronicle.jsonl)");
+            JObject pokeMeta = JObject.Parse(Read(Path.Combine(agentDir, "poke.json")));
+            Check((int)pokeMeta["number"] == 60 && (string)pokeMeta["campaign"] == "smoketest" && (string)pokeMeta["realm"] == "orcs" && (double)pokeMeta["hours"] == 1002,
+                  "poke.json tells the war room the poke's number, hour, campaign and realm");
+            Check(pokeTxt.Contains("RECENT HISTORY, LAST TWO DAYS (from your chronicle)") && pokeTxt.Contains("Orc Village is being raided"),
+                  "the report's recent history comes from the chronicle");
+
             // the fog check: the real reports are clean; a report with an id the realm cannot know is caught
             Check(Diag.CountOf("fog:reports") >= 4 && Diag.CountOf("fog:leaks") == 0, "every report was fog-checked, and none leaked (" + Diag.CountOf("fog:reports") + " checked)");
             var v = new View { Faction = "orcs", FactionName = "Misty Mountain Orcs", Hours = 1002 };
@@ -144,6 +170,14 @@ namespace SmokeTest
             Brain.OnHour(afterFight);
             Check(Brain.PokesWatched == pokesBefore, "a fight with bandits pokes no one");
             Check(!Brain.ReportNow(afterFight).Contains("against Looters"), "and stays out of the report's news");
+            Files.FlushAll();
+            Check(!Read(Path.Combine(agentDir, "chronicle.txt")).Contains("against Looters"), "and out of the chronicle");
+            // a lord set free goes into the chronicle without a poke
+            Brain.OnNotice(new Notice { Id = 3, Hours = 1010.2, Kind = "released", Text = "Grakmaw (Misty Mountain Orcs) was ransomed from Kingdom of Arnor and Gondor.", Factions = { "orcs" }, RecordOnly = true });
+            Brain.OnHour(World(1010.5, playerSeen: true));
+            Files.FlushAll();
+            Check(Brain.PokesWatched == pokesBefore && Read(Path.Combine(agentDir, "chronicle.txt")).Contains("Grakmaw (Misty Mountain Orcs) was ransomed"),
+                  "a lord set free goes into the chronicle, without a poke");
             Files.FlushAll();
             Check(Read(Path.Combine(dir, "notices.jsonl")).Contains("\"quiet\":\"bandits\"") && Diag.CountOf("quiet:bandits") == 1, "but it is in the logs, marked as not poked");
             var far = new PartyRow { Id = "lord_far", Name = "Elendil", Faction = "player_k", Kind = "lord", Men = 200, Strength = 300, X = 160, Y = 140, Doing = "GoToSettlement", TargetSettlement = "castle_men", Spottable = true };
@@ -164,6 +198,18 @@ namespace SmokeTest
             Check(cutPokes.Contains("\"party\":\"lord_far\"") && cutPokes.Contains("\"party\":\"lord_drifter\""), "each of those pokes names its lord");
 
             ToolTests(dir, agentDir);
+
+            // an enemy army in view is history; then an earlier save is loaded, and the chronicle forgets what came after it
+            Files.FlushAll();
+            Check(Read(Path.Combine(agentDir, "chronicle.txt")).Contains("Enemy army in view: Theoden"), "an enemy army coming into view goes into the chronicle");
+            int linesBefore = Chronicle.Count;
+            Brain.Reset(campaign, 1005, "orcs", null);
+            Brain.OnHour(World(1005, playerSeen: false));
+            Files.FlushAll();
+            string cut = Read(Path.Combine(agentDir, "chronicle.txt"));
+            Check(Chronicle.Count < linesBefore && !cut.Contains("Theoden") && !cut.Contains("ransomed") && cut.Contains("Orc Village is being raided") && cut.Contains("taken prisoner by Galenor"),
+                  "loading an earlier save cuts the chronicle back to its date, and keeps what came before (" + linesBefore + " lines, then " + Chronicle.Count + ")");
+            Check(!Read(Path.Combine(dir, "chronicle_orcs.jsonl")).Contains("Theoden"), "in the campaign's own copy too");
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");

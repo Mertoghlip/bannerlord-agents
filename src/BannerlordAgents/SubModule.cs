@@ -18,6 +18,7 @@ namespace BannerlordAgents
     /// Version 0.3 adds the strategists' flight recorder (docs/LOGGING.md): heartbeats and a watchdog, a folder of
     /// detailed logs per launch, alarms, the black box, the freeze probe, and the two game hooks. All the heavy work
     /// runs on background threads kept on the efficiency cores; the game's thread only copies numbers.
+    /// Version 0.4 adds the tools (docs/TOOLS.md); 0.5 the watched realm's chronicle, its memory of the war (docs/MEMORY.md).
     /// </summary>
     public class SubModule : MBSubModuleBase
     {

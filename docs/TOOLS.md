@@ -122,6 +122,7 @@ The defend tool, shortened:
   - one per enemy the realm knows of: where it is or was last seen, its strength, the lords who can reach it soonest.
 
   Travel hours are rough: straight-line distance over the lord's speed.
+- **Its memory** (since 0.5, [MEMORY.md](MEMORY.md)): the story so far, its own notes, and its chronicle, of which the report's last section shows the last two days. A tool's call-backs and endings go into the chronicle, so the story remembers which orders worked.
 
 ## Testing by hand
 

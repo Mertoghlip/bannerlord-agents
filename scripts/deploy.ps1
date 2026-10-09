@@ -58,6 +58,13 @@ if (-not $NoBuild) {
         exit 1
     }
     Write-Host 'Smoke test: all checks passed.' -ForegroundColor Green
+    # the war room's memory (docs/MEMORY.md), checked without calling Claude
+    & (Join-Path $repo 'src\BannerlordAgents.WarRoom\bin\Release\net8.0-windows\WarRoom.exe') selftest | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "The war room's self-test failed; nothing installed. Run WarRoom.exe selftest to see which check." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "War room self-test: all checks passed." -ForegroundColor Green
 }
 
 $stage = Join-Path $repo "build\Modules\$moduleId"

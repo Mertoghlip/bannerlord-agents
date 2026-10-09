@@ -167,6 +167,14 @@ namespace BannerlordAgents
             }
         }
 
+        /// <summary>Closes one file kept open for appending, so it can be rewritten whole.</summary>
+        public static void Close(string path)
+        {
+            if (!Open.TryGetValue(path, out StreamWriter w)) return;
+            try { w.Dispose(); } catch (Exception e) { Diag.Swallowed("closing " + Path.GetFileName(path), e); }
+            Open.Remove(path);
+        }
+
         public static void CloseAll()
         {
             foreach (KeyValuePair<string, StreamWriter> kv in Open)

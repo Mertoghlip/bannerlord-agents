@@ -28,14 +28,33 @@ namespace BannerlordAgents.WarRoom
         public int TimeoutSeconds = 240;
         /// <summary>Empty: the newest Claude Code that VS Code's extension carries, else "claude" on the path.</summary>
         public string ClaudePath = "";
-        public int MaxLessons = 12;
-        /// <summary>Let the agent read its look-up files (lookups\&lt;id&gt;.txt) during a call.</summary>
+        /// <summary>Lessons kept in the notes; past this, the chronicler merges them.</summary>
+        public int MaxLessons = 15;
+        /// <summary>Let the agent read its look-up files (lookups\&lt;id&gt;.txt) and its chronicle during a call.</summary>
         public bool Lookups = true;
+        /// <summary>
+        /// How the realm remembers (docs/MEMORY.md): "written", a fresh call each poke with the story so far, the notes and
+        /// the chronicle; or "conversation", one long conversation resumed each poke, for comparison.
+        /// </summary>
+        public string MemoryMode = "written";
+        /// <summary>New chronicle lines before the chronicler rewrites the story so far, in a quiet moment.</summary>
+        public int StoryEvery = 12;
+        public int StoryWords = 450;
+        /// <summary>The chronicler's model (empty: the agent's), effort and thinking cap.</summary>
+        public string StoryModel = "";
+        public string StoryEffort = "medium";
+        public int StoryThinkingCap = 2000;
+        /// <summary>In the one-long-conversation mode: past this many tokens, the next poke starts a new conversation from the notes.</summary>
+        public int ConversationLimit = 180000;
 
         public string ChannelDir => Path.Combine(AgentDir, Channel);
         public string FilePath => Path.Combine(AgentDir, "warroom.txt");
+        /// <summary>The single journal from before memory was kept per campaign; it becomes the first campaign's notes.</summary>
         public string Journal => Path.Combine(AgentDir, "journal.md");
+        public string MemoryDir => Path.Combine(AgentDir, "memory");
         public string SystemTemplate => Path.Combine(AgentDir, "warroom-system.md");
+        public string ChroniclerTemplate => Path.Combine(AgentDir, "chronicler-system.md");
+        public bool Conversation => string.Equals(MemoryMode, "conversation", StringComparison.OrdinalIgnoreCase);
 
         public static Config Load(string agentDir)
         {
@@ -62,8 +81,16 @@ namespace BannerlordAgents.WarRoom
                     case "claude_path": c.ClaudePath = v; break;
                     case "max_lessons": if (int.TryParse(v, out int m) && m >= 0) c.MaxLessons = m; break;
                     case "lookups": c.Lookups = v == "on" || v == "true" || v == "yes"; break;
+                    case "memory": if (v == "written" || v == "conversation") c.MemoryMode = v; break;
+                    case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
+                    case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
+                    case "story_model": c.StoryModel = v; break;
+                    case "story_effort": if (v.Length > 0) c.StoryEffort = v; break;
+                    case "story_thinking_cap": if (int.TryParse(v, out int stc) && stc >= 0) c.StoryThinkingCap = stc; break;
+                    case "conversation_limit": if (int.TryParse(v, out int cl) && cl >= 20000) c.ConversationLimit = cl; break;
                 }
             }
+            if (!File.ReadAllText(c.FilePath).Contains("memory =")) c.Save();   // a settings file from before memory: the new keys are added
             return c;
         }
 
@@ -85,8 +112,20 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("# empty: the newest Claude Code in VS Code's extension folder, else claude on the path");
             sb.AppendLine("claude_path = " + ClaudePath);
             sb.AppendLine("max_lessons = " + MaxLessons.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# let the agent read its look-up files and its whole chronicle during a call");
             sb.AppendLine("lookups = " + (Lookups ? "on" : "off"));
-            File.WriteAllText(FilePath, sb.ToString());
+            sb.AppendLine("# memory: written (a fresh call each poke, with the story so far, the notes and the chronicle) or conversation (one long conversation, for comparison)");
+            sb.AppendLine("memory = " + MemoryMode);
+            sb.AppendLine("# the chronicler rewrites the story so far after this many new chronicle lines, in a quiet moment, in at most story_words words");
+            sb.AppendLine("story_every = " + StoryEvery.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("story_words = " + StoryWords.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# the chronicler's model (empty: the agent's), effort and thinking cap");
+            sb.AppendLine("story_model = " + StoryModel);
+            sb.AppendLine("story_effort = " + StoryEffort);
+            sb.AppendLine("story_thinking_cap = " + StoryThinkingCap.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# conversation memory only: past this many tokens, the next poke starts a new conversation from the notes");
+            sb.AppendLine("conversation_limit = " + ConversationLimit.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
         }
     }
 }

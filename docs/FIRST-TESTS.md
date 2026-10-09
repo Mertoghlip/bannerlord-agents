@@ -23,19 +23,19 @@
 
 - **Install 1** has been in the game since Oct 7, and carries the agent channel, so phases 0 to 6 can all run on it. Versions 0.3 and 0.3.1 (Oct 8) added the logs and cut the pokes.
 - **Oct 8, first live session:** phases 0, 1, 2 and 5 ran. The report is [reports/2026-10-08-first-live-session.md](reports/2026-10-08-first-live-session.md). Phases 3, 4 and 6 are still to run.
-- **Version 0.4 (in the game since Oct 8, 21:14)** brings the tools, the armies and the war room, a week early, so phase 7 can run now. [Testing version 0.4](#testing-version-04-opus-commands-the-orcs-with-tools) says how.
+- **Version 0.4 (Oct 8)** brings the tools, the armies and the war room, a week early, so phase 7 can run now. **Version 0.5 (in the game since Oct 9, 11:01)** adds each realm's memory of the war ([MEMORY.md](MEMORY.md)). [Testing versions 0.4 and 0.5](#testing-versions-04-and-05-opus-commands-the-orcs-with-tools-and-memory) says how.
 - **The agent** is the war room since Oct 8 ([WARROOM.md](WARROOM.md)). The agent chat of the first session ([AGENT-CHAT.md](AGENT-CHAT.md)) is retired.
 
 Each install is one restart of the game.
 
-## Testing version 0.4: Opus commands the orcs with tools
+## Testing versions 0.4 and 0.5: Opus commands the orcs, with tools and memory
 
-**Set up already (Oct 8, 21:14):**
+**Set up already (Oct 8, 21:14; memory Oct 9, 11:01):**
 - the bridge is in **live** mode for **every** orc lord, answering through `C:\Users\karab\Projects\orc-war-council\warroom`;
 - the war room is running in the background on this laptop. To run it yourself instead: `powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1`, which runs in its window until Ctrl+C.
 
 **You:**
-1. Close the old agent chat: the VS Code window open on `orc-war-council`. It would only wake every 30 minutes and find nothing.
+1. Close the old agent chat: the VS Code window open on `orc-war-council`. It has nothing left to answer, and on Oct 9 it was still waking every 30 minutes and writing into the old journal.
 2. Start the game with Bannerlord Agents ticked, and load your campaign.
 3. In the console (Alt + ~):
    - `agents.agent` says LIVE, all lords, with the folder above;
@@ -48,17 +48,23 @@ Each install is one restart of the game.
 - **Armies:** when the agent gathers one, the game's own army forms at once, and the called lords march to the meeting place.
 - **Your approach:** orc lords near your army should take shelter in a castle or town, and come out again once you leave.
 - **Answer time:** each receipt line gives the seconds from poke to answer.
+- **The memory** ([MEMORY.md](MEMORY.md)):
+  - `agents.chronicle` prints the last lines of the orcs' chronicle. At the first load it starts with what the game remembers of the last week, marked "(from the game's records)".
+  - The War room window says when the story so far is rewritten, and what each answer changed in the notes.
+  - The notes and the story are plain files: `C:\Users\karab\Projects\orc-war-council\memory\<campaign>\notes.md` and `story.md`.
+  - If you load an earlier save, the War room window says the memory went back to that date.
 
-**Not yet seen in a real game** (the smoke test covers each one on a made-up world):
+**Not yet seen in a real game** (the tests cover each one outside the game):
 - an army formed by the agent, with its lords marching to it;
 - a held lord sheltering from you, and going to buy food;
 - a lord stopping near an enemy holding, rather than inside it;
 - an idle army breaking up after about two days, as the game does;
-- answer time with the new, longer pokes.
+- the game's own history read at a real load, and the first story written from it;
+- answer time with the new, longer pokes and the memory.
 
 **Stop at any time:** `agents.agent shadow` stops new orders from being carried out, and `agents.release all` hands every orc lord back to the game at once. Closing the war room alone stops new answers, but the lords keep their current orders until released.
 
-## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.4 since Oct 8, 21:14)
+## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.5 since Oct 9, 11:01)
 
 Your three newest saves were copied to `C:\BannerlordArchive\save-backups` before the install, and checked identical to the originals.
 
@@ -240,7 +246,7 @@ One lord shows whether the live loop works. The whole realm follows in phase 7, 
 - Opus can form armies with the game's own rules, and order them like a single lord.
 - The realm's pokes are merged, and the late-order checks are on.
 
-**You:** play an evening as usual, at war with them. The steps are in [Testing version 0.4](#testing-version-04-opus-commands-the-orcs-with-tools).
+**You:** play an evening as usual, at war with them. The steps are in [Testing version 0.4](#testing-versions-04-and-05-opus-commands-the-orcs-with-tools-and-memory).
 
 **Check:**
 - Their lords keep moving sensibly while Opus thinks.

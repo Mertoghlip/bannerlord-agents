@@ -18,7 +18,8 @@ The agents' answers are under [Agent channel](#agent-channel) below. Tool defini
 | `data\<campaign id>\pokes_<realm id>.jsonl` | poke of the watched realm | carries the full view and the report text |
 | `data\<campaign id>\reports\<realm id>_latest.txt` | the latest poke's report | overwritten each poke |
 | `data\<campaign id>\reports\<realm id>_now.txt` | the report from `agents.view` | overwritten each time |
-| `data\<campaign id>\notices.jsonl` | ruler notice | for the watched realm and the player's realm; `quiet` says why one was kept to the logs instead of poking (see below) |
+| `data\<campaign id>\notices.jsonl` | ruler notice | for the watched realm and the player's realm; `quiet` says why one was kept to the logs instead of poking (see below); `record_only`, one that goes only into the chronicle |
+| `data\<campaign id>\chronicle_<realm id>.jsonl` | line of the realm's chronicle (0.5) | `hours`, `date`, `kind`, `text`, `place`, `party`, `from` ("game" for a line from the game's own history log). Cut back to the save's date when an earlier save is loaded ([docs/MEMORY.md](../docs/MEMORY.md)). |
 | `data\<campaign id>\orders.jsonl` | order event | issued, arrived, reissued, ended; for hand, agent and vassal orders, tools included |
 | `data\<campaign id>\record\decisions.jsonl` | decision of the player's | with what the player could see |
 | `data\<campaign id>\record\events.jsonl` | event around the player | entered or left a settlement, attacked, realm votes, vassal orders ended |
@@ -46,9 +47,9 @@ Trigger kinds:
 | Group | Kinds |
 |---|---|
 | Seen | `first_look`, `enemy_in_view` (an army, or a lord close to the realm: within `sighting_distance` of one of its holdings, heading for, besieging or raiding one, or chasing one of its parties; on first coming close, or again after 12 hours without), `quiet_day` |
-| Notices | `war`, `peace`, `alliance`, `alliance_ended`, `call_to_war`, `call_to_war_ended`, `besieged`, `siege_started`, `raided`, `looted`, `holding_changed`, `army_dispersed`, `party_destroyed`, `battle`, `captured`, `proposal`, `decided`, `peace_offer` |
+| Notices | `war`, `peace`, `alliance`, `alliance_ended`, `call_to_war`, `call_to_war_ended`, `besieged`, `siege_started`, `siege_ended` (lifted; 0.5), `raided`, `looted`, `holding_changed`, `army_dispersed`, `party_destroyed`, `battle`, `captured`, `lord_killed` (0.5), `proposal`, `decided`, `peace_offer`, `tool`, `order_arrived`, `order_ended` |
 
-Since 0.3.1 (after the first session's 125 pokes, [docs/reports/2026-10-08-pokes.md](../docs/reports/2026-10-08-pokes.md)), some notices are **kept quiet**: written to `notices.jsonl` and the trace with `quiet` set, but never a trigger and never in the report's news.
+Since 0.3.1 (after the first session's 125 pokes, [docs/reports/2026-10-08-pokes.md](../docs/reports/2026-10-08-pokes.md)), some notices are **kept quiet**: written to `notices.jsonl` and the trace with `quiet` set, but never a trigger, never in the report's news, and (since 0.5) never in the chronicle.
 
 | `quiet` | What |
 |---|---|
@@ -101,7 +102,7 @@ A movement counts as a decision once it has held for a quarter of an in-game hou
 | Event | `type`: "event", `kind` (entered, left, attacked, joined_your_army, realm_decided, vassal_order_ended), `text`, `hours`, `date` |
 | Click | `type`: "click", `hours`, `wall`, `behavior` (the game's own name), `settlement`, `party`, `x`, `y` |
 | Order | `type`: "order", `event` (issued, arrived, reissued, ended), `id` (numbered per session), `source`, `poke`, `hours`, `lord`, `lord_name`, `verb` (the current move), `tool` (for the agent's and the console's orders), `place`, `target`, `reissued`, `text` |
-| Notice | `id`, `hours`, `kind` (as the trigger kinds above, plus `tool` for a tool's call-back), `text`, `factions` (the realms told), `party`, `place` (the holding it is about), `quiet` |
+| Notice | `id`, `hours`, `kind` (as the trigger kinds above, plus `released` and `army_formed`, which only go into the chronicle), `text`, `factions` (the realms told), `party`, `place` (the holding it is about), `quiet`, `record_only` |
 
 ## Agent channel
 
@@ -114,6 +115,8 @@ The channel lives in the folder set by `agent_dir` in `settings.txt`, now `C:\Us
 | `report.txt` | bridge | `SITUATION AT <date>` and the mode, then the report without triggers, with the orders in force. Refreshed every in-game hour. |
 | `tools.txt` | bridge | the order library the agent reads: every move, tool and army order with what it takes, its settings and ranges, and when it calls back. Written at every campaign load (and by `scripts\setup-agent.ps1`). |
 | `lookups\<id>.txt` | bridge | one file per holding of the realm, lord of the realm and enemy it knows of (README.txt says what is in each), rewritten before each poke |
+| `chronicle.txt`, `chronicle.jsonl` | bridge | the realm's chronicle (0.5): to read, one dated line each, oldest first; and for the war room, `hours`, `date`, `kind`, `text` per line. Rewritten whole at each load, then a line added as each comes ([docs/MEMORY.md](../docs/MEMORY.md)). |
+| `poke.json` | bridge | the latest poke for the war room (0.5), written before `poke.txt`: `number`, `hours`, `date`, `campaign`, `realm`, `realm_name`, `load_id` (new at every load), `loaded_at` and `loaded_at_date` (the save's in-game hour), `chronicle_lines` |
 | `orders\*.json` | agent (war room) | one answer per file, in the form shown below. Each file is read once and moved to `orders\done\`. |
 | `receipts.log` | bridge | one line per order (APPLIED, CHECKED in shadow mode, or REFUSED, with the reason and the answer time), and later lines for what became of agent orders (ended, and `tool:` lines for every call-back). Also: RECEIVED, at once, for a file read while the game's clock is stopped (its orders are answered when the clock runs again); SET ASIDE for a file written before the game session began (moved unread to `orders\stale\`); REFUSED for every order in a file answering a poke from before the last load; UNREADABLE for a file that is not valid JSON after five tries. |
 
@@ -122,6 +125,7 @@ The poke's sections, after WHY YOU ARE ASKED NOW (since 0.4):
 - **YOUR ORDERS IN FORCE:** one line per held lord: the order with its ids, what it is doing now, since when, settings that differ from the defaults, and its next order (then).
 - **READY-MADE FACTS:** for up to four things the poke is about, the realm's lords soonest to it (strength, rough hours, free or ordered) and enemies near it; then the count of free lords.
 - In YOUR LORDS AND ARMIES, a held lord's line ends with "(your order: <tool>)".
+- **RECENT HISTORY, LAST TWO DAYS (from your chronicle)** (since 0.5): the report's last section, the chronicle's last 25 lines within 48 hours, in place of NEWS. The war room adds the rest of the realm's memory before the poke ([docs/MEMORY.md](../docs/MEMORY.md)).
 
 An answer file:
 
@@ -165,6 +169,7 @@ One folder per game launch, `logs\sessions\<yyyyMMdd-HHmmss>\`. What each file i
 | `order` | issued (with the words, and the lord's state before and after), checked (shadow), hour, arrived, moved (a tool's new move, and whether the game took it), reissued (with who turned the lord away), replaced, ended, after release, refused at the door, lord lookup |
 | `tool` | library written (with any problems the checker found), started (tool, lord, places, lords, settings, next order), step (from, to, the rule that fired, the move), no target, sheltered and resumed (the safety rule), adjusted, then, replaced, ended (why, steps, hours), cleared |
 | `army` | formed (leader, place, lords called, influence cost and the clan's influence before, army type) |
+| `chronicle` | game history read (entries scanned, lines about the realm, unread, ms; at load), loaded (lines, cut, seeded from the game, the cutoff hour) |
 | `lord` | a change in what a lord of the watched realm (or a lord we hold) is doing |
 | `ai` | the game's AI weighing its options: kept plan (the best other option), changed plan or called an army (the options and their scores, the bar) |
 | `witness` | the movement watcher: who changed the plan of a lord holding our order, with the call trail |

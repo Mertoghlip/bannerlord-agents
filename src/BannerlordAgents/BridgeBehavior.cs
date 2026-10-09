@@ -17,12 +17,17 @@ namespace BannerlordAgents
         public static Kingdom Watched;
         public static bool Running;
         public static string CampaignId = "unknown";
+        /// <summary>This load of the campaign (a new one each time a save is loaded), and the in-game hour of the save: the war room tells a reload by them.</summary>
+        public static string LoadId = "";
+        public static double LoadedAt = double.NaN;
 
         public static void Start()
         {
             Running = true;
             Live.CampaignRunning = true;
             CampaignId = Campaign.Current?.UniqueGameId ?? "unknown";
+            LoadId = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", Text.Inv);
+            LoadedAt = CampaignTime.Now.ToHours;
             Diag.Count("campaign loads");
             Watchdog.NewCampaign();
             Orders.Reset();
@@ -39,8 +44,14 @@ namespace BannerlordAgents
             double warmMs = Perf.Ms(t);
             Watched = Resolve(Settings.Watch);
             string id = CampaignId;
+            // the game's own history of the watched realm starts its chronicle (only for the time before our own lines)
+            long th = Perf.Now();
+            List<ChronicleEntry> history = GameHistory.Collect(Watched, out int scanned, out int unread);
+            Diag.Event("chronicle", "game history read", new { realm = Watched?.StringId, entries = scanned, about_the_realm = history.Count, unread, ms = Math.Round(Perf.Ms(th), 1) });
+            string realm = Watched?.StringId;
+            double loadedAt = LoadedAt;
             Background.Start();
-            Background.Post("new campaign", () => Brain.Reset(id));
+            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, realm, history));
             AgentChannel.Start();
             GameHooks.Apply();
             LordWatch.Refresh();
@@ -119,6 +130,9 @@ namespace BannerlordAgents
             CampaignEvents.OnCallToWarAgreementStartedEvent.AddNonSerializedListener(this, OnCallToWarStarted);
             CampaignEvents.OnCallToWarAgreementEndedEvent.AddNonSerializedListener(this, OnCallToWarEnded);
             CampaignEvents.OnSiegeEventStartedEvent.AddNonSerializedListener(this, OnSiegeStarted);
+            CampaignEvents.OnSiegeEventEndedEvent.AddNonSerializedListener(this, OnSiegeEnded);
+            CampaignEvents.HeroKilledEvent.AddNonSerializedListener(this, OnHeroKilled);
+            CampaignEvents.HeroPrisonerReleased.AddNonSerializedListener(this, OnPrisonerReleased);
             CampaignEvents.VillageBeingRaided.AddNonSerializedListener(this, OnVillageRaided);
             CampaignEvents.VillageLooted.AddNonSerializedListener(this, OnVillageLooted);
             CampaignEvents.OnSettlementOwnerChangedEvent.AddNonSerializedListener(this, OnOwnerChanged);
@@ -250,13 +264,16 @@ namespace BannerlordAgents
         private void OnCallToWarEnded(Kingdom a, Kingdom b, Kingdom c) => Guard("call-to-war notice", () => Notices.OnCallToWarEnded(a, b, c));
 
         private void OnSiegeStarted(SiegeEvent se) => Guard("siege", () => { Notices.OnSiegeStarted(se); Recorder.OnSiegeStarted(se); });
+        private void OnSiegeEnded(SiegeEvent se) => Guard("siege notice", () => Notices.OnSiegeEnded(se));
+        private void OnHeroKilled(Hero victim, Hero killer, KillCharacterAction.KillCharacterActionDetail d, bool notify) => Guard("death notice", () => Notices.OnHeroKilled(victim, killer, d, notify));
+        private void OnPrisonerReleased(Hero h, PartyBase party, IFaction capturers, EndCaptivityDetail d, bool notify) => Guard("release notice", () => Notices.OnPrisonerReleased(h, party, capturers, d, notify));
         private void OnVillageRaided(Village v) => Guard("raid", () => { Notices.OnVillageRaided(v); Recorder.OnVillageRaided(v); });
         private void OnVillageLooted(Village v) => Guard("looting notice", () => Notices.OnVillageLooted(v));
 
         private void OnOwnerChanged(Settlement s, bool open, Hero newOwner, Hero oldOwner, Hero capturer, ChangeOwnerOfSettlementAction.ChangeOwnerOfSettlementDetail d)
             => Guard("holding notice", () => Notices.OnOwnerChanged(s, open, newOwner, oldOwner, capturer, d));
 
-        private void OnArmyCreated(Army a) => Guard("army", () => Recorder.OnArmyCreated(a));
+        private void OnArmyCreated(Army a) => Guard("army", () => { Recorder.OnArmyCreated(a); Notices.OnArmyCreated(a); });
         private void OnArmyDispersed(Army a, Army.ArmyDispersionReason r, bool mine) => Guard("army notice", () => Notices.OnArmyDispersed(a, r, mine));
         private void OnPartyJoinedArmy(MobileParty p) => Guard("army", () => Recorder.OnPartyJoinedArmy(p));
         private void OnPartyDestroyed(MobileParty p, PartyBase by) => Guard("party notice", () => Notices.OnPartyDestroyed(p, by));

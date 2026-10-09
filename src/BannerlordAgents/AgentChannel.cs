@@ -252,7 +252,11 @@ namespace BannerlordAgents
             return sb.ToString().TrimEnd();
         }
 
-        public static void OnPoke(int n, double hours, List<Trigger> triggers, string report)
+        /// <summary>
+        /// A poke for the agent: poke.json (for the war room: the number, the in-game hour, the campaign, the realm and
+        /// this load, by which it tells a reloaded save), then poke.txt, then its line in pokes.log, each swapped in whole.
+        /// </summary>
+        public static void OnPoke(int n, double hours, List<Trigger> triggers, string report, object meta = null)
         {
             _lastPoke = n;
             Pokes[n] = new PokeInfo { Wall = DateTime.Now, Hours = hours };
@@ -260,6 +264,7 @@ namespace BannerlordAgents
             if (PokeReasons.Count > 300) PokeReasons.RemoveRange(0, PokeReasons.Count - 300);
             if (_waitingSince == DateTime.MinValue) { _waitingSince = DateTime.Now; _waitingFor = n; }
             Paths.Ensure(OrdersDir);
+            Files.Overwrite(Path.Combine(Dir, "poke.json"), Json.Line(meta ?? new { Number = n, Hours = hours, Date = Text.When(hours) }));
             string head = "POKE #" + n + ", " + Text.When(hours) + "\n"
                           + "Answer with one orders file in orders\\ that says \"poke\": " + n + ".\n"
                           + "Your orders right now: " + ModeText() + "\n\n";
@@ -584,6 +589,12 @@ namespace BannerlordAgents
             }
             string what = (a.Lord ?? "?") + " " + (a.Do ?? "?") + (string.IsNullOrEmpty(a.Target) ? "" : " " + a.Target);
             Line("poke #" + a.Poke + ", " + a.File + " order " + a.Index + " (" + what + "): " + status.ToUpperInvariant() + ". " + reason + "." + delay);
+            // the chronicle keeps what was ordered, and what was refused and why (shadow mode's checks are not history)
+            string why = string.IsNullOrWhiteSpace(a.Why) ? "" : " Why: " + a.Why.Trim().TrimEnd('.') + ".";
+            if (status == "applied") Chronicle.Line(hours, "order", "You ordered: " + reason.TrimEnd('.') + "." + why, a.At, a.Lord);
+            else if (status == "refused" && !reason.StartsWith("it answers poke #", StringComparison.Ordinal))
+                Chronicle.Line(hours, "refused", "Your order (" + (a.Lord ?? "?") + " " + (a.Do ?? "?") + (string.IsNullOrEmpty(a.At ?? a.Target) ? "" : " " + (a.At ?? a.Target))
+                                                 + ") was refused: " + reason.TrimEnd('.') + "." + why, a.At, a.Lord);
             Diag.Event("answer", "receipt", new { poke = a.Poke, file = a.File, index = a.Index, lord = a.Lord, @do = a.Do, target = a.Target, status, reason,
                                                   answer_s = seconds >= 0 ? Math.Round(seconds, 1) : (double?)null, waited_s = Math.Round(waited, 1) });
             Brain.WriteOrder(new

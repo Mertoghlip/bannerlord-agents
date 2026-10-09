@@ -185,3 +185,55 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a lord stopping near an enemy holding;
   - an idle army breaking up after about two days;
   - answer time with the new, longer pokes.
+
+## Friday, October 9
+
+### About 10:27 · The old agent chat wrote into the old journal (outside the repository)
+- **What:** the agent chat of Oct 8, still open in VS Code, added a "Problems" section to `orc-war-council\journal.md`. It said that no pokes had come for about 8 hours, and that Mert had asked it to stop watching for them.
+- **Effect:** none on the war room. The journal's plan and lessons become the first campaign's notes (below), and its lords' tasks and problems do not carry over. The chat itself has nothing left to answer and should be closed.
+
+### 10:56 to 11:00 · The memory checked against Claude Code, with a small model
+- **The war room's settings** (`orc-war-council\warroom.txt`) gained the memory keys (`memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit`) when the new war room first read them. The old values were kept.
+- **Both memories, end to end** (replay in order, Haiku 4.5, pokes #6, #10 and #54):
+
+  | Memory | Tokens read per answer | Answer time | Story |
+  |---|---|---|---|
+  | Written | 11,800, 12,000, 13,500 | 8 to 16 s | rewritten once, 350 words in 15 s |
+  | Conversation | 11,800, 21,100, 30,500 | 10 to 12 s | (none) |
+
+  - The conversation was resumed each poke.
+  - The notes changed with each answer.
+
+### 11:01 · Version 0.5.0: each realm's memory of the war · commit pending (installed 11:01)
+- **What** ([MEMORY.md](MEMORY.md)):
+  - **The chronicle (bridge):** every non-quiet notice the realm gets, every enemy army it sees come into view, and every order the agent gives (carried out or refused, with its reason).
+    - At the first load, what the game's own history log still holds about the realm fills the time before the chronicle's own lines, marked as such.
+    - It is kept per campaign and realm, and mirrored into the channel (`chronicle.txt`, `chronicle.jsonl`).
+    - It is cut back to the save's date when an earlier save is loaded.
+  - **New notices:**
+    - a siege lifted and a lord killed, which poke;
+    - a lord set free and an army of the realm's own formed, which go only into the chronicle.
+  - **The report:** its NEWS becomes RECENT HISTORY, the chronicle's last two days. `poke.json` tells the war room the poke's hour, the campaign and this load of the game. `agents.chronicle` prints the last lines.
+  - **The war room's memory, per campaign:**
+    - the agent's notes (plan, a line per enemy, lessons), changed only by its answers through `plan`, `enemies` and `lessons`;
+    - the story so far, which the chronicler rewrites in quiet moments, on its own thread, beside the answers;
+    - snapshots, so a reload cuts the notes and the story back too.
+  - **Each message** carries the story, the notes and any chronicle lines the story does not cover yet.
+  - **The one-long-conversation memory** is a setting (`memory = conversation`), for comparison. `replay --memory written|conversation` answers recorded pokes in order with the memory carried along. `WarRoom story` rewrites the story now. `WarRoom selftest` checks the memory without any call, and `deploy.ps1` runs it before installing.
+  - **The instructions:** the agent's (`agent/warroom-system.template.md`) describe the memory and the `enemies` field. The chronicler's are new (`agent/chronicler-system.template.md`).
+- **Why:** Mert, Oct 9: "each realm should have a continuous memory of the history of the game". Mert approved this design over one long conversation, which fills up within an hour or two and could not carry over to a small local model. The conversation is kept, to measure the difference.
+- **Checks:**
+  - the smoke test passed in full (77 checks) and the war room's self-test too (25);
+  - 327 game references, 0 missing;
+  - the installed DLL has sha256 `05AC49E933B36345…`.
+- **Outside the repository:**
+  - the 0.4.0 war room was stopped at about 10:57 for the rebuild;
+  - `scripts/setup-agent.ps1 -Mode live` (11:01) installed the new `warroom-system.md` and `chronicler-system.md`, and refreshed `tools.txt`;
+  - the 0.5.0 war room was started at 11:02, and again at 11:03 after a small fix (the self-test no longer reads the live agent folder; the chronicle is read every few seconds at most while idle);
+  - at the first poke, `journal.md` becomes `memory\<campaign>\notes.md` and is renamed `journal-before-memory-<date>.md`.
+- **Not yet seen in a game:**
+  - the game's history read at a real load;
+  - the first story;
+  - a reload cutting both memories back;
+  - answer time with the memory added.
+- **Not yet run:** the full comparison of the two memories with Opus 5.5, about 120 calls; it waits for Mert's go-ahead.

@@ -20,6 +20,8 @@ namespace BannerlordAgents
         public List<ViewParty> LastSeen = new List<ViewParty>();
         public List<ViewHolding> Frontier = new List<ViewHolding>();
         public List<string> News = new List<string>();
+        /// <summary>The news comes from the realm's chronicle (its recent history), not only from its notices.</summary>
+        public bool NewsFromChronicle;
         public int OthersInView;
     }
 
@@ -108,9 +110,18 @@ namespace BannerlordAgents
                     v.LastSeen.Add(last);
                     if (v.LastSeen.Count >= 25) break;
                 }
-                foreach (Notice n in mem.News.Where(n => s.Hours - n.Hours <= 48))
-                    v.News.Add(Text.When(n.Hours) + ": " + n.Text);
-                if (v.News.Count > 20) v.News = v.News.Skip(v.News.Count - 20).ToList();
+                if (fid == Chronicle.Realm)
+                {
+                    // the chronicle's last two days: the notices, and also the enemy armies sighted and the orders given
+                    v.News = Chronicle.Recent(s.Hours, 48, 25);
+                    v.NewsFromChronicle = true;
+                }
+                else
+                {
+                    foreach (Notice n in mem.News.Where(n => s.Hours - n.Hours <= 48))
+                        v.News.Add(Text.When(n.Hours) + ": " + n.Text);
+                    if (v.News.Count > 20) v.News = v.News.Skip(v.News.Count - 20).ToList();
+                }
             }
 
             if (own.Count > 0)
@@ -196,7 +207,7 @@ namespace BannerlordAgents
 
             if (v.News.Count > 0)
             {
-                sb.AppendLine().AppendLine("NEWS, LAST TWO DAYS");
+                sb.AppendLine().AppendLine(v.NewsFromChronicle ? "RECENT HISTORY, LAST TWO DAYS (from your chronicle)" : "NEWS, LAST TWO DAYS");
                 foreach (string n in v.News) sb.AppendLine("- " + n);
             }
             return sb.ToString();

@@ -15,8 +15,10 @@ namespace BannerlordAgents
 {
     /// <summary>
     /// The notices a ruler gets, for the watched realm and the player's realm only: wars and peace, alliances and
-    /// calls to war, sieges and raids on their lands, holdings changing hands, armies broken up, lords lost, battles
-    /// fought and the realm's votes. Each becomes a poke trigger at the next in-game hour, except the ones kept
+    /// calls to war, sieges and raids on their lands and sieges lifted, holdings changing hands, armies broken up, lords
+    /// lost or killed, battles fought and the realm's votes. Each also goes into the realm's chronicle (Chronicle). A
+    /// lord set free and an army of the realm's own formed go only into the chronicle (Notice.RecordOnly). Each other
+    /// notice becomes a poke trigger at the next in-game hour, except the ones kept
     /// quiet (Notice.Quiet), which only go to the logs: fights with bandits, caravans or villagers away from any
     /// holding, a raid announced again, and a lost party whose lord's capture already says it (the first session's
     /// pokes, docs/reports/2026-10-08-pokes.md). Game's thread: the handlers only write a sentence and hand it to the
@@ -35,11 +37,14 @@ namespace BannerlordAgents
         private static readonly Dictionary<MapEvent, Opened> Battles = new Dictionary<MapEvent, Opened>();
         /// <summary>Raids announced, by village and raider, with the in-game hour.</summary>
         private static readonly Dictionary<string, double> Raids = new Dictionary<string, double>();
+        /// <summary>Who laid each siege, by the besieged holding: by the siege's end the besiegers may be gone.</summary>
+        private static readonly Dictionary<string, KeyValuePair<string, IFaction>> Sieges = new Dictionary<string, KeyValuePair<string, IFaction>>();
 
         public static void Reset()
         {
             Battles.Clear();
             Raids.Clear();
+            Sieges.Clear();
         }
 
         private static List<string> Involved(params IFaction[] factions)
@@ -56,10 +61,10 @@ namespace BannerlordAgents
             return list;
         }
 
-        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null)
+        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null, bool recordOnly = false)
         {
             if (!Bridge.Running || (factions.Count == 0 && kind != "party_destroyed")) return;
-            var n = new Notice { Id = NoticeIds.Next(), Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place };
+            var n = new Notice { Id = NoticeIds.Next(), Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place, RecordOnly = recordOnly };
             Background.Post(() => Brain.OnNotice(n));
         }
 
@@ -108,6 +113,66 @@ namespace BannerlordAgents
             List<string> attackers = Involved(lead?.MapFaction);
             attackers.RemoveAll(defenders.Contains);
             Send("siege_started", Names.Party(lead) + " laid siege to " + Names.Settlement(s) + " (" + F(s.MapFaction) + ").", attackers, lead?.StringId, place: s.StringId);
+            Sieges[s.StringId] = new KeyValuePair<string, IFaction>(Names.Party(lead), lead?.MapFaction);
+        }
+
+        /// <summary>A siege over. Taken, the holding's change of hands says it; otherwise it was lifted, which both sides hear.</summary>
+        public static void OnSiegeEnded(SiegeEvent se)
+        {
+            Settlement s = se?.BesiegedSettlement;
+            if (s == null) return;
+            Sieges.TryGetValue(s.StringId, out KeyValuePair<string, IFaction> laid);
+            Sieges.Remove(s.StringId);
+            IFaction besiegers = laid.Value ?? se.BesiegerCamp?.LeaderParty?.MapFaction;
+            if (besiegers != null && s.MapFaction == besiegers) return;
+            Send("siege_ended", "The siege of " + Names.Settlement(s) + " (" + F(s.MapFaction) + ") was lifted"
+                 + (laid.Key != null ? "; " + laid.Key + (besiegers != null ? " (" + F(besiegers) + ")" : "") + " had laid it" : "") + ".",
+                 Involved(s.MapFaction, besiegers), place: s.StringId);
+        }
+
+        /// <summary>A lord dead: in battle, executed, of age or otherwise.</summary>
+        public static void OnHeroKilled(Hero victim, Hero killer, KillCharacterAction.KillCharacterActionDetail detail, bool notify)
+        {
+            if (victim == null || !victim.IsLord) return;
+            string how;
+            switch (detail)
+            {
+                case KillCharacterAction.KillCharacterActionDetail.DiedInBattle:
+                case KillCharacterAction.KillCharacterActionDetail.WoundedInBattle: how = "died in battle"; break;
+                case KillCharacterAction.KillCharacterActionDetail.Executed:
+                case KillCharacterAction.KillCharacterActionDetail.ExecutionAfterMapEvent: how = "was executed"; break;
+                case KillCharacterAction.KillCharacterActionDetail.Murdered: how = "was murdered"; break;
+                case KillCharacterAction.KillCharacterActionDetail.DiedOfOldAge: how = "died of old age"; break;
+                case KillCharacterAction.KillCharacterActionDetail.Lost: how = "was lost"; break;
+                default: how = "died"; break;
+            }
+            Send("lord_killed", Names.Hero(victim) + " (" + F(victim.MapFaction) + ") " + how + (killer != null && killer != victim ? ", by " + Names.Hero(killer) + " (" + F(killer.MapFaction) + ")" : "") + ".",
+                 Involved(victim.MapFaction, killer?.MapFaction));
+        }
+
+        /// <summary>A lord set free: in the chronicle, without a poke (the lord's return shows in the next report).</summary>
+        public static void OnPrisonerReleased(Hero h, PartyBase party, IFaction capturers, EndCaptivityDetail detail, bool notify)
+        {
+            if (h == null || !h.IsLord || detail == EndCaptivityDetail.Death) return;
+            string how;
+            switch (detail)
+            {
+                case EndCaptivityDetail.Ransom: how = "was ransomed"; break;
+                case EndCaptivityDetail.ReleasedAfterPeace: how = "was released after the peace"; break;
+                case EndCaptivityDetail.ReleasedAfterBattle: how = "was freed in a battle"; break;
+                case EndCaptivityDetail.ReleasedAfterEscape: how = "escaped"; break;
+                default: how = "was released"; break;
+            }
+            Send("released", Names.Hero(h) + " (" + F(h.MapFaction) + ") " + how + (capturers != null ? " from " + F(capturers) : "") + ".",
+                 Involved(h.MapFaction, capturers), recordOnly: true);
+        }
+
+        /// <summary>An army formed by one of the watched realm's lords (the agent's or the game's own): in its chronicle, without a poke.</summary>
+        public static void OnArmyCreated(Army army)
+        {
+            if (army?.LeaderParty == null || Bridge.Watched == null || army.Kingdom != Bridge.Watched) return;
+            string where = army.AiBehaviorObject is Settlement s ? " at " + Names.Settlement(s) : "";
+            Send("army_formed", Names.Party(army.LeaderParty) + " formed an army" + where + ".", Involved(army.Kingdom), army.LeaderParty.StringId, recordOnly: true);
         }
 
         /// <summary>The game says "being raided" when the raiders arrive and again once the village's defenders are beaten: only the first is news.</summary>

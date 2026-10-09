@@ -1,12 +1,12 @@
 # The war room
 
-The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program beside the game where the agent decides. Since Oct 8 it replaces the agent chat. It makes one fresh, short Claude Code call per poke, on your subscription, with no API key (plan, decision 8).
+The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program beside the game where the agent decides. Since Oct 8 it replaces the agent chat. It makes one fresh, short Claude Code call per poke, on your subscription, with no API key (plan, decision 8). Since Oct 9 (0.5) each call also carries the realm's written memory of the war: the story so far, the agent's notes and its chronicle ([MEMORY.md](MEMORY.md)).
 
 ## Why it is faster than the agent chat
 
 | | Agent chat (Oct 8) | War room |
 |---|---|---|
-| Memory | one conversation that grew by about 25,000 tokens an answer (66,000 to 193,000) | a fresh call every time: instructions and library (cached), the journal and the poke |
+| Memory | one conversation that grew by about 25,000 tokens an answer (66,000 to 193,000) | a fresh call every time: instructions and library (cached), then the story so far, the notes and the poke ([MEMORY.md](MEMORY.md)) |
 | Steps per answer | 2 to 3: wake, read the files, think and write | 1: everything comes in the message, and the orders come back as the reply |
 | Thinking | unlimited, at max effort: 2,000 to 14,600 tokens | capped: 3,000 tokens for an ordinary poke, 5,000 for an urgent one, at high effort |
 | What it decides | the whole realm, every time | only what changed: the orders in force stand, and an empty answer is valid |
@@ -52,13 +52,14 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 | `urgent` | is besieged, laid siege, passed from, declared war, Enemy army in view, was taken prisoner, army has formed, fell, striking the besiegers | words in a poke's reasons that make it urgent |
 | `timeout_seconds` | 120 | the longest a call may take |
 | `lookups` | on | let the agent read its look-up files during a call |
-| `max_lessons` | 12 | lessons kept in the journal |
+| `max_lessons` | 12 | lessons kept in the notes; past it, the chronicler merges them |
+| `memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit` | written, 12, 450, (the agent's), medium, 2000, 180000 | the realm's memory and its chronicler ([MEMORY.md](MEMORY.md#settings-warroomtxt)) |
 | `claude_path` | (empty) | the newest Claude Code in VS Code's extension folder, else claude on the path |
 
 ## One call
 
 - **The system prompt** is the agent's instructions (`warroom-system.md`, from `agent/warroom-system.template.md`) plus the order library (`tools.txt`). It changes only when they do, so it stays cached between calls.
-- **The message** is the journal, the number of the last poke answered, and the poke itself:
+- **The message** is the realm's memory (the story so far, the notes, and any chronicle lines the story does not cover yet; [MEMORY.md](MEMORY.md)), the number of the last poke answered, and the poke itself:
   - why it is asked;
   - what changed since the last answer;
   - the orders in force;
@@ -74,7 +75,8 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 - **The reply** must be one JSON object: `poke`, `orders`, an optional `plan` and `lessons`.
   - When there is more than one object, the last that reads wins. If none reads, the war room retries once at low effort, showing the agent its own answer.
   - The orders go to `orders\poke-N.json`, swapped in whole.
-  - The plan replaces the journal's standing plan, the lessons are added, and other sections of the journal are kept.
+  - The plan, the notes on enemies and the lessons go into the notes ([MEMORY.md](MEMORY.md)).
+- **The chronicler** rewrites the story so far in quiet moments, in a call of its own beside the answers (`chronicler-system.md`).
 
 ## Guards
 
@@ -85,15 +87,22 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 
 ## Logs (`%LOCALAPPDATA%\BannerlordAgents\logs\warroom`)
 
-- **`calls.jsonl`:** one line per call:
+- **`calls.jsonl`:** one line per call, `kind` "answer" or "story":
   - which poke, and when it was;
   - urgent or not, model, effort, thinking cap;
   - total seconds, call seconds, when the answer began (`answer_began_ms`);
-  - tokens in, out and thinking, and cache read and written;
+  - tokens in, out and thinking, and cache read and written; `context_tokens`, all it read;
+  - the memory: its kind, the story's words, the chronicle lines carried (`gap_lines`), the notes' size and what the answer changed in them (`notes_changed`), the conversation (in that memory);
   - the steps, the number of orders, any retry, any denied read.
-- **`calls\<date>\<time>-poke-N\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer, for reading side by side.
-- **`warroom-<date>.log`:** the window's lines.
-- **`system-<hash>.md`:** each system prompt used.
+  - For the chronicler: the lines it was given, the story's words, any lessons merged.
+- **`calls\<date>\<time>-poke-N\`** and **`<time>-story\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer (or the story), for reading side by side.
+- **`warroom-<date>.log`:** the window's lines, memory included ("Memory: the story so far was rewritten ...", "Memory: an earlier save was loaded ...").
+- **`system-<hash>.md`**, **`chronicler-<hash>.md`:** each system prompt used.
+
+## Other commands
+
+- `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
+- `WarRoom selftest`: the memory checked in a scratch folder, without any call (25 checks; `scripts\deploy.ps1` runs it before installing).
 
 ## Replay
 
@@ -103,10 +112,12 @@ WarRoom replay --pokes <pokes_<realm>.jsonl> --numbers 6,10,54 [--effort high] [
 
 Recorded pokes are answered again in a scratch folder:
 - with the live instructions and library;
-- with an empty journal and no look-ups;
+- each on its own, with empty notes and no look-ups;
 - without writing any orders.
 
 It prints the time, tokens and steps of each call. This is how settings and models are compared: the RQ3 numbers on answer time and usage.
+
+With `--memory written` or `--memory conversation`, the pokes are answered in order instead, with the memory carried along, to compare the two memories ([MEMORY.md](MEMORY.md#comparing-the-two-memories)).
 
 ## Not available
 

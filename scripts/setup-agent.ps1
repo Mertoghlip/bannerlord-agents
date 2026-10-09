@@ -6,10 +6,11 @@
   The agent plays the watched realm through the agent channel, answered by the war room (WarRoom.exe, one fresh
   Claude Code call per poke; docs/WARROOM.md). It must not see this repository, so its workspace lives elsewhere
   (default C:\Users\karab\Projects\orc-war-council). This:
-  - installs agent\warroom-system.template.md as warroom-system.md (the war room's instructions for the agent), and the
+  - installs agent\warroom-system.template.md as warroom-system.md (the war room's instructions for the agent),
+    agent\chronicler-system.template.md as chronicler-system.md (the chronicler's, who writes the story so far), and the
     older agent chat's agent\CLAUDE.template.md and settings.template.json (always refreshed; in the repository they keep
     template names so no session here ever loads them);
-  - copies agent\journal.md only if there is no journal yet;
+  - leaves the realm's memory alone: the war room keeps it per campaign in memory\<campaign>\ (docs/MEMORY.md);
   - creates the channel folder warroom\ (orders\done, lookups) and writes the order library into it (tools.txt), so the
     war room has it before the game's first session; the bridge rewrites it at every load;
   - sets the bridge's settings.txt: agent_dir = <workspace>\warroom, agent = <Mode>, agent_lords = <Lords>.
@@ -36,10 +37,10 @@ New-Item -ItemType Directory -Force (Join-Path $channel 'orders\done') | Out-Nul
 New-Item -ItemType Directory -Force (Join-Path $channel 'lookups') | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $Workspace '.claude') | Out-Null
 Copy-Item (Join-Path $template 'warroom-system.template.md') (Join-Path $Workspace 'warroom-system.md') -Force
+Copy-Item (Join-Path $template 'chronicler-system.template.md') (Join-Path $Workspace 'chronicler-system.md') -Force
 Copy-Item (Join-Path $template 'CLAUDE.template.md') (Join-Path $Workspace 'CLAUDE.md') -Force
 Copy-Item (Join-Path $template 'settings.template.json') (Join-Path $Workspace '.claude\settings.json') -Force
-$journal = Join-Path $Workspace 'journal.md'
-if (-not (Test-Path $journal)) { Copy-Item (Join-Path $template 'journal.md') $journal }
+# the realm's memory (notes, story so far) is made per campaign by the war room, in memory\<campaign>\ (docs/MEMORY.md)
 
 # the order library, from the same code the bridge uses (the smoke test can write it without the game)
 $smoke = Join-Path $repo 'tests\SmokeTest\bin\Release\SmokeTest.exe'

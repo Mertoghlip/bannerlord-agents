@@ -106,7 +106,8 @@ One line each; the proposal page has the detail.
     - **Your control:** you can turn it on or off from the console at any time.
     - **Caveat:** you play one realm of the free peoples, while the agents command orc and eastern realms. Your campaign also runs your personal mods, and the measured runs don't.
 12. **Logs and data stay off OneDrive and out of git.** The bridge writes to `%LOCALAPPDATA%\BannerlordAgents`. Code and documents go to GitHub. Run logs, recordings, datasets and model files don't. Where they get backed up is decided in November.
-13. **Everything the strategists do is logged** (Oct 8, [LOGGING.md](LOGGING.md)). Every poke, answer, order and lord is followed end to end, with heartbeats, alarms the moment a rule breaks, a black box, and a freeze probe that says where the game is stuck. The game's AI's own reasons (the options it weighed, with their scores) are recorded for the watched realm's lords; that is also the baseline for comparing with the game's AI. All of it runs off the game's busy core; the logs report their own cost. The tools and the war room will log into the same record.
+13. **Everything the strategists do is logged** (Oct 8, [LOGGING.md](LOGGING.md)). Every poke, answer, order and lord is followed end to end, with heartbeats, alarms the moment a rule breaks, a black box, and a freeze probe that says where the game is stuck. The game's AI's own reasons (the options it weighed, with their scores) are recorded for the watched realm's lords; that is also the baseline for comparing with the game's AI. All of it runs off the game's busy core; the logs report their own cost. The tools, the war room and the chronicle log into the same record.
+14. **Each realm remembers the war in writing** (Mert, Oct 9; [MEMORY.md](MEMORY.md)). Every answer stays a fresh, short call, and carries the realm's memory: the story so far, the agent's own notes, and the chronicle lines the story does not cover yet. A conversation that keeps everything would fill up within an hour or two and be squeezed into a summary anyway, and a small local model could not hold it. The memory holds only what the realm learned, and follows the game's own time: an earlier save loaded is an earlier memory. The one-long-conversation memory stays as a setting, to measure the difference (RQ3).
 
 ## Week by week
 
@@ -134,6 +135,8 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [x] Changing orders without re-planning: adjust, next orders (then), empty answers, and the orders in force in every poke
 - [x] Look-ups and ready-made facts: one file per holding, lord and known enemy, and the soonest lords for what a poke is about
 - [x] The war room's call path, moved up from week 3: one fresh Claude Code call per poke, with the thinking capped; median answer 15 s against 53 on recorded pokes ([WARROOM.md](WARROOM.md))
+- [x] Each realm's memory of the war (Oct 9, version 0.5; [MEMORY.md](MEMORY.md)): the chronicle the bridge keeps, the agent's own notes, and the story so far the chronicler rewrites in quiet moments; cut back when an earlier save is loaded
+- [ ] The two memories compared on the recorded session (written against one long conversation): answer time, usage and decisions. *The replay is built; the full run with Opus 5.5 waits for your go-ahead (about 120 calls).*
 - [x] Faction authority: an agent orders only its own lords. **free** hands a lord back.
 - [ ] First tests, phase 7: Opus 5.5 commands the whole orc realm with those tools, in your campaign. *Set up Oct 8, 21:14.*
 - [ ] Run control: a fixed starting save, a 60-day limit, the player parked far away, a fixed speed, and autosave with resume

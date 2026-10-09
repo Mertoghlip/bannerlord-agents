@@ -13,13 +13,13 @@ The study asks how much to leave to the model and how much to code. It also asks
 | Folder | What it holds |
 |---|---|
 | `src/BannerlordAgents/` | The bridge, the game module that runs inside the game. It is its own module, separate from TFAOMFixes. Its `Tools/` folder holds the tool engine and the order library ([docs/TOOLS.md](docs/TOOLS.md)). |
-| `src/BannerlordAgents.WarRoom/` | The war room, the program beside the game where the agent decides: one short Claude Code call per poke ([docs/WARROOM.md](docs/WARROOM.md)). |
+| `src/BannerlordAgents.WarRoom/` | The war room, the program beside the game where the agent decides: one short Claude Code call per poke ([docs/WARROOM.md](docs/WARROOM.md)), carrying the realm's written memory of the war ([docs/MEMORY.md](docs/MEMORY.md)). |
 | `tests/SmokeTest/` | Runs the bridge's background half, the tools included, on a small made-up world outside the game. Mistakes surface there before they cost an in-game test. |
 | `protocol/` | Every file the module writes, and the fields in each record. |
 | `agent/` | Templates for the agent's own folder, which lives outside this repository so the agent cannot read the code. `scripts/setup-agent.ps1` installs them. |
 | `tools/FreezeProbe/` | A small program outside the game that says where the game is stuck when it freezes. The module starts it by itself; it is installed in the module's `probe` folder. |
 | `scripts/` | `deploy.ps1` builds everything, runs the smoke test, and installs the module into the game; it refuses while the game is open or if a check fails. `probe.ps1` runs the freeze probe by hand. `setup-agent.ps1` prepares the agent's folder, and `warroom.ps1` starts the war room. |
-| `docs/` | The build plan, the first tests phase by phase, the tools, the war room, the logs ([LOGGING.md](docs/LOGGING.md)), every change with its notes ([CHANGELOG.md](docs/CHANGELOG.md)), the hours log, the session reports, and the proposal. |
+| `docs/` | The build plan, the first tests phase by phase, the tools, the war room, the memory, the logs ([LOGGING.md](docs/LOGGING.md)), every change with its notes ([CHANGELOG.md](docs/CHANGELOG.md)), the hours log, the session reports, and the proposal. |
 
 More arrives as the plan reaches it:
 - `src/BannerlordAgents.Core/`: the shared core, when the tool engine is needed outside the game too.
