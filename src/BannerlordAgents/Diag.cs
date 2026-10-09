@@ -589,6 +589,8 @@ namespace BannerlordAgents
             sb.AppendLine("Campaign loads: " + CountOf("campaign loads") + ". In-game hours covered: " + CountOf("hours") + ".");
             sb.AppendLine("Pokes for the watched realm: " + CountOf("pokes") + Breakdown("poke:") + ". Reports: " + SampleText("report:tokens", "tokens", "0")
                           + "; the 40-party limit hid parties " + CountOf("report:cap hit") + " times.");
+            sb.AppendLine("Not poked: " + CountOf("quiet") + " notices kept to the logs" + Breakdown("quiet:") + "; enemy lords newly seen far off "
+                          + CountOf("sighting:far off") + ".");
             sb.AppendLine("Fog check: " + CountOf("fog:reports") + " reports checked, " + CountOf("fog:leaks") + " leaks. Sight check: " + CountOf("sight:runs")
                           + " runs, our rule agreed with the game on " + CountOf("sight:agree") + " of " + CountOf("sight:parties") + " parties.");
             sb.AppendLine("Agent (" + Settings.Agent + "): " + CountOf("agent:files") + " answer files, " + CountOf("agent:orders") + " orders (" + CountOf("agent:applied")

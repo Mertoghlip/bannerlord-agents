@@ -147,6 +147,7 @@ namespace BannerlordAgents
             r.Besieging = p.BesiegedSettlement?.StringId;
             MapEvent me = p.MapEvent;
             r.InBattle = me != null;
+            if (me != null && me.IsRaid) r.Raiding = me.MapEventSettlement?.StringId;
             r.SeenByPlayer = p.IsVisible && !p.IsMainParty;
             r.Spottable = inside == null || leader?.ClanBanner != null
                           || (me != null && me.IsSiegeAssault && party.Side == BattleSideEnum.Attacker);

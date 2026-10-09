@@ -54,6 +54,7 @@ Installed with version 0.3 of the module (Oct 8). The record formats are in [pro
 ### Pokes
 - Every notice is numbered, and followed to the poke that carried it.
 - Pokes by reason, and how long after the hour each poke's files were written.
+- **What was kept from the agent** (since 0.3.1): small fights, repeated raid notices and lost parties whose capture already says it, each logged with the reason; and each enemy lord newly seen far from the realm's holdings. The summary counts both.
 - **Alarms** for:
   - twelve poked hours in a row;
   - the same enemy setting off three sightings in a day at the edge of sight;

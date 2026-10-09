@@ -1,6 +1,6 @@
 # Hours log
 
-The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Add one row per working session. The week totals let the final report compare the plan with what actually happened.
+The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Add one row per working session. The week totals let the final report compare the plan with what actually happened. Each change itself, with its notes, is in [CHANGELOG.md](CHANGELOG.md).
 
 | Date | Hours | Work | Week (budget) |
 |---|---|---|---|
@@ -10,3 +10,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Oct 8 | | The strategists' logs (version 0.3): watchdog, black box, freeze probe, fog and sight checks, order tracing, the game AI's reasons, the movement watcher; five fixes found while planning | 1 |
 | Oct 8 | | First live session (phases 0, 1, 2, 5): the agent in shadow mode; ghost-troop crashes traced and fixed in the fixes mod; report written | 1 |
 | Oct 8 | | Why the orcs were poked 125 times: every poke sorted by type, battles by who fought whom, and what each cut would save | 1 |
+| Oct 8 | | Version 0.3.1, fewer pokes: small fights and far-off lords cut, three wording fixes; installed. The change log started ([CHANGELOG.md](CHANGELOG.md)) | 1 |

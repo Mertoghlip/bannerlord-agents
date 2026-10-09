@@ -28,6 +28,11 @@ namespace BannerlordAgents
         public static string AgentLords = "all";
         /// <summary>Where the agent channel lives; empty means %LOCALAPPDATA%\BannerlordAgents\agent.</summary>
         public static string AgentDir = "";
+        /// <summary>
+        /// Enemy lords seen further than this (map units) from all of the realm's holdings poke only when they head for
+        /// one of them or chase one of its parties. Armies always poke.
+        /// </summary>
+        public static float SightingDistance = 30f;
 
         // ---- the logs (docs/LOGGING.md) ----
 
@@ -83,6 +88,10 @@ namespace BannerlordAgents
                         case "agent": Agent = Mode(value); break;
                         case "agent_lords": AgentLords = value.Length > 0 ? value : "all"; break;
                         case "agent_dir": AgentDir = value; break;
+                        case "sighting_distance":
+                            if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float sd) && sd > 0) SightingDistance = sd;
+                            else Unknown.Add(line);
+                            break;
                         case "detail": Detail = DetailLevel(value); break;
                         case "witness": Witness = On(value, Witness); break;
                         case "ai_reasons": AiReasons = On(value, AiReasons); break;
@@ -96,7 +105,7 @@ namespace BannerlordAgents
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
-                foreach (string k in new[] { "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe" })
+                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -118,6 +127,8 @@ namespace BannerlordAgents
                 sb.AppendLine("agent = " + Agent);
                 sb.AppendLine("agent_lords = " + AgentLords);
                 sb.AppendLine("agent_dir = " + AgentDir);
+                sb.AppendLine("# pokes: enemy lords further than this from all the realm's holdings poke only when heading for one or chasing its parties");
+                sb.AppendLine("sighting_distance = " + SightingDistance.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("# logs (docs/LOGGING.md): detail = full or everyday; witness and ai_reasons are the two game hooks");
                 sb.AppendLine("detail = " + Detail);
                 sb.AppendLine("witness = " + (Witness ? "on" : "off"));

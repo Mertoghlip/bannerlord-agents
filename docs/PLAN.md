@@ -114,7 +114,7 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 ### Week 1 · Oct 5–11 · 10 h · see, record, obey
 
 - [x] Private repository, the separate module, the build and install script, this plan
-- [ ] First tests, install 1 ([FIRST-TESTS.md](FIRST-TESTS.md), phases 0–4): the orcs' view and pokes, the recorder, the performance check, and one orc lord ordered by hand. *Built, checked outside the game, and installed Oct 7. Oct 8: phases 0–2 ran (and phase 5), see [the report](reports/2026-10-08-first-live-session.md); phases 3 and 4 still to run.*
+- [ ] First tests, install 1 ([FIRST-TESTS.md](FIRST-TESTS.md), phases 0–4): the orcs' view and pokes, the recorder, the performance check, and one orc lord ordered by hand. *Built, checked outside the game, and installed Oct 7. Oct 8: phases 0–2 ran (and phase 5), see [the report](reports/2026-10-08-first-live-session.md); phases 3 and 4 still to run. Then 0.3.1 cut the pokes to what a ruler should hear ([the breakdown](reports/2026-10-08-pokes.md)).*
 - [x] The faction report, as text and as JSON. One record per poke, as JSON lines.
 - [x] Record formats written down in [protocol/README.md](../protocol/README.md)
 

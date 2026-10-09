@@ -33,6 +33,8 @@ namespace BannerlordAgents
         public string TargetParty;
         public string Besieging;
         public bool InBattle;
+        /// <summary>The village it is raiding right now (not just marching to).</summary>
+        public string Raiding;
         /// <summary>The game's own flag: the player's party can see this one.</summary>
         public bool SeenByPlayer;
         /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>
@@ -75,6 +77,11 @@ namespace BannerlordAgents
         public string Text;
         public List<string> Factions = new List<string>();
         public string Party;
+        /// <summary>
+        /// Why it is kept to the logs instead of poking anyone (a fight with bandits, a caravan or villagers; a raid
+        /// already announced; a lost party whose lord's capture already says it), or null when it pokes.
+        /// </summary>
+        public string Quiet;
     }
 
     /// <summary>The world as copied once per in-game hour.</summary>

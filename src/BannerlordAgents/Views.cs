@@ -239,6 +239,7 @@ namespace BannerlordAgents
 
         public static string Doing(Snapshot s, PartyRow r)
         {
+            if (r.Raiding != null) return "raiding " + SName(s, r.Raiding);
             if (r.InBattle) return "fighting";
             if (r.Besieging != null) return "besieging " + SName(s, r.Besieging);
             if (r.InSettlement != null) return "inside " + SName(s, r.InSettlement);
@@ -247,7 +248,7 @@ namespace BannerlordAgents
                 case "GoToSettlement": return "going to " + SName(s, r.TargetSettlement);
                 case "BesiegeSettlement": return "marching to besiege " + SName(s, r.TargetSettlement);
                 case "AssaultSettlement": return "assaulting " + SName(s, r.TargetSettlement);
-                case "RaidSettlement": return "raiding " + SName(s, r.TargetSettlement);
+                case "RaidSettlement": return "on the way to raid " + SName(s, r.TargetSettlement);
                 case "DefendSettlement": return "defending " + SName(s, r.TargetSettlement);
                 case "PatrolAroundPoint": return r.TargetSettlement != null ? "patrolling around " + SName(s, r.TargetSettlement) : "patrolling";
                 case "EngageParty": return "chasing " + PName(s, r.TargetParty);

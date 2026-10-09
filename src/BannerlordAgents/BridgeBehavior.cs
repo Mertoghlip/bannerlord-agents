@@ -26,6 +26,7 @@ namespace BannerlordAgents
             Diag.Count("campaign loads");
             Watchdog.NewCampaign();
             Orders.Reset();
+            Notices.Reset();
             Recorder.Reset();
             PacReader.Reset();
             Vision.Reset();
@@ -260,7 +261,7 @@ namespace BannerlordAgents
         private void OnPartyJoinedArmy(MobileParty p) => Guard("army", () => Recorder.OnPartyJoinedArmy(p));
         private void OnPartyDestroyed(MobileParty p, PartyBase by) => Guard("party notice", () => Notices.OnPartyDestroyed(p, by));
 
-        private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => Recorder.OnBattleStarted(me, attacker, defender));
+        private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); });
         private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => Notices.OnBattleEnded(me));
         private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () => Notices.OnPrisonerTaken(capturer, h));
 

@@ -12,12 +12,12 @@ The formats for the war room (agents' orders, tool definitions) arrive in weeks 
 |---|---|---|
 | `logs\bridge.log` | human-readable log | carries across launches; past 8 MB the old one becomes `bridge_prev.log`; alarms start with `!!` |
 | `logs\sessions\<date-time>\` | game launch | the detailed logs (below, and [docs/LOGGING.md](../docs/LOGGING.md)); the newest 30 launches are kept, 2 GB at most in all |
-| `settings.txt` | settings | `watch`, `bridge`, `record`, `perf`, `notify`, `agent`, `agent_lords`, `agent_dir`, `detail` (full or everyday), `witness`, `ai_reasons`, `screen_alarms`, `answer_alarm_minutes`, `freeze_probe`; the console commands change these |
+| `settings.txt` | settings | `watch`, `bridge`, `record`, `perf`, `notify`, `agent`, `agent_lords`, `agent_dir`, `sighting_distance` (30: enemy lords further than this from all the realm's holdings poke only when heading for one or chasing its parties), `detail` (full or everyday), `witness`, `ai_reasons`, `screen_alarms`, `answer_alarm_minutes`, `freeze_probe`; the console commands change these |
 | `perf\perf_<yyyyMMdd>.csv` | second of campaign-map play | see the columns below |
 | `data\<campaign id>\pokes_<realm id>.jsonl` | poke of the watched realm | carries the full view and the report text |
 | `data\<campaign id>\reports\<realm id>_latest.txt` | the latest poke's report | overwritten each poke |
 | `data\<campaign id>\reports\<realm id>_now.txt` | the report from `agents.view` | overwritten each time |
-| `data\<campaign id>\notices.jsonl` | ruler notice | for the watched realm and the player's realm |
+| `data\<campaign id>\notices.jsonl` | ruler notice | for the watched realm and the player's realm; `quiet` says why one was kept to the logs instead of poking (see below) |
 | `data\<campaign id>\orders.jsonl` | hand-order event | issued, arrived, reissued, ended |
 | `data\<campaign id>\record\decisions.jsonl` | decision of the player's | with what the player could see |
 | `data\<campaign id>\record\events.jsonl` | event around the player | entered or left a settlement, attacked, realm votes, vassal orders ended |
@@ -44,8 +44,18 @@ Trigger kinds:
 
 | Group | Kinds |
 |---|---|
-| Seen | `first_look`, `enemy_in_view` (a lord or army, first sighting or after 12 hours out of sight), `quiet_day` |
+| Seen | `first_look`, `enemy_in_view` (an army, or a lord close to the realm: within `sighting_distance` of one of its holdings, heading for, besieging or raiding one, or chasing one of its parties; on first coming close, or again after 12 hours without), `quiet_day` |
 | Notices | `war`, `peace`, `alliance`, `alliance_ended`, `call_to_war`, `call_to_war_ended`, `besieged`, `siege_started`, `raided`, `looted`, `holding_changed`, `army_dispersed`, `party_destroyed`, `battle`, `captured`, `proposal`, `decided`, `peace_offer` |
+
+Since 0.3.1 (after the first session's 125 pokes, [docs/reports/2026-10-08-pokes.md](../docs/reports/2026-10-08-pokes.md)), some notices are **kept quiet**: written to `notices.jsonl` and the trace with `quiet` set, but never a trigger and never in the report's news.
+
+| `quiet` | What |
+|---|---|
+| `bandits`, `a caravan`, `villagers`, `no lord on one side` | a battle away from any town, castle or village without lords on both sides. A battle still pokes when it is an assault, a sally or a raid, or has lords on both sides. |
+| `raid already announced` | the same raider on the same village within 24 hours (the game says "being raided" twice per raid) |
+| `the capture says it` | a lord's party wiped out as its lord was taken prisoner; the `captured` notice says it |
+
+Enemy lords further off are still listed in the report; the trace logs each one the old rule would have poked for as a `sighting` event, `far off`.
 
 ## View
 
@@ -133,7 +143,8 @@ One folder per game launch, `logs\sessions\<yyyyMMdd-HHmmss>\`. What each file i
 | `hour`, `vision`, `snapshot` | each hourly copy: counts, the worker's delay after the hour, the parts' times; the realm's sight; impossible values |
 | `sight_check` | our sight rule against the game's for the player's party, with every disagreement's numbers |
 | `fog` | a leak found in a report |
-| `notice`, `poke` | every notice with its `id`; every poke with its triggers, the notices it carried, its size by section, and its delay |
+| `notice`, `poke` | every notice with its `id` (and `quiet` when kept from the agent); every poke with its triggers, the notices it carried, its size by section, and its delay |
+| `sighting` | an enemy lord newly seen far off, not poked for (`far off`: distance, nearest holding, what the lord was doing); a lord seen with a new party |
 | `answer` | each answer file (written, read, seconds after its poke, newer pokes already out, duplicate), each receipt, files set aside or unreadable, ids never shown |
 | `order` | issued (with the words, and the lord's state before and after), checked (shadow), hour, arrived, reissued (with who turned him away), ended, after release, refused at the door, lord lookup |
 | `lord` | a change in what a lord of the watched realm (or a lord we hold) is doing |

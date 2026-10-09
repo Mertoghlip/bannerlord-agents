@@ -82,10 +82,11 @@ Expect one slow load, because the game rebuilds its shaders after any change to 
   - parties that drop out of sight, kept as "last seen at … on …".
 - **Their pokes:**
   - an enemy army comes into view, for the first time or after a long absence;
-  - a notice their Warlord would get: a war declared, a holding besieged, raided or taken, an army destroyed, or an offer;
+  - an enemy lord comes near their holdings, heads for one, or chases one of their parties;
+  - a notice their Warlord would get: a war declared, a holding besieged, raided or taken, an army destroyed, a battle between lords, a lord captured, or an offer;
   - a full quiet day.
 
-  Pokes that land close together are merged into one.
+  Pokes that land close together are merged into one. Since Oct 8 (version 0.3.1), fights with bandits, caravans and villagers, and enemy lords far from orc land, no longer poke: they were 67 of the first session's 125 pokes ([the breakdown](reports/2026-10-08-pokes.md)).
 - **`agents.view`** prints the report an agent would get, word for word.
 - **A sight check for your own party:** our rule against the game's own view.
 

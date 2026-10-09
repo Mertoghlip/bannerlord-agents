@@ -131,6 +131,34 @@ namespace SmokeTest
             v.Forces.Add(new ViewParty { Id = "lord_bolg", Lord = "lord_bolg", Name = "Bolg", Faction = "orcs" });
             List<string> leaks = Audit.Fog(v, "- Bolg [lord_bolg]\n- ENEMY Someone [lord_hidden_1] far away", new Dictionary<string, Sighting>(), new HashSet<string>());
             Check(leaks.Count == 1 && leaks[0].Contains("lord_hidden_1"), "the fog check catches a planted leak: " + string.Join("; ", leaks));
+            Check(now.Contains("on the way to raid Orc Village"), "a lord marching to raid is not yet said to be raiding");
+
+            // fewer pokes (docs/reports/2026-10-08-pokes.md): a small fight goes to the logs only; an enemy lord far
+            // from the realm's holdings pokes once heading for one, or once it comes near while still in view
+            int pokesBefore = Brain.PokesWatched;
+            Brain.OnNotice(new Notice { Id = 2, Hours = 1009.5, Kind = "battle", Text = "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.", Factions = { "orcs" }, Quiet = "bandits" });
+            Snapshot afterFight = World(1010, playerSeen: true);
+            Brain.OnHour(afterFight);
+            Check(Brain.PokesWatched == pokesBefore, "a fight with bandits pokes no one");
+            Check(!Brain.ReportNow(afterFight).Contains("against Looters"), "and stays out of the report's news");
+            Files.FlushAll();
+            Check(Read(Path.Combine(dir, "notices.jsonl")).Contains("\"quiet\":\"bandits\"") && Diag.CountOf("quiet:bandits") == 1, "but it is in the logs, marked as not poked");
+            var far = new PartyRow { Id = "lord_far", Name = "Elendil", Faction = "player_k", Kind = "lord", Men = 200, Strength = 300, X = 160, Y = 140, Doing = "GoToSettlement", TargetSettlement = "castle_men", Spottable = true };
+            Brain.OnHour(World(1011, true, far));
+            Check(Brain.PokesWatched == pokesBefore && Diag.CountOf("sighting:far off") == 1, "an enemy lord 60 away, going elsewhere, pokes no one");
+            far.Doing = "BesiegeSettlement";
+            far.TargetSettlement = "castle_orc";
+            Brain.OnHour(World(1012, true, far));
+            Check(Brain.PokesWatched == pokesBefore + 1, "the same lord pokes once marching on an orc castle");
+            var drifter = new PartyRow { Id = "lord_drifter", Name = "Isildur", Faction = "player_k", Kind = "lord", Men = 150, Strength = 200, X = 160, Y = 60, Doing = "Hold", Spottable = true };
+            Brain.OnHour(World(1013, true, far, drifter));
+            Check(Brain.PokesWatched == pokesBefore + 1, "another far-off lord pokes no one");
+            drifter.X = 125;
+            drifter.Y = 104;
+            Brain.OnHour(World(1014, true, far, drifter));
+            Check(Brain.PokesWatched == pokesBefore + 2, "until coming within reach of an orc holding, though never out of view");
+            string cutPokes = Read(Path.Combine(dir, "pokes_orcs.jsonl"));
+            Check(cutPokes.Contains("\"party\":\"lord_far\"") && cutPokes.Contains("\"party\":\"lord_drifter\""), "each of those pokes names its lord");
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");
@@ -151,6 +179,7 @@ namespace SmokeTest
             Check(Read(Path.Combine(Diag.SessionDir, "errors.log")).Contains("a test error"), "errors.log keeps the full trace of an error");
             Check(box != null && Read(box).Contains("LAST THINGS THE MOD SAW AND DID"), "the black box is written");
             Check(File.Exists(Path.Combine(Diag.SessionDir, "health.csv")) && Read(Path.Combine(Diag.SessionDir, "summary.txt")).Contains("SESSION SUMMARY"), "the health row and the summary are written");
+            Check(Read(Path.Combine(Diag.SessionDir, "summary.txt")).Contains("Not poked: 1 notices kept to the logs"), "the summary counts what was kept from the agent");
             Check(Read(Path.Combine(Diag.SessionDir, "story.log")).Contains("poke:"), "the readable story is written into this launch's folder too");
             Diag.EndLaunch("the smoke test ended");
             Check(!File.Exists(Path.Combine(Diag.SessionDir, "running.marker")), "a clean end removes the running marker");
@@ -196,7 +225,7 @@ namespace SmokeTest
             if (!ok) _failures++;
         }
 
-        private static Snapshot World(double hours, bool playerSeen)
+        private static Snapshot World(double hours, bool playerSeen, params PartyRow[] extra)
         {
             var s = new Snapshot { Campaign = "smoketest", Hours = hours, Date = "Summer 3, 1085", PlayerFaction = "player_k", PlayerParty = "main_party", Watched = "orcs" };
             s.Factions["orcs"] = new FactionRow { Id = "orcs", Name = "Misty Mountain Orcs", Ruler = "Azog", AtWar = { "player_k" } };
@@ -222,6 +251,11 @@ namespace SmokeTest
 
             s.WatchedSees = new Dictionary<string, Sighting> { ["looters_1"] = new Sighting { Party = "looters_1", By = "Orc Castle", Distance = 5.4f } };
             if (playerSeen) s.WatchedSees["main_party"] = new Sighting { Party = "main_party", By = "Bolg", Distance = 8.2f };
+            foreach (PartyRow r in extra)
+            {
+                Add(s, r);
+                s.WatchedSees[r.Id] = new Sighting { Party = r.Id, By = "Azog", Distance = 12f };
+            }
             s.InspectedByWatched = new HashSet<string> { "castle_orc", "village_orc" };
             return s;
         }

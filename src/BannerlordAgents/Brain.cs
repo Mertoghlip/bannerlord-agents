@@ -10,9 +10,12 @@ namespace BannerlordAgents
     /// The worker's side of the bridge: what each realm remembers, when it gets poked, and every file written.
     ///
     /// A realm is poked, at most once per in-game hour, when:
-    /// - an enemy lord or army comes into its view, for the first time or after 12 hours out of sight;
-    /// - its ruler gets a notice (a war, a siege or raid on its lands, a holding taken, an army broken, ...);
+    /// - an enemy army comes into its view, or an enemy lord comes within reach of its holdings (sighting_distance),
+    ///   heads for one of them or chases one of its parties: for the first time, or after 12 hours without;
+    /// - its ruler gets a notice (a war, a siege or raid on its lands, a holding taken, an army broken, ...), except
+    ///   the ones kept quiet, such as fights with bandits, caravans and villagers (Notices);
     /// - a full day passes with nothing new.
+    /// Enemy lords further off are still in the report, just not a reason to poke (docs/reports/2026-10-08-pokes.md).
     /// Everything that happens within the same hour is merged into one poke. The watched realm's pokes carry the
     /// full view and the written report an agent would read; the player's own pokes are kept so each recorded
     /// decision can say what the player had just seen. Every report is fog-checked before it is written, and every
@@ -25,6 +28,8 @@ namespace BannerlordAgents
         {
             public readonly Dictionary<string, ViewParty> LastSeen = new Dictionary<string, ViewParty>();
             public HashSet<string> SeenLastHour = new HashSet<string>();
+            /// <summary>The last hour each enemy lord or army was in view and close enough to poke for.</summary>
+            public readonly Dictionary<string, double> LastClose = new Dictionary<string, double>();
             public double Started = double.NaN;
             public double LastPoke = double.NaN;
             public readonly List<Notice> Pending = new List<Notice>();
@@ -70,8 +75,18 @@ namespace BannerlordAgents
 
         public static void OnNotice(Notice n)
         {
-            Diag.Event("notice", n.Kind, new { id = n.Id, factions = n.Factions, party = n.Party, text = n.Text });
+            Diag.Event("notice", n.Kind, new { id = n.Id, factions = n.Factions, party = n.Party, text = n.Text, quiet = n.Quiet });
             if (n.Factions.Count == 0) Diag.Count("notice:for no realm we follow");
+            if (n.Kind == "party_destroyed" && n.Party != null)
+                foreach (Memory m in Mem.Values) m.LastSeen.Remove(n.Party);
+            Files.Append(Path.Combine(Dir, "notices.jsonl"), Json.Line(n));
+            if (n.Quiet != null)
+            {
+                // kept to the logs: no poke, and not in the report's news either
+                Diag.Count("quiet");
+                Diag.Count("quiet:" + n.Quiet);
+                return;
+            }
             foreach (string f in n.Factions.Distinct())
             {
                 Memory m = Get(f);
@@ -79,9 +94,6 @@ namespace BannerlordAgents
                 m.News.Add(n);
                 m.News.RemoveAll(x => n.Hours - x.Hours > 48);
             }
-            if (n.Kind == "party_destroyed" && n.Party != null)
-                foreach (Memory m in Mem.Values) m.LastSeen.Remove(n.Party);
-            Files.Append(Path.Combine(Dir, "notices.jsonl"), Json.Line(n));
         }
 
         public static void OnHour(Snapshot s)
@@ -137,33 +149,47 @@ namespace BannerlordAgents
             Memory m = Get(fid);
             var triggers = new List<Trigger>();
             List<SettlementRow> own = s.Settlements.Where(h => h.Faction == fid).ToList();
+            var ownIds = new HashSet<string>(own.Select(h => h.Id));
             bool first = double.IsNaN(m.Started);
             if (first)
             {
                 m.Started = s.Hours;
                 triggers.Add(new Trigger { Hours = s.Hours, Kind = "first_look", Text = "First look since the campaign was loaded." });
             }
-            else
+
+            var close = new HashSet<string>();
+            foreach (KeyValuePair<string, Sighting> kv in sees)
             {
-                foreach (KeyValuePair<string, Sighting> kv in sees)
+                if (!s.PartyById.TryGetValue(kv.Key, out PartyRow r)) continue;
+                if (r.Kind != "lord" || r.Attached || !hostile.Contains(r.Faction ?? "")) continue;
+                if (r.ArmyMen == 0 && r.Men < SmallestLordParty) continue;
+                ViewParty vp = Views.Party(s, r, kv.Value, "enemy", own);
+                if (!Close(s, fid, r, vp, own, ownIds))
                 {
-                    if (!s.PartyById.TryGetValue(kv.Key, out PartyRow r)) continue;
-                    if (r.Kind != "lord" || r.Attached || !hostile.Contains(r.Faction ?? "")) continue;
-                    if (r.ArmyMen == 0 && r.Men < SmallestLordParty) continue;
-                    if (m.SeenLastHour.Contains(r.Id)) continue;
-                    if (m.LastSeen.TryGetValue(r.Id, out ViewParty last) && s.Hours - last.SeenHours < OutOfSightHours) continue;
-                    ViewParty vp = Views.Party(s, r, kv.Value, "enemy", own);
-                    int men = r.ArmyMen > 0 ? r.ArmyMen : r.Men;
-                    string where = vp.NearestHolding != null ? Text.D(vp.HoldingDistance) + " from " + vp.NearestHolding : "near " + (vp.Near ?? "nowhere known");
-                    triggers.Add(new Trigger
+                    // logged where the old rule would have poked: newly in view, after 12 hours out of sight
+                    bool wasNew = !m.SeenLastHour.Contains(r.Id)
+                                  && !(m.LastSeen.TryGetValue(r.Id, out ViewParty lastView) && s.Hours - lastView.SeenHours < OutOfSightHours);
+                    if (!first && !isPlayer && wasNew)
                     {
-                        Hours = s.Hours, Kind = "enemy_in_view", Party = r.Id,
-                        Text = "Enemy " + (r.ArmyMen > 0 ? "army" : "lord") + " in view: " + vp.Name + " (" + vp.FactionName + "), "
-                               + Text.N(men) + " men, " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + "."
-                    });
-                    if (!isPlayer) Sighted(m, s, r, vp);
+                        Diag.Count("sighting:far off");
+                        Diag.Event("sighting", "far off", new { party = r.Id, name = vp.Name, distance = vp.HoldingDistance, from = vp.NearestHolding, doing = vp.Doing });
+                    }
+                    continue;
                 }
+                close.Add(r.Id);
+                if (first || (m.LastClose.TryGetValue(r.Id, out double last) && s.Hours - last < OutOfSightHours)) continue;
+                int men = r.ArmyMen > 0 ? r.ArmyMen : r.Men;
+                string where = vp.NearestHolding != null ? Text.D(vp.HoldingDistance) + " from " + vp.NearestHolding : "near " + (vp.Near ?? "nowhere known");
+                triggers.Add(new Trigger
+                {
+                    Hours = s.Hours, Kind = "enemy_in_view", Party = r.Id,
+                    Text = "Enemy " + (r.ArmyMen > 0 ? "army" : "lord") + " in view: " + vp.Name + " (" + vp.FactionName + "), "
+                           + Text.N(men) + " men, " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + "."
+                });
+                if (!isPlayer) Sighted(m, s, r, vp);
             }
+            foreach (string id in close) m.LastClose[id] = s.Hours;
+            foreach (string id in m.LastClose.Where(x => s.Hours - x.Value > ForgetHours).Select(x => x.Key).ToList()) m.LastClose.Remove(id);
 
             m.SeenLastHour = new HashSet<string>(sees.Keys);
             foreach (KeyValuePair<string, Sighting> kv in sees)
@@ -240,6 +266,20 @@ namespace BannerlordAgents
                 string say = v.FactionName + ": " + triggers[0].Text + (triggers.Count > 1 ? " (+" + (triggers.Count - 1) + ")" : "");
                 Background.ToMain.Enqueue(() => Ui.Say(say, Colors.Yellow));
             }
+        }
+
+        private static readonly HashSet<string> HeadingIn = new HashSet<string> { "GoToSettlement", "RaidSettlement", "BesiegeSettlement", "AssaultSettlement", "PatrolAroundPoint" };
+
+        /// <summary>
+        /// Close enough to poke for: an army; a lord within sighting_distance of one of the realm's holdings; or one
+        /// heading for, besieging or raiding one of them, or chasing one of the realm's parties.
+        /// </summary>
+        private static bool Close(Snapshot s, string fid, PartyRow r, ViewParty vp, List<SettlementRow> own, HashSet<string> ownIds)
+        {
+            if (r.ArmyMen > 0 || own.Count == 0 || vp.HoldingDistance < Settings.SightingDistance) return true;
+            if ((r.Besieging != null && ownIds.Contains(r.Besieging)) || (r.Raiding != null && ownIds.Contains(r.Raiding))) return true;
+            if (r.TargetSettlement != null && ownIds.Contains(r.TargetSettlement) && HeadingIn.Contains(r.Doing ?? "")) return true;
+            return r.Doing == "EngageParty" && r.TargetParty != null && s.PartyById.TryGetValue(r.TargetParty, out PartyRow chased) && chased.Faction == fid;
         }
 
         /// <summary>
