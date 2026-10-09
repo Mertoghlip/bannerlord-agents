@@ -88,12 +88,28 @@ Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' a
 - **Every army** (`army` events): the leader, the meeting place, the lords called, the influence price, and the clan's influence before.
 - **Alarm** for a tool in the library that fails the checker, at every load.
 
+- **Join orders** (since 0.6): each lord sent to join an army (`army:sent to join`), each one that joined (`army` "joined", with the influence it cost and the clan's influence before), and each that could not (its order's end, with why).
+
+### Recruitment (since 0.6, Oct 9; logs only, never shown to the agent)
+Why the watched realm's parties do or do not refill, measured against the game's own gates (`Recruitment`; read in the 1.4.8 code, `RecruitmentCampaignBehavior` and `HeroHelper`). A lord the game runs may recruit only in an hour it spends in a town (not besieged) or an unraided village, and only when:
+- its party's gold is above **50 + 20 a man** (up to 150 men);
+- for a lord who does not lead the clan, the clan's gold is above **50 + the clan leader's party wages + 40 a man in that party**;
+- the party is below its size limit, not starving, and has room in its wage budget for the recruit;
+- a notable there has volunteers waiting, within the slots the notable's relation allows.
+
+What is recorded:
+- **Once a day** (game's thread, a few milliseconds), one line in `recruitment.jsonl` in the campaign's folder: for each lord, its gold against the party bar, its clan's gold against the clan bar, men against the size limit, wages against the wage limit, starving, in an army, held by our order, inside where, whether every gate is open, and the men it recruited that day and where; for each town and village of the realm, its state, the volunteers waiting, and how many of them the ruler's relations would reach (a stand-in for every lord's); and the totals.
+- **Every recruit** by the realm's lords as it happens (the game's `OnTroopRecruitedEvent`, counted on the game's thread without allocating for anyone else's).
+- **Every in-game hour** (worker), which lords sat where they could recruit.
+- **A sentence a day** in `story.log`, for example: "recruitment, Summer 10, 1087: 49 lords at 24% of their size limits on average; 31 below the party-gold bar, 12 below the clan-gold bar, 5 without wage room, 0 full, 2 starving; 140 men recruited by 14 lords; 210 volunteers waiting in 6 of the realm's 11 towns and villages (95 within what the ruler's relations allow); 19 of 49 lords spent at least one of the last 24 hours where they could recruit".
+- `agents.recruits` prints the same as of now, and the last whole day.
+
 ### The realm's memory (since 0.5, Oct 9)
 - **At every load** (`chronicle` events): how many entries of the game's own history log were read, how many were about the watched realm, any that could not be read, and the time it took on the game's thread; then the chronicle's lines, how many were cut because an earlier save was loaded, and how many came from the game's log.
 - **The chronicle itself** is the record: one dated line per thing the realm learned, in the campaign's folder ([MEMORY.md](MEMORY.md)). `agents.chronicle [n]` prints its last lines.
 
 ### The war room
-The war room keeps its own logs, beside the game's: every call with its times and tokens, the prompt, Claude Code's full event stream, and the answer; and every rewrite of the story so far, with what the memory carried into each answer ([WARROOM.md](WARROOM.md)).
+The war room keeps its own logs, beside the game's: every call with its times and tokens, the prompt, Claude Code's full event stream, and the answer; every council of war, with why it sat and which of its orders were dropped because a faster answer had ordered those lords; and every rewrite of the story so far, with what the memory carried into each answer ([WARROOM.md](WARROOM.md)).
 
 ### Who moved a lord, and why the game's AI chose
 These are the only two pieces that hook into the game's code instead of reading it. Each has its own switch.
@@ -175,6 +191,7 @@ The agent cannot read any of this: a war room call can read only the channel fol
 | `agents.detail full` or `everyday` | the detail level |
 | `agents.hooks on` or `off`; `agents.hooks witness` or `reasons on` or `off` | the two game hooks |
 | `agents.alarms on` or `off` | red alarms on screen |
+| `agents.recruits` | why the watched realm's parties do or do not refill, as of now and for the last whole day |
 
 Outside the game, `scripts\probe.ps1` runs the probe on the running game, for example during a loading-screen hang before the mod is up.
 

@@ -38,6 +38,7 @@ namespace BannerlordAgents
             LordWatch.Reset();
             Names.Clear();
             Perf.ResetCapture();
+            Recruitment.Reset();
             Calendar.Capture();
             long t = Perf.Now();
             int warmed = Names.WarmUp();
@@ -149,6 +150,7 @@ namespace BannerlordAgents
             CampaignEvents.SettlementEntered.AddNonSerializedListener(this, OnSettlementEntered);
             CampaignEvents.OnSettlementLeftEvent.AddNonSerializedListener(this, OnSettlementLeft);
             CampaignEvents.ConversationEnded.AddNonSerializedListener(this, OnConversationEnded);
+            CampaignEvents.OnTroopRecruitedEvent.AddNonSerializedListener(this, OnTroopRecruited);
         }
 
         /// <summary>Nothing of ours goes into the save.</summary>
@@ -251,6 +253,15 @@ namespace BannerlordAgents
                 _decisionsAtDayStart = decisions;
             });
             if (Bridge.Running) Guard("daily sweep", Orders.DailySweep);
+            if (Bridge.Running && Settings.Bridge) Guard("recruitment check", () => Recruitment.Daily());
+        }
+
+        /// <summary>Every recruit in the world: a hot path, so no Guard (it would allocate); the watched realm's are counted.</summary>
+        private void OnTroopRecruited(Hero recruiter, Settlement where, Hero source, CharacterObject troop, int amount)
+        {
+            if (!Bridge.Running) return;
+            try { Recruitment.OnTroopRecruited(recruiter, where, source, troop, amount); }
+            catch (Exception e) { Diag.Error("recruit count", e); }
         }
 
         private void OnBeforeSave() => Guard("save hand-back", Orders.HandBackForSave);

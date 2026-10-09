@@ -9,7 +9,7 @@ The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program b
 | Memory | one conversation that grew by about 25,000 tokens an answer (66,000 to 193,000) | a fresh call every time: instructions and library (cached), then the story so far, the notes and the poke ([MEMORY.md](MEMORY.md)) |
 | Steps per answer | 2 to 3: wake, read the files, think and write | 1: everything comes in the message, and the orders come back as the reply |
 | Thinking | unlimited, at max effort: 2,000 to 14,600 tokens | capped: 3,000 tokens for an ordinary poke, 5,000 for an urgent one, at high effort |
-| What it decides | the whole realm, every time | only what changed: the orders in force stand, and an empty answer is valid |
+| What it decides | the whole realm, every time | at a poke, only what changed: the orders in force stand, and an empty answer is valid; the whole realm at a council of war, beside the answers (since 0.6) |
 | Waiting between pokes | woke every 30 minutes to restart its watcher, even with the game closed | does nothing until a poke comes |
 
 **Measured on the first session's recorded pokes** (`WarRoom replay`, Opus 5.5, high effort, thinking capped at 3,000):
@@ -54,6 +54,10 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 | `lookups` | on | let the agent read its look-up files during a call |
 | `max_lessons` | 12 | lessons kept in the notes; past it, the chronicler merges them |
 | `memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit` | written, 12, 450, (the agent's), medium, 2000, 180000 | the realm's memory and its chronicler ([MEMORY.md](MEMORY.md#settings-warroomtxt)) |
+| `council` | on | the council of war ([below](#the-council-of-war)); written memory only |
+| `council_every_hours`, `council_gap_hours` | 24, 6 | a council sits at least this often, and never sooner than this after the last (in-game hours; the first look excepted) |
+| `council_after` | First look since the campaign was loaded, passed from, declared war on, made peace, is besieged by, army has formed | words in a poke's reasons (or in what changed since the last answer) that call a council |
+| `council_effort`, `council_thinking_cap`, `council_timeout_seconds` | high, 12000, 420 | the council's call: room to think about the whole realm |
 | `claude_path` | (empty) | the newest Claude Code in VS Code's extension folder, else claude on the path |
 
 ## One call
@@ -78,6 +82,26 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
   - The plan, the notes on enemies and the lessons go into the notes ([MEMORY.md](MEMORY.md)).
 - **The chronicler** rewrites the story so far in quiet moments, in a call of its own beside the answers (`chronicler-system.md`).
 
+## The council of war
+
+Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke needs and leaves the rest standing, so the lords nobody orders stay with their own judgment (the game's AI) and the realm is never set on one course as a whole (second live session: 3 of 49 lords held orders). The council is the other half: a slower call, now and then, that sees the whole realm and may reorder any lord.
+
+- **When it sits** (`Room.CouncilDue`):
+  - right after the first look of a game session (`First look since the campaign was loaded`), gap or not;
+  - after a big event: any of `council_after`'s words in the reasons of a poke just answered, or in what changed since the last answer;
+  - when its time has come: `council_every_hours` after the last council, or sooner if the last council asked for it (`council_in`, 4 to 72 hours);
+  - once in each run of the war room, even with no event;
+  - never sooner than `council_gap_hours` after the last one (except after the first look), never two at once, and only while the game is running (the bridge's briefing less than ten minutes old). A council that fails waits five minutes.
+- **What it sees:** the same written memory as a poke (the story so far, the notes, the chronicle not in the story yet), then:
+  - COUNCIL OF WAR, with why it sits now;
+  - the bridge's **briefing** (`council.txt`, rewritten every in-game hour, [TOOLS.md](TOOLS.md#what-the-agent-reads-besides-the-tools)): the purse, every lord in detail, the muster at each castle and town, the captured lords;
+  - the hourly **situation report** (`report.txt`): the realm in sum, lords and armies, holdings, captured lords, what is in view and was seen earlier, enemy holdings near, the orders in force, the recent history.
+  - Its instructions are the same system prompt as every poke (so it stays cached), whose section "The council of war" says what a council is for.
+- **Beside the answers, never in their way:** it runs on its own thread, like the chronicler. Pokes that come meanwhile are answered at once. A fast answer that orders a lord while the council sits saw a newer world, so **its order stands**: the council's order for that lord is dropped, and that lord is taken out of the council's gather and add lists (`Room.DropOrdered`). The next poke's message says which of the council's orders did not go out.
+- **Its answer** is the same JSON object as a poke's, with any number of orders, and an optional `"council_in"`: in how many in-game hours the next council should sit. The orders go to `orders\poke-N-council-<time>.json` (N: the newest poke), which the bridge reads like any answer; the plan, enemies and lessons go into the notes.
+- **It has no plan of ours** ([plan, decision 15](PLAN.md#decisions-for-the-build)): the instructions teach doctrine, not this war's moves ([DOCTRINE.md](DOCTRINE.md)).
+- **By hand:** `WarRoom council` sits one now (the game must be running).
+
 ## Guards
 
 - **The answer ends the call,** not Claude Code's exit: Claude Code sometimes lingers after answering, so it is closed after 2 s.
@@ -87,7 +111,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 
 ## Logs (`%LOCALAPPDATA%\BannerlordAgents\logs\warroom`)
 
-- **`calls.jsonl`:** one line per call, `kind` "answer" or "story":
+- **`calls.jsonl`:** one line per call, `kind` "answer", "council" or "story" (a council's line also has why it sat, the briefing's and situation's sizes, the orders dropped because a faster answer ordered those lords, and `council_in`):
   - which poke, and when it was;
   - urgent or not, model, effort, thinking cap;
   - total seconds, call seconds, when the answer began (`answer_began_ms`);
@@ -95,14 +119,15 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
   - the memory: its kind, the story's words, the chronicle lines carried (`gap_lines`), the notes' size and what the answer changed in them (`notes_changed`), the conversation (in that memory);
   - the steps, the number of orders, any retry, any denied read.
   - For the chronicler: the lines it was given, the story's words, any lessons merged.
-- **`calls\<date>\<time>-poke-N\`** and **`<time>-story\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer (or the story), for reading side by side.
+- **`calls\<date>\<time>-poke-N\`**, **`<time>-council-N\`** and **`<time>-story\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer (or the story), for reading side by side.
 - **`warroom-<date>.log`:** the window's lines, memory included ("Memory: the story so far was rewritten ...", "Memory: an earlier save was loaded ...").
 - **`system-<hash>.md`**, **`chronicler-<hash>.md`:** each system prompt used.
 
 ## Other commands
 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
-- `WarRoom selftest`: the memory checked in a scratch folder, without any call (28 checks; `scripts\deploy.ps1` runs it before installing).
+- `WarRoom council`: a council of war sits now (the game must be running).
+- `WarRoom selftest`: the memory and the council checked in a scratch folder, without any call (38 checks; `scripts\deploy.ps1` runs it before installing).
 
 ## Replay
 

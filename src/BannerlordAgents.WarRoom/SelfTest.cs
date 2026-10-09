@@ -108,6 +108,38 @@ namespace BannerlordAgents.WarRoom
             string problem = Room.Extract("{\"poke\": 5, \"orders\": [], \"enemies\": {\"Aragorn\": \"x\"}}", 5, out JsonObject ans);
             Check(problem == null && ans?["enemies"] is JsonObject, "an answer with only notes and no orders is read");
 
+            // the council of war: when it sits, what its message holds, and the fast answers' orders winning over its older view
+            var cw = new Config { AgentDir = root, Channel = "warroom", CouncilGapHours = 6, CouncilEveryHours = 24 };
+            var council = new Room(cw, Path.Combine(root, "logs"));
+            Check(council.CouncilDue(1000) == "no council has sat yet in this run of the war room", "a council sits once in each run of the war room, even with no event");
+            council.CouncilSat(1000, null);
+            Check(council.CouncilDue(1003) == null && council.NextCouncilHours == 1024, "after a council, none sits until its time (" + council.NextCouncilHours + ")");
+            council.AfterAnswer("POKE #7\nWHY YOU ARE ASKED NOW\n- Western Moria is besieged by Aragorn (Kingdom of Arnor and Gondor), 5,532 men.\n\nREPORT", new JsonObject { ["orders"] = new JsonArray() });
+            Check(council.CouncilDue(1003) == null && council.CouncilDue(1006)?.StartsWith("Western Moria is besieged by Aragorn", StringComparison.Ordinal) == true,
+                  "a big event calls a council, but not within council_gap_hours of the last one");
+            council.AfterAnswer("POKE #8\nWHY YOU ARE ASKED NOW\n- First look since the campaign was loaded.\n\nREPORT", new JsonObject { ["orders"] = new JsonArray() });
+            Check(council.CouncilDue(1001) == "First look since the campaign was loaded.", "the first look calls a council at once, gap or not");
+            council.CouncilSat(1001, 10);
+            Check(council.CouncilDue(1010) == null && council.CouncilDue(1011) == "10 hours have passed since the last council", "a council may set when the next one sits (council_in)");
+            council.CouncilSitting(true);
+            council.AfterAnswer("POKE #9\nWHY YOU ARE ASKED NOW\n- test\n\nREPORT", (JsonObject)JsonNode.Parse("{\"orders\": [{\"lord\": \"lord_A\", \"do\": \"defend\"}, {\"lord\": \"lord_B\", \"do\": \"gather\", \"lords\": [\"lord_C\"]}]}"));
+            Check(council.OrderedMeanwhile.SetEquals(new[] { "lord_A", "lord_B", "lord_C" }) && council.CouncilDue(2000) == null, "while a council sits, the lords a fast answer orders are noted, and no second council sits");
+            council.CouncilSitting(false);
+            var councilOrders = (JsonArray)JsonNode.Parse("[{\"lord\": \"lord_A\", \"do\": \"join\", \"target\": \"lord_X\"}, {\"lord\": \"lord_X\", \"do\": \"gather\", \"at\": \"town_1\", \"lords\": [\"lord_C\", \"lord_D\"]}, {\"lord\": \"lord_E\", \"do\": \"gather\", \"at\": \"town_2\", \"lords\": [\"lord_C\"]}]");
+            JsonArray keptOrders = Room.DropOrdered(councilOrders, new HashSet<string>(new[] { "lord_A", "lord_C" }, StringComparer.OrdinalIgnoreCase), out List<string> droppedOrders);
+            Check(keptOrders.Count == 1 && (string)keptOrders[0]["lord"] == "lord_X" && ((JsonArray)keptOrders[0]["lords"]).Count == 1 && droppedOrders.Count == 4,
+                  "the council's orders for lords ordered meanwhile do not go out, and those lords leave its gathers (" + string.Join("; ", droppedOrders) + ")");
+            string ct = Room.CouncilText("First look since the campaign was loaded.", new PokeMeta { Number = 8, Date = "Summer 9, 1087, 12:00" }, 8, "COUNCIL BRIEFING FOR X\n\nYOUR PURSE", "SITUATION AT Summer 9\nREPORT FOR X");
+            Check(ct.StartsWith("COUNCIL OF WAR, Summer 9, 1087, 12:00") && ct.Contains("\"poke\": 8") && ct.IndexOf("YOUR PURSE", StringComparison.Ordinal) < ct.IndexOf("REPORT FOR X", StringComparison.Ordinal),
+                  "the council's message: why it sits, then the whole-realm briefing, then the situation");
+            council.EnsureMemory(meta);
+            Check(council.Message("POKE #10", meta, false, true, out _, out _, "YOUR COUNCIL OF WAR gave 3 orders; 1 did not go out.").Contains("YOUR COUNCIL OF WAR gave 3 orders"),
+                  "what became of the council's orders goes into the next fast message");
+            cw.Save();
+            Config cl = Config.Load(root);
+            Check(cl.Council && cl.CouncilGapHours == 6 && cl.CouncilAfter.Contains("is besieged by") && File.ReadAllText(cw.FilePath).Contains("council_thinking_cap = 12000"),
+                  "the council's settings are written and read back");
+
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
             Check(Program.Quiet(T("battle", "Battle: Galenor (Kingdom of Arnor and Gondor) against Villagers of Celebloth (Misty Mountain Orcs); Galenor won.")), "replay: a fight with villagers is kept quiet");

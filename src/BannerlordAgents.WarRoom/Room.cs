@@ -42,6 +42,20 @@ namespace BannerlordAgents.WarRoom
         private DateTime _storyFailedAt = DateTime.MinValue, _lastCallEnded = DateTime.MinValue, _storyLooked = DateTime.MinValue;
         private double _pokeHours = double.NaN;
         private static readonly object LogGate = new object();
+        private readonly object _systemGate = new object();
+
+        // the council of war: its thread, why the next one is due, when the last one sat, and the lords the fast answers
+        // ordered while it sat (their orders win over the council's)
+        private Task _council;
+        private CancellationTokenSource _councilStop;
+        private string _councilDue;
+        private bool _councilFirstLook;
+        private double _lastCouncilHours = double.NaN, _nextCouncilHours = double.NaN;
+        private DateTime _councilFailedAt = DateTime.MinValue;
+        private readonly object _councilGate = new object();
+        private bool _councilSitting;
+        private readonly HashSet<string> _orderedMeanwhile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private string _councilNote;
 
         /// <summary>Lines of the chronicle the bridge puts in the report's RECENT HISTORY: the last 25 of the last 48 hours (Views.Build).</summary>
         private const double RecentHours = 48;
@@ -83,11 +97,14 @@ namespace BannerlordAgents.WarRoom
                     continue;
                 }
                 StoryIfDue(stop);
+                CouncilIfDue(stop);
                 if (waitingSaid != _lastAnswered) { Say("Waiting for the next poke (last answered #" + _lastAnswered + ")."); waitingSaid = _lastAnswered; }
                 stop.WaitHandle.WaitOne(250);
             }
             _storyStop?.Cancel();
+            _councilStop?.Cancel();
             try { _story?.Wait(5000); } catch (AggregateException) { }
+            try { _council?.Wait(5000); } catch (AggregateException) { }
             Say("Stopped.");
             return 0;
         }
@@ -112,7 +129,7 @@ namespace BannerlordAgents.WarRoom
                 sessionId = _mem.SessionId;
                 resume = _mem.SessionStarted;
             }
-            string prompt = Message(pokeText, meta, conversation, !resume, out int gapLines, out int storyWords);
+            string prompt = Message(pokeText, meta, conversation, !resume, out int gapLines, out int storyWords, write ? TakeCouncilNote() : null);
             string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-poke-" + number + (tag != null ? "-" + tag : ""));
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
@@ -161,6 +178,7 @@ namespace BannerlordAgents.WarRoom
             {
                 WriteOrders(number, answer);
                 changed = Remember(answer, number, when, meta);
+                AfterAnswer(pokeText, answer);
             }
             long context = r.InTokens + r.CacheRead + r.CacheWrite;
             if (write)
@@ -195,8 +213,9 @@ namespace BannerlordAgents.WarRoom
             return r;
         }
 
-        /// <summary>The message: the memory (the story so far, the notes, the chronicle not in the story yet), then the poke.</summary>
-        internal string Message(string pokeText, PokeMeta meta, bool conversation, bool newConversation, out int gapLines, out int storyWords)
+        /// <summary>The message: the memory (the story so far, the notes, the chronicle not in the story yet), then the poke.
+        /// before: a line for this message only, such as what became of the last council's orders.</summary>
+        internal string Message(string pokeText, PokeMeta meta, bool conversation, bool newConversation, out int gapLines, out int storyWords, string before = null)
         {
             gapLines = storyWords = 0;
             _mem.View(out string story, out double storyHours, out string storyDate, out string notes, out _);
@@ -233,6 +252,7 @@ namespace BannerlordAgents.WarRoom
                     sb.AppendLine();
                 }
             }
+            if (!string.IsNullOrEmpty(before)) sb.AppendLine(before.TrimEnd()).AppendLine();
             sb.AppendLine(_lastAnswered >= 0 ? "Your last answer was to poke #" + _lastAnswered + "." : "You have not answered any poke yet in this run.");
             sb.AppendLine();
             sb.Append(pokeText);
@@ -302,7 +322,7 @@ namespace BannerlordAgents.WarRoom
                     Number = (int?)o["number"] ?? -1, Hours = Num(o["hours"]), Date = (string)o["date"] ?? "", Campaign = (string)o["campaign"], Realm = (string)o["realm"],
                     RealmName = (string)o["realm_name"], LoadId = (string)o["load_id"], LoadedAt = Num(o["loaded_at"]), LoadedAtDate = (string)o["loaded_at_date"] ?? ""
                 };
-                return m.Number == number ? m : null;
+                return number < 0 || m.Number == number ? m : null;   // -1: whatever poke.json holds (the council)
             }
             catch (Exception e) when (e is JsonException || e is InvalidOperationException || e is FormatException) { return null; }
         }
@@ -420,6 +440,250 @@ namespace BannerlordAgents.WarRoom
             return kept;
         }
 
+        // ---------- the council of war ----------
+
+        /// <summary>
+        /// After each fast answer: a poke whose reasons hold one of council_after's words calls a council; and while a council
+        /// sits, the lords this answer ordered are noted, so the council's older view does not undo a newer order.
+        /// </summary>
+        internal void AfterAnswer(string pokeText, JsonObject answer)
+        {
+            lock (_councilGate)
+            {
+                if (_councilSitting && answer?["orders"] is JsonArray list)
+                    foreach (string lord in OrderedLords(list)) _orderedMeanwhile.Add(lord);
+                if (!_c.Council || _c.Conversation) return;
+                string reasons = Section(pokeText, "WHY YOU ARE ASKED NOW") + "\n" + Section(pokeText, "WHAT CHANGED SINCE YOUR LAST ANSWER");
+                foreach (string w in _c.CouncilAfter)
+                {
+                    int i = reasons.IndexOf(w, StringComparison.OrdinalIgnoreCase);
+                    if (i < 0) continue;
+                    string line = reasons.Substring(reasons.LastIndexOf('\n', i) + 1);
+                    int end = line.IndexOf('\n');
+                    _councilDue = (end > 0 ? line.Substring(0, end) : line).Trim().TrimStart('-', ' ');
+                    if (w.StartsWith("First look", StringComparison.OrdinalIgnoreCase)) _councilFirstLook = true;
+                    break;
+                }
+            }
+        }
+
+        /// <summary>The lords an answer's orders name: each order's lord, and the lords it calls (gather, add).</summary>
+        internal static IEnumerable<string> OrderedLords(JsonArray orders)
+        {
+            foreach (JsonNode n in orders)
+            {
+                if (n is not JsonObject o) continue;
+                if (o["lord"] is JsonValue lv && lv.TryGetValue(out string lord) && lord.Trim().Length > 0) yield return lord.Trim();
+                if (o["lords"] is JsonArray ls)
+                    foreach (JsonNode l in ls)
+                        if (l is JsonValue v && v.TryGetValue(out string s) && s.Trim().Length > 0) yield return s.Trim();
+            }
+        }
+
+        /// <summary>
+        /// Why a council of war should sit now, or null: after the first look (at once), after a big event, or when its time
+        /// has come (council_every_hours after the last, or the hour the last council asked for); never within council_gap_hours
+        /// of the last one, except for the first look, and not while one sits. nowHours: the newest poke's in-game hour.
+        /// </summary>
+        internal string CouncilDue(double nowHours)
+        {
+            if (!_c.Council || _c.Conversation || double.IsNaN(nowHours)) return null;
+            lock (_councilGate)
+            {
+                if (_councilSitting) return null;
+                bool gapOk = double.IsNaN(_lastCouncilHours) || nowHours - _lastCouncilHours >= _c.CouncilGapHours - 1e-6;
+                if (_councilDue != null && (_councilFirstLook || gapOk)) return _councilDue;
+                if (!gapOk) return null;
+                if (double.IsNaN(_lastCouncilHours)) return "no council has sat yet in this run of the war room";
+                if (!double.IsNaN(_nextCouncilHours) && nowHours >= _nextCouncilHours - 1e-6)
+                    return Math.Round(nowHours - _lastCouncilHours) + " hours have passed since the last council";
+                return null;
+            }
+        }
+
+        private void CouncilIfDue(CancellationToken stop)
+        {
+            if (_mem == null || (_council != null && !_council.IsCompleted)) return;
+            if ((DateTime.Now - _councilFailedAt).TotalMinutes < 5) return;
+            string why = CouncilDue(_pokeHours);
+            if (why == null || !Fresh(out _)) return;
+            _councilStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            CancellationToken token = _councilStop.Token;
+            lock (_councilGate)
+            {
+                _councilSitting = true;
+                _orderedMeanwhile.Clear();
+            }
+            _council = Task.Run(() =>
+            {
+                try { SitCouncil(why, token); }
+                catch (Exception e) when (e is IOException || e is InvalidOperationException || e is JsonException)
+                {
+                    _councilFailedAt = DateTime.Now;
+                    Say("Council of war: it could not sit (" + e.Message + "); tried again in five minutes.");
+                }
+                finally { lock (_councilGate) _councilSitting = false; }
+            });
+        }
+
+        /// <summary>"WarRoom council": a council sits now, by hand (the game must be running: its briefing fresh).</summary>
+        public int CouncilNow(string why)
+        {
+            PokeMeta meta = ReadMeta(-1);
+            if (meta == null) { Say("No poke.json in " + _c.ChannelDir + " yet: load the campaign first."); return 1; }
+            if (!Fresh(out string stale)) { Say("Council of war: not now: " + stale + "."); return 1; }
+            _lastAnswered = Math.Max(_lastAnswered, LastAnsweredOnDisk());
+            EnsureMemory(meta);
+            return SitCouncil(why) ? 0 : 1;
+        }
+
+        /// <summary>The bridge's briefing and situation are recent (the game is running): written within the last ten minutes.</summary>
+        private bool Fresh(out string why)
+        {
+            string briefing = Path.Combine(_c.ChannelDir, "council.txt"), situation = Path.Combine(_c.ChannelDir, "report.txt");
+            why = !File.Exists(briefing) ? "no council briefing from the game yet (council.txt)" : !File.Exists(situation) ? "no situation report yet (report.txt)" : null;
+            if (why != null) return false;
+            double age = (DateTime.Now - File.GetLastWriteTime(briefing)).TotalMinutes;
+            if (age > 10) { why = "the council briefing is " + Math.Round(age) + " minutes old: the game is closed or long paused"; return false; }
+            return true;
+        }
+
+        /// <summary>A council sits now (also "WarRoom council"): the reason given; true when its answer was read and written.</summary>
+        public bool SitCouncil(string why, CancellationToken cancel = default, string tag = null, bool write = true)
+        {
+            DateTime began = DateTime.Now;
+            PokeMeta meta = ReadMeta(-1);
+            if (meta == null || _mem == null) { Say("Council of war: no poke yet in this run, so it waits."); return false; }
+            int number = meta.Number;
+            string briefing = ReadShared(Path.Combine(_c.ChannelDir, "council.txt")) ?? "";
+            string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
+            string council = CouncilText(why, meta, number, briefing, situation);
+            string prompt = Message(council, meta, false, true, out int gapLines, out int storyWords);
+            string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-council-" + number + (tag != null ? "-" + tag : ""));
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
+            Say("Council of war (after poke #" + number + ", " + meta.Date + "): " + why + ". Asking " + _c.Model + " at effort " + _c.CouncilEffort + ", thinking up to " + _c.CouncilThinkingCap + " tokens...");
+            CallResult r = Claude.Run(_claude, SystemFile(), prompt, _c.Model, _c.CouncilEffort, _c.ChannelDir, _c.Lookups, _c.CouncilTimeoutSeconds, _c.CouncilThinkingCap, cancel: cancel);
+            File.WriteAllText(Path.Combine(folder, "raw.jsonl"), r.Raw ?? "");
+            JsonObject answer = null;
+            string problem = r.Ok ? Extract(r.Text, number, out answer) : r.Error;
+            var dropped = new List<string>();
+            int orders = 0;
+            double? councilIn = null;
+            string changed = "";
+            if (answer != null)
+            {
+                lock (_councilGate)
+                {
+                    // a fast answer that ordered a lord while the council sat saw a newer world: its order stands
+                    answer["orders"] = DropOrdered(answer["orders"] as JsonArray ?? new JsonArray(), _orderedMeanwhile, out dropped);
+                }
+                orders = ((JsonArray)answer["orders"]).Count;
+                if (answer["council_in"] is JsonValue ci && ci.TryGetValue(out double h)) councilIn = Math.Max(4, Math.Min(72, h));
+                answer["kind"] = "council";
+                if (write)
+                {
+                    WriteOrders(number, answer, "council");
+                    changed = Remember(answer, number, meta.Date, meta);
+                }
+                File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            }
+            double seconds = (DateTime.Now - began).TotalSeconds;
+            if (answer != null)
+            {
+                CouncilSat(meta.Hours, councilIn);
+                if (dropped.Count > 0 && write)
+                    lock (_councilGate)
+                        _councilNote = "YOUR COUNCIL OF WAR (" + meta.Date + ") gave " + (orders + dropped.Count) + " orders; " + dropped.Count + " of them did not go out, because a faster answer of yours ordered those lords while it sat: "
+                                       + string.Join("; ", dropped) + ".";
+            }
+            else _councilFailedAt = DateTime.Now;
+            Log(new
+            {
+                kind = "council", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), poke = number, when = meta.Date, why, model = _c.Model, effort = _c.CouncilEffort,
+                thinking_cap = _c.CouncilThinkingCap, ok = answer != null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), api_ms = r.ApiMs, ttft_ms = r.TtftMs, turns = r.Turns,
+                tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
+                context_tokens = r.InTokens + r.CacheRead + r.CacheWrite, story_words = storyWords, gap_lines = gapLines, briefing_chars = briefing.Length, situation_chars = situation.Length,
+                orders, dropped, council_in = councilIn, notes_changed = changed, campaign = _mem.Campaign, denied = r.Denied, folder, written = write && answer != null
+            });
+            if (answer != null)
+                Say("Council of war: " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s ("
+                    + r.Thinking.ToString("N0", CultureInfo.InvariantCulture) + " tokens of thinking)" + (dropped.Count > 0 ? "; " + dropped.Count + " left out, the lords ordered meanwhile" : "")
+                    + (changed.Length > 0 ? ". Notes: " + changed : "") + ". Next council by " + Program.When(_nextCouncilHours) + " at the latest.");
+            else if (!cancel.IsCancellationRequested) Say("Council of war: NO ANSWER (" + problem + ") after " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s; tried again in five minutes.");
+            return answer != null;
+        }
+
+        /// <summary>The council's part of the message: why it sits, then the bridge's whole-realm briefing, then the hourly situation report.</summary>
+        internal static string CouncilText(string why, PokeMeta meta, int number, string briefing, string situation)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("COUNCIL OF WAR, " + meta.Date);
+            sb.AppendLine("Why it sits now: " + why.TrimEnd('.') + ".");
+            sb.AppendLine("This is not a poke: it is your council of war (see \"The council of war\" in your instructions). Answer with one JSON object that says \"poke\": " + number + ".");
+            sb.AppendLine();
+            sb.AppendLine(briefing.Trim());
+            sb.AppendLine();
+            sb.Append(situation.Trim());
+            sb.AppendLine();
+            return sb.ToString();
+        }
+
+        /// <summary>The council's orders, less those for lords a faster answer ordered meanwhile (and those lords taken out of gather's and add's lists).</summary>
+        internal static JsonArray DropOrdered(JsonArray orders, ISet<string> ordered, out List<string> dropped)
+        {
+            dropped = new List<string>();
+            var kept = new JsonArray();
+            foreach (JsonNode n in orders)
+            {
+                if (n is not JsonObject o) continue;
+                string lord = o["lord"] is JsonValue lv && lv.TryGetValue(out string s) ? s.Trim() : "";
+                if (ordered.Contains(lord)) { dropped.Add(lord + " " + ((string)(o["do"] as JsonValue) ?? "?")); continue; }
+                if (o["lords"] is JsonArray ls)
+                {
+                    var keep = new JsonArray();
+                    foreach (JsonNode l in ls)
+                    {
+                        string id = l is JsonValue v && v.TryGetValue(out string x) ? x.Trim() : "";
+                        if (ordered.Contains(id)) dropped.Add(id + " (called by " + lord + ")");
+                        else keep.Add(id);
+                    }
+                    if (keep.Count == 0 && ls.Count > 0) { dropped.Add(lord + " " + ((string)(o["do"] as JsonValue) ?? "?") + ", every lord it called was ordered meanwhile"); continue; }
+                    o["lords"] = keep;
+                }
+                kept.Add(o.DeepClone());
+            }
+            return kept;
+        }
+
+        /// <summary>A council sat at this in-game hour: the next one is due council_in hours later (its own choice, 4 to 72), else council_every_hours.</summary>
+        internal void CouncilSat(double hours, double? councilIn)
+        {
+            lock (_councilGate)
+            {
+                _lastCouncilHours = hours;
+                _nextCouncilHours = hours + (councilIn ?? _c.CouncilEveryHours);
+                _councilDue = null;
+                _councilFirstLook = false;
+            }
+        }
+
+        internal double NextCouncilHours { get { lock (_councilGate) return _nextCouncilHours; } }
+
+        /// <summary>For the self-test: a council sitting (fast answers' lords are then noted), and the note for the next fast message.</summary>
+        internal void CouncilSitting(bool sitting) { lock (_councilGate) { _councilSitting = sitting; if (sitting) _orderedMeanwhile.Clear(); } }
+        internal HashSet<string> OrderedMeanwhile { get { lock (_councilGate) return new HashSet<string>(_orderedMeanwhile, StringComparer.OrdinalIgnoreCase); } }
+
+        private string TakeCouncilNote()
+        {
+            lock (_councilGate)
+            {
+                string note = _councilNote;
+                _councilNote = null;
+                return note;
+            }
+        }
+
         // ---------- reading the channel ----------
 
         /// <summary>The newest poke: its number from pokes.log, its text from poke.txt (when poke.txt already holds it).</summary>
@@ -503,6 +767,11 @@ namespace BannerlordAgents.WarRoom
         /// look-ups section goes.
         /// </summary>
         internal string SystemFile()
+        {
+            lock (_systemGate) return SystemFileLocked();   // the council's thread asks for it too
+        }
+
+        private string SystemFileLocked()
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate) : "You command a realm in Mount & Blade II: Bannerlord. Answer each poke with one JSON object of orders.";
             if (_c.Conversation) template = ReplaceSection(template, "## Your memory", ConversationMemory);
@@ -620,15 +889,18 @@ namespace BannerlordAgents.WarRoom
             }
         }
 
-        private void WriteOrders(int number, JsonObject answer)
+        /// <summary>The answer's orders into orders\poke-N.json (a council's: poke-N-council.json), swapped in whole for the bridge to read.</summary>
+        private void WriteOrders(int number, JsonObject answer, string suffix = null)
         {
             string dir = Path.Combine(_c.ChannelDir, "orders");
             Directory.CreateDirectory(dir);
             var file = new JsonObject { ["poke"] = number, ["orders"] = answer["orders"]?.DeepClone() ?? new JsonArray() };
+            if (suffix != null) file["kind"] = suffix;
             if (answer["note"] != null) file["note"] = answer["note"].DeepClone();
             else if (answer["plan"] != null) file["note"] = answer["plan"].DeepClone();
-            string final = Path.Combine(dir, "poke-" + number + ".json");
-            string temp = Path.Combine(dir, "poke-" + number + ".json.part");
+            string name = "poke-" + number + (suffix != null ? "-" + suffix + "-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) : "");
+            string final = Path.Combine(dir, name + ".json");
+            string temp = Path.Combine(dir, name + ".json.part");
             File.WriteAllText(temp, file.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
             File.Move(temp, final, true);
         }

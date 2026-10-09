@@ -153,7 +153,10 @@ namespace BannerlordAgents
                 string report = Views.Report(v, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true });
                 Audit.CheckReport(v, report, s.WatchedSees, s.InspectedByWatched, "hourly report", Known(s, s.WatchedSees, m, w));
                 AgentChannel.OnHour(s.Hours, report);
+                try { AgentChannel.WriteCouncil(Facts.Council(w)); }
+                catch (Exception e) { Diag.Error("writing the council briefing", e); }
             }
+            if (s.Watched != null) Recruitment.OnHour(s);
         }
 
         /// <summary>Notices for realms no longer followed (the watched realm changed): dropped, and said so.</summary>

@@ -25,6 +25,11 @@
 - **Oct 8, first live session:** phases 0, 1, 2 and 5 ran. The report is [reports/2026-10-08-first-live-session.md](reports/2026-10-08-first-live-session.md). Phases 3, 4 and 6 are still to run.
 - **Oct 9, second live session:** phase 7 began: Opus commanded every orc lord, with tools and memory, for a short run. The report is [reports/2026-10-09-second-live-session.md](reports/2026-10-09-second-live-session.md).
 - **Version 0.4 (Oct 8)** brings the tools, the armies and the war room, a week early, so phase 7 can run now. **Version 0.5 (in the game since Oct 9, 11:01)** adds each realm's memory of the war ([MEMORY.md](MEMORY.md)). [Testing versions 0.4 and 0.5](#testing-versions-04-and-05-opus-commands-the-orcs-with-tools-and-memory) says how.
+- **Version 0.6 (in the game since Oct 9, about 13:30)** adds the council of war and the agent's new instructions (a medieval commander's doctrine, [DOCTRINE.md](DOCTRINE.md)), the captured lords, the realm in sum and the muster, the join order, the garrison counted in a relief, and the recruitment log. **What to watch in your standing test** (load the Summer 9, 1087 save, march on Western Moria):
+  - a council sits right after the first look ("Council of war" in the war room's window);
+  - what the council does with the whole realm, and its plan in the notes;
+  - joins and armies forming in the receipts;
+  - `agents.recruits` in the console, and the daily recruitment line in the log.
 - **The agent** is the war room since Oct 8 ([WARROOM.md](WARROOM.md)). The agent chat of the first session ([AGENT-CHAT.md](AGENT-CHAT.md)) is retired.
 
 Each install is one restart of the game.
@@ -65,7 +70,7 @@ Each install is one restart of the game.
 
 **Stop at any time:** `agents.agent shadow` stops new orders from being carried out, and `agents.release all` hands every orc lord back to the game at once. Closing the war room alone stops new answers, but the lords keep their current orders until released.
 
-## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.5.1 since Oct 9, 11:55)
+## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.6.0 since Oct 9, about 13:30)
 
 Your three newest saves were copied to `C:\BannerlordArchive\save-backups` before the install, and checked identical to the originals.
 

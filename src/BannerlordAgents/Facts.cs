@@ -21,22 +21,92 @@ namespace BannerlordAgents
             public PartyRow Row;
             public string Name, Tag, Order;
             public double Strength;
+            /// <summary>Its men, with its whole army's when it leads one.</summary>
+            public int Men;
+            /// <summary>Cannot be called into another lord's army: it rules the realm, or it is already in an army.</summary>
+            public bool Uncallable;
         }
 
         private static List<Lord> OwnLords(World w)
         {
             var list = new List<Lord>();
+            // the ruler cannot be called into another lord's army (the ruling clan's leader rules the realm)
+            string rulerClan = w.Realm == w.S.Watched ? w.S.Clans.FirstOrDefault(c => c.Ruler)?.Leader : null;
             foreach (PartyRow r in w.S.Parties)
             {
                 if (r.Faction != w.Realm || r.Kind != "lord" || r.Attached) continue;
                 ToolInstance t = Runner.ForParty(r.Id);
                 list.Add(new Lord
                 {
-                    Row = r, Name = r.Name ?? r.Id, Tag = r.Leader ?? r.Id, Strength = World.StrengthOf(r),
+                    Row = r, Name = r.Name ?? r.Id, Tag = r.Leader ?? r.Id, Strength = World.StrengthOf(r), Men = World.MenOf(r),
+                    Uncallable = r.ArmyLeader != null || (rulerClan != null && r.Leader == rulerClan),
                     Order = t != null ? "your order: " + t.Def.Name + (t.Order.At != null ? " " + w.Name(t.Order.At) : t.Order.Target != null ? " " + w.Name(t.Order.Target) : "") : "free"
                 });
             }
             return list;
+        }
+
+        // ---------- the muster ----------
+
+        private static readonly double[] Bands = { 24, 48, 72 };
+        private static readonly string[] BandNames = { "within a day", "within 2 days", "within 3 days" };
+
+        /// <summary>Within the game's range for calling a lord into an army led from this place (straight line, so a little generous).</summary>
+        private static bool AtOnce(World w, Lord l, string place)
+        {
+            if (l.Uncallable || w.S.CallRange <= 0) return false;
+            double d = w.Distance(l.Row.Id, place);
+            return !double.IsNaN(d) && d <= w.S.CallRange;
+        }
+
+        /// <summary>
+        /// The muster at a place in one line: the realm's lords who could be there within one, two and three days, as running
+        /// totals (lords, men, strength), with how many of the first day's a leader there could call into an army at once.
+        /// </summary>
+        public static string MusterLine(World w, string place)
+        {
+            List<Lord> lords = OwnLords(w).Where(l => !double.IsNaN(Hours(w, l.Row, place))).ToList();
+            var parts = new List<string>();
+            for (int b = 0; b < Bands.Length; b++)
+            {
+                List<Lord> within = lords.Where(l => Hours(w, l.Row, place) <= Bands[b]).ToList();
+                string atOnce = b == 0 ? " (" + within.Count(l => AtOnce(w, l, place)) + " can be called at once)" : "";
+                parts.Add(BandNames[b] + " " + within.Count + " lords, " + Text.N(within.Sum(l => l.Men)) + " men, strength " + Text.N((int)within.Sum(l => l.Strength)) + atOnce);
+            }
+            return string.Join("; ", parts) + "; all " + lords.Count + ": " + Text.N(lords.Sum(l => l.Men)) + " men, strength " + Text.N((int)lords.Sum(l => l.Strength));
+        }
+
+        /// <summary>
+        /// The muster at a place in full: every lord of the realm leading a party, by how soon they could be there, with the
+        /// running totals at one, two and three days. * marks a lord a leader there could call into an army at once; the
+        /// others must march first (a join order does both). An army counts with its leader, with all its men.
+        /// </summary>
+        public static List<string> Muster(World w, string place)
+        {
+            var lines = new List<string>();
+            List<Lord> lords = OwnLords(w).Where(l => !double.IsNaN(Hours(w, l.Row, place))).OrderBy(l => Hours(w, l.Row, place)).ToList();
+            int b = 0, count = 0, men = 0;
+            double strength = 0;
+            var band = new List<string>();
+            void Close(string name)
+            {
+                lines.Add(name + ": " + count + " lords, " + Text.N(men) + " men, strength " + Text.N((int)strength) + " in all"
+                          + (band.Count > 0 ? "; adds " + string.Join("; ", band) : "; adds no one") + ".");
+                band.Clear();
+            }
+            foreach (Lord l in lords)
+            {
+                double h = Hours(w, l.Row, place);
+                while (b < Bands.Length && h > Bands[b]) Close(BandNames[b++]);
+                count++;
+                men += l.Men;
+                strength += l.Strength;
+                band.Add(l.Name + (AtOnce(w, l, place) ? "*" : "") + " [" + l.Tag + "] " + Text.N(l.Men) + " men, strength " + Text.N((int)l.Strength) + ", " + H(h)
+                         + (l.Row.ArmyLeader == l.Row.Id ? ", leads an army" : l.Row.ArmyLeader != null ? ", in an army" : "") + ", " + l.Order);
+            }
+            while (b < Bands.Length) Close(BandNames[b++]);
+            if (band.Count > 0) Close("later");
+            return lines;
         }
 
         private static double Hours(World w, PartyRow lord, string place)
@@ -64,6 +134,7 @@ namespace BannerlordAgents
             var sb = new StringBuilder();
             var done = new HashSet<string>();
             int subjects = 0;
+            bool mustered = false;
             foreach (Trigger t in triggers ?? new List<Trigger>())
             {
                 if (subjects >= 4) break;
@@ -76,6 +147,20 @@ namespace BannerlordAgents
                     List<string> foes = w.EnemiesNear(place, 40).Take(3).Select(e => EnemyLine(w, e, place)).ToList();
                     sb.AppendLine("- Near " + h.Name + " [" + h.Id + "]: your nearest lords " + (near.Count > 0 ? string.Join("; ", near) : "none") + "."
                                   + (foes.Count > 0 ? " Enemies in view within 40: " + string.Join("; ", foes) + "." : " No enemy in view within 40."));
+                    if (h.Faction == w.Realm && w.Besieged(h))
+                    {
+                        double? inside = w.InsideStrength(h);
+                        if (inside.HasValue)
+                            sb.AppendLine("- Inside " + h.Name + ": the garrison and your lords there, strength " + Text.N((int)inside.Value)
+                                          + ". They sally out to join a relief only when they and the relief together are more than 1.5 times the besiegers' strength ("
+                                          + Text.N((int)(w.SiegeStrength(h) ?? 0)) + "); militia never sally.");
+                    }
+                    if (!mustered)
+                    {
+                        // the muster for the first place this poke is about: how much of the realm could be there, and how soon
+                        mustered = true;
+                        sb.AppendLine("- Muster at " + h.Name + " (running totals, rough): " + MusterLine(w, place) + ". The full list: lookups/" + h.Id + ".txt.");
+                    }
                 }
                 PartyRow p = w.Party(t.Party);
                 if (p != null && p.Faction != w.Realm && w.HostileFaction(p.Faction) && done.Add(p.Id))
@@ -117,8 +202,36 @@ namespace BannerlordAgents
                 List<SettlementRow> hostile = w.S.Settlements.Where(x => World.IsFort(x) && w.HostileFaction(x.Faction)).OrderBy(x => w.Distance(h.Id, x.Id))
                                                .Where(x => w.Distance(h.Id, x.Id) <= 60).Take(5).ToList();
                 if (hostile.Count > 0) sb.AppendLine("Enemy castles and towns within 60: " + string.Join("; ", hostile.Select(x => x.Name + " [" + x.Id + "] " + Text.D((float)w.Distance(h.Id, x.Id)) + " away")) + ".");
+                if (World.IsFort(h))
+                {
+                    sb.AppendLine("Muster here: every lord of yours by how soon they could be here, with running totals. * = a leader here could call them into an army at once; the others march first (gather and add send them to join by themselves):");
+                    foreach (string line in Muster(w, h.Id)) sb.AppendLine("- " + line);
+                }
                 files[h.Id] = sb.ToString();
             }
+
+            // the realm's lords held prisoner: one file each, and all of them by where they are held
+            List<ViewCaptive> captives = w.S.Captives.Select(c => Views.Captive(w.S, c)).ToList();
+            for (int i = 0; i < captives.Count; i++)
+            {
+                ViewCaptive c = captives[i];
+                CaptiveRow row = w.S.Captives[i];
+                var sb = new StringBuilder();
+                string where = c.Holding != null ? "held in " + (c.HoldingName ?? c.Holding) + " [" + c.Holding + "], " + (c.HoldingKind ?? "holding") + " of " + (c.HoldingFaction ?? "?")
+                             : "held by " + (c.PartyName ?? "a party") + (c.PartyLord != null ? " [" + c.PartyLord + "]" : "") + " (" + (c.PartyFaction ?? "?") + ")";
+                sb.AppendLine(c.Name + " [" + c.Hero + "], your lord, is a prisoner: " + where + (double.IsNaN(c.Since) ? "" : ", since " + Text.When(c.Since)) + ". As of " + Text.When(w.Hours) + ".");
+                // where to go for them: the holding, or the party holding them if it is in sight
+                string at = row.Holding ?? (row.Party != null && w.InView(row.Party) ? row.Party : null);
+                if (at != null)
+                {
+                    sb.AppendLine("Your lords who can reach " + (c.Holding != null ? "that holding" : "that party") + " soonest:");
+                    foreach (Lord l in lords.Where(l => !double.IsNaN(Hours(w, l.Row, at))).OrderBy(l => Hours(w, l.Row, at)).Take(8)) sb.AppendLine("- " + LordLine(w, l, at));
+                }
+                else sb.AppendLine("Where that party is now is not in your sight.");
+                files[c.Hero] = sb.ToString();
+            }
+            files["captured"] = captives.Count == 0 ? "None of your lords is a prisoner. As of " + Text.When(w.Hours) + ".\n"
+                : "Your lords held prisoner, by where they are held, as of " + Text.When(w.Hours) + ":\n" + string.Concat(Views.CaptiveLines(captives).Select(l => "- " + l + "\n"));
 
             foreach (Lord l in lords)
             {
@@ -164,11 +277,65 @@ namespace BannerlordAgents
 
             files["README"] = "Look-ups for " + Views.FactionName(w.S, w.Realm) + ", as of " + Text.When(w.Hours) + ", rewritten with each poke.\n"
                               + "One file per id you see in [brackets]: lookups/<id>.txt.\n"
-                              + "- a holding of yours: your lords soonest to it, enemies near it, enemy castles and towns near it;\n"
+                              + "- a holding of yours: your lords soonest to it, enemies near it, enemy castles and towns near it, and for a castle or town the muster there (every lord by how soon they could come, with running totals);\n"
                               + "- a lord of yours: men, strength, ranks, food, hours to each of your holdings, enemies near the lord;\n"
+                              + "- a lord of yours held prisoner: where and since when, and your lords who can reach that place soonest;\n"
                               + "- an enemy: where it is or was last seen, its strength, your holdings near it, your lords who can reach it soonest.\n"
+                              + "lookups/captured.txt lists all your lords held prisoner, by where they are held.\n"
                               + "Travel hours are rough: straight-line distance over the lord's speed.\n";
             return files;
+        }
+
+        // ---------- the council of war ----------
+
+        /// <summary>
+        /// The briefing for a council of war (council.txt in the channel, rewritten every in-game hour): the whole realm at
+        /// once, which a poke's report gives only in part. The purse (the ruler's clan's gold, every clan's influence), every
+        /// lord with ranks, food and whose judgment it follows, the muster at each castle and town, and the captured lords.
+        /// The war room puts the hourly report after it. Same fog as the report: only the realm's own affairs.
+        /// </summary>
+        public static string Council(World w)
+        {
+            Snapshot s = w.S;
+            List<Lord> lords = OwnLords(w);
+            var sb = new StringBuilder();
+            sb.AppendLine("COUNCIL BRIEFING FOR " + Views.FactionName(s, w.Realm).ToUpperInvariant() + ", " + Text.When(w.Hours));
+            sb.AppendLine("The whole realm at once: your purse, every lord, the muster at each of your castles and towns, and your captured lords. The situation report follows it.");
+
+            sb.AppendLine().AppendLine("YOUR PURSE");
+            ClanRow mine = s.Clans.FirstOrDefault(c => c.Ruler);
+            if (mine != null) sb.AppendLine("- Your own clan (" + mine.Name + "): gold " + Text.N(mine.Gold) + ", influence " + Text.N((int)mine.Influence) + ".");
+            else sb.AppendLine("- Not known this hour.");
+            List<ClanRow> others = s.Clans.Where(c => !c.Ruler).OrderByDescending(c => c.Influence).ToList();
+            if (others.Count > 0)
+                sb.AppendLine("- Influence of your other clans (an army's leader's clan pays influence for every lord called into it): "
+                              + string.Join("; ", others.Select(c => c.Name + " " + Text.N((int)c.Influence))) + ".");
+
+            sb.AppendLine().AppendLine("EVERY LORD (" + lords.Count + "; an army counts with its leader; \"free\" lords follow their own judgment, not yours)");
+            var clanNames = s.Clans.ToDictionary(c => c.Id, c => c);
+            foreach (Lord l in lords.OrderByDescending(l => l.Men))
+            {
+                PartyRow r = l.Row;
+                string ranks = r.SizeLimit > 0 ? " of " + Text.N(r.SizeLimit) + " (" + Math.Round(100.0 * r.Men / r.SizeLimit) + "%)" : "";
+                string army = r.ArmyLeader == r.Id ? ", leads an army of " + Text.N(r.ArmyMen) + " men in " + r.ArmyParties + " parties" : r.ArmyLeader != null ? ", in " + w.Name(r.ArmyLeader) + "'s army" : "";
+                string clan = r.Clan != null && clanNames.TryGetValue(r.Clan, out ClanRow cr) ? "; clan " + cr.Name + (cr.Ruler ? " (yours)" : "") + ", influence " + Text.N((int)cr.Influence) : "";
+                sb.AppendLine("- " + l.Name + " [" + l.Tag + "]: " + Text.N(r.Men) + ranks + " men" + army + ", strength " + Text.N((int)l.Strength)
+                              + (r.FoodDays >= 0 ? ", food " + r.FoodDays + " days" : "") + ", speed " + Text.D(World.Speed(r)) + "; " + Views.Doing(s, r) + "; " + l.Order + clan + ".");
+            }
+
+            List<SettlementRow> forts = s.Settlements.Where(h => h.Faction == w.Realm && World.IsFort(h)).OrderBy(h => h.Name).ToList();
+            if (forts.Count > 0)
+            {
+                sb.AppendLine().AppendLine("MUSTER AT EACH OF YOUR CASTLES AND TOWNS (running totals, rough; the full list per place: lookups/<id>.txt)");
+                foreach (SettlementRow h in forts)
+                    sb.AppendLine("- " + h.Name + " [" + h.Id + "]" + (w.Besieged(h) ? " (UNDER SIEGE)" : "") + ": " + MusterLine(w, h.Id) + ".");
+            }
+
+            List<ViewCaptive> captives = s.Captives.Select(c => Views.Captive(s, c)).ToList();
+            sb.AppendLine().AppendLine("YOUR CAPTURED LORDS (" + captives.Count + (captives.Count > 0 ? ", by where they are held)" : ")"));
+            if (captives.Count == 0) sb.AppendLine("- None.");
+            foreach (string line in Views.CaptiveLines(captives)) sb.AppendLine("- " + line);
+            return sb.ToString().TrimEnd();
         }
     }
 }

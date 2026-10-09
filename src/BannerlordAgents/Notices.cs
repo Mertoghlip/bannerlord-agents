@@ -330,8 +330,8 @@ namespace BannerlordAgents
         }
 
         /// <summary>One of the watched realm's orders finished or failed: a poke trigger, as the plan has it.</summary>
-        public static void Order(string kind, string text, string party)
-            => Send(kind, text, Involved(Bridge.Watched), party);
+        public static void Order(string kind, string text, string party, bool recordOnly = false)
+            => Send(kind, text, Involved(Bridge.Watched), party, recordOnly: recordOnly);
 
         public static void OnPeaceOfferedToPlayer(IFaction from, int amount, int days)
         {

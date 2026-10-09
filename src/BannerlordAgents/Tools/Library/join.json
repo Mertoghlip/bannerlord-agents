@@ -1,0 +1,14 @@
+{
+  "tool": "join",
+  "kind": "army",
+  "about": "Sends this lord to join the army of another of your lords: the lord marches toward that army and joins it as soon as it is close enough to be called, at the game's usual influence price, paid by the army leader's clan. For lords too far away to be called at once (gather and add send such lords this way by themselves). A ruler cannot be called into another lord's army, and a lord already in an army cannot join another.",
+  "calls_back": "the lord cannot join after all (the army broke up, its leader is gone, or the leader's clan cannot pay); a lord who joins is in the army's numbers from then on",
+  "target": "own_lord",
+  "start": "march",
+  "states": {
+    "march": { "about": "marching to join {target}'s army", "do": "join target",
+      "when": [
+        { "if": "gone(target)", "go": "failed", "poke": "{target}'s party is gone, so {me} could not join its army." } ] },
+    "failed": { "about": "could not join", "end": "fail" }
+  }
+}

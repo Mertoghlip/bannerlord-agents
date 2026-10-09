@@ -39,8 +39,9 @@ namespace BannerlordAgents
         public float ArmyStrength;
         /// <summary>Map units per in-game hour, as the game last worked it out (lords only).</summary>
         public float Speed;
-        /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts.</summary>
+        /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts, and the lord's clan.</summary>
         public int SizeLimit, FoodDays = -1;
+        public string Clan;
         /// <summary>The game's own flag: the player's party can see this one.</summary>
         public bool SeenByPlayer;
         /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>
@@ -54,9 +55,32 @@ namespace BannerlordAgents
         public string BesiegedBy;
         public string Besieger;
         public int Garrison;
+        /// <summary>The watched realm's own castles and towns only: the garrison's strength, the game's own estimate.</summary>
+        public float GarrisonStrength;
         public int Militia;
         public string VillageState;
         public string Bound;
+    }
+
+    /// <summary>A lord of the watched realm held prisoner, from the game's own records (what the encyclopedia shows).</summary>
+    internal sealed class CaptiveRow
+    {
+        public string Hero, Name;
+        /// <summary>Where: a holding's id, or the party holding the lord (with that party's lord).</summary>
+        public string Holding, Party, PartyLord, Faction;
+        public float X, Y;
+        /// <summary>The in-game hour the captivity began (NaN when the game does not say).</summary>
+        public double Since = double.NaN;
+    }
+
+    /// <summary>One clan of the watched realm: its influence (the price of calling lords into an army), and the ruler's own clan's gold.</summary>
+    internal sealed class ClanRow
+    {
+        public string Id, Name, Leader;
+        public float Influence;
+        /// <summary>Known only for the ruler's own clan (the realm's treasury); -1 for the others.</summary>
+        public int Gold = -1;
+        public bool Ruler;
     }
 
     internal sealed class FactionRow
@@ -141,6 +165,11 @@ namespace BannerlordAgents
         public Dictionary<string, Sighting> WatchedSees;
         /// <summary>Settlements close enough to the watched realm's eyes for their garrisons to be counted.</summary>
         public HashSet<string> InspectedByWatched;
+        /// <summary>The watched realm's lords held prisoner, and its clans.</summary>
+        public List<CaptiveRow> Captives = new List<CaptiveRow>();
+        public List<ClanRow> Clans = new List<ClanRow>();
+        /// <summary>How far a lord may be from an army's leader and still be called into the army (the game's rule, in map units along the way).</summary>
+        public float CallRange;
 
         // for the logs (docs/LOGGING.md)
         /// <summary>When the copy began (UTC ticks), so the logs can say how long the worker took after it.</summary>

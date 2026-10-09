@@ -461,6 +461,7 @@ namespace BannerlordAgents.Tools
                     case "army_lords": return ArmyCount(false);
                     case "army_coming": return ArmyCount(true);
                     case "army_complete": return me != null && me.ArmyLeader == me.Id && ArmyCount(true) == 0 && ArmyCount(false) > 1;
+                    case "army_joining": return (double)ById.Values.Count(x => x.Def.Name == "join" && x.Order.Target == _t.Order.Party);
                     case "in_settlement": return me?.InSettlement != null;
                     case "besieging": return me?.Besieging != null;
                     case "lords": return (double)_t.Order.Lords.Count;
@@ -481,6 +482,8 @@ namespace BannerlordAgents.Tools
                     case "within": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return !double.IsNaN(d) && d <= Expr.Number(a[1]); }
                     case "besieged": return _w.Besieged(H(a[0]));
                     case "siege_strength": return _w.SiegeStrength(H(a[0]));
+                    case "inside_strength": return _w.InsideStrength(H(a[0]), me?.Id);
+                    case "relief_strength": return _w.ReliefStrength(H(a[0]), World.StrengthOf(me), me?.Id);
                     case "besieger":
                         {
                             SettlementRow h = H(a[0]);

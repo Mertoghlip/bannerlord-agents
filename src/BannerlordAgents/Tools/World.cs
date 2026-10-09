@@ -149,6 +149,37 @@ namespace BannerlordAgents.Tools
             return any ? sum : (double?)null;
         }
 
+        /// <summary>
+        /// The defenders inside one of the realm's own castles or towns who can sally out: the garrison and the lords of the
+        /// realm and its allies sheltering there. Militia never sally (the game's rule). Null for anyone else's holding.
+        /// </summary>
+        public double? InsideStrength(SettlementRow h, string except = null)
+        {
+            if (h == null || h.Faction != Realm || !IsFort(h)) return null;
+            double sum = h.GarrisonStrength;
+            foreach (PartyRow r in S.Parties)
+                if (r.InSettlement == h.Id && r.Kind == "lord" && !r.Attached && r.Id != except && (r.Faction == Realm || Ally(r.Faction))) sum += StrengthOf(r);
+            return sum;
+        }
+
+        /// <summary>
+        /// What a relief force of this strength would fight the besiegers of one of the realm's holdings with. The game's
+        /// rule (SallyOutsCampaignBehavior, 1.4.8): once a relief force attacks the besiegers, the garrison and the lords
+        /// inside join the battle when they and the friendly forces there are more than 1.5 times the enemy's strength
+        /// there; it checks again every hour of the battle. So: the relief's strength plus theirs when that holds, else the
+        /// relief's alone.
+        /// </summary>
+        public double ReliefStrength(SettlementRow h, double relief, string reliefParty = null)
+        {
+            double? inside = InsideStrength(h, reliefParty);
+            double? siege = SiegeStrength(h);
+            if (inside == null || siege == null || inside.Value <= 0) return relief;
+            return relief + inside.Value > SallyRatio * siege.Value ? relief + inside.Value : relief;
+        }
+
+        /// <summary>The game's bar for the defenders to sally out beside a relief force (SallyOutPowerRatioForHelpingReliefForce).</summary>
+        public const double SallyRatio = 1.5;
+
         /// <summary>Nearest castle or town of the realm or an ally, not under siege, to a place.</summary>
         public SettlementRow NearestFort(string from, Func<SettlementRow, bool> extra = null)
         {

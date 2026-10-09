@@ -1,8 +1,8 @@
 {
   "tool": "gather",
   "kind": "army",
-  "about": "Forms an army under this lord: the named lords march to the meeting place and join it there. The game charges the leader's clan its usual influence for each lord called. Lords who cannot come (in a battle, too far, already in an army) are left out, and you are told which.",
-  "calls_back": "the army has formed, it has waited wait_hours, or it broke up",
+  "about": "Forms an army under this lord: the named lords march to the meeting place and join it there. The game charges the leader's clan its usual influence for each lord called. Lords too far away to be called yet are sent marching toward the army and join it once close enough (a join order each, paid when they join); lords who cannot come at all (in a battle, inside a besieged holding, besieging, already in an army) are left out. You are told who comes now, who marches first, and who cannot come.",
+  "calls_back": "the army has formed with every lord who was coming, it has waited wait_hours, or it broke up",
   "at": "friendly_holding",
   "lords": true,
   "settings": {
@@ -10,11 +10,11 @@
   },
   "start": "wait",
   "states": {
-    "wait": { "about": "waiting at {at} for the army: {army_lords} lords, {army_coming} still coming", "do": "near at",
+    "wait": { "about": "waiting at {at} for the army: {army_lords} lords, {army_coming} still coming, {army_joining} marching to join", "do": "near at",
       "when": [
         { "if": "hours_in_state >= 1 and not in_army", "go": "broke", "poke": "{me}'s army broke up before it formed." },
-        { "if": "army_complete", "go": "ready", "poke": "{me}'s army has formed at {at}: {army_lords} lords, {men} men, strength {strength}." },
-        { "if": "hours_in_state >= wait_hours", "go": "ready", "poke": "{me} waited {wait_hours} hours at {at}; going on with {army_lords} lords, {men} men ({army_coming} never came)." } ] },
+        { "if": "army_complete and army_joining == 0", "go": "ready", "poke": "{me}'s army has formed at {at}: {army_lords} lords, {men} men, strength {strength}." },
+        { "if": "hours_in_state >= wait_hours", "go": "ready", "poke": "{me} waited {wait_hours} hours at {at}; going on with {army_lords} lords, {men} men ({army_coming} never came, {army_joining} still marching to join)." } ] },
     "ready": { "about": "the army is ready at {at}, waiting for your order", "end": "hold" },
     "broke": { "about": "the army broke up", "end": "fail" }
   }

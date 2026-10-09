@@ -51,6 +51,8 @@ namespace BannerlordAgents
                 if (p.Lord != null) allowed.Add(p.Lord);
             }
             foreach (ViewHolding h in v.Holdings.Concat(v.Frontier)) allowed.Add(h.Id);
+            // the realm's own lords held prisoner, and where and by whom: the game's public records (the encyclopedia)
+            foreach (string id in Views.CaptiveIds(v)) allowed.Add(id);
             // beyond the report's own lists: everything in sight (past the 40-party list), remembered, or named by an order in force
             if (known != null) foreach (string id in known) if (id != null) allowed.Add(id);
             foreach (Match m in Brackets.Matches(report ?? ""))

@@ -60,7 +60,7 @@ namespace BannerlordAgents.Tools
         {
             ["goto"] = "holding", ["enter"] = "holding", ["near"] = "holding", ["patrol"] = "holding", ["defend"] = "holding",
             ["besiege"] = "holding", ["raid"] = "holding", ["recruit"] = "holding",
-            ["engage"] = "party", ["follow"] = "party", ["toward"] = "party",
+            ["engage"] = "party", ["follow"] = "party", ["toward"] = "party", ["join"] = "party",
             ["leave"] = "none", ["hold"] = "none"
         };
 
@@ -72,14 +72,14 @@ namespace BannerlordAgents.Tools
         public static readonly HashSet<string> BuiltIns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "me", "strength", "men", "ranks", "wounded", "food_days", "hours_in_state", "hours_running", "in_army", "leads_army",
-            "army_lords", "army_coming", "army_complete", "in_settlement", "besieging", "at", "target", "caution", "danger_radius"
+            "army_lords", "army_coming", "army_complete", "army_joining", "in_settlement", "besieging", "at", "target", "caution", "danger_radius"
         };
 
         /// <summary>The functions, with how many arguments each takes.</summary>
         public static readonly Dictionary<string, int> Functions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
             ["distance"] = 2, ["hours_to"] = 1, ["inside"] = 1, ["within"] = 2,
-            ["besieged"] = 1, ["siege_strength"] = 1, ["besieger"] = 1, ["raided"] = 1, ["looted"] = 1,
+            ["besieged"] = 1, ["siege_strength"] = 1, ["inside_strength"] = 1, ["relief_strength"] = 1, ["besieger"] = 1, ["raided"] = 1, ["looted"] = 1,
             ["ours"] = 1, ["hostile"] = 1, ["friendly"] = 1,
             ["enemies_near"] = 2, ["enemy_strength_near"] = 2, ["strongest_enemy_near"] = 2, ["weakest_enemy_near"] = 2, ["nearest_enemy"] = 2, ["army_near"] = 2,
             ["strength_of"] = 1, ["men_of"] = 1, ["in_view"] = 1, ["seen_ago"] = 1, ["gone"] = 1,
@@ -326,7 +326,7 @@ namespace BannerlordAgents.Tools
             sb.AppendLine();
             sb.AppendLine("Armies (order the army's leader; the leader's moves and tools move the whole army):");
             foreach (ToolDef d in All.Values.Where(x => x.Kind == "army").OrderBy(x => x.Name)) sb.AppendLine(d.Describe());
-            sb.AppendLine("- **add** (lords): calls more lords into the leader's army, at the game's influence price.");
+            sb.AppendLine("- **add** (lords): calls more lords into the leader's army, at the game's influence price. Lords too far away to be called yet are sent marching to join it (a join order each).");
             sb.AppendLine("- **release** (lords): lets lords go from the leader's army; they go back to their own judgment. Without lords, release is the same as free.");
             sb.AppendLine("- **disband**: breaks up the leader's army.");
             sb.AppendLine("- The game's own rules still hold: an army left idle (holding, or waiting at a friendly place) for about two days breaks up, and so does one whose cohesion runs out.");

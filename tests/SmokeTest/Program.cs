@@ -256,7 +256,9 @@ namespace SmokeTest
 
             List<string> problems = Library.Problems();
             Check(problems.Count == 0, "the tool library passes its own checks" + (problems.Count > 0 ? ": " + string.Join("; ", problems) : ""));
-            Check(Library.All.Count == 16, "the library holds 16 orders (7 moves, 7 tools, 2 for armies), got " + Library.All.Count);
+            Check(Library.All.Count == 17, "the library holds 17 orders (7 moves, 7 tools, 3 for armies), got " + Library.All.Count);
+            Check(Library.Text().Contains("**join** (target: one of your lords)") && Library.Text().Contains("more than 1.5 times the besiegers' strength"),
+                  "the library has the join order, and relieve says when the defenders inside sally out");
             var scope = new TestScope();
             Check(Expr.Truthy(Expr.Parse("2 + 3 * 4 == 14 and not false and twice(x) >= 4").Eval(scope)), "the language: sums, comparisons, and/not, names and functions");
             Check(!Expr.Truthy(Expr.Parse("none < 3 or missing > 0").Eval(scope)), "a comparison with something unknown is false, so no rule fires on a missing fact");
@@ -369,6 +371,8 @@ namespace SmokeTest
             Brain.OnHour(ToolWorld(3014, gorbag, shagrat));
             Check(released.Contains(904) && thens.Count == 0, "an army that broke up sets its lord free, and its next order does not start");
 
+            FactsTests(dir, agentDir, moves, released, thens);
+
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
             string numbered = Path.Combine(dir, "pokes_numbers_test.jsonl");
@@ -376,6 +380,109 @@ namespace SmokeTest
             Check(AgentChannel.HighestIn(numbered) == 125, "the highest poke number is found in a poke file of long lines (" + AgentChannel.HighestIn(numbered) + ")");
 
             Runner.Reset();
+        }
+
+        /// <summary>
+        /// Version 0.6 on the made-up world: relieve counting the defenders inside by the game's sally rule, the join order
+        /// and gather waiting for the lords still marching to join, the captured lords, the realm in sum, the muster, the
+        /// council's briefing, and the fog check over all of it.
+        /// </summary>
+        private static void FactsTests(string dir, string agentDir, List<KeyValuePair<int, Move>> moves, List<int> released, List<KeyValuePair<int, JObject>> thens)
+        {
+            // relieve: the garrison and the lords inside count only when the game would send them out (relief + inside > 1.5 x besiegers)
+            var sieger = new PartyRow { Id = "p_sieger", Leader = "lord_sieger", Name = "Elladan", Faction = "player_k", Kind = "lord", Men = 700, Strength = 1000, Speed = 4, X = 101, Y = 102, Besieging = "castle_orc", Doing = "BesiegeSettlement", Spottable = true };
+            var inside = new PartyRow { Id = "p_in", Leader = "lord_in", Name = "Muzgash", Faction = "orcs", Kind = "lord", Men = 200, SizeLimit = 300, Strength = 300, Speed = 4, FoodDays = 5, X = 100, Y = 100, InSettlement = "castle_orc", Doing = "Hold", Spottable = true };
+            var relief = new PartyRow { Id = "p_rel", Leader = "lord_rel", Name = "Grishnakh", Faction = "orcs", Kind = "lord", Men = 500, SizeLimit = 600, Strength = 700, Speed = 4, FoodDays = 9, X = 125, Y = 100, Doing = "Hold", Spottable = true };
+            Snapshot Siege(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                SettlementRow c = s.SettlementById["castle_orc"];
+                c.BesiegedBy = "player_k";
+                c.Besieger = "p_sieger";
+                c.GarrisonStrength = 600;
+                return s;
+            }
+            Snapshot w1 = Siege(4000, sieger, inside, relief);
+            World world = Runner.WorldFor(w1);
+            Check(world.InsideStrength(w1.SettlementById["castle_orc"]) == 900 && world.ReliefStrength(w1.SettlementById["castle_orc"], 700, "p_rel") == 1600
+                  && world.ReliefStrength(w1.SettlementById["castle_orc"], 400, "p_rel") == 400,
+                  "the defenders inside (garrison 600, Muzgash 300) join a relief of 700 against 1,000 (1,600 > 1,500), not one of 400 (1,300)");
+            Brain.OnHour(w1);
+            moves.Clear();
+            Runner.Start(905, new ToolOrder { Tool = "relieve", Lord = "lord_rel", LordName = "Grishnakh", Party = "p_rel", At = "castle_orc" });
+            Check(moves.Any(m => m.Key == 905 && m.Value.Verb == "engage" && m.Value.Party == "p_sieger"), "relieve strikes at once when the defenders inside would sally out beside it");
+            relief.Strength = 400;
+            Brain.OnHour(Siege(4001, sieger, inside, relief));
+            moves.Clear();
+            Runner.Start(906, new ToolOrder { Tool = "relieve", Lord = "lord_rel", LordName = "Grishnakh", Party = "p_rel", At = "castle_orc" });
+            Files.FlushAll();
+            Check(!moves.Any(m => m.Key == 906 && m.Value.Verb == "engage") && Read(Path.Combine(dir, "notices.jsonl")).Contains("too weak to strike the besiegers of Orc Castle yet: strength 400"),
+                  "a weaker relief waits, and says it is too weak, counting itself alone");
+            Runner.Ended(906, "test over");
+
+            // join: the far lord marches to the army's leader; gather waits for it even once the army is otherwise complete
+            var leader = new PartyRow { Id = "p_ldr", Leader = "lord_ldr", Name = "Mauhur", Faction = "orcs", Kind = "lord", Men = 300, Strength = 400, ArmyLeader = "p_ldr", ArmyMen = 450, ArmyParties = 2, ArmyStrength = 600, Speed = 4, FoodDays = 9, X = 139, Y = 100, Doing = "GoToPoint", Spottable = true };
+            var member = new PartyRow { Id = "p_mem", Leader = "lord_mem", Name = "Snaga", Faction = "orcs", Kind = "lord", Men = 150, Strength = 200, ArmyLeader = "p_ldr", Attached = true, Speed = 4, FoodDays = 9, X = 139, Y = 100, Doing = "EscortParty", Spottable = true };
+            var far = new PartyRow { Id = "p_far", Leader = "lord_far2", Name = "Radbug", Faction = "orcs", Kind = "lord", Men = 250, SizeLimit = 300, Strength = 320, Speed = 4, FoodDays = 9, X = 400, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(4002, leader, member, far));
+            var ga = new ToolOrder { Tool = "gather", Lord = "lord_ldr", LordName = "Mauhur", Party = "p_ldr", At = "castle_two", Then = JObject.Parse("{\"do\":\"defend\",\"at\":\"castle_two\"}") };
+            ga.Lords.Add("p_mem");
+            ga.Lords.Add("p_far");
+            moves.Clear();
+            thens.Clear();
+            released.Clear();
+            // as gather sends them: the far lord's join order goes out with the army's own
+            Runner.Start(908, new ToolOrder { Tool = "join", Lord = "lord_far2", LordName = "Radbug", Party = "p_far", Target = "p_ldr" });
+            Runner.Start(907, ga);
+            Check(moves.Any(m => m.Key == 908 && m.Value.Verb == "join" && m.Value.Party == "p_ldr"), "join marches the far lord to the army's leader, to join once close enough");
+            Brain.OnHour(ToolWorld(4003, leader, member, far));
+            Check(thens.Count == 0 && Runner.InForce(Runner.WorldFor(ToolWorld(4003, leader, member, far))).Contains("1 marching to join"),
+                  "gather waits for the lord still marching to join, though the rest of its army has come");
+            Runner.Ended(908, "joined Mauhur's army");   // the game's thread joins it and ends the order
+            Brain.OnHour(ToolWorld(4004, leader, member, far));
+            Check(thens.Any(t => t.Key == 907), "once no lord is marching to join, the army is formed and its next order starts");
+            Runner.Start(909, new ToolOrder { Tool = "join", Lord = "lord_far2", LordName = "Radbug", Party = "p_far", Target = "p_vanished" });
+            Check(released.Contains(909), "a join order whose army's leader is gone fails, and frees the lord");
+
+            // the realm in sum, the captured lords (where, by whom, since when) and the muster, in the report and the look-ups
+            Snapshot s2 = ToolWorld(4010, leader, member, far, inside);
+            s2.CallRange = 60;
+            s2.Clans.Add(new ClanRow { Id = "clan_azog", Name = "Azog's clan", Leader = "lord_azog_h", Influence = 900, Gold = 15000, Ruler = true });
+            s2.Clans.Add(new ClanRow { Id = "clan_mau", Name = "Mauhur's clan", Leader = "lord_ldr", Influence = 120 });
+            leader.Clan = "clan_mau";
+            s2.Captives.Add(new CaptiveRow { Hero = "lord_cap1", Name = "Lugdush", Holding = "castle_men", Faction = "player_k", X = 170, Y = 100, Since = 3990 });
+            s2.Captives.Add(new CaptiveRow { Hero = "lord_cap2", Name = "Ufthak", Holding = "castle_men", Faction = "player_k", X = 170, Y = 100, Since = 4001 });
+            s2.Captives.Add(new CaptiveRow { Hero = "lord_cap3", Name = "Gorbag", Party = "p_hunter", PartyLord = "lord_hunter", Faction = "player_k", X = 200, Y = 150, Since = 4005 });
+            View v = Views.Build(s2, "orcs", s2.WatchedSees, s2.HostileToWatched, Brain.Get("orcs"));
+            string report = Views.Report(v, null);
+            Check(report.Contains("YOUR REALM IN SUM") && report.Contains("In the field: 4 lords leading parties, 900 men") && report.Contains("Prisoners of the enemy: 3 of your lords"),
+                  "the report sums up the realm: lords, men, castles, villages, prisoners");
+            Check(report.Contains("YOUR CAPTURED LORDS (3, by where they are held)") && report.Contains("In Fornost [castle_men] (castle of Kingdom of Arnor and Gondor): 2 lords: Lugdush [lord_cap1] since")
+                  && report.Contains("Held by a party [lord_hunter] (Kingdom of Arnor and Gondor), on the march: 1 lord: Gorbag [lord_cap3]"),
+                  "the captured lords, grouped by where they are held, with since when");
+            List<string> leaks = Audit.Fog(v, report, s2.WatchedSees, s2.InspectedByWatched);
+            Check(leaks.Count == 0, "the captured lords pass the fog check (the game's public records)" + (leaks.Count > 0 ? ": " + string.Join("; ", leaks) : ""));
+            World w2 = Runner.WorldFor(s2);
+            // three lords lead parties (Snaga marches in Mauhur's army): Mauhur's army and Muzgash within a day, Radbug in under three
+            string muster = Facts.MusterLine(w2, "castle_two");
+            Check(muster.StartsWith("within a day 2 lords, 650 men, strength 900 (1 can be called at once)") && muster.Contains("within 3 days 3 lords") && muster.EndsWith("all 3: 900 men, strength 1,220"),
+                  "the muster at a holding: running totals by day, and who can be called at once (" + muster + ")");
+            List<string> full = Facts.Muster(w2, "castle_two");
+            Check(full.Count == 3 && full[0].Contains("Mauhur [lord_ldr]") && full[0].Contains("leads an army") && full[0].Contains("Muzgash*") && full[1].Contains("adds no one")
+                  && full[2].StartsWith("within 3 days: 3 lords") && full[2].Contains("Radbug [lord_far2]"),
+                  "the full muster lists every lord by band, marking who can be called at once (*)");
+            Dictionary<string, string> look = Facts.Lookups(w2, Brain.Get("orcs").LastSeen);
+            Check(look.ContainsKey("captured") && look["captured"].Contains("Lugdush [lord_cap1]") && look.ContainsKey("lord_cap1") && look["lord_cap1"].Contains("is a prisoner: held in Fornost [castle_men]")
+                  && look["castle_two"].Contains("Muster here"), "the look-ups: each captured lord, all of them, and the muster in each castle's file");
+            string council = Facts.Council(w2);
+            Check(council.StartsWith("COUNCIL BRIEFING FOR MISTY MOUNTAIN ORCS") && council.Contains("Your own clan (Azog's clan): gold 15,000, influence 900")
+                  && council.Contains("Influence of your other clans") && council.Contains("Mauhur [lord_ldr]: 300") && council.Contains("clan Mauhur's clan, influence 120")
+                  && council.Contains("MUSTER AT EACH OF YOUR CASTLES AND TOWNS") && council.Contains("YOUR CAPTURED LORDS (3, by where they are held)"),
+                  "the council's briefing: the purse, every lord, the muster at each castle and town, the captured lords");
+            Files.FlushAll();
+            Check(File.Exists(Path.Combine(agentDir, "council.txt")) && Read(Path.Combine(agentDir, "council.txt")).StartsWith("COUNCIL BRIEFING"), "the briefing is written into the channel every hour");
+            Runner.Ended(905, "test over");
+            Runner.Ended(907, "test over");
         }
 
         private sealed class TestScope : IScope

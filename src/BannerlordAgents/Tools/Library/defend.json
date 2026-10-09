@@ -8,7 +8,7 @@
   "settings": {
     "radius": [20, 3, 80, "how far around the holding it watches, in map units"],
     "shelter_at": [1.2, 0.3, 5, "shelter when the enemies in the area are this many times its strength"],
-    "strike_below": [0.7, 0.1, 2, "attack an enemy in the area, or the besiegers, up to this share of its strength"],
+    "strike_below": [0.7, 0.1, 2, "attack an enemy in the area, or the besiegers, up to this share of its strength (against besiegers, counting the defenders inside when they would sally out)"],
     "floor": [0.4, 0, 1, "shelter when its ranks fall below this share of full"]
   },
   "init": { "target": "none", "refuge": "pick(fort(at), at, nearest_fort())" },
@@ -18,7 +18,7 @@
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
         { "if": "ranks < floor", "go": "shelter", "poke": "{me}'s ranks fell to {round(ranks * 100)}% near {at}; sheltering in {refuge}." },
-        { "if": "besieged(at) and siege_strength(at) <= strength * strike_below", "go": "relieve", "poke": "{me} is breaking the siege of {at}: strength {strength} against {siege_strength(at)}." },
+        { "if": "besieged(at) and siege_strength(at) <= relief_strength(at) * strike_below", "go": "relieve", "poke": "{me} is breaking the siege of {at}: strength {relief_strength(at)} with the defenders inside who would sally out ({me}'s own {strength}) against {siege_strength(at)}." },
         { "if": "besieged(at)", "go": "shelter", "poke": "A strong force besieges {at}: strength {siege_strength(at)} against {me}'s {strength}. {me} is sheltering in {refuge}." },
         { "if": "enemy_strength_near(at, radius) >= strength * shelter_at", "go": "shelter", "poke": "Enemies too strong for {me} are near {at}: strength {enemy_strength_near(at, radius)} against {strength}. {me} is sheltering in {refuge}." },
         { "if": "weakest_enemy_near(at, radius) != none and strength_of(weakest_enemy_near(at, radius)) <= strength * strike_below", "go": "strike", "set": { "target": "weakest_enemy_near(at, radius)" } } ] },
@@ -36,7 +36,7 @@
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell." },
         { "if": "not besieged(at)", "go": "patrol", "poke": "The siege of {at} is broken." },
-        { "if": "siege_strength(at) > strength * strike_below * 1.5", "go": "shelter", "poke": "The besiegers of {at} grew too strong to strike; {me} is sheltering in {refuge}." } ] },
+        { "if": "siege_strength(at) > relief_strength(at) * strike_below * 1.5", "go": "shelter", "poke": "The besiegers of {at} grew too strong to strike; {me} is sheltering in {refuge}." } ] },
     "lost": { "about": "done", "end": "free" }
   }
 }

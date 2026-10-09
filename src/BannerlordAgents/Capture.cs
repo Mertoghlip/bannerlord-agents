@@ -69,7 +69,13 @@ namespace BannerlordAgents
                     r.Besieger = camp?.LeaderParty?.StringId;
                     r.BesiegedBy = camp?.MapFaction?.StringId;
                 }
-                if (s.Town != null) r.Garrison = s.Town.GarrisonParty?.Party.NumberOfHealthyMembers ?? 0;
+                if (s.Town != null)
+                {
+                    PartyBase g = s.Town.GarrisonParty?.Party;
+                    r.Garrison = g?.NumberOfHealthyMembers ?? 0;
+                    // the game keeps this estimate until the garrison changes; only the watched realm's tools weigh it
+                    if (g != null && watched != null && f == watched) r.GarrisonStrength = (float)Math.Round(g.EstimatedStrength);
+                }
                 if (s.Village != null)
                 {
                     r.VillageState = s.Village.VillageState.ToString();
@@ -101,6 +107,7 @@ namespace BannerlordAgents
                 if (player != null && kv.Value != player && FactionManager.IsAtWarAgainstFaction(kv.Value, player)) snap.HostileToPlayer.Add(kv.Key);
             }
 
+            if (watched != null) Realm(watched, snap);
             long t4 = Perf.Now();
             if (withVision && watched != null) Vision.FactionSees(watched, live, snap);
             long t5 = Perf.Now();
@@ -120,6 +127,52 @@ namespace BannerlordAgents
 
         private static double Ms(long a, long b) => (b - a) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
 
+        /// <summary>
+        /// The watched realm's own records: its lords held prisoner (where, by whom, since when), its clans' influence and
+        /// the ruler's clan's gold, and the game's range for calling lords into an army.
+        /// </summary>
+        private static void Realm(Kingdom watched, Snapshot snap)
+        {
+            snap.CallRange = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
+            foreach (Hero h in watched.AliveLords)
+            {
+                if (h == null || !h.IsPrisoner) continue;
+                var c = new CaptiveRow { Hero = h.StringId, Name = Names.Hero(h) };
+                PartyBase at = h.PartyBelongedToAsPrisoner;
+                if (at?.Settlement != null)
+                {
+                    c.Holding = at.Settlement.StringId;
+                    c.Faction = at.Settlement.MapFaction?.StringId;
+                    c.X = Text.R1(at.Settlement.Position.X);
+                    c.Y = Text.R1(at.Settlement.Position.Y);
+                }
+                else if (at?.MobileParty != null)
+                {
+                    MobileParty p = at.MobileParty;
+                    // a prisoner inside a holding with the party holding them is in that holding
+                    c.Holding = p.CurrentSettlement?.StringId;
+                    c.Party = p.StringId;
+                    c.PartyLord = p.LeaderHero?.StringId;
+                    c.Faction = p.MapFaction?.StringId;
+                    c.X = Text.R1(p.Position.X);
+                    c.Y = Text.R1(p.Position.Y);
+                }
+                double since = h.CaptivityStartTime.ToHours;
+                if (since > 0 && since <= snap.Hours + 1) c.Since = since;
+                snap.Captives.Add(c);
+            }
+            foreach (Clan cl in watched.Clans)
+            {
+                if (cl == null || cl.IsEliminated) continue;
+                bool ruler = cl == watched.RulingClan;
+                snap.Clans.Add(new ClanRow
+                {
+                    Id = cl.StringId, Name = Names.Faction(cl), Leader = cl.Leader?.StringId, Influence = (float)Math.Round(cl.Influence),
+                    Gold = ruler ? cl.Gold : -1, Ruler = ruler
+                });
+            }
+        }
+
         /// <summary>One party as plain numbers. For the watched realm's own lords (own) a few more, which its tools need.</summary>
         public static PartyRow Row(MobileParty p, bool own)
         {
@@ -133,12 +186,13 @@ namespace BannerlordAgents
             // the game recomputes a party's strength whenever its roster changes, so only ask where a report needs it
             if (p.IsLordParty || p.IsBandit) r.Strength = (float)Math.Round(party.EstimatedStrength);
             if (p.IsLordParty) r.Speed = Text.R1(p.LastCalculatedBaseSpeed);   // the speed the game last worked out: a field, not a new sum
+            Hero leader = p.LeaderHero;
             if (own && p.IsLordParty)
             {
                 r.SizeLimit = party.PartySizeLimit;
                 r.FoodDays = p.GetNumDaysForFoodToLast();
+                r.Clan = leader?.Clan?.StringId;
             }
-            Hero leader = p.LeaderHero;
             r.Leader = leader?.StringId;
             Settlement inside = p.CurrentSettlement;
             r.InSettlement = inside?.StringId;

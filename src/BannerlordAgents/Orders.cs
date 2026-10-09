@@ -57,6 +57,8 @@ namespace BannerlordAgents
             public float BestDistance = float.MaxValue;
             public double LastProgressAt;
             public bool StuckAlarmed, FightAlarmed;
+            /// <summary>A join order has seen its army (so an army missing later broke up, rather than not having formed yet).</summary>
+            public bool JoinedSeen;
             public readonly List<double> ReissueTimes = new List<double>();
         }
 
@@ -239,7 +241,7 @@ namespace BannerlordAgents
                 status = "posted";
                 return null;
             }
-            if (verb == "add" || verb == "release" || verb == "disband") return ArmyChange(verb, lord, party, a, realm, shadow, live, ref status);
+            if (verb == "add" || verb == "release" || verb == "disband") return ArmyChange(verb, lord, party, a, realm, source, shadow, live, ref status);
 
             ToolDef def = Library.Get(verb);
             if (def == null)
@@ -452,6 +454,12 @@ namespace BannerlordAgents
             o.LastProgressAt = CampaignTime.Now.ToHours;
             Diag.Event("order", "moved", new { id = o.Id, tool = o.Tool, lord = o.Lord?.StringId, move = m.ToString(), made = Describe(o), took = OnCourse(o) });
             Log.Line("order #" + o.Id + " [" + o.Source + "] " + o.Tool + ": " + Describe(o));
+            // a lord already close enough joins at once, rather than at the next hour
+            if (o.Verb == "join" && TryJoin(o))
+            {
+                Active.Remove(o);
+                Changed();
+            }
         }
 
         /// <summary>A tool finished and frees its lord (from the worker).</summary>
@@ -497,7 +505,8 @@ namespace BannerlordAgents
             switch (o.Verb)
             {
                 case "engage": return o.Target != null && o.Target.IsActive && realm != null && FactionManager.IsAtWarAgainstFaction(o.Target.MapFaction, realm);
-                case "follow": return o.Target != null && o.Target.IsActive && o.Target != o.Party;
+                case "follow":
+                case "join": return o.Target != null && o.Target.IsActive && o.Target != o.Party;
                 case "goto":
                 case "enter":
                 case "recruit":
@@ -531,6 +540,7 @@ namespace BannerlordAgents
                 case "recruit": text = lord + " fills the ranks at " + at; break;
                 case "hold": text = lord + " holds position"; break;
                 case "gather": text = lord + " gathers an army at " + at + " with " + with; break;
+                case "join": text = lord + " marches to join " + target + "'s army"; break;
                 default:
                     text = lord + " " + def.Name + (at != null ? " " + at : "") + (target != null ? " " + target : "") + (with != null ? ", with " + with : ""); break;
             }
@@ -551,15 +561,23 @@ namespace BannerlordAgents
             if (lord.Clan == null || lord.Clan.Kingdom != realm) return name + "'s clan is not a clan of " + Names.Faction(realm) + ".";
             if (lord.Clan.IsUnderMercenaryService) return name + "'s clan serves as mercenaries, and the game does not let mercenaries lead armies.";
             if (o.Lords.Count == 0) return "gather needs lords to call, for example \"lords\": [\"lord_X\", \"lord_Y\"].";
-            List<MobileParty> members = Callable(lp, o.Lords, realm, out List<string> leftOut, out int cost);
-            if (members.Count == 0) return "none of these lords can be called: " + string.Join("; ", leftOut) + ".";
-            if (leftOut.Count > 0) notes.Add("left out, since they cannot be called: " + string.Join("; ", leftOut));
+            List<MobileParty> members = Callable(lp, o.Lords, realm, out List<string> leftOut, out int cost, out List<MobileParty> far);
+            if (members.Count == 0 && far.Count == 0) return "none of these lords can come: " + string.Join("; ", leftOut) + ".";
+            if (leftOut.Count > 0) notes.Add("cannot come: " + string.Join("; ", leftOut));
             float influence = lord.Clan.Influence;
             if (cost > influence) return "calling " + members.Count + " lords costs " + cost + " influence, and " + name + "'s clan has " + (int)influence + ". Call fewer lords, or nearer ones.";
+            int farCost = CostNow(lp, far);
+            if (far.Count > 0)
+                notes.Add("too far to be called yet, so they march to join and are called once close enough (about " + farCost + " influence more, less as they come nearer): "
+                          + string.Join(", ", far.Select(m => Names.Hero(m.LeaderHero) + " (" + Text.N(m.Party.NumberOfHealthyMembers) + " men)")));
+            if (cost + farCost > influence && far.Count > 0)
+                notes.Add("the clan may not have the influence for all of them when they arrive (" + (int)influence + " now)");
             Settlement place = Settlement.Find(o.At);
-            string who = string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero)));
+            string who = members.Count > 0 ? string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero))) : "no lord at once";
             int men = lp.Party.NumberOfHealthyMembers + members.Sum(m => m.Party.NumberOfHealthyMembers);
-            string text = name + " calls " + who + " to " + Names.Settlement(place) + " (" + (members.Count + 1) + " lords, " + Text.N(men) + " men) for " + cost
+            int farMen = far.Sum(m => m.Party.NumberOfHealthyMembers);
+            string text = name + " calls " + who + " to " + Names.Settlement(place) + " (" + (members.Count + 1) + " lords, " + Text.N(men) + " men now"
+                          + (far.Count > 0 ? "; " + far.Count + " more lords, " + Text.N(farMen) + " men, march to join" : "") + ") for " + cost
                           + " influence; the clan has " + (int)influence;
             if (o.Then != null) text += "; then " + ((string)o.Then["do"] ?? "?") + (o.Then["at"] != null ? " " + (string)o.Then["at"] : o.Then["target"] != null ? " " + (string)o.Then["target"] : "");
             if (shadow)
@@ -582,14 +600,16 @@ namespace BannerlordAgents
             if (army == null) return "the game did not form the army (no reason given)";
             army.AiBehaviorObject = place;   // meet where the agent said, not where the game would choose
             Diag.Count("army:formed");
-            Diag.Event("army", "formed", new { leader = lord.StringId, place = place.StringId, members = members.Select(m => m.LeaderHero.StringId).ToList(), cost, influence_before = (int)influence, type = type.ToString() });
+            Diag.Event("army", "formed", new { leader = lord.StringId, place = place.StringId, members = members.Select(m => m.LeaderHero.StringId).ToList(),
+                                                far = far.Select(m => m.LeaderHero?.StringId).ToList(), cost, far_cost_now = farCost, influence_before = (int)influence, type = type.ToString() });
             StartTool(lord, lp, def, o, realm, o.Words);
+            SendToJoin(far, lp, o, realm);
             status = "applied";
             return text + Notes(notes);
         }
 
         /// <summary>add, release (with lords) and disband, for a lord who leads an army.</summary>
-        private static string ArmyChange(string verb, Hero lord, MobileParty lp, AgentChannel.AgentOrder a, Kingdom realm, bool shadow, bool live, ref string status)
+        private static string ArmyChange(string verb, Hero lord, MobileParty lp, AgentChannel.AgentOrder a, Kingdom realm, string source, bool shadow, bool live, ref string status)
         {
             string name = Names.Hero(lord);
             Army army = lp.Army;
@@ -617,13 +637,18 @@ namespace BannerlordAgents
             }
             if (verb == "add")
             {
-                List<MobileParty> members = Callable(lp, ids, realm, out List<string> leftOut, out int cost);
-                if (members.Count == 0) return "none of these lords can be called: " + string.Join("; ", leftOut) + ".";
-                string left = leftOut.Count > 0 ? " (left out, since they cannot be called: " + string.Join("; ", leftOut) + ")" : "";
+                List<MobileParty> members = Callable(lp, ids, realm, out List<string> leftOut, out int cost, out List<MobileParty> far);
+                if (members.Count == 0 && far.Count == 0) return "none of these lords can come: " + string.Join("; ", leftOut) + ".";
+                var notes = new List<string>();
+                if (leftOut.Count > 0) notes.Add("cannot come: " + string.Join("; ", leftOut));
+                int farCost = CostNow(lp, far);
+                if (far.Count > 0)
+                    notes.Add("too far to be called yet, so they march to join and are called once close enough (about " + farCost + " influence more, less as they come nearer): "
+                              + string.Join(", ", far.Select(m => Names.Hero(m.LeaderHero))));
                 float influence = lord.Clan?.Influence ?? 0;
                 if (cost > influence) return "calling them costs " + cost + " influence, and " + name + "'s clan has " + (int)influence + ".";
-                string who = string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero)));
-                if (shadow) { status = "checked"; return "valid: " + name + " would call " + who + " into the army for " + cost + " influence" + left + " (shadow mode: not carried out)"; }
+                string who = members.Count > 0 ? string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero))) : "no lord at once";
+                if (shadow) { status = "checked"; return "valid: " + name + " would call " + who + " into the army for " + cost + " influence" + Notes(notes) + " (shadow mode: not carried out)"; }
                 if (!live) return NotYours(lord);
                 foreach (MobileParty m in members)
                 {
@@ -631,8 +656,9 @@ namespace BannerlordAgents
                     m.Army = army;   // the game charges the influence and marches them to the leader
                 }
                 Diag.Count("army:added", members.Count);
+                if (far.Count > 0) SendToJoin(far, lp, new ToolOrder { Poke = a.Poke, Source = source }, realm);
                 status = "applied";
-                return name + " calls " + who + " into the army for " + cost + " influence" + left;
+                return name + " calls " + who + " into the army for " + cost + " influence" + Notes(notes);
             }
             // release: lords leave the army and decide for themselves again
             var leaving = new List<MobileParty>();
@@ -652,20 +678,27 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// The lords who can be called to the leader's army, by the game's own rules, and the influence they cost. The
-        /// others are left out, each with why: one lord in a battle no longer stops the whole army (first live test, Oct 9).
+        /// The lords who can be called to the leader's army, by the game's own rules, and the influence they cost. Lords
+        /// only too far away to be called yet come back in far (they can march to join); the others are left out, each
+        /// with why: one lord in a battle no longer stops the whole army (first live test, Oct 9).
         /// </summary>
-        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out List<string> leftOut, out int cost)
+        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out List<string> leftOut, out int cost, out List<MobileParty> far)
         {
             leftOut = new List<string>();
+            far = new List<MobileParty>();
             cost = 0;
             var members = new List<MobileParty>();
-            float far = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
+            float range = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
             foreach (string id in partyIds)
             {
                 MobileParty m = FindPartyById(id);
-                string why = CannotCall(leader, m, realm, far);
-                if (why != null) { leftOut.Add(why); continue; }
+                string why = CannotCall(leader, m, realm, range, out bool tooFar);
+                if (why != null)
+                {
+                    if (!tooFar) leftOut.Add(why);
+                    else if (!far.Contains(m)) far.Add(m);
+                    continue;
+                }
                 if (members.Contains(m)) continue;
                 members.Add(m);
                 cost += Campaign.Current.Models.ArmyManagementCalculationModel.CalculatePartyInfluenceCost(leader, m);
@@ -673,8 +706,10 @@ namespace BannerlordAgents
             return members;
         }
 
-        private static string CannotCall(MobileParty leader, MobileParty m, Kingdom realm, float far)
+        /// <summary>Why a lord cannot be called into the leader's army now, or null. tooFar: the only reason is distance, so the lord can march to join.</summary>
+        private static string CannotCall(MobileParty leader, MobileParty m, Kingdom realm, float range, out bool tooFar)
         {
+            tooFar = false;
             if (m == null || !m.IsActive || m.LeaderHero == null) return "one of them is not leading a party";
             string n = Names.Hero(m.LeaderHero);
             if (m == leader) return n + " leads the army";
@@ -686,8 +721,89 @@ namespace BannerlordAgents
             if (m.BesiegedSettlement != null) return n + " is besieging " + Names.Settlement(m.BesiegedSettlement);
             if (m.IsDisbanding) return n + "'s party is breaking up";
             float d = DistanceHelper.GetDistanceBetweenMobilePartyToMobileParty(m, leader, m.NavigationCapability, out _);
-            if (d > far) return n + " is too far away to be called (" + (int)d + ", the game allows " + (int)far + ")";
+            if (d > range)
+            {
+                tooFar = true;
+                return n + " is too far away to be called yet (" + (int)d + ", the game allows " + (int)range + ")";
+            }
             return null;
+        }
+
+        /// <summary>
+        /// Lords too far away to be called into the leader's army yet: each gets a join order (the library's join tool),
+        /// marching toward the army until it can be called. Returns their names; the influence is paid when each joins.
+        /// </summary>
+        private static List<string> SendToJoin(List<MobileParty> far, MobileParty leader, ToolOrder from, Kingdom realm)
+        {
+            var sent = new List<string>();
+            ToolDef def = Library.Get("join");
+            if (def == null) { Diag.Alarm("tool_unknown", "The join order is missing from the library, so lords too far away were not sent to join the army."); return sent; }
+            foreach (MobileParty m in far)
+            {
+                Hero h = m?.LeaderHero;
+                if (h == null || !m.IsActive) continue;
+                var o = new ToolOrder
+                {
+                    Tool = def.Name, Lord = h.StringId, LordName = Names.Hero(h), Party = m.StringId, Target = leader.StringId, Poke = from.Poke, Source = from.Source,
+                    Why = "too far to be called into " + Names.Hero(leader.LeaderHero) + "'s army yet"
+                };
+                o.Words = h.StringId + " join " + (leader.LeaderHero?.StringId ?? leader.StringId);
+                StartTool(h, m, def, o, realm, o.Words);
+                sent.Add(Names.Hero(h));
+            }
+            if (sent.Count > 0) Diag.Count("army:sent to join", sent.Count);
+            return sent;
+        }
+
+        /// <summary>The influence the far lords would cost if called now; less once they are closer (the game prices distance).</summary>
+        private static int CostNow(MobileParty leader, List<MobileParty> far)
+            => far.Sum(m => Campaign.Current.Models.ArmyManagementCalculationModel.CalculatePartyInfluenceCost(leader, m));
+
+        /// <summary>
+        /// A join order's lord, every hour and when its move is made: joins the target's army once the game would let it be
+        /// called (paying the leader's clan's influence, like add), keeps marching while it is only too far or busy, and
+        /// gives up for good when the army is gone or cannot pay. Returns true when the order ended (the caller drops it).
+        /// </summary>
+        private static bool TryJoin(HandOrder o)
+        {
+            MobileParty p = o.Party, target = o.Target;
+            Kingdom realm = o.Realm;
+            if (p == null || !p.IsActive || realm == null) return false;
+            Army army = target?.Army;
+            if (p.Army != null && p.Army == army) { End(o, "joined " + Names.Party(army.LeaderParty) + "'s army", "joined an army"); return true; }
+            if (target == null || !target.IsActive) { End(o, "the army's leader is gone, so the lord could not join", "join failed"); return true; }
+            if (army == null || army.LeaderParty == null)
+            {
+                // the army may be forming in the same answer: a few hours' grace before it counts as gone
+                if (CampaignTime.Now.ToHours - o.Since < 3) return false;
+                End(o, Names.Party(target) + " leads no army" + (o.JoinedSeen ? " any more (it broke up)" : "") + ", so the lord could not join", "join failed");
+                return true;
+            }
+            o.JoinedSeen = true;
+            MobileParty leader = army.LeaderParty;
+            if (o.Target != leader) { o.Target = leader; Apply(o); }   // follow the army's leader, not a member of it
+            float range = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
+            string why = CannotCall(leader, p, realm, range, out bool tooFar);
+            if (why != null)
+            {
+                if (tooFar || p.MapEvent != null || p.CurrentSettlement?.SiegeEvent != null) return false;   // still marching, or busy for now
+                End(o, "it cannot join: " + why, "join failed");
+                return true;
+            }
+            int cost = Campaign.Current.Models.ArmyManagementCalculationModel.CalculatePartyInfluenceCost(leader, p);
+            float influence = leader.LeaderHero?.Clan?.Influence ?? 0;
+            if (cost > influence)
+            {
+                End(o, "joining costs " + cost + " influence and " + Names.Hero(leader.LeaderHero) + "'s clan has " + (int)influence + ", so the lord could not join", "join failed");
+                return true;
+            }
+            End(o, "joined " + Names.Party(leader) + "'s army for " + cost + " influence", "joined an army");
+            Witness.Ours = true;
+            try { p.Army = army; }   // the game charges the influence and marches the lord to the leader
+            finally { Witness.Ours = false; }
+            Diag.Count("army:joined");
+            Diag.Event("army", "joined", new { lord = o.Lord?.StringId, leader = leader.LeaderHero?.StringId, cost, influence_before = (int)influence });
+            return true;
         }
 
         private static Army.ArmyTypes ArmyTypeFor(JObject then)
@@ -809,6 +925,12 @@ namespace BannerlordAgents
                 MobileParty p = o.Party;
                 float? d = Distance(o);
                 Diag.Event("order", "hour", new { id = o.Id, lord = o.Lord?.StringId, tool = o.Tool, verb = o.Verb, arrived = o.Arrived, reissued = o.Reissued, state = State(p, o) });
+                if (o.Verb == "join" && TryJoin(o))
+                {
+                    Active.RemoveAt(i);
+                    changed = true;
+                    continue;
+                }
                 if (p.MapEvent != null || (p.BesiegedSettlement != null && o.Verb != "besiege")) continue;   // busy fighting; look again next hour
                 if (o.ToolId > 0 && !Possible(o))
                 {
@@ -870,7 +992,7 @@ namespace BannerlordAgents
         /// <summary>Is he getting closer? No progress for 6 in-game hours, away from his target and out of battle, is an alarm.</summary>
         private static void Progress(HandOrder o, float? d, double now)
         {
-            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow") return;
+            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow" || o.Verb == "join") return;
             if (d.Value < o.BestDistance - 0.5f)
             {
                 o.BestDistance = d.Value;
@@ -1071,6 +1193,7 @@ namespace BannerlordAgents
                     case "defend": SetPartyAiAction.GetActionForDefendingSettlement(p, o.Place, nav, false, false); break;
                     case "engage": SetPartyAiAction.GetActionForEngagingParty(p, o.Target, nav, false); break;
                     case "follow": SetPartyAiAction.GetActionForEscortingParty(p, o.Target, nav, false, false); break;
+                    case "join": SetPartyAiAction.GetActionForEscortingParty(p, o.Target?.Army?.LeaderParty ?? o.Target, nav, false, false); break;
                     case "besiege": SetPartyAiAction.GetActionForBesiegingSettlement(p, o.Place, nav, false); break;
                     case "raid": SetPartyAiAction.GetActionForRaidingSettlement(p, o.Place, nav, false, false); break;
                     case "hold": p.SetMoveModeHold(); break;
@@ -1098,6 +1221,7 @@ namespace BannerlordAgents
                 case "defend": return (b == AiBehavior.DefendSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
                 case "engage": return b == AiBehavior.EngageParty && p.TargetParty == o.Target;
                 case "follow": return b == AiBehavior.EscortParty && p.TargetParty == o.Target;
+                case "join": return b == AiBehavior.EscortParty && (p.TargetParty == o.Target || p.TargetParty == o.Target?.Army?.LeaderParty);
                 case "besiege": return p.BesiegedSettlement == o.Place || (b == AiBehavior.BesiegeSettlement && p.TargetSettlement == o.Place);
                 case "raid": return (b == AiBehavior.RaidSettlement && p.TargetSettlement == o.Place) || (p.MapEvent != null && p.MapEvent.IsRaid);
                 case "hold": return b == AiBehavior.Hold;
@@ -1189,8 +1313,10 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Error("releasing a lord", e); stillOff = true; }
             Diag.Count("order:ended");
             Diag.Count("order end:" + (key ?? "other"));
-            // a tool that finished has already called the agent back in its own words
-            Note(o, "ended", why, new { key, hours_held = Math.Round(CampaignTime.Now.ToHours - o.Since, 1), state = State(o.Party, o) }, quiet: key == "tool done");
+            // a tool that finished has already called the agent back in its own words; a lord who joined an army as ordered,
+            // or was called into one by the agent's own order, goes into the chronicle without waking the agent
+            Note(o, "ended", why, new { key, hours_held = Math.Round(CampaignTime.Now.ToHours - o.Since, 1), state = State(o.Party, o) }, quiet: key == "tool done",
+                 recordOnly: (key == "joined an army" && o.Verb == "join") || key == "called to an army");
             Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
             if (stillOff)
                 Diag.Alarm("release_failed", Names.Hero(o.Lord) + "'s order ended, but the game's AI could not be switched back on for this lord.", true, new { id = o.Id });
@@ -1391,7 +1517,7 @@ namespace BannerlordAgents
             };
         }
 
-        private static void Note(HandOrder o, string what, string text, object extra = null, bool quiet = false)
+        private static void Note(HandOrder o, string what, string text, object extra = null, bool quiet = false, bool recordOnly = false)
         {
             var rec = new
             {
@@ -1412,7 +1538,7 @@ namespace BannerlordAgents
             // the watched realm hears when one of its orders finishes or fails, as a poke trigger
             if (o.Realm != null && o.Realm == Bridge.Watched && (what == "arrived" || what == "ended"))
                 Notices.Order(what == "arrived" ? "order_arrived" : "order_ended",
-                              what == "arrived" ? text + " as ordered." : "The order \"" + (o.ToolText ?? Describe(o)) + "\" ended: " + text + ".", o.Party?.StringId);
+                              what == "arrived" ? text + " as ordered." : "The order \"" + (o.ToolText ?? Describe(o)) + "\" ended: " + text + ".", o.Party?.StringId, recordOnly);
         }
 
         /// <summary>Keeps the watchers in step with the orders held: the plain copy for the logs, the movement watcher and the lord watch.</summary>

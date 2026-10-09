@@ -274,3 +274,79 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room was stopped and restarted at 11:55 and again at 11:57 for the rebuilds;
   - `tools.txt` was rewritten;
   - in `memory\Ah2auppicLLJ\snapshots.jsonl`, the old journal's notes were re-dated from "any date" to poke #1 (Summer 9, 1087, 09:00), so reloading that save starts the orcs afresh (backup `snapshots.jsonl.bak-20261009-before-seed-date`).
+
+### 12:01 to 12:15 · The third run, and what the orcs were missing
+- **What:** Mert reloaded the Summer 9, 1087 save on 0.5.1 and marched on Western Moria again (his standing test), then closed the game for a diagnosis.
+- **The fixes held:**
+  - the chronicle was cut back 24 lines and the memory went back to empty;
+  - the pokes went on from #126;
+  - Naglur's army formed with 6 lords and 988 men, with no false "broke up";
+  - the story so far was rewritten at 531 words.
+- **The agent's answer to Mert's host** (5,528 men, seen at 19:00): a relief army under Vrakdush with 10 lords (about 2,219 men, strength about 3,778, `strike_at` 0.8, waiting up to 120 hours). It arrived while the game was paused and was never carried out.
+- **The diagnosis, from the game at 19:00** (Mert: "Why do the orcs have so little men?"):
+  - **The realm:** 49 lords' parties with 8,257 men, strength 14,494, against Mert's army at 14,674; 12 of those parties (2,275 men) belong to clans outside the ruler's. Garrisons 4,249 men; militia 2,496.
+  - **Thin parties:** 24% full on average (median 22%; 12 lords under 15%).
+  - **Losses:** the game's records hold 158 captures of orc lords (27 on Spring 20, 1087, and 18 on Spring 7). Four villages were looted and Sídwic was being raided.
+  - **Scattered:** eight lords were "defending Bar-noss" against a 205-man raider.
+  - **Command:** only 3 of the 49 lords held the agent's orders. The instructions told it to give only the changes, so the other lords stayed with the game's AI.
+  - **Recruiting rules, read in the game's code:**
+    - a lord recruits only at a town or village;
+    - its party's gold must be above 50 + 20 a man;
+    - a lord who does not lead the clan also needs clan gold above the leader's wages + 40 a man in the leader's party;
+    - there must be room in the wage budget;
+    - TAOM blocks recruiting across good and evil, for the AI too.
+    - Gold, wage room and the volunteers waiting were not measured yet.
+- **Also seen:** 39 and 26 ms on the game's thread for the first hourly copy after a load, 28 and 32 ms applying the first orders; the hourly copy otherwise about 5 to 7 ms (the goal is under 1 ms).
+- **Mert's decisions (Oct 9):**
+  - build plans A to D: the missing facts, a join order, the garrison counted in a relief, recruitment measured;
+  - build the council of war (E1);
+  - rewrite the agent's instructions as a medieval commander's, from a study of medieval doctrine, without giving it his own plan (E3).
+
+### 13:30 · Version 0.6.0: the council of war, the missing facts, a commander's doctrine · commit (hash in the next commit; installed about 13:30)
+- **What the agent now sees:**
+  - **YOUR REALM IN SUM:** the field forces, the castles and towns, the villages, and how many lords are prisoners.
+  - **YOUR CAPTURED LORDS:** each one, grouped by where they are held, and since when, from the game's own prisoner records (`Hero.PartyBelongedToAsPrisoner`, `CaptivityStartTime`).
+  - **The muster:** how many lords, men and strength could reach a place within one, two and three days, as running totals, and whom a leader there could call into an army at once (the game's calling range). It is in the facts of every poke about a holding, in full in each castle's and town's look-up, and in the council's briefing.
+  - **Look-ups** for each captured lord, and `captured.txt`.
+  - **The council's briefing** (`council.txt`, every in-game hour): the purse (the ruler's clan's gold and influence, every other clan's influence), every lord in detail, the muster at each castle and town, and the captured lords.
+- **New orders** ([TOOLS.md](TOOLS.md)):
+  - **join:** a lord marches toward another lord's army and joins it once the game would let it be called, paying the leader's clan's influence then. It fails, and tells the agent, if the army breaks up, its leader is gone, or the clan cannot pay.
+  - **gather and add** now send lords too far away to be called on a join order, instead of leaving them out; gather waits for them. The receipt says who comes now, who marches first, and who cannot come.
+- **A relief counts the defenders, by the game's rule:**
+  - read in the 1.4.8 code: the garrison and the lords inside sally out to join a relief force only when they and the friendly forces at the siege camp are more than 1.5 times the enemy's there. The game checks this when the battle starts and every hour of it. Militia never sally.
+  - So relieve and defend now weigh `relief_strength` (and `inside_strength`), not the relief's strength alone, and the facts give the strength inside a besieged holding.
+- **Recruitment measured** (logs only, [LOGGING.md](LOGGING.md)):
+  - once a day, `recruitment.jsonl` records each lord's gold against the game's two gold bars, its wage room, fill, starving and held, the men it recruited and where, and the hours it sat where it could recruit;
+  - each town's and village's volunteers waiting (and within the ruler's relations);
+  - a daily sentence in the log, and `agents.recruits`.
+- **The council of war** (war room, [WARROOM.md](WARROOM.md#the-council-of-war)):
+  - a slower call on its own thread (effort high, up to 12,000 tokens of thinking, 420 s), so the fast answers go on meanwhile;
+  - it sits after the first look of a session, after big events (a holding changing hands, war, peace, one of the realm's places besieged, an army formed), at least every 24 in-game hours, and when its last answer asked (`council_in`), never within 6 hours of the last except after the first look;
+  - it reads the briefing and the hourly situation, and may order every lord;
+  - a fast answer that orders a lord while it sits wins for that lord, and the next poke says which council orders did not go out;
+  - `WarRoom council` sits one by hand.
+- **New instructions for the agent** (`agent/warroom-system.template.md`; the study is [DOCTRINE.md](DOCTRINE.md)):
+  - a medieval commander's persona and 14 principles of doctrine, each tied to a writer or a campaign: Vegetius, the *Strategikon*, *On Skirmishing*, Kekaumenos, Jean de Bueil; Hattin, 1183, Mortemer, Charles V and du Guesclin, the Mongols in 1241, Ain Jalut, Baybars and others;
+  - a new goal, without "keep every castle and town you hold";
+  - lords without orders are said plainly to follow the game's own AI;
+  - "change only what the poke needs" is kept for pokes, with the council setting the realm's course;
+  - neutral examples instead of a relief of Western Moria;
+  - no plan for this war (Mert: "It should arrive at that conclusion on its own").
+- **Why:** the diagnosis above.
+  - The orcs were scattered and thin.
+  - The agent could not see its captured lords, or how much of the realm could mass where.
+  - Far lords were left out of armies, and a relief ignored the garrison.
+  - Its instructions pushed it to defend every place with small answers.
+- **Checks:**
+  - the smoke test passed in full (97 checks, 16 new) and the war room's self-test too (38, 10 new);
+  - 348 game references, 0 missing;
+  - the installed DLL has sha256 `4161700C8FEDADB0…`.
+- **Outside the repository:**
+  - the 0.5.0 war room was stopped at 13:30:04 (it was idle);
+  - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` in `C:\Users\karab\Projects\orc-war-council`, and the older chat's `CLAUDE.md` with its goal brought in line. It also rewrote `tools.txt` (17 orders), and rewrote the bridge's settings unchanged (live, all lords);
+  - the 0.6.0 war room started at 13:30:46 and added the council's keys to `warroom.txt`, keeping the live values (`max_lessons` 12, `timeout_seconds` 120).
+- **Not yet seen in a game:**
+  - a council;
+  - a join;
+  - a relief weighing the garrison;
+  - a day of recruitment numbers.

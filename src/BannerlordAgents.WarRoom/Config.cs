@@ -46,6 +46,19 @@ namespace BannerlordAgents.WarRoom
         public int StoryThinkingCap = 2000;
         /// <summary>In the one-long-conversation mode: past this many tokens, the next poke starts a new conversation from the notes.</summary>
         public int ConversationLimit = 180000;
+        /// <summary>
+        /// The council of war (docs/WARROOM.md): a slower call on its own thread that sees the whole realm (council.txt) and
+        /// may reorder any lord. It sits after the first look, after the big events below, and at least every
+        /// council_every_hours in-game hours, never sooner than council_gap_hours after the last one (the first look excepted).
+        /// The fast answers go on meanwhile; one of them that orders a lord first wins over the council's order for that lord.
+        /// </summary>
+        public bool Council = true;
+        public double CouncilEveryHours = 24;
+        public double CouncilGapHours = 6;
+        public string[] CouncilAfter = { "First look since the campaign was loaded", "passed from", "declared war on", "made peace", "is besieged by", "army has formed" };
+        public string CouncilEffort = "high";
+        public int CouncilThinkingCap = 12000;
+        public int CouncilTimeoutSeconds = 420;
 
         public string ChannelDir => Path.Combine(AgentDir, Channel);
         public string FilePath => Path.Combine(AgentDir, "warroom.txt");
@@ -88,9 +101,17 @@ namespace BannerlordAgents.WarRoom
                     case "story_effort": if (v.Length > 0) c.StoryEffort = v; break;
                     case "story_thinking_cap": if (int.TryParse(v, out int stc) && stc >= 0) c.StoryThinkingCap = stc; break;
                     case "conversation_limit": if (int.TryParse(v, out int cl) && cl >= 20000) c.ConversationLimit = cl; break;
+                    case "council": c.Council = v == "on" || v == "true" || v == "yes"; break;
+                    case "council_every_hours": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double ce) && ce >= 1) c.CouncilEveryHours = ce; break;
+                    case "council_gap_hours": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double cg) && cg >= 0) c.CouncilGapHours = cg; break;
+                    case "council_after": c.CouncilAfter = v.Split('|').Select(x => x.Trim()).Where(x => x.Length > 0).ToArray(); break;
+                    case "council_effort": if (v.Length > 0) c.CouncilEffort = v; break;
+                    case "council_thinking_cap": if (int.TryParse(v, out int ctc) && ctc >= 0) c.CouncilThinkingCap = ctc; break;
+                    case "council_timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ct) && ct > 10) c.CouncilTimeoutSeconds = ct; break;
                 }
             }
-            if (!File.ReadAllText(c.FilePath).Contains("memory =")) c.Save();   // a settings file from before memory: the new keys are added
+            string text = File.ReadAllText(c.FilePath);
+            if (!text.Contains("memory =") || !text.Contains("council =")) c.Save();   // a settings file from before memory or the council: the new keys are added
             return c;
         }
 
@@ -125,6 +146,15 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("story_thinking_cap = " + StoryThinkingCap.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("# conversation memory only: past this many tokens, the next poke starts a new conversation from the notes");
             sb.AppendLine("conversation_limit = " + ConversationLimit.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# the council of war: a slower call beside the answers that sees the whole realm and may reorder any lord; it sits after the first look,");
+            sb.AppendLine("# after any of the council_after words in a poke's reasons, and at least every council_every_hours in-game hours (never within council_gap_hours of the last)");
+            sb.AppendLine("council = " + (Council ? "on" : "off"));
+            sb.AppendLine("council_every_hours = " + CouncilEveryHours.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("council_gap_hours = " + CouncilGapHours.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("council_after = " + string.Join(" | ", CouncilAfter));
+            sb.AppendLine("council_effort = " + CouncilEffort);
+            sb.AppendLine("council_thinking_cap = " + CouncilThinkingCap.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("council_timeout_seconds = " + CouncilTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
             File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
         }
     }

@@ -117,7 +117,7 @@ This is the experiment behind the choice: answer time, usage, and the quality of
 
 ## Checks
 
-- `WarRoom selftest` (also run by `scripts\deploy.ps1`; 28 checks, no calls) covers:
+- `WarRoom selftest` (also run by `scripts\deploy.ps1`; 38 checks since 0.6, the council of war included; no calls) covers:
   - the journal becoming the notes;
   - what an answer changes in the notes;
   - cutting back on a reload;
@@ -125,7 +125,7 @@ This is the experiment behind the choice: answer time, usage, and the quality of
   - both memories' messages and instructions;
   - when a story is due;
   - the replay's view of what is now quiet.
-- The smoke test (81 checks) covers the bridge's side:
+- The smoke test (97 checks since 0.6) covers the bridge's side:
   - the game's history first, marked;
   - notices, orders and refusals in the chronicle, and fights with bandits kept out;
   - a lord set free kept without a poke;

@@ -47,20 +47,35 @@ The agent reads it in every call as `tools.txt` (written from the same code; `ag
 |---|---|
 | Moves | goto, patrol, engage, follow, leave, recruit, hold, free |
 | Tools | defend, garrison, besiege, raid, hunt, screen, rest |
-| Armies | gather, relieve, add, release, disband |
+| Armies | gather, relieve, join, add, release, disband |
 | Changing orders | a new order replaces the old one; adjust (settings only); no orders at all is a valid answer; then |
 
 What each one does, takes, sets and calls back on is in `tools.txt`. The definitions are the JSON files in `src/BannerlordAgents/Tools/Library`, built into the DLL.
 
 ### Armies, by the game's own rules
-- **gather** forms the army at once with the game's own call (`Kingdom.CreateArmy`), at the meeting place the agent names. The called lords march there and join as they arrive. Lords who cannot come (in a battle, too far, already in an army) are left out and named in the receipt; the order is refused only when none can come (since 0.5.1). The tool judges the army from the next hour on, since the hour's map copy was taken before the army existed.
-- **Influence:** the leader's clan pays the game's influence price for each lord (`CalculatePartyInfluenceCost`). The order is refused if the clan cannot afford it.
+- **gather** forms the army at once with the game's own call (`Kingdom.CreateArmy`), at the meeting place the agent names. The called lords march there and join as they arrive. The tool judges the army from the next hour on, since the hour's map copy was taken before the army existed.
+  - **Lords too far away to be called yet** (since 0.6) are not left out: each gets a **join** order and marches toward the army until the game would let it be called (below). The army then forms with whoever is in range, even the leader alone, and gather waits for the marching lords too (`army_joining`) before it calls back that the army has formed.
+  - **Lords who cannot come at all** (in a battle, inside a besieged holding, besieging, already in an army) are left out and named in the receipt; the order is refused only when no lord can come (since 0.5.1).
+  - The receipt says who comes now, who marches first (with men, and the influence they would cost if called now; less as they come nearer, since the game prices distance), and who cannot come.
+- **join** (since 0.6, `target`: the army's leader, or a lord in that army): the lord follows the army's leader and joins the army as soon as the game's calling rules allow (`CannotCall`, the same as gather's), paying the leader's clan's influence then, like add. Checked on the game's thread when the move is made and every in-game hour (`Orders.TryJoin`).
+  - It keeps marching while the lord is only too far, or busy in a battle.
+  - It fails, sets the lord free and calls the agent back when the army has broken up, its leader is gone, the lord cannot be called for another reason, or the leader's clan cannot pay. An army missing in the first 3 hours is waited for, since it may be forming in the same answer.
+  - A lord who joins goes into the chronicle without a poke (as does a held lord called into an army); gather's own call-back tells the agent when the army is complete.
+- **add** sends lords too far away to be called the same way: a join order each.
+- **Influence:** the leader's clan pays the game's influence price for each lord (`CalculatePartyInfluenceCost`). The order is refused if the clan cannot afford the lords called at once; the receipt warns when it may not afford the marching ones too.
 - **Who cannot be called** (the same as the game's AI):
   - a lord already in an army, in a battle, besieging, or inside a besieged holding;
   - the realm's ruler (except as the leader);
-  - a lord farther away than the game allows.
+  - a lord farther away than the game allows (`MaximumDistanceToCallToArmy`: eight times the average distance between neighbouring towns, along the way): these march to join instead.
 - **Who cannot lead:** a mercenary clan's lord.
 - **Called lords we were holding** are let go, so the game can march them to the army.
+
+### Breaking a siege: when the defenders inside join (since 0.6)
+Read in the 1.4.8 code (`SallyOutsCampaignBehavior`, `StartBattleAction`, `MapEvent.Initialize`, `Town.GetDefenderParties`):
+- A relief force that attacks the besiegers starts a "siege outside" battle. All the besieging lords fight it together.
+- **The garrison and the lords sheltering inside** (the realm's and its allies') sally out to join that battle only when they, plus the friendly forces near the siege camp (the relief among them), are **more than 1.5 times** the enemy forces near the camp. The game checks this when the battle starts and again every hour while it lasts. (Without a relief, the bar for a sally on its own is 2 times, checked every 4 hours.)
+- **Militia never sally out.**
+- So **relieve** and **defend** now weigh `relief_strength(at)`: the relief's own strength, plus the garrison's and the inside lords' (`inside_strength(at)`) when that rule holds, against the besiegers'. A lord sheltering inside is not counted twice. READY-MADE FACTS give the strength inside a besieged holding of the realm and the rule.
 - **Ordering the army:** orders go to the leader, and the leader's moves and tools move the whole army. A party marching in an army cannot be ordered.
 - **The game still breaks armies up:**
   - idle (holding, or waiting at a friendly place) for about two days;
@@ -93,7 +108,7 @@ The defend tool, shortened:
   "when": [ { "if": "hours_in_state >= 3 and not besieged(at) and enemy_strength_near(at, radius) < strength * shelter_at * 0.8", "go": "patrol" } ] }
 ```
 
-- **Moves:** goto, enter, near (close to a holding's gate), toward (where a party was last seen), leave, patrol, defend, engage, follow, besiege, raid, recruit and hold.
+- **Moves:** goto, enter, near (close to a holding's gate), toward (where a party was last seen), leave, patrol, defend, engage, follow, join (follow an army's leader and join once it can be called), besiege, raid, recruit and hold.
 - **Expressions:** numbers, true, false and none; + - * /; == != < <= > >=; and, or, not.
   - A comparison with something unknown (none) is false, so no rule fires on a missing fact.
   - `{...}` in a call-back is filled in, with ids shown as names.
@@ -101,10 +116,10 @@ The defend tool, shortened:
   - the order's own: `me`, `at`, `target`, `lords`, and the settings;
   - about the lord: `strength` and `men` (the whole army's when the lord leads one), `ranks`, `wounded`, `food_days`;
   - about time: `hours_in_state`, `hours_running`;
-  - about armies and places: `in_army`, `leads_army`, `army_lords`, `army_coming`, `army_complete`, `in_settlement`, `besieging`.
+  - about armies and places: `in_army`, `leads_army`, `army_lords`, `army_coming`, `army_complete`, `army_joining` (lords holding a join order for this lord's army), `in_settlement`, `besieging`.
 - **Functions** (their names say what they do):
   - places and distance: `distance`, `hours_to`, `inside`, `within`, `fort`, `nearest_fort`, `nearest_supply`, `next_village`;
-  - holdings: `besieged`, `siege_strength`, `besieger`, `raided`, `looted`, `ours`, `hostile`, `friendly`;
+  - holdings: `besieged`, `siege_strength`, `inside_strength`, `relief_strength`, `besieger`, `raided`, `looted`, `ours`, `hostile`, `friendly`;
   - enemies near a place: `enemies_near`, `enemy_strength_near`, `strongest_enemy_near`, `weakest_enemy_near`, `nearest_enemy`, `army_near`;
   - a party: `strength_of`, `men_of`, `in_view`, `seen_ago`, `gone`;
   - the order's lords: `lords_arrived`, `lords_count`;
@@ -115,13 +130,18 @@ The defend tool, shortened:
 
 - **WHAT CHANGED SINCE YOUR LAST ANSWER:** the reasons of every poke that came after the one it answered, and what became of its orders. The tools' call-backs are among them.
 - **YOUR ORDERS IN FORCE:** each held lord's order, what it is doing right now (sheltering, buying food, waiting for an army), its settings that differ from the defaults, and its next order.
-- **READY-MADE FACTS:** for up to four things the poke is about (a holding, an enemy), the realm's lords who can get there soonest, with strength, rough hours and whether they are free; and the enemies near it.
+- **READY-MADE FACTS:** for up to four things the poke is about (a holding, an enemy), the realm's lords who can get there soonest, with strength, rough hours and whether they are free; and the enemies near it. Since 0.6 also:
+  - **the muster** at the first holding the poke is about: how many lords, men and strength could be there within one, two and three days, as running totals, and how many of the first day's a leader there could call into an army at once;
+  - for a besieged holding of the realm, the strength inside and the sally rule above.
+- **The report** (since 0.6) opens with **YOUR REALM IN SUM** (lords leading parties, their men and strength, armies, how many hold the agent's orders and how many follow their own judgment; castles and towns with garrisons, militia and sieges; villages looted or raided; lords held prisoner) and lists **YOUR CAPTURED LORDS**, grouped by where each is held (a holding, or the party holding them) and since when. They come from the game's own prisoner records, which the encyclopedia shows a player too, so the fog check allows their ids.
 - **Look-ups** (`lookups\<id>.txt`), rewritten at each poke. The war room lets the agent read them:
-  - one per holding: lords by march time, enemies near, enemy castles near;
+  - one per holding: lords by march time, enemies near, enemy castles near; for a castle or town, the full muster (every lord by how soon they could be there, with running totals, * for those a leader there could call at once);
   - one per lord: men, strength, ranks, food, hours to each holding, enemies near;
+  - one per captured lord: where and since when, and the lords who can reach that place soonest; `captured.txt` lists them all by place;
   - one per enemy the realm knows of: where it is or was last seen, its strength, the lords who can reach it soonest.
 
-  Travel hours are rough: straight-line distance over the lord's speed.
+  Travel hours are rough: straight-line distance over the lord's speed. The calling range is checked the same way, so it is a little generous: the game measures along the way.
+- **The council's briefing** (`council.txt`, since 0.6, every in-game hour): the whole realm at once for the war room's council of war ([WARROOM.md](WARROOM.md#the-council-of-war)): the purse (the ruler's clan's gold and influence, every other clan's influence), every lord with ranks, food, speed, what it is doing, whose judgment it follows and its clan's influence, the muster at each castle and town, and the captured lords.
 - **Its memory** (since 0.5, [MEMORY.md](MEMORY.md)): the story so far, its own notes, and its chronicle, of which the report's last section shows the last two days. A tool's call-backs and endings go into the chronicle, so the story remembers which orders worked.
 
 ## Testing by hand
@@ -138,5 +158,4 @@ The defend tool, shortened:
 
 - **Rules are checked once an in-game hour,** as the game's own AI thinks. At fast speed that is about a second.
 - **When a tool attacks a lord, the game's move heads for that lord's true position,** as the game's own AI does. A lord out of view is searched for where the realm last saw it (toward), so the tools themselves never use what the realm cannot see.
-- **Strength is the game's own estimate,** for a party, an army or a siege camp.
-- **The garrison's strength is not added** when a tool weighs a siege it could break.
+- **Strength is the game's own estimate,** for a party, an army, a garrison or a siege camp. The game's sally check weighs a slightly different number (each party's strength for its side and the ground, times its aggressiveness) and counts every friendly and enemy party near the camp, so `relief_strength` is close to the game's judgment, not identical.

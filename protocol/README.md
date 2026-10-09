@@ -1,4 +1,4 @@
-# Record formats (install 1, with the logs of version 0.3 and the tools of 0.4)
+# Record formats (install 1, with the logs of version 0.3, the tools of 0.4, the memory of 0.5 and the council of 0.6)
 
 Everything the bridge writes is JSON, one object per line (JSON Lines). Names are snake_case, and empty fields are left out. `hours` is in-game hours since the calendar began. `date` is the game's own date text, and `wall` is the real clock.
 
@@ -27,6 +27,7 @@ The agents' answers are under [Agent channel](#agent-channel) below. Tool defini
 | `data\<campaign id>\record\pokes_you.jsonl` | poke the player would have had | same rules as the agents' pokes, using the game's own view of the player |
 | `data\<campaign id>\handbacks.jsonl` | save made while lords held our orders | `save`, `saved`, `lords` (hero ids handed back), `clean` (all checked free before the game wrote); every load checks these lords |
 | `data\<campaign id>\ids_shown.txt` | id shown to the agent | every id in brackets the agent has been shown in this campaign; an order naming any other id raises an alarm |
+| `data\<campaign id>\recruitment.jsonl` | day of the watched realm (0.6) | `type` "recruitment", `hours`, `date`, `realm`, `summary` (lords, average fill, below the party-gold bar, below the clan-gold bar, ranks full, starving, no wage room, recruiters, recruited, volunteers waiting, within the ruler's reach, places with volunteers, places), `hours_counted`, `hours_where_recruiting` (lord id: hours spent where it could recruit), `lords` (each: `lord`, `name`, `clan`, `leads_clan`, `men`, `limit`, `gold`, `gold_bar`, `clan_gold`, `clan_bar`, `wage`, `wage_limit`, `wage_room`, `starving`, `in_army`, `held`, `inside`, `may_recruit`, `recruited`, `recruited_at`), `places` (each town and village: `id`, `name`, `kind`, `culture`, `state`, `waiting`, `ruler_could_take`). Logs only ([docs/LOGGING.md](../docs/LOGGING.md#recruitment-since-06-oct-9-logs-only-never-shown-to-the-agent)). |
 
 The campaign id is the game's own id for the campaign, so separate campaigns never mix.
 
@@ -66,6 +67,8 @@ Enemy lords further off are still listed in the report; the trace logs each one 
 | `faction`, `faction_name`, `ruler`, `hours`, `date`, `night` | who and when |
 | `at_war`, `allies` | realm names |
 | `forces` | the realm's own lords' parties and armies, as *view parties* (members of an army are folded into its leader) |
+| `captives` | the watched realm's lords held prisoner (0.6): `hero`, `name`, `holding` with `holding_name`, `holding_kind`, `holding_faction` (where they are held), or `party_lord`, `party_name`, `party_faction` (the party holding them, when not in a holding), and `since` (in-game hour) |
+| `sum` | the watched realm in a few numbers (0.6): `lords`, `men` and `strength` (an army counted with its leader), `armies`, `army_lords` (parties in them), `ordered` (holding the agent's orders), `forts`, `garrison_men`, `militia`, `besieged`, `villages`, `looted`, `raided`, `captives` |
 | `holdings` | the realm's own settlements, as *view holdings*, each with the nearest enemy in view |
 | `seen` | lords and enemies in view, nearest to the realm's holdings first, at most 40 (`seen_not_listed` counts the rest) |
 | `others_in_view` | caravans, villagers and other small neutral parties in view (counted, not listed) |
@@ -113,17 +116,19 @@ The channel lives in the folder set by `agent_dir` in `settings.txt`, now `C:\Us
 | `pokes.log` | bridge | one line per poke of the watched realm: `#12 \| Summer 3, 1085, 14:00 \| <first trigger> (and N more)` |
 | `poke.txt` | bridge | `POKE #12, <date>`, how to answer, the mode, then the report with the poke's sections (below). It is written before the poke's line appears in `pokes.log`. |
 | `report.txt` | bridge | `SITUATION AT <date>` and the mode, then the report without triggers, with the orders in force. Refreshed every in-game hour. |
+| `council.txt` | bridge | the briefing for a council of war (0.6), refreshed every in-game hour: `COUNCIL BRIEFING FOR <realm>, <date>`, then YOUR PURSE (the ruler's clan's gold and influence, every other clan's influence), EVERY LORD (men of the size limit, army, strength, food, speed, what it is doing, the order it holds or "free", its clan and the clan's influence), MUSTER AT EACH OF YOUR CASTLES AND TOWNS (running totals within one, two and three days) and YOUR CAPTURED LORDS ([docs/TOOLS.md](../docs/TOOLS.md)). The war room reads it with `report.txt` for a council. |
 | `tools.txt` | bridge | the order library the agent reads: every move, tool and army order with what it takes, its settings and ranges, and when it calls back. Written at every campaign load (and by `scripts\setup-agent.ps1`). |
-| `lookups\<id>.txt` | bridge | one file per holding of the realm, lord of the realm and enemy it knows of (README.txt says what is in each), rewritten before each poke |
+| `lookups\<id>.txt` | bridge | one file per holding of the realm (with the full muster for a castle or town, since 0.6), lord of the realm, captured lord of the realm (0.6) and enemy it knows of, and `captured.txt` (0.6); README.txt says what is in each. Rewritten before each poke. |
 | `chronicle.txt`, `chronicle.jsonl` | bridge | the realm's chronicle (0.5): to read, one dated line each, oldest first; and for the war room, `hours`, `date`, `kind`, `text` per line. Rewritten whole at each load, then a line added as each comes ([docs/MEMORY.md](../docs/MEMORY.md)). |
 | `poke.json` | bridge | the latest poke for the war room (0.5), written before `poke.txt`: `number`, `hours`, `date`, `campaign`, `realm`, `realm_name`, `load_id` (new at every load), `loaded_at` and `loaded_at_date` (the save's in-game hour), `chronicle_lines` |
-| `orders\*.json` | agent (war room) | one answer per file, in the form shown below. Each file is read once and moved to `orders\done\`. |
+| `orders\*.json` | agent (war room) | one answer per file, in the form shown below; a council's answer is `poke-N-council-<time>.json` with `"kind": "council"` (0.6). Each file is read once and moved to `orders\done\`. |
 | `receipts.log` | bridge | one line per order (APPLIED, CHECKED in shadow mode, or REFUSED, with the reason and the answer time), and later lines for what became of agent orders (ended, and `tool:` lines for every call-back). Also: RECEIVED, at once, for a file read while the game's clock is stopped (its orders are answered when the clock runs again); SET ASIDE for a file written before the game session began (moved unread to `orders\stale\`); REFUSED for every order in a file answering a poke from before the last load; UNREADABLE for a file that is not valid JSON after five tries. |
 
 The poke's sections, after WHY YOU ARE ASKED NOW (since 0.4):
 - **WHAT CHANGED SINCE YOUR LAST ANSWER (to poke #K):** the reasons of every poke after #K, then "What became of your orders since then" (the receipts written since poke #K was).
 - **YOUR ORDERS IN FORCE:** one line per held lord: the order with its ids, what it is doing now, since when, settings that differ from the defaults, and its next order (then).
-- **READY-MADE FACTS:** for up to four things the poke is about, the realm's lords soonest to it (strength, rough hours, free or ordered) and enemies near it; then the count of free lords.
+- **READY-MADE FACTS:** for up to four things the poke is about, the realm's lords soonest to it (strength, rough hours, free or ordered) and enemies near it; for a besieged holding of the realm, the strength inside and when it sallies out (0.6); the muster at the first holding (0.6); then the count of free lords.
+- **YOUR REALM IN SUM** (0.6), before YOUR LORDS AND ARMIES: the field forces, the castles and towns, the villages and the lords held prisoner, in three lines; and **YOUR CAPTURED LORDS** (0.6), after YOUR HOLDINGS, grouped by where they are held.
 - In YOUR LORDS AND ARMIES, a held lord's line ends with "(your order: <tool>)".
 - **RECENT HISTORY, LAST TWO DAYS (from your chronicle)** (since 0.5): the report's last section, the chronicle's last 25 lines within 48 hours, in place of NEWS. The war room adds the rest of the realm's memory before the poke ([docs/MEMORY.md](../docs/MEMORY.md)).
 
@@ -139,6 +144,7 @@ An answer file:
 
 - `lord`, `at` (a holding), `target` (a lord) and `lords` (a list) take the ids shown in [brackets], or names. `target` and `at` stand in for each other where a tool takes only one.
 - `do` is any order of the library in `tools.txt` (docs/TOOLS.md), or `free`, `release`, `add`, `disband`, `adjust`.
+- A council's answer may also carry `"council_in"`: in-game hours until the next council (4 to 72); the war room reads it, the bridge ignores it.
 - Settings are numbers: in `"settings": {...}`, or as any other number at the order's top level.
 - `then` is an order without a lord (it is the same lord's), checked against the game when it starts.
 - `"orders": []` is a valid answer: nothing changes.
@@ -168,7 +174,8 @@ One folder per game launch, `logs\sessions\<yyyyMMdd-HHmmss>\`. What each file i
 | `answer` | each answer file (written, read, seconds after its poke, newer pokes already out, duplicate), each receipt, files set aside or unreadable, ids never shown |
 | `order` | issued (with the words, and the lord's state before and after), checked (shadow), hour, arrived, moved (a tool's new move, and whether the game took it), reissued (with who turned the lord away), replaced, ended, after release, refused at the door, lord lookup |
 | `tool` | library written (with any problems the checker found), started (tool, lord, places, lords, settings, next order), step (from, to, the rule that fired, the move), no target, sheltered and resumed (the safety rule), adjusted, then, replaced, ended (why, steps, hours), cleared |
-| `army` | formed (leader, place, lords called, influence cost and the clan's influence before, army type) |
+| `army` | formed (leader, place, lords called, lords sent to join (0.6), influence cost now and the far lords' cost now, the clan's influence before, army type); joined (0.6: the lord, the leader, the cost, the influence before) |
+| `recruitment` | day (0.6): the summary, how many lords sat where they could recruit, the hours counted |
 | `chronicle` | game history read (entries scanned, lines about the realm, unread, ms; at load), loaded (lines, cut, seeded from the game, the cutoff hour) |
 | `lord` | a change in what a lord of the watched realm (or a lord we hold) is doing |
 | `ai` | the game's AI weighing its options: kept plan (the best other option), changed plan or called an army (the options and their scores, the bar) |

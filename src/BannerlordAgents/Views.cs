@@ -23,6 +23,22 @@ namespace BannerlordAgents
         /// <summary>The news comes from the realm's chronicle (its recent history), not only from its notices.</summary>
         public bool NewsFromChronicle;
         public int OthersInView;
+        /// <summary>The watched realm only: its lords held prisoner, and the whole realm in a few numbers.</summary>
+        public List<ViewCaptive> Captives = new List<ViewCaptive>();
+        public RealmSum Sum;
+    }
+
+    internal sealed class ViewCaptive
+    {
+        public string Hero, Name, Holding, HoldingName, HoldingKind, HoldingFaction, PartyLord, PartyName, PartyFaction;
+        public double Since = double.NaN;
+    }
+
+    /// <summary>The whole realm in a few numbers: its field forces, its castles and towns, its villages, its captured lords.</summary>
+    internal sealed class RealmSum
+    {
+        public int Lords, Men, Armies, ArmyLords, Ordered, Forts, GarrisonMen, Militia, Villages, Looted, Raided, Besieged, Captives;
+        public float Strength;
     }
 
     internal sealed class ViewParty
@@ -136,7 +152,76 @@ namespace BannerlordAgents
                 }
                 v.Frontier = v.Frontier.OrderBy(h => own.Min(o => Dist(o.X, o.Y, h.X, h.Y))).Take(20).ToList();
             }
+            if (fid == s.Watched)
+            {
+                foreach (CaptiveRow c in s.Captives) v.Captives.Add(Captive(s, c));
+                v.Sum = Sum(s, fid, own);
+            }
             return v;
+        }
+
+        /// <summary>A captured lord as the realm knows it: where they are held (a holding, or the party holding them) and since when.</summary>
+        public static ViewCaptive Captive(Snapshot s, CaptiveRow c)
+        {
+            var vc = new ViewCaptive { Hero = c.Hero, Name = c.Name ?? c.Hero, Holding = c.Holding, PartyLord = c.PartyLord, Since = c.Since };
+            if (c.Holding != null && s.SettlementById.TryGetValue(c.Holding, out SettlementRow h))
+            {
+                vc.HoldingName = h.Name;
+                vc.HoldingKind = h.Kind;
+                vc.HoldingFaction = FactionName(s, h.Faction);
+            }
+            if (c.Party != null)
+            {
+                vc.PartyName = s.PartyById.TryGetValue(c.Party, out PartyRow p) ? p.Name ?? "a party" : "a party";
+                vc.PartyFaction = FactionName(s, c.Faction);
+            }
+            return vc;
+        }
+
+        public static RealmSum Sum(Snapshot s, string fid, List<SettlementRow> own)
+        {
+            var sum = new RealmSum { Captives = s.Captives.Count };
+            foreach (PartyRow r in s.Parties)
+            {
+                if (r.Faction != fid || r.Kind != "lord") continue;
+                sum.Lords++;
+                if (Tools.Runner.ForParty(r.Id) != null) sum.Ordered++;
+                if (r.Attached) continue;   // the game counts a party marching in an army with its leader (Army.TotalHealthyMembers)
+                sum.Men += r.ArmyMen > 0 ? r.ArmyMen : r.Men;
+                sum.Strength += r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength;
+                if (r.ArmyLeader == r.Id)
+                {
+                    sum.Armies++;
+                    sum.ArmyLords += r.ArmyParties;
+                }
+            }
+            foreach (SettlementRow h in own)
+            {
+                if (h.Kind == "village")
+                {
+                    sum.Villages++;
+                    if (h.VillageState == "Looted") sum.Looted++;
+                    else if (h.VillageState == "BeingRaided") sum.Raided++;
+                    continue;
+                }
+                if (h.Kind != "town" && h.Kind != "castle") continue;
+                sum.Forts++;
+                sum.GarrisonMen += h.Garrison;
+                sum.Militia += h.Militia;
+                if (h.BesiegedBy != null) sum.Besieged++;
+            }
+            return sum;
+        }
+
+        /// <summary>The ids the report names beyond its own lists: the captured lords, and where and by whom they are held.</summary>
+        public static IEnumerable<string> CaptiveIds(View v)
+        {
+            foreach (ViewCaptive c in v.Captives)
+            {
+                yield return c.Hero;
+                if (c.Holding != null) yield return c.Holding;
+                if (c.Holding == null && c.PartyLord != null) yield return c.PartyLord;
+            }
         }
 
         public static string Report(View v, List<Trigger> triggers, ReportExtras x = null)
@@ -158,6 +243,19 @@ namespace BannerlordAgents
             if (x?.InForce != null) sb.AppendLine().AppendLine("YOUR ORDERS IN FORCE").AppendLine(x.InForce);
             if (x?.Facts != null) sb.AppendLine().AppendLine("READY-MADE FACTS").AppendLine(x.Facts);
 
+            if (v.Sum != null)
+            {
+                RealmSum r = v.Sum;
+                sb.AppendLine().AppendLine("YOUR REALM IN SUM");
+                sb.AppendLine("- In the field: " + r.Lords + " lords leading parties, " + Text.N(r.Men) + " men, strength " + Text.N((int)r.Strength)
+                              + (r.Armies > 0 ? "; " + r.Armies + (r.Armies == 1 ? " army (" : " armies (") + r.ArmyLords + " parties)" : "; no army")
+                              + ". Holding your orders: " + r.Ordered + "; the other " + (r.Lords - r.Ordered) + " follow their own judgment.");
+                sb.AppendLine("- Castles and towns: " + r.Forts + " (garrisons " + Text.N(r.GarrisonMen) + " men, militia " + Text.N(r.Militia)
+                              + (r.Besieged > 0 ? "; " + r.Besieged + " under siege" : "") + "). Villages: " + r.Villages
+                              + (r.Looted + r.Raided > 0 ? " (" + string.Join(", ", new[] { r.Looted > 0 ? r.Looted + " looted" : null, r.Raided > 0 ? r.Raided + " being raided" : null }.Where(x => x != null)) + ")" : "") + ".");
+                sb.AppendLine("- Prisoners of the enemy: " + (r.Captives == 0 ? "none of your lords." : r.Captives + " of your lords (YOUR CAPTURED LORDS)."));
+            }
+
             sb.AppendLine().AppendLine("YOUR LORDS AND ARMIES (" + v.Forces.Count + ", " + Text.N(v.Forces.Sum(f => f.ArmyMen > 0 ? f.ArmyMen : f.Men)) + " men)");
             foreach (ViewParty f in v.Forces)
             {
@@ -175,6 +273,12 @@ namespace BannerlordAgents
                 if (!string.IsNullOrEmpty(h.Status)) line.Append("; " + h.Status);
                 if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Text.D(h.ThreatDistance));
                 sb.AppendLine(line.Append('.').ToString());
+            }
+
+            if (v.Sum != null && v.Captives.Count > 0)
+            {
+                sb.AppendLine().AppendLine("YOUR CAPTURED LORDS (" + v.Captives.Count + ", by where they are held)");
+                foreach (string line in CaptiveLines(v.Captives)) sb.AppendLine("- " + line);
             }
 
             sb.AppendLine().AppendLine("IN VIEW (" + v.Seen.Count + (v.SeenNotListed > 0 ? ", and " + v.SeenNotListed + " more further off" : "") + ")");
@@ -211,6 +315,24 @@ namespace BannerlordAgents
                 foreach (string n in v.News) sb.AppendLine("- " + n);
             }
             return sb.ToString();
+        }
+
+        /// <summary>The captured lords, one line per place they are held (a holding, or the party holding them), most first.</summary>
+        public static List<string> CaptiveLines(List<ViewCaptive> captives)
+        {
+            var lines = new List<string>();
+            foreach (IGrouping<string, ViewCaptive> g in captives.GroupBy(c => c.Holding ?? "party:" + (c.PartyLord ?? c.PartyName ?? "?"))
+                                                                  .OrderByDescending(g => g.Count()).ThenBy(g => g.Key))
+            {
+                ViewCaptive first = g.First();
+                string where = first.Holding != null
+                    ? "In " + (first.HoldingName ?? first.Holding) + " [" + first.Holding + "] (" + (first.HoldingKind ?? "holding") + " of " + (first.HoldingFaction ?? "?") + ")"
+                    : "Held by " + (first.PartyName ?? "a party") + (first.PartyLord != null ? " [" + first.PartyLord + "]" : "") + " (" + (first.PartyFaction ?? "?") + "), on the march";
+                string who = string.Join("; ", g.OrderBy(c => double.IsNaN(c.Since) ? double.MaxValue : c.Since)
+                                                .Select(c => c.Name + " [" + c.Hero + "]" + (double.IsNaN(c.Since) ? "" : " since " + Text.When(c.Since))));
+                lines.Add(where + ": " + g.Count() + (g.Count() == 1 ? " lord" : " lords") + ": " + who + ".");
+            }
+            return lines;
         }
 
         /// <summary>The player's realm, compactly, for each recorded decision.</summary>

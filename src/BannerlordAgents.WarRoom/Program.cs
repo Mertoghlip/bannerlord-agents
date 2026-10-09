@@ -10,6 +10,7 @@ namespace BannerlordAgents.WarRoom
     /// WarRoom.exe [run] [--dir agent-folder]        answers every poke as it comes (the live loop)
     /// WarRoom.exe once [--dir agent-folder]          answers the newest poke now, and stops
     /// WarRoom.exe story [--dir agent-folder]         has the chronicler rewrite the story so far now, from the channel's chronicle
+    /// WarRoom.exe council [--dir agent-folder]       a council of war sits now (the game must be running), and stops
     /// WarRoom.exe selftest                           checks the realm's memory in a scratch folder, without calling Claude
     /// WarRoom.exe replay --pokes file.jsonl --numbers 6,10,54 [--effort e] [--cap tokens] [--model m] [--tag t]
     ///                                                 answers recorded pokes again, each on its own, without memory, to time them
@@ -47,9 +48,10 @@ namespace BannerlordAgents.WarRoom
                         return room.Answer(int.Parse(m.Groups[1].Value), m.Groups[2].Value.Trim(), text).Ok ? 0 : 1;
                     }
                 case "story": return Story(c);
+                case "council": return new Room(c).CouncilNow("asked for by hand");
                 case "replay": return Arg(args, "--memory") != null ? ReplayInOrder(c, args) : Replay(c, args);
                 default:
-                    Console.WriteLine("Usage: WarRoom [run|once|story|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]");
+                    Console.WriteLine("Usage: WarRoom [run|once|story|council|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]");
                     return 1;
             }
         }

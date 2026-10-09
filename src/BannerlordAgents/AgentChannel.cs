@@ -327,6 +327,13 @@ namespace BannerlordAgents
             RememberIds(report);
         }
 
+        /// <summary>The briefing for a council of war (Facts.Council), rewritten every in-game hour: the war room reads it for a review.</summary>
+        public static void WriteCouncil(string text)
+        {
+            Files.Overwrite(Path.Combine(Dir, "council.txt"), text);
+            RememberIds(text);
+        }
+
         /// <summary>Every id the agent is shown, so an order naming any other id can be flagged.</summary>
         private static void RememberIds(string report)
         {
