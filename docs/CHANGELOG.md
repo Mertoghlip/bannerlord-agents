@@ -128,7 +128,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the journal: the agent chat's journal is kept as `journal-chat-20261008.md`. `journal.md` carries over its plan in three sections (standing plan, lords and their tasks, lessons), reworded for the new orders, without its list of problems.
 - **Why:** Mert's "turn the agent on and let's begin testing": Opus 5.5 commands every orc lord, live.
 
-### 21:14 · Version 0.4.0: tools, armies and the war room · commit pending (installed 20:59, again 21:10 and 21:14)
+### 21:14 · Version 0.4.0: tools, armies and the war room · commit 1f87367 (installed 20:59, again 21:10 and 21:14)
 - **What:**
   - **The behavior language and the tool engine** (`src/BannerlordAgents/Tools`, [TOOLS.md](TOOLS.md)):
     - a tool is a small JSON file of settings, states, rules and call-backs, read by a checker before it runs;
