@@ -302,7 +302,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - build the council of war (E1);
   - rewrite the agent's instructions as a medieval commander's, from a study of medieval doctrine, without giving it his own plan (E3).
 
-### 13:30 · Version 0.6.0: the council of war, the missing facts, a commander's doctrine · commit (hash in the next commit; installed about 13:30)
+### 13:30 · Version 0.6.0: the council of war, the missing facts, a commander's doctrine · commit 71cbbcc (installed about 13:30)
 - **What the agent now sees:**
   - **YOUR REALM IN SUM:** the field forces, the castles and towns, the villages, and how many lords are prisoners.
   - **YOUR CAPTURED LORDS:** each one, grouped by where they are held, and since when, from the game's own prisoner records (`Hero.PartyBelongedToAsPrisoner`, `CaptivityStartTime`).
