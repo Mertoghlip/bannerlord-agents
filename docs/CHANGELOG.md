@@ -204,7 +204,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The conversation was resumed each poke.
   - The notes changed with each answer.
 
-### 11:01 · Version 0.5.0: each realm's memory of the war · commit pending (installed 11:01)
+### 11:01 · Version 0.5.0: each realm's memory of the war · commit 999f913 (installed 11:01)
 - **What** ([MEMORY.md](MEMORY.md)):
   - **The chronicle (bridge):** every non-quiet notice the realm gets, every enemy army it sees come into view, and every order the agent gives (carried out or refused, with its reason).
     - At the first load, what the game's own history log still holds about the realm fills the time before the chronicle's own lines, marked as such.
