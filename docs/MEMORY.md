@@ -51,7 +51,7 @@ The report's last section, **RECENT HISTORY, LAST TWO DAYS**, is the chronicle's
 - **Plan:** replaced by the answer's `plan`.
 - **Enemies:** one line per name, from the answer's `enemies`: `{"Aragorn": "comes through the Redhorn Gate"}`. A new note replaces the old one on that name, and `""` removes it.
 - **Lessons:** the answer's `lessons` are added. Past `max_lessons`, the chronicler merges them; any the agent adds meanwhile are kept after the merged ones.
-- **The old journal:** the first time, the old single journal (`journal.md`) became the campaign's notes, with its plan and its lessons. Its list of lords' tasks did not carry over, since YOUR ORDERS IN FORCE says it at every poke. The journal is then renamed `journal-before-memory-<date>.md`, so it is never read twice.
+- **The old journal:** the first time, the old single journal (`journal.md`) became the campaign's notes, with its plan and its lessons. Its list of lords' tasks did not carry over, since YOUR ORDERS IN FORCE says it at every poke. The journal is then renamed `journal-before-memory-<date>.md`, so it is never read twice. Those notes count from the first poke of the memory: loading a save from before it starts with empty notes, since the journal belonged to another run of the game (Oct 9: a Summer 9 save was given notes written at Summer 17).
 
 ### The story so far (the chronicler)
 - **When:** once `story_every` (12) new chronicle lines have come, or the oldest of them is a day and a half older than the newest poke.
@@ -117,7 +117,7 @@ This is the experiment behind the choice: answer time, usage, and the quality of
 
 ## Checks
 
-- `WarRoom selftest` (also run by `scripts\deploy.ps1`; 25 checks, no calls) covers:
+- `WarRoom selftest` (also run by `scripts\deploy.ps1`; 28 checks, no calls) covers:
   - the journal becoming the notes;
   - what an answer changes in the notes;
   - cutting back on a reload;
@@ -125,7 +125,7 @@ This is the experiment behind the choice: answer time, usage, and the quality of
   - both memories' messages and instructions;
   - when a story is due;
   - the replay's view of what is now quiet.
-- The smoke test (77 checks) covers the bridge's side:
+- The smoke test (81 checks) covers the bridge's side:
   - the game's history first, marked;
   - notices, orders and refusals in the chronicle, and fights with bandits kept out;
   - a lord set free kept without a poke;

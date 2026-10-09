@@ -271,7 +271,7 @@ namespace BannerlordAgents.WarRoom
             string campaign = meta?.Campaign ?? LatestCampaign() ?? _mem?.Campaign ?? "unknown";
             if (_mem == null || _mem.Campaign != campaign)
             {
-                _mem = Memory.Open(_c, campaign, Say);
+                _mem = Memory.Open(_c, campaign, Say, meta?.Hours ?? double.NaN);
                 Say("Memory of campaign " + campaign + ": " + _mem.Dir + (_mem.Story.Length > 0 ? "; the story so far reaches " + _mem.StoryDate : "") + ".");
             }
             if (meta == null || string.IsNullOrEmpty(meta.LoadId) || meta.LoadId == _mem.LoadId) return;

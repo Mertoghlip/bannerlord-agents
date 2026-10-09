@@ -205,7 +205,7 @@ namespace BannerlordAgents.Tools
             foreach (StateDef st in States.Values)
             {
                 string where = "state " + st.Name;
-                if (st.End != null && st.End != "free" && st.End != "hold") Problems.Add(where + ": end must be free or hold");
+                if (st.End != null && st.End != "free" && st.End != "hold" && st.End != "fail") Problems.Add(where + ": end must be free, hold or fail");
                 if (st.Do == null && st.End == null) Problems.Add(where + ": a state needs a move (do) unless it ends the tool");
                 if (st.Do != null)
                 {
@@ -335,7 +335,7 @@ namespace BannerlordAgents.Tools
             sb.AppendLine("- Give a lord a new order to replace the old one. Lords you do not mention keep their orders.");
             sb.AppendLine("- **adjust** (settings): changes only the numbers of a lord's current tool, keeping its state.");
             sb.AppendLine("- An answer with no orders is a valid answer: everything stands.");
-            sb.AppendLine("- **then**: an order can carry a next order, started as soon as the first one finishes, e.g. gather, then relieve.");
+            sb.AppendLine("- **then**: an order can carry a next order, started as soon as the first one finishes, e.g. gather, then relieve. It does not start when the first one fails (an army that broke up before it formed): that lord is set free, and you are told.");
             sb.AppendLine();
             sb.AppendLine("Every move and tool also takes caution (default " + ToolDef.Num(Caution.Default) + ") and danger_radius (default " + ToolDef.Num(DangerRadius.Default)
                           + "): " + Caution.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");

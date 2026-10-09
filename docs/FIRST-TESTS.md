@@ -23,6 +23,7 @@
 
 - **Install 1** has been in the game since Oct 7, and carries the agent channel, so phases 0 to 6 can all run on it. Versions 0.3 and 0.3.1 (Oct 8) added the logs and cut the pokes.
 - **Oct 8, first live session:** phases 0, 1, 2 and 5 ran. The report is [reports/2026-10-08-first-live-session.md](reports/2026-10-08-first-live-session.md). Phases 3, 4 and 6 are still to run.
+- **Oct 9, second live session:** phase 7 began: Opus commanded every orc lord, with tools and memory, for a short run. The report is [reports/2026-10-09-second-live-session.md](reports/2026-10-09-second-live-session.md).
 - **Version 0.4 (Oct 8)** brings the tools, the armies and the war room, a week early, so phase 7 can run now. **Version 0.5 (in the game since Oct 9, 11:01)** adds each realm's memory of the war ([MEMORY.md](MEMORY.md)). [Testing versions 0.4 and 0.5](#testing-versions-04-and-05-opus-commands-the-orcs-with-tools-and-memory) says how.
 - **The agent** is the war room since Oct 8 ([WARROOM.md](WARROOM.md)). The agent chat of the first session ([AGENT-CHAT.md](AGENT-CHAT.md)) is retired.
 
@@ -64,7 +65,7 @@ Each install is one restart of the game.
 
 **Stop at any time:** `agents.agent shadow` stops new orders from being carried out, and `agents.release all` hands every orc lord back to the game at once. Closing the war room alone stops new answers, but the lords keep their current orders until released.
 
-## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.5 since Oct 9, 11:01)
+## Running the tests (install 1 since Wed Oct 7, 15:33; version 0.5.1 since Oct 9, 11:55)
 
 Your three newest saves were copied to `C:\BannerlordArchive\save-backups` before the install, and checked identical to the originals.
 

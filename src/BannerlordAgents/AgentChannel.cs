@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -163,15 +164,57 @@ namespace BannerlordAgents
         {
             EnsureBefore(campaignPokesFile);
             if (_next <= _before) _next = _before + 1;
-            return _next++;
+            int n = _next++;
+            if (campaignPokesFile != null) Files.Overwrite(NumberFile(campaignPokesFile), n.ToString(Text.Inv));
+            return n;
         }
 
         private static void EnsureBefore(string campaignPokesFile)
         {
             if (_before >= 0) return;
-            _before = Math.Max(LastNumberIn(Path.Combine(Dir, "pokes.log"), "#", true), LastNumberIn(campaignPokesFile, "{\"type\":\"poke\",\"number\":", false));
+            if (campaignPokesFile == null && Brain.Latest?.Watched != null) campaignPokesFile = Path.Combine(Brain.Dir, "pokes_" + Brain.Latest.Watched + ".jsonl");
+            _before = Math.Max(LastNumberIn(Path.Combine(Dir, "pokes.log"), "#", true), HighestIn(campaignPokesFile));
             _next = _before + 1;
             if (_before > 0) Diag.Event("agent", "poke numbers carry on", new { from = _before + 1 });
+        }
+
+        private static string NumberFile(string campaignPokesFile)
+            => Path.Combine(Path.GetDirectoryName(campaignPokesFile), Path.GetFileNameWithoutExtension(campaignPokesFile) + ".number");
+
+        /// <summary>
+        /// The highest poke number a campaign has used, kept in pokes_&lt;realm&gt;.number beside its poke file. The first
+        /// time, it is read from the whole poke file: each of its lines holds a whole report, longer than any tail worth
+        /// reading, so a look at the file's end found no number and the numbers began again at #1 (first live test, Oct 9).
+        /// </summary>
+        internal static int HighestIn(string campaignPokesFile)
+        {
+            if (campaignPokesFile == null) return 0;
+            try
+            {
+                string kept = NumberFile(campaignPokesFile);
+                if (System.IO.File.Exists(kept) && int.TryParse(System.IO.File.ReadAllText(kept).Trim(), NumberStyles.Integer, Text.Inv, out int n)) return n;
+                if (!System.IO.File.Exists(campaignPokesFile)) return 0;
+                const string marker = "{\"type\":\"poke\",\"number\":";
+                int best = 0;
+                using (var fs = new FileStream(campaignPokesFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var sr = new StreamReader(fs, Encoding.UTF8))
+                {
+                    string line;
+                    while ((line = sr.ReadLine()) != null)
+                    {
+                        if (!line.StartsWith(marker, StringComparison.Ordinal)) continue;
+                        int j = marker.Length;
+                        while (j < line.Length && char.IsDigit(line[j])) j++;
+                        if (int.TryParse(line.Substring(marker.Length, j - marker.Length), NumberStyles.Integer, Text.Inv, out int v) && v > best) best = v;
+                    }
+                }
+                return best;
+            }
+            catch (Exception e)
+            {
+                Diag.Swallowed("reading the campaign's highest poke number", e);
+                return 0;
+            }
         }
 
         /// <summary>The last number after the marker in the end of a file (lines start with it when atLineStart).</summary>

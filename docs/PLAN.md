@@ -138,7 +138,7 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [x] Each realm's memory of the war (Oct 9, version 0.5; [MEMORY.md](MEMORY.md)): the chronicle the bridge keeps, the agent's own notes, and the story so far the chronicler rewrites in quiet moments; cut back when an earlier save is loaded
 - [ ] The two memories compared on the recorded session (written against one long conversation): answer time, usage and decisions. *The replay is built; the full run with Opus 5.5 waits for your go-ahead (about 120 calls).*
 - [x] Faction authority: an agent orders only its own lords. **free** hands a lord back.
-- [ ] First tests, phase 7: Opus 5.5 commands the whole orc realm with those tools, in your campaign. *Set up Oct 8, 21:14.*
+- [ ] First tests, phase 7: Opus 5.5 commands the whole orc realm with those tools, in your campaign. *Set up Oct 8, 21:14; a first short run on Oct 9 ([report](reports/2026-10-09-second-live-session.md)), which led to version 0.5.1.*
 - [ ] Run control: a fixed starting save, a 60-day limit, the player parked far away, a fixed speed, and autosave with resume
 - [ ] The starting save for measured runs, and the script that switches module lists
 

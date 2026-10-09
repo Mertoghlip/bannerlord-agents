@@ -345,6 +345,36 @@ namespace SmokeTest
                   && orders[1].Settings["wait_hours"] == 24 && (string)orders[1].Then["do"] == "relieve" && orders[2].Settings["caution"] == 0,
                   "the agent's new orders are read: places, lords, settings and a next order" + (error != null ? " (" + error + ")" : ""));
 
+            // as in the game: the order forms the army after the hour's copy, so the tool's first look sees no army yet
+            // (first live test, Oct 9: "broke up before it formed" at once, and the next order started early)
+            var gorbag = new PartyRow { Id = "p_gor", Leader = "lord_gor", Name = "Gorbag", Faction = "orcs", Kind = "lord", Men = 200, Strength = 260, Speed = 4, FoodDays = 10, X = 138, Y = 100, Doing = "Hold", Spottable = true };
+            var shagrat = new PartyRow { Id = "p_sha", Leader = "lord_sha", Name = "Shagrat", Faction = "orcs", Kind = "lord", Men = 180, Strength = 240, Speed = 4, FoodDays = 10, X = 125, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(3012, gorbag, shagrat));
+            var g2 = new ToolOrder { Tool = "gather", Lord = "lord_gor", LordName = "Gorbag", Party = "p_gor", At = "castle_two", Then = JObject.Parse("{\"do\":\"defend\",\"at\":\"castle_two\"}") };
+            g2.Lords.Add("p_sha");
+            released.Clear();
+            thens.Clear();
+            Runner.Start(904, g2);
+            Check(!released.Contains(904) && thens.Count == 0, "a new army is not taken for broken at the tool's first look, made before it formed");
+            gorbag.ArmyLeader = "p_gor";
+            gorbag.ArmyMen = 380;
+            gorbag.ArmyParties = 2;
+            shagrat.ArmyLeader = "p_gor";
+            shagrat.Doing = "EscortParty";
+            Brain.OnHour(ToolWorld(3013, gorbag, shagrat));
+            Check(!released.Contains(904) && thens.Count == 0, "the hour after, it waits for the called lord");
+            // an army that truly breaks up: its next order does not start, and the lord is set free
+            gorbag.ArmyLeader = null;
+            shagrat.ArmyLeader = null;
+            Brain.OnHour(ToolWorld(3014, gorbag, shagrat));
+            Check(released.Contains(904) && thens.Count == 0, "an army that broke up sets its lord free, and its next order does not start");
+
+            // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
+            // is read from the whole file once, then kept beside it
+            string numbered = Path.Combine(dir, "pokes_numbers_test.jsonl");
+            File.WriteAllText(numbered, "{\"type\":\"poke\",\"number\":125,\"report\":\"" + new string('x', 200000) + "\"}\n{\"type\":\"poke\",\"number\":9,\"report\":\"short\"}\n");
+            Check(AgentChannel.HighestIn(numbered) == 125, "the highest poke number is found in a poke file of long lines (" + AgentChannel.HighestIn(numbered) + ")");
+
             Runner.Reset();
         }
 

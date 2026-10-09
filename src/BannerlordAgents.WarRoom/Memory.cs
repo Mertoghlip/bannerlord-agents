@@ -56,7 +56,10 @@ namespace BannerlordAgents.WarRoom
         /// campaign) becomes its notes: the plan and the lessons carry over, the list of lords' tasks does not (the orders in
         /// force say it every poke). The journal is then renamed, so it is never read twice.
         /// </summary>
-        public static Memory Open(Config c, string campaign, Action<string> say)
+        /// <param name="nowHours">The in-game hour of the poke that opens it. Notes taken over from the old journal are
+        /// kept as of that hour, so loading a save from before it starts the realm afresh: the journal belonged to another
+        /// run of the game (first live test, Oct 9: a Summer 9 save got notes written at Summer 17).</param>
+        public static Memory Open(Config c, string campaign, Action<string> say, double nowHours = double.NaN)
         {
             string safe = Safe(string.IsNullOrWhiteSpace(campaign) ? "unknown" : campaign);
             var m = new Memory(campaign ?? "unknown", Path.Combine(c.MemoryDir, safe));
@@ -65,18 +68,23 @@ namespace BannerlordAgents.WarRoom
             if (fresh)
             {
                 string plan = "(not set yet)", lessons = "";
+                bool migrated = false;
                 if (File.Exists(c.Journal) && m.Campaign != "unknown")
                 {
                     Dictionary<string, string> old = Sections(File.ReadAllText(c.Journal));
                     plan = Get(old, "Standing plan") ?? Get(old, "Plan") ?? plan;
                     lessons = Get(old, "Lessons") ?? "";
-                    string moved = Path.Combine(c.AgentDir, "journal-before-memory-" + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture) + ".md");
+                    string stamp = "journal-before-memory-" + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
+                    string moved = Path.Combine(c.AgentDir, stamp + ".md");
+                    for (int i = 2; File.Exists(moved); i++) moved = Path.Combine(c.AgentDir, stamp + "-" + i + ".md");
                     File.Move(c.Journal, moved);
+                    migrated = true;
                     say("Memory: the old journal became the notes of campaign " + m.Campaign + " (its plan and lessons); it is kept as " + Path.GetFileName(moved) + ".");
                 }
                 m.Notes = Compose(plan, new List<KeyValuePair<string, string>>(), Bullets(lessons));
                 m.Save();
-                m.Snapshot(-1, "", -1, "seed");
+                // empty notes hold at any date; the old journal's only from now on (a save from before starts afresh)
+                m.Snapshot(migrated && !double.IsNaN(nowHours) ? nowHours : -1, "", -1, migrated ? "seed from the old journal" : "seed");
                 return m;
             }
             m.Load();

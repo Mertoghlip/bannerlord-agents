@@ -171,7 +171,9 @@ namespace BannerlordAgents
         public static void OnArmyCreated(Army army)
         {
             if (army?.LeaderParty == null || Bridge.Watched == null || army.Kingdom != Bridge.Watched) return;
-            string where = army.AiBehaviorObject is Settlement s ? " at " + Names.Settlement(s) : "";
+            // an army an order forms meets where the order says; the game fires this before that place is set
+            Settlement at = Orders.FormingAt ?? army.AiBehaviorObject as Settlement;
+            string where = at != null ? " at " + Names.Settlement(at) : "";
             Send("army_formed", Names.Party(army.LeaderParty) + " formed an army" + where + ".", Involved(army.Kingdom), army.LeaderParty.StringId, recordOnly: true);
         }
 

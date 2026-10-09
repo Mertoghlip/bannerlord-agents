@@ -102,7 +102,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 ## Other commands
 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
-- `WarRoom selftest`: the memory checked in a scratch folder, without any call (25 checks; `scripts\deploy.ps1` runs it before installing).
+- `WarRoom selftest`: the memory checked in a scratch folder, without any call (28 checks; `scripts\deploy.ps1` runs it before installing).
 
 ## Replay
 

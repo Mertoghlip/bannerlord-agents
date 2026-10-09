@@ -223,7 +223,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - **The instructions:** the agent's (`agent/warroom-system.template.md`) describe the memory and the `enemies` field. The chronicler's are new (`agent/chronicler-system.template.md`).
 - **Why:** Mert, Oct 9: "each realm should have a continuous memory of the history of the game". Mert approved this design over one long conversation, which fills up within an hour or two and could not carry over to a small local model. The conversation is kept, to measure the difference.
 - **Checks:**
-  - the smoke test passed in full (77 checks) and the war room's self-test too (25);
+  - the smoke test passed in full (77 checks) and the war room's self-test too (26; first written here as 25);
   - 327 game references, 0 missing;
   - the installed DLL has sha256 `05AC49E933B36345…`.
 - **Outside the repository:**
@@ -237,3 +237,40 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a reload cutting both memories back;
   - answer time with the memory added.
 - **Not yet run:** the full comparison of the two memories with Opus 5.5, about 120 calls; it waits for Mert's go-ahead.
+
+### 11:42 to 11:51 · The second live session, with tools and memory ([report](reports/2026-10-09-second-live-session.md))
+- **What:** Mert loaded the Summer 9, 1087 save, the starting point of the first session, and marched on Western Moria. The orcs ran on version 0.5.0, live, under Opus 5.5.
+- **Numbers:**
+  - the game's history held 318 entries about the orcs, read in 56 ms;
+  - 9 pokes and 6 answers, in 8 to 29 s (median about 16 s);
+  - 10 orders carried out, 2 refused, and 4 waiting for the clock when the game was paused and closed;
+  - the first story so far, 550 words in 14 s.
+  - The agent judged Mert's army too strong, and ordered Ulga's army out of Western Moria to join Vrakdush at Methedras. The order arrived while the game was paused and was never carried out.
+- **Found:**
+  - gather's false "broke up before it formed";
+  - an army refused whole for one busy lord;
+  - the game's meeting place in the chronicle;
+  - poke numbers starting again at #1;
+  - notes from the Oct 8 run (Summer 17) given to a Summer 9 save.
+  - Also seen: 39 ms and 28 ms on the game's thread after the load and at the first orders.
+- **Outside the repository:**
+  - at the first poke (11:47:48) the war room took the old journal over as the notes of campaign `Ah2auppicLLJ` (`orc-war-council\memory\Ah2auppicLLJ\`) and renamed it `journal-before-memory-20261009-1147.md`;
+  - the bridge started `chronicle_mistymountainorcs.jsonl` in the campaign's folder.
+
+### 11:55 · Version 0.5.1: army fixes · commit pending (installed 11:55)
+- **What:**
+  - gather judges its army from the next hour on, and a new "fail" ending keeps an army that truly broke up from starting its next order, setting its lord free;
+  - gather and add form the army with the lords who can come, naming the ones left out;
+  - the chronicle names the order's meeting place;
+  - poke numbers come from the campaign's whole poke file once, then from `pokes_<realm>.number` beside it, so the next poke is #126;
+  - notes taken over from the old journal hold from the first poke of the memory, so a save from before it starts afresh;
+  - renaming the journal can no longer collide with an earlier copy.
+- **Why:** the second live session (above). Mert quit the game for the army fixes.
+- **Checks:**
+  - the smoke test (81 checks) and the war room's self-test (28) passed;
+  - 327 game references, 0 missing;
+  - the installed DLL has sha256 `384C41BEBCA7AAA9…`.
+- **Outside the repository:**
+  - the war room was stopped and restarted at 11:55 and again at 11:57 for the rebuilds;
+  - `tools.txt` was rewritten;
+  - in `memory\Ah2auppicLLJ\snapshots.jsonl`, the old journal's notes were re-dated from "any date" to poke #1 (Summer 9, 1087, 09:00), so reloading that save starts the orcs afresh (backup `snapshots.jsonl.bak-20261009-before-seed-date`).

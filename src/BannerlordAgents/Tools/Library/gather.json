@@ -1,7 +1,7 @@
 {
   "tool": "gather",
   "kind": "army",
-  "about": "Forms an army under this lord: the named lords march to the meeting place and join it there. The game charges the leader's clan its usual influence for each lord called.",
+  "about": "Forms an army under this lord: the named lords march to the meeting place and join it there. The game charges the leader's clan its usual influence for each lord called. Lords who cannot come (in a battle, too far, already in an army) are left out, and you are told which.",
   "calls_back": "the army has formed, it has waited wait_hours, or it broke up",
   "at": "friendly_holding",
   "lords": true,
@@ -12,10 +12,10 @@
   "states": {
     "wait": { "about": "waiting at {at} for the army: {army_lords} lords, {army_coming} still coming", "do": "near at",
       "when": [
-        { "if": "not in_army", "go": "broke", "poke": "{me}'s army broke up before it formed." },
+        { "if": "hours_in_state >= 1 and not in_army", "go": "broke", "poke": "{me}'s army broke up before it formed." },
         { "if": "army_complete", "go": "ready", "poke": "{me}'s army has formed at {at}: {army_lords} lords, {men} men, strength {strength}." },
         { "if": "hours_in_state >= wait_hours", "go": "ready", "poke": "{me} waited {wait_hours} hours at {at}; going on with {army_lords} lords, {men} men ({army_coming} never came)." } ] },
     "ready": { "about": "the army is ready at {at}, waiting for your order", "end": "hold" },
-    "broke": { "about": "the army broke up", "end": "free" }
+    "broke": { "about": "the army broke up", "end": "fail" }
   }
 }

@@ -238,6 +238,13 @@ namespace BannerlordAgents.Tools
         private static void Finish(ToolInstance t, string end, World w)
         {
             t.Finished = true;
+            if (end == "fail")
+            {
+                // a tool that failed (an army that broke up) does not lead to its next order: that order assumed it worked
+                if (t.Order.Then != null) Diag.Event("tool", "then skipped", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, next = t.Order.Then.ToString(Newtonsoft.Json.Formatting.None) });
+                ReleaseSink(t.Id, "the " + t.Def.Name + " could not be done" + (t.Order.Then != null ? ", so its next order did not start" : ""));
+                return;
+            }
             if (t.Order.Then != null)
             {
                 Diag.Event("tool", "then", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, next = t.Order.Then.ToString(Newtonsoft.Json.Formatting.None) });

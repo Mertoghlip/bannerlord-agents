@@ -90,6 +90,8 @@ namespace BannerlordAgents
         private const double RecruitDays = 3;
         private const double StuckHours = 6;
         private static readonly List<HandOrder> Active = new List<HandOrder>();
+        /// <summary>The meeting place of an army being formed by an order, for the army's notice (the game fires it before the place is set).</summary>
+        internal static Settlement FormingAt;
         private static readonly List<Released> AfterRelease = new List<Released>();
         private static readonly HashSet<MobileParty> Toggled = new HashSet<MobileParty>();
         private static readonly Dictionary<string, string> LastCulprit = new Dictionary<string, string>();
@@ -549,8 +551,9 @@ namespace BannerlordAgents
             if (lord.Clan == null || lord.Clan.Kingdom != realm) return name + "'s clan is not a clan of " + Names.Faction(realm) + ".";
             if (lord.Clan.IsUnderMercenaryService) return name + "'s clan serves as mercenaries, and the game does not let mercenaries lead armies.";
             if (o.Lords.Count == 0) return "gather needs lords to call, for example \"lords\": [\"lord_X\", \"lord_Y\"].";
-            List<MobileParty> members = Callable(lp, o.Lords, realm, out string problem, out int cost);
-            if (members == null) return problem;
+            List<MobileParty> members = Callable(lp, o.Lords, realm, out List<string> leftOut, out int cost);
+            if (members.Count == 0) return "none of these lords can be called: " + string.Join("; ", leftOut) + ".";
+            if (leftOut.Count > 0) notes.Add("left out, since they cannot be called: " + string.Join("; ", leftOut));
             float influence = lord.Clan.Influence;
             if (cost > influence) return "calling " + members.Count + " lords costs " + cost + " influence, and " + name + "'s clan has " + (int)influence + ". Call fewer lords, or nearer ones.";
             Settlement place = Settlement.Find(o.At);
@@ -568,8 +571,13 @@ namespace BannerlordAgents
             foreach (MobileParty m in members) ReleaseHeld(m, "called to " + name + "'s army");
             Army.ArmyTypes type = ArmyTypeFor(o.Then);
             Witness.Ours = true;
+            FormingAt = place;
             try { realm.CreateArmy(lord, place, type, new MBList<MobileParty>(members)); }
-            finally { Witness.Ours = false; }
+            finally
+            {
+                Witness.Ours = false;
+                FormingAt = null;
+            }
             Army army = lp.Army;
             if (army == null) return "the game did not form the army (no reason given)";
             army.AiBehaviorObject = place;   // meet where the agent said, not where the game would choose
@@ -609,12 +617,13 @@ namespace BannerlordAgents
             }
             if (verb == "add")
             {
-                List<MobileParty> members = Callable(lp, ids, realm, out string problem, out int cost);
-                if (members == null) return problem;
+                List<MobileParty> members = Callable(lp, ids, realm, out List<string> leftOut, out int cost);
+                if (members.Count == 0) return "none of these lords can be called: " + string.Join("; ", leftOut) + ".";
+                string left = leftOut.Count > 0 ? " (left out, since they cannot be called: " + string.Join("; ", leftOut) + ")" : "";
                 float influence = lord.Clan?.Influence ?? 0;
                 if (cost > influence) return "calling them costs " + cost + " influence, and " + name + "'s clan has " + (int)influence + ".";
                 string who = string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero)));
-                if (shadow) { status = "checked"; return "valid: " + name + " would call " + who + " into the army for " + cost + " influence (shadow mode: not carried out)"; }
+                if (shadow) { status = "checked"; return "valid: " + name + " would call " + who + " into the army for " + cost + " influence" + left + " (shadow mode: not carried out)"; }
                 if (!live) return NotYours(lord);
                 foreach (MobileParty m in members)
                 {
@@ -623,7 +632,7 @@ namespace BannerlordAgents
                 }
                 Diag.Count("army:added", members.Count);
                 status = "applied";
-                return name + " calls " + who + " into the army for " + cost + " influence";
+                return name + " calls " + who + " into the army for " + cost + " influence" + left;
             }
             // release: lords leave the army and decide for themselves again
             var leaving = new List<MobileParty>();
@@ -642,23 +651,25 @@ namespace BannerlordAgents
             return gone + " left " + name + "'s army";
         }
 
-        /// <summary>The lords who can be called to the leader's army, by the game's own rules, and the influence it costs; null and why when one cannot.</summary>
-        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out string problem, out int cost)
+        /// <summary>
+        /// The lords who can be called to the leader's army, by the game's own rules, and the influence they cost. The
+        /// others are left out, each with why: one lord in a battle no longer stops the whole army (first live test, Oct 9).
+        /// </summary>
+        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out List<string> leftOut, out int cost)
         {
-            problem = null;
+            leftOut = new List<string>();
             cost = 0;
             var members = new List<MobileParty>();
-            var problems = new List<string>();
             float far = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
             foreach (string id in partyIds)
             {
                 MobileParty m = FindPartyById(id);
                 string why = CannotCall(leader, m, realm, far);
-                if (why != null) { problems.Add(why); continue; }
+                if (why != null) { leftOut.Add(why); continue; }
+                if (members.Contains(m)) continue;
                 members.Add(m);
                 cost += Campaign.Current.Models.ArmyManagementCalculationModel.CalculatePartyInfluenceCost(leader, m);
             }
-            if (problems.Count > 0) { problem = "these lords cannot be called: " + string.Join("; ", problems) + "."; return null; }
             return members;
         }
 

@@ -60,6 +60,12 @@ namespace BannerlordAgents.WarRoom
             Check(File.ReadAllLines(Path.Combine(m.Dir, "snapshots.jsonl")).Length == 2, "the snapshots after the cut are dropped (the seed and the one at 100 remain)");
             m.CutBack(10);
             Check(m.Notes.Contains("Hold Western Moria."), "cut back before any answer, the notes are the seed again");
+            // the old journal belonged to another run of the game: a save from before the memory began starts afresh
+            File.WriteAllText(c.Journal, "# Journal\n\n## Standing plan\nRelieve Western Moria, besieged since Summer 17.\n\n## Lessons\n- A lesson from Summer 17.\n");
+            Memory late = Memory.Open(c, "camp4", said.Add, 500);
+            Check(late.Notes.Contains("besieged since Summer 17"), "the old journal becomes the notes at the first poke");
+            late.CutBack(400);
+            Check(late.Notes.Contains("(not set yet)") && !late.Notes.Contains("Summer 17"), "a save from before that poke starts without them");
 
             // the chronicle lines a message carries: after the story, and not the ones in the report's RECENT HISTORY
             var lines = new List<string>();

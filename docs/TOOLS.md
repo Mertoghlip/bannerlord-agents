@@ -53,7 +53,7 @@ The agent reads it in every call as `tools.txt` (written from the same code; `ag
 What each one does, takes, sets and calls back on is in `tools.txt`. The definitions are the JSON files in `src/BannerlordAgents/Tools/Library`, built into the DLL.
 
 ### Armies, by the game's own rules
-- **gather** forms the army at once with the game's own call (`Kingdom.CreateArmy`), at the meeting place the agent names. The called lords march there and join as they arrive.
+- **gather** forms the army at once with the game's own call (`Kingdom.CreateArmy`), at the meeting place the agent names. The called lords march there and join as they arrive. Lords who cannot come (in a battle, too far, already in an army) are left out and named in the receipt; the order is refused only when none can come (since 0.5.1). The tool judges the army from the next hour on, since the hour's map copy was taken before the army existed.
 - **Influence:** the leader's clan pays the game's influence price for each lord (`CalculatePartyInfluenceCost`). The order is refused if the clan cannot afford it.
 - **Who cannot be called** (the same as the game's AI):
   - a lord already in an army, in a battle, besieging, or inside a besieged holding;
@@ -79,7 +79,7 @@ A tool is a JSON file:
   - `about`: what the orders in force say it is doing;
   - `do`: the move made when the state is entered;
   - `when`: ordered rules (`if`, `go`, optional `poke` and `set`). The first rule that holds fires.
-- A state with `end` finishes the tool: `free` hands the lord back to the game's AI, `hold` keeps the lord standing. A `then` order starts instead, if there is one.
+- A state with `end` finishes the tool: `free` hands the lord back to the game's AI, `hold` keeps the lord standing, and `fail` says the tool could not be done: the lord is set free and its next order does not start (since 0.5.1). Otherwise a `then` order starts instead, if there is one.
 
 The defend tool, shortened:
 
