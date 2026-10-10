@@ -351,7 +351,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a relief weighing the garrison;
   - a day of recruitment numbers.
 
-### 19:30 · Version 0.6.1: defend and patrol fixed · commit (hash in the next commit; installed 19:29, again 19:30)
+### 19:30 · Version 0.6.1: defend and patrol fixed · commit 013fd4d (installed 19:29, again 19:30)
 - **Why:** Mert asked how the defend and patrol orders work, and then, after the walkthrough, "Yes, fix the weak spots." The walkthrough read the game's patrol in the 1.4.8 code and found five:
   - the game's patrol ranges between half and all of half a day's march around a castle (20 to 41 map units at the orcs' median speed), beyond the 20 units defend watches, and defend had the danger rule off;
   - a chase did not watch for a big force coming;
