@@ -272,10 +272,11 @@ namespace SmokeTest
             var d = new ToolOrder { Tool = "defend", Lord = "lord_bolg", LordName = "Bolg", Party = "p_bolg", At = "castle_orc" };
             Runner.Start(901, d);
             Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "patrol" && m.Value.Place == "castle_orc"), "defend starts by patrolling around its holding");
+            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "patrol" && m.Value.R == 20), "and its patrol keeps within the radius it watches (20), not the game's half a day's march");
             var host = new PartyRow { Id = "p_host", Leader = "lord_host", Name = "Theoden", Faction = "player_k", Kind = "lord", Men = 1500, ArmyMen = 2000, ArmyParties = 4, ArmyStrength = 2600, Strength = 900, Speed = 4, X = 112, Y = 102, Doing = "GoToSettlement", TargetSettlement = "castle_orc", Spottable = true };
             moves.Clear();
             Brain.OnHour(ToolWorld(3001, bolg, host));
-            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"), "defend shelters inside from an army too strong for it");
+            Check(moves.Any(m => m.Key == 901 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "defend shelters from an army too strong for it in the nearest other castle, not the one it guards");
             moves.Clear();
             bolg.InSettlement = "castle_orc";
             for (int h = 3002; h <= 3005; h++) Brain.OnHour(ToolWorld(h, bolg));
@@ -315,7 +316,7 @@ namespace SmokeTest
             Check(thens.Any(t => t.Key == 903 && (string)t.Value["do"] == "relieve"), "once the army has formed, its next order (then) starts");
             Files.FlushAll();
             string notes = Read(Path.Combine(dir, "notices.jsonl"));
-            Check(notes.Contains("Enemies too strong for Bolg") && notes.Contains("is sheltering in Orc Keep from Elrohir") && notes.Contains("army has formed at Orc Keep"),
+            Check(notes.Contains("Forces too strong for Bolg") && notes.Contains("is sheltering in Orc Keep from Elrohir") && notes.Contains("army has formed at Orc Keep"),
                   "every call-back goes to the agent as a notice");
 
             // adjust: new numbers for a running tool, kept to their range
@@ -372,6 +373,7 @@ namespace SmokeTest
             Check(released.Contains(904) && thens.Count == 0, "an army that broke up sets its lord free, and its next order does not start");
 
             FactsTests(dir, agentDir, moves, released, thens);
+            DefendTests(moves, released);
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
@@ -483,6 +485,121 @@ namespace SmokeTest
             Check(File.Exists(Path.Combine(agentDir, "council.txt")) && Read(Path.Combine(agentDir, "council.txt")).StartsWith("COUNCIL BRIEFING"), "the briefing is written into the channel every hour");
             Runner.Ended(905, "test over");
             Runner.Ended(907, "test over");
+        }
+
+        /// <summary>
+        /// Version 0.6.1, the weak spots of defend and patrol: a patrol kept within its radius; shelter outside a castle
+        /// under a strong siege (inside only when told); refilling in a town or village; a chase broken off when a strong
+        /// force comes; the danger rule counting bandits, sparing a siege camp being struck, and never sheltering in the
+        /// place the danger marches on; and an army out of sight counted where it was last seen, for six hours.
+        /// </summary>
+        private static void DefendTests(List<KeyValuePair<int, Move>> moves, List<int> released)
+        {
+            PartyRow Lord(string id, float x, int men, int limit, float strength) => new PartyRow
+            {
+                Id = id, Leader = "lord_" + id, Name = id, Faction = "orcs", Kind = "lord", Men = men, SizeLimit = limit, Strength = strength, Speed = 4, FoodDays = 10, X = x, Y = 100, Doing = "Hold", Spottable = true
+            };
+            Snapshot Besieged(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                SettlementRow c = s.SettlementById["castle_orc"];
+                c.BesiegedBy = "player_k";
+                c.Besieger = ps.First(p => p.Besieging == "castle_orc").Id;
+                c.GarrisonStrength = 600;
+                return s;
+            }
+
+            // the plain patrol: the game leads it unless a radius is given
+            var walker = Lord("p_walk", 130, 200, 250, 260);
+            Brain.OnHour(ToolWorld(5000, walker));
+            moves.Clear();
+            Runner.Start(910, new ToolOrder { Tool = "patrol", Lord = "lord_p_walk", LordName = "Walker", Party = "p_walk", At = "castle_two" });
+            bool gameLed = moves.Any(m => m.Key == 910 && m.Value.Verb == "patrol" && m.Value.R == 0);
+            var bounded = new ToolOrder { Tool = "patrol", Lord = "lord_p_walk", LordName = "Walker", Party = "p_walk", At = "castle_two" };
+            bounded.Settings["radius"] = 15;
+            Runner.Start(911, bounded);
+            Check(gameLed && moves.Any(m => m.Key == 911 && m.Value.Verb == "patrol" && m.Value.R == 15), "a plain patrol is the game's unless given a radius, then it keeps within it");
+            Runner.Ended(911, "test over");
+
+            // a strong siege: shelter in the nearest other castle by default; inside the holding only when told to stay inside
+            var sieger = new PartyRow { Id = "p_sg", Leader = "lord_sg", Name = "Elladan", Faction = "player_k", Kind = "lord", Men = 2000, Strength = 3000, Speed = 4, X = 101, Y = 102, Besieging = "castle_orc", Doing = "BesiegeSettlement", Spottable = true };
+            var d1 = Lord("p_d1", 115, 300, 320, 400);
+            var d2 = Lord("p_d2", 115, 300, 320, 400);
+            Brain.OnHour(Besieged(5001, sieger, d1, d2));
+            moves.Clear();
+            Runner.Start(912, new ToolOrder { Tool = "defend", Lord = "lord_p_d1", LordName = "D1", Party = "p_d1", At = "castle_orc" });
+            var inside = new ToolOrder { Tool = "defend", Lord = "lord_p_d2", LordName = "D2", Party = "p_d2", At = "castle_orc" };
+            inside.Settings["stay_inside"] = 1;
+            Runner.Start(913, inside);
+            Check(moves.Any(m => m.Key == 912 && m.Value.Verb == "enter" && m.Value.Place == "castle_two") && moves.Any(m => m.Key == 913 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"),
+                  "under a siege too strong to break, defend shelters in the nearest other castle, and inside the besieged one only with stay_inside 1");
+            Runner.Ended(912, "test over");
+            Runner.Ended(913, "test over");
+
+            // ranks below the floor: refill in the nearest town or village, where recruits are (not a castle)
+            var weak = Lord("p_d3", 120, 50, 300, 70);
+            Brain.OnHour(ToolWorld(5002, weak));
+            moves.Clear();
+            Runner.Start(914, new ToolOrder { Tool = "defend", Lord = "lord_p_d3", LordName = "D3", Party = "p_d3", At = "castle_two" });
+            Check(moves.Any(m => m.Key == 914 && m.Value.Verb == "recruit" && m.Value.Place == "village_orc"), "a lord whose ranks fall below the floor goes to refill in the nearest town or village");
+            Runner.Ended(914, "test over");
+
+            // a chase broken off when a strong force comes into the area
+            var d4 = Lord("p_d4", 104, 300, 320, 400);
+            var raider = new PartyRow { Id = "p_rd", Leader = "lord_rd", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 70, Strength = 100, Speed = 5, X = 108, Y = 96, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(5003, d4, raider));
+            moves.Clear();
+            Runner.Start(915, new ToolOrder { Tool = "defend", Lord = "lord_p_d4", LordName = "D4", Party = "p_d4", At = "castle_orc" });
+            bool chased = moves.Any(m => m.Key == 915 && m.Value.Verb == "engage" && m.Value.Party == "p_rd");
+            var host = new PartyRow { Id = "p_host2", Leader = "lord_host2", Name = "Imrahil", Faction = "player_k", Kind = "lord", Men = 2000, ArmyMen = 2400, ArmyParties = 3, ArmyStrength = 3000, Strength = 1200, Speed = 4, X = 90, Y = 100, Doing = "GoToPoint", Spottable = true };
+            moves.Clear();
+            Brain.OnHour(ToolWorld(5004, d4, raider, host));
+            Check(chased && moves.Any(m => m.Key == 915 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "a chase is broken off, into the nearest other castle, when a strong force comes into the area");
+            Runner.Ended(915, "test over");
+
+            // the danger rule counts bandits
+            var lone = Lord("p_lone", 60, 40, 200, 60);
+            var band = new PartyRow { Id = "p_band", Name = "Sea Raiders", Faction = "looters", Kind = "bandit", Men = 80, Strength = 200, Speed = 5, X = 64, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(5005, lone, band));
+            moves.Clear();
+            Runner.Start(916, new ToolOrder { Tool = "goto", Lord = "lord_p_lone", LordName = "Lone", Party = "p_lone", At = "castle_two" });
+            Check(moves.Any(m => m.Key == 916 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"), "the danger rule shelters a weak lord from a strong band of bandits too");
+            Runner.Ended(916, "test over");
+
+            // ... but not from the other lords of a siege camp the order is striking
+            var s1 = new PartyRow { Id = "p_s1", Leader = "lord_s1", Name = "Elrohir", Faction = "player_k", Kind = "lord", Men = 400, Strength = 500, Speed = 4, X = 101, Y = 102, Besieging = "castle_orc", Doing = "BesiegeSettlement", Spottable = true };
+            var s2 = new PartyRow { Id = "p_s2", Leader = "lord_s2", Name = "Beregond", Faction = "player_k", Kind = "lord", Men = 1100, Strength = 1500, Speed = 4, X = 99, Y = 103, Besieging = "castle_orc", Doing = "BesiegeSettlement", Spottable = true };
+            var rel = Lord("p_rel2", 115, 700, 800, 900);
+            Brain.OnHour(Besieged(5006, s1, s2, rel));
+            moves.Clear();
+            var ro = new ToolOrder { Tool = "relieve", Lord = "lord_p_rel2", LordName = "Rel", Party = "p_rel2", At = "castle_orc" };
+            ro.Settings["strike_at"] = 0.4;
+            Runner.Start(917, ro);
+            bool struck = moves.Any(m => m.Key == 917 && m.Value.Verb == "engage" && m.Value.Party == "p_s1");
+            rel.X = 106;   // closing on the camp, now within reach of the stronger besieger too
+            moves.Clear();
+            Brain.OnHour(Besieged(5007, s1, s2, rel));
+            Check(struck && !moves.Any(m => m.Key == 917 && m.Value.Verb == "enter"), "the danger rule does not turn a relief back from the siege camp it is striking");
+            Runner.Ended(917, "test over");
+
+            // ... and never shelters a lord in the castle the danger is marching to besiege
+            var near = Lord("p_near", 104, 200, 250, 300);
+            var marcher = new PartyRow { Id = "p_march", Leader = "lord_march", Name = "Faramir", Faction = "player_k", Kind = "lord", Men = 1500, Strength = 2000, Speed = 4, X = 110, Y = 100, Doing = "BesiegeSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            Brain.OnHour(ToolWorld(5008, near, marcher));
+            moves.Clear();
+            Runner.Start(918, new ToolOrder { Tool = "goto", Lord = "lord_p_near", LordName = "Near", Party = "p_near", At = "village_orc" });
+            Check(moves.Any(m => m.Key == 918 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "the danger rule shelters a lord elsewhere than the castle the danger marches to besiege");
+            Runner.Ended(918, "test over");
+
+            // an army that walked out of sight is still a threat where it was last seen, for six hours
+            var shadow = new PartyRow { Id = "p_shadow", Leader = "lord_shadow", Name = "Eomer", Faction = "player_k", Kind = "lord", Men = 1600, ArmyMen = 1600, ArmyParties = 2, ArmyStrength = 2000, Strength = 1100, Speed = 4, X = 105, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(5010, near, shadow));
+            Snapshot later = ToolWorld(5012, near, shadow);
+            later.WatchedSees.Remove("p_shadow");
+            Snapshot much = ToolWorld(5018, near, shadow);
+            much.WatchedSees.Remove("p_shadow");
+            double recent = Runner.WorldFor(later).ThreatStrength("castle_orc", 20), stale = Runner.WorldFor(much).ThreatStrength("castle_orc", 20);
+            Check(recent == 2000 && stale == 0, "an army out of sight counts where it was last seen for six hours (" + recent + " two hours on, " + stale + " eight hours on)");
         }
 
         private sealed class TestScope : IScope

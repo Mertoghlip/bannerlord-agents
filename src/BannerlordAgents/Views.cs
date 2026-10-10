@@ -249,7 +249,7 @@ namespace BannerlordAgents
                 sb.AppendLine().AppendLine("YOUR REALM IN SUM");
                 sb.AppendLine("- In the field: " + r.Lords + " lords leading parties, " + Text.N(r.Men) + " men, strength " + Text.N((int)r.Strength)
                               + (r.Armies > 0 ? "; " + r.Armies + (r.Armies == 1 ? " army (" : " armies (") + r.ArmyLords + " parties)" : "; no army")
-                              + ". Holding your orders: " + r.Ordered + "; the other " + (r.Lords - r.Ordered) + " follow their own judgment.");
+                              + ". Holding your orders: " + r.Ordered + "; the other " + (r.Lords - r.Ordered) + " are led by the game's own AI.");
                 sb.AppendLine("- Castles and towns: " + r.Forts + " (garrisons " + Text.N(r.GarrisonMen) + " men, militia " + Text.N(r.Militia)
                               + (r.Besieged > 0 ? "; " + r.Besieged + " under siege" : "") + "). Villages: " + r.Villages
                               + (r.Looted + r.Raided > 0 ? " (" + string.Join(", ", new[] { r.Looted > 0 ? r.Looted + " looted" : null, r.Raided > 0 ? r.Raided + " being raided" : null }.Where(x => x != null)) + ")" : "") + ".");

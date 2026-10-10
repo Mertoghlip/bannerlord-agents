@@ -33,10 +33,12 @@ A tool calls the agent back, with a poke, only when its plan may need to change.
 
 ## Two rules every order carries
 
-- **Safety.** The game switches off a held lord's quick reactions, so that lord does not flee by itself.
-  - When an enemy `caution` times stronger (default 1.5) comes within `danger_radius` (default 8), the lord shelters in the nearest friendly castle or town.
-  - The order resumes once the danger has passed.
-  - The agent is told, and `caution` 0 switches this off. Defend has its own sheltering instead.
+- **Safety.** The game switches off a held lord's quick reactions, so that lord does not flee by itself. (One reaction survives, the game's own exception: a held lord may still attack, or pull back from, an enemy fighting at or besieging the very holding it was sent to; `MobilePartyAi.GetBehaviors`.)
+  - When an enemy lord, army or band of bandits (since 0.6.1) `caution` times stronger (default 1.5) comes within `danger_radius` (default 8), the lord shelters in the nearest friendly castle or town not under siege.
+  - Never in the castle or town that enemy is besieging or marching to besiege, and, for an order with `stay_inside` 0 (defend's default), never in its own holding (0.6.1): both would trap the lord in the place the enemy is coming for.
+  - While an order strikes a siege camp (relieve, defend's relief), the other lords camped in that siege are part of the fight it chose and do not count (0.6.1).
+  - The order resumes once the danger has passed (at least two hours, and nothing that strong within 1.5 times the radius).
+  - The agent is told, and `caution` 0 switches this off. Since 0.6.1 defend carries it too, beside its own sheltering.
 - **Food.** With under two days of food, the lord goes to the nearest friendly town or village to buy more, then resumes.
 
 ## The library
@@ -69,6 +71,17 @@ What each one does, takes, sets and calls back on is in `tools.txt`. The definit
   - a lord farther away than the game allows (`MaximumDistanceToCallToArmy`: eight times the average distance between neighbouring towns, along the way): these march to join instead.
 - **Who cannot lead:** a mercenary clan's lord.
 - **Called lords we were holding** are let go, so the game can march them to the army.
+
+### Patrol and defend (since 0.6.1)
+- **The game's own patrol** (`SetMovePatrolAroundSettlement`, read in 1.4.8): the lord walks to random points in a ring between half and all of a patrol radius from the holding's gate, and the radius is half a day's march at the lord's own speed for a castle or town, a quarter of a day for a village (`DefaultMobilePartyAIModel.GetPatrolRadius`). At the orcs' median speed, 3.4 map units an hour, that is 20 to 41 units out from a castle, 10 to 20 from a village.
+- **A patrol kept within a radius:** a move made by a tool with a `radius` setting (defend, screen), or the plain patrol given one, is our own patrol instead: from point to point, each a reachable spot between a quarter and three quarters of the radius from the gate (`Orders.NextPatrolPoint`), the next one picked the hour the lord reaches the last. The plain patrol's radius is 0 by default, which leaves it to the game.
+- **defend**, step by step:
+  - **patrolling** within its radius; each hour, the first that holds of: the holding lost (it stops); ranks below `floor` (it goes to refill); a siege it can break (it strikes the besiegers, with the defenders inside when they would sally out); any other siege (it shelters); the threat near the holding at least `shelter_at` times its strength (it shelters); a weak enemy lord near the holding (it strikes the weakest);
+  - **sheltering**: in the nearest other castle or town of the realm or an ally, not under siege, unless `stay_inside` is 1 (then inside the holding, to help hold its walls, at the risk of being taken with it). It strikes a siege from there when it becomes breakable, and patrols again after at least 3 hours once there is no siege and the threat is below 80% of the sheltering line;
+  - **refilling**: in the nearest town or village of the realm or an ally that can give recruits (castles give none), back when its ranks are over the floor; a reminder to the agent after two days;
+  - **striking a weak lord**: given up when the target is gone or out of sight, too far from the holding, too strong, when another siege starts, or when the threat near the holding reaches the sheltering line;
+  - **breaking a siege**: until it is broken, the besiegers grow too strong, or other enemy forces come near beside them.
+- **The threat near a place** (`threat_near`, since 0.6.1): the strength of the hostile lords, armies and bandits in view within the radius, and of the hostile lords and armies seen there in the last 6 hours, at the place they were last seen, unless known gone. Defend and raid weigh it when they decide to shelter or pull back; striking still needs an enemy in view.
 
 ### Breaking a siege: when the defenders inside join (since 0.6)
 Read in the 1.4.8 code (`SallyOutsCampaignBehavior`, `StartBattleAction`, `MapEvent.Initialize`, `Town.GetDefenderParties`):
@@ -119,8 +132,8 @@ The defend tool, shortened:
   - about armies and places: `in_army`, `leads_army`, `army_lords`, `army_coming`, `army_complete`, `army_joining` (lords holding a join order for this lord's army), `in_settlement`, `besieging`.
 - **Functions** (their names say what they do):
   - places and distance: `distance`, `hours_to`, `inside`, `within`, `fort`, `nearest_fort`, `nearest_supply`, `next_village`;
-  - holdings: `besieged`, `siege_strength`, `inside_strength`, `relief_strength`, `besieger`, `raided`, `looted`, `ours`, `hostile`, `friendly`;
-  - enemies near a place: `enemies_near`, `enemy_strength_near`, `strongest_enemy_near`, `weakest_enemy_near`, `nearest_enemy`, `army_near`;
+  - holdings: `besieged`, `siege_strength`, `inside_strength`, `relief_strength`, `besieger`, `raided`, `looted`, `ours`, `hostile`, `friendly`, `other_fort` (the nearest castle or town of the realm or an ally, not under siege, other than the one given);
+  - enemies near a place: `enemies_near`, `enemy_strength_near`, `strongest_enemy_near`, `weakest_enemy_near`, `nearest_enemy`, `army_near` (enemy lords and armies in view), and `threat_near` (also bandits, and armies seen there in the last 6 hours);
   - a party: `strength_of`, `men_of`, `in_view`, `seen_ago`, `gone`;
   - the order's lords: `lords_arrived`, `lords_count`;
   - general: `min`, `max`, `pick`, `round`.
@@ -133,7 +146,7 @@ The defend tool, shortened:
 - **READY-MADE FACTS:** for up to four things the poke is about (a holding, an enemy), the realm's lords who can get there soonest, with strength, rough hours and whether they are free; and the enemies near it. Since 0.6 also:
   - **the muster** at the first holding the poke is about: how many lords, men and strength could be there within one, two and three days, as running totals, and how many of the first day's a leader there could call into an army at once;
   - for a besieged holding of the realm, the strength inside and the sally rule above.
-- **The report** (since 0.6) opens with **YOUR REALM IN SUM** (lords leading parties, their men and strength, armies, how many hold the agent's orders and how many follow their own judgment; castles and towns with garrisons, militia and sieges; villages looted or raided; lords held prisoner) and lists **YOUR CAPTURED LORDS**, grouped by where each is held (a holding, or the party holding them) and since when. They come from the game's own prisoner records, which the encyclopedia shows a player too, so the fog check allows their ids.
+- **The report** (since 0.6) opens with **YOUR REALM IN SUM** (lords leading parties, their men and strength, armies, how many hold the agent's orders and how many are led by the game's own AI; castles and towns with garrisons, militia and sieges; villages looted or raided; lords held prisoner) and lists **YOUR CAPTURED LORDS**, grouped by where each is held (a holding, or the party holding them) and since when. They come from the game's own prisoner records, which the encyclopedia shows a player too, so the fog check allows their ids.
 - **Look-ups** (`lookups\<id>.txt`), rewritten at each poke. The war room lets the agent read them:
   - one per holding: lords by march time, enemies near, enemy castles near; for a castle or town, the full muster (every lord by how soon they could be there, with running totals, * for those a leader there could call at once);
   - one per lord: men, strength, ranks, food, hours to each holding, enemies near;

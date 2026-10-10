@@ -44,8 +44,11 @@ namespace BannerlordAgents
             public string Verb;
             public Settlement Place;
             public MobileParty Target;
-            /// <summary>For "toward": the point it marches to.</summary>
+            /// <summary>For "toward": the point it marches to; for a patrol kept within Radius of its holding, the point it is walking to now.</summary>
             public float X, Y;
+            /// <summary>A patrol's reach from its holding (the tool's radius); 0 leaves the patrol to the game, which ranges half a day's march out.</summary>
+            public float Radius;
+            public bool HasPoint;
             /// <summary>A tool order: its runner instance and its name (0 and null for a plain vassal order).</summary>
             public int ToolId;
             public string Tool;
@@ -214,7 +217,7 @@ namespace BannerlordAgents
             if (verb == "free" || (verb == "release" && a.Lords.Count == 0))
             {
                 HandOrder held = Active.FirstOrDefault(x => x.Lord == lord);
-                if (shadow) { status = "checked"; return "valid: " + name + " would be left to their own judgment (shadow mode: not carried out)"; }
+                if (shadow) { status = "checked"; return "valid: " + name + " would be left to the game's own AI (shadow mode: not carried out)"; }
                 if (!live) return NotYours(lord);
                 if (held != null)
                 {
@@ -223,7 +226,7 @@ namespace BannerlordAgents
                     Changed();
                 }
                 status = "applied";
-                return name + " follows their own judgment again";
+                return name + " is led by the game's own AI again";
             }
             if (party == null || party.LeaderHero != lord || !party.IsActive) return name + " is not leading a party right now.";
             if (party.AttachedTo != null && party.Army?.LeaderParty != party)
@@ -444,6 +447,8 @@ namespace BannerlordAgents
             o.Target = m.Party != null ? FindPartyById(m.Party) : null;
             o.X = m.X;
             o.Y = m.Y;
+            o.Radius = m.R;
+            o.HasPoint = false;
             o.Arrived = false;
             o.ArrivedAt = -1;
             o.ReissueTimes.Clear();
@@ -623,7 +628,7 @@ namespace BannerlordAgents
                 finally { Witness.Ours = false; }
                 Diag.Count("army:disbanded");
                 status = "applied";
-                return name + "'s army breaks up; its lords go back to their own judgment";
+                return name + "'s army breaks up; its lords go back to the game's own AI";
             }
             if (a.Lords.Count == 0) return verb + " needs lords, for example \"lords\": [\"lord_X\"].";
             var ids = new List<string>();
@@ -955,6 +960,13 @@ namespace BannerlordAgents
                     Hold(p);
                     continue;
                 }
+                if (o.Verb == "patrol" && o.Radius > 0f && o.HasPoint && p.Position.ToVec2().Distance(new Vec2(o.X, o.Y)) < 1.5f)
+                {
+                    // a patrol kept within its radius reached this point: on to the next
+                    NextPatrolPoint(o, MobileParty.NavigationType.Default);
+                    Apply(o);
+                    continue;
+                }
                 Progress(o, d, now);
                 if (!OnCourse(o))
                 {
@@ -1189,7 +1201,15 @@ namespace BannerlordAgents
                         if (p.CurrentSettlement != null) LeaveSettlementAction.ApplyForParty(p);
                         p.SetMoveModeHold();
                         break;
-                    case "patrol": SetPartyAiAction.GetActionForPatrollingAroundSettlement(p, o.Place, nav, false, false); break;
+                    case "patrol":
+                        if (o.Radius > 0f)
+                        {
+                            // our own patrol: from point to point within the tool's radius of the holding (the game's would range half a day's march out)
+                            if (!o.HasPoint) NextPatrolPoint(o, nav);
+                            p.SetMoveGoToPoint(new CampaignVec2(new Vec2(o.X, o.Y), true), p.NavigationCapability);
+                        }
+                        else SetPartyAiAction.GetActionForPatrollingAroundSettlement(p, o.Place, nav, false, false);
+                        break;
                     case "defend": SetPartyAiAction.GetActionForDefendingSettlement(p, o.Place, nav, false, false); break;
                     case "engage": SetPartyAiAction.GetActionForEngagingParty(p, o.Target, nav, false); break;
                     case "follow": SetPartyAiAction.GetActionForEscortingParty(p, o.Target, nav, false, false); break;
@@ -1202,6 +1222,18 @@ namespace BannerlordAgents
                 Toggled.Add(p);
             }
             finally { Witness.Ours = false; }
+        }
+
+        /// <summary>
+        /// The next point of a patrol kept within its radius: a reachable spot between a quarter and three quarters of the
+        /// radius from the holding's gate, so the lord stays inside the area its tool watches.
+        /// </summary>
+        private static void NextPatrolPoint(HandOrder o, MobileParty.NavigationType nav)
+        {
+            CampaignVec2 pt = NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, o.Radius * 0.75f, o.Radius * 0.25f);
+            o.X = pt.X;
+            o.Y = pt.Y;
+            o.HasPoint = true;
         }
 
         private static bool OnCourse(HandOrder o)
@@ -1217,7 +1249,7 @@ namespace BannerlordAgents
                 case "near": return o.Place != null && (b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f;
                 case "toward": return b == AiBehavior.GoToPoint || b == AiBehavior.Hold;
                 case "leave": return p.CurrentSettlement == null;
-                case "patrol": return b == AiBehavior.PatrolAroundPoint && p.TargetSettlement == o.Place;
+                case "patrol": return o.Radius > 0f ? b == AiBehavior.GoToPoint || b == AiBehavior.Hold : b == AiBehavior.PatrolAroundPoint && p.TargetSettlement == o.Place;
                 case "defend": return (b == AiBehavior.DefendSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
                 case "engage": return b == AiBehavior.EngageParty && p.TargetParty == o.Target;
                 case "follow": return b == AiBehavior.EscortParty && p.TargetParty == o.Target;

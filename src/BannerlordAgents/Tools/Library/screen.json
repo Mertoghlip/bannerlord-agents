@@ -1,7 +1,7 @@
 {
   "tool": "screen",
   "kind": "tool",
-  "about": "Patrols around a holding on the border, which widens what your realm can see.",
+  "about": "Patrols within radius of a holding on the border, which widens what your realm can see.",
   "calls_back": "a new enemy army comes within radius",
   "at": "any_holding",
   "settings": {

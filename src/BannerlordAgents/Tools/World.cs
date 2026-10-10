@@ -17,7 +17,10 @@ namespace BannerlordAgents.Tools
         private readonly Dictionary<string, Sighting> _sees;
         private readonly Dictionary<string, ViewParty> _lastSeen;
         private readonly HashSet<string> _hostile, _allies;
-        private readonly List<PartyRow> _enemies;
+        private readonly List<PartyRow> _enemies, _bandits;
+
+        /// <summary>An enemy army out of sight is still counted as a threat where it was last seen, for this many hours.</summary>
+        public const double RecentHours = 6;
 
         /// <summary>Map units a party covers in an hour when its speed is unknown.</summary>
         public const float DefaultSpeed = 4f;
@@ -32,9 +35,13 @@ namespace BannerlordAgents.Tools
             _hostile = realm == s.Watched ? s.HostileToWatched : realm == s.PlayerFaction ? s.HostileToPlayer : new HashSet<string>();
             _allies = s.Factions.TryGetValue(realm ?? "", out FactionRow fr) ? new HashSet<string>(fr.Allies) : new HashSet<string>();
             _enemies = new List<PartyRow>();
+            _bandits = new List<PartyRow>();
             foreach (KeyValuePair<string, Sighting> kv in _sees)
-                if (s.PartyById.TryGetValue(kv.Key, out PartyRow r) && r.Kind == "lord" && !r.Attached && _hostile.Contains(r.Faction ?? ""))
-                    _enemies.Add(r);
+            {
+                if (!s.PartyById.TryGetValue(kv.Key, out PartyRow r) || r.Attached) continue;
+                if (r.Kind == "lord" && _hostile.Contains(r.Faction ?? "")) _enemies.Add(r);
+                else if (r.Kind == "bandit") _bandits.Add(r);
+            }
         }
 
         public PartyRow Party(string id) => id != null && S.PartyById.TryGetValue(id, out PartyRow r) ? r : null;
@@ -127,6 +134,34 @@ namespace BannerlordAgents.Tools
             return list.OrderBy(e => (e.X - px) * (e.X - px) + (e.Y - py) * (e.Y - py)).ToList();
         }
 
+        /// <summary>Everything in view within r of a place that could attack a lord: hostile lords and armies, and bandits. Nearest first.</summary>
+        public List<PartyRow> ThreatsInView(string place, double r)
+        {
+            List<PartyRow> list = EnemiesNear(place, r);
+            if (!Where(place, out float px, out float py)) return list;
+            foreach (PartyRow b in _bandits)
+                if (Math.Sqrt((b.X - px) * (b.X - px) + (b.Y - py) * (b.Y - py)) <= r) list.Add(b);
+            return list.OrderBy(e => (e.X - px) * (e.X - px) + (e.Y - py) * (e.Y - py)).ToList();
+        }
+
+        /// <summary>
+        /// The strength that threatens a place, as the realm can judge it: hostile lords, armies and bandits in view within r,
+        /// and hostile lords and armies seen there within the last RecentHours, at the place they were last seen (an army
+        /// that walked out of sight an hour ago has not gone away). A party known gone is not counted.
+        /// </summary>
+        public double ThreatStrength(string place, double r)
+        {
+            if (!Where(place, out float px, out float py)) return 0;
+            double sum = ThreatsInView(place, r).Sum(StrengthOf);
+            foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
+            {
+                ViewParty v = kv.Value;
+                if (v.Relation != "enemy" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                if (Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py)) <= r) sum += v.Strength;
+            }
+            return sum;
+        }
+
         public bool Besieged(SettlementRow h) => h != null && h.BesiegedBy != null;
 
         /// <summary>
@@ -190,6 +225,24 @@ namespace BannerlordAgents.Tools
             {
                 if (!IsFort(h) || Besieged(h) || (h.Faction != Realm && !Ally(h.Faction))) continue;
                 if (extra != null && !extra(h)) continue;
+                double d = (h.X - px) * (h.X - px) + (h.Y - py) * (h.Y - py);
+                if (d < bd) { bd = d; best = h; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Nearest castle or town of the realm or an ally, not under siege, to a party, other than the given holding: a
+        /// refuge outside the place the enemy is coming for, so a lord sheltering there cannot be trapped and taken with it.
+        /// </summary>
+        public SettlementRow OtherFort(string except, string from)
+        {
+            if (!Where(from, out float px, out float py)) return null;
+            SettlementRow best = null;
+            double bd = double.MaxValue;
+            foreach (SettlementRow h in S.Settlements)
+            {
+                if (!IsFort(h) || Besieged(h) || h.Id == except || (h.Faction != Realm && !Ally(h.Faction))) continue;
                 double d = (h.X - px) * (h.X - px) + (h.Y - py) * (h.Y - py);
                 if (d < bd) { bd = d; best = h; }
             }

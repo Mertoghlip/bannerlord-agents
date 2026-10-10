@@ -138,7 +138,7 @@ namespace BannerlordAgents
             {
                 case "live":
                     return "LIVE. " + (Text.Plain(Settings.AgentLords) == "all" ? "Every lord of yours obeys your orders."
-                           : "Only these lords obey: " + Settings.AgentLords + ". The others follow their own judgment, and orders for them are refused.");
+                           : "Only these lords obey: " + Settings.AgentLords + ". The others are led by the game's own AI, and orders for them are refused.");
                 case "shadow":
                     return "SHADOW. Every order is checked against the game and answered in receipts.log, but none is carried out yet.";
                 default:

@@ -6,16 +6,20 @@ using Newtonsoft.Json.Linq;
 
 namespace BannerlordAgents.Tools
 {
-    /// <summary>One move for the game's thread: a verb and what it acts on (a holding, a party, or a point for toward).</summary>
+    /// <summary>
+    /// One move for the game's thread: a verb and what it acts on (a holding, a party, or a point for toward). R: for
+    /// patrol, how far from the holding the lord may roam (the tool's own radius setting); 0 leaves it to the game.
+    /// </summary>
     internal struct Move
     {
         public string Verb, Place, Party;
-        public float X, Y;
+        public float X, Y, R;
 
-        public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party
+        public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party && Math.Abs(R - o.R) < 0.01f
                                     && (Verb != "toward" || (Math.Abs(X - o.X) < 1f && Math.Abs(Y - o.Y) < 1f));
 
-        public override string ToString() => Verb + (Place != null ? " " + Place : "") + (Party != null ? " " + Party : "") + (Verb == "toward" ? " (" + X + ", " + Y + ")" : "");
+        public override string ToString() => Verb + (Place != null ? " " + Place : "") + (Party != null ? " " + Party : "") + (Verb == "toward" ? " (" + X + ", " + Y + ")" : "")
+                                             + (R > 0 ? " within " + R : "");
     }
 
     /// <summary>A tool order as the game's thread checked it: ids only, so the worker can run it.</summary>
@@ -134,6 +138,15 @@ namespace BannerlordAgents.Tools
                 t.Settings[sd.Name] = v;
             }
             Diag.Event("tool", "adjusted", new { id, tool = t.Def.Name, lord = t.Order.Lord, settings = new Dictionary<string, double>(t.Settings) });
+            // a move that takes a number from the settings (a patrol's radius) is made again with the new one
+            Snapshot s0 = Brain.Latest;
+            if (s0 != null && s0.Watched != null && t.Entered && !t.Finished && t.Shelter == null && t.SupplyAt == null && t.State != null && t.Def.States.TryGetValue(t.State, out StateDef cur) && cur.Do != null)
+            {
+                World w0 = WorldFor(s0);
+                t.Pending = Resolve(t, cur.Do, new Scope(t, w0), w0);
+                t.HasPending = true;
+                Issue(t, w0);
+            }
             AgentChannel.Receipt(a, "applied", t.Order.LordName + "'s " + t.Def.Name + " now has " + string.Join(", ", settings.Keys.Select(k => k + " " + ToolDef.Num(t.Settings[k])))
                                                + (notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : ""), hours);
         }
@@ -222,7 +235,12 @@ namespace BannerlordAgents.Tools
             string id = v as string;
             if (kind == "holding")
             {
-                if (w.Holding(id) != null) return new Move { Verb = a.Verb, Place = id };
+                if (w.Holding(id) != null)
+                {
+                    // a patrol keeps within the tool's own radius (defend's watch area, screen's), when it has one; else the game ranges it
+                    float r = a.Verb == "patrol" && t.Settings.TryGetValue("radius", out double rr) ? (float)rr : 0f;
+                    return new Move { Verb = a.Verb, Place = id, R = r };
+                }
             }
             else if (a.Verb == "toward")
             {
@@ -279,9 +297,12 @@ namespace BannerlordAgents.Tools
             double radius = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
             double mine = World.StrengthOf(me);
             var spare = new HashSet<string> { t.Order.Target, t.Current.Party, scope.Get("target") as string };
+            // striking a siege camp: every lord camped in that siege is part of the fight the order chose, not a danger to flee
+            string siege = t.Current.Verb == "engage" ? w.Party(t.Current.Party)?.Besieging : null;
+            bool Spared(PartyRow e) => spare.Contains(e.Id) || (siege != null && e.Besieging == siege);
             if (t.Shelter != null)
             {
-                bool still = caution > 0 && w.EnemiesNear(me.Id, radius * 1.5).Any(e => !spare.Contains(e.Id) && World.StrengthOf(e) >= caution * Math.Max(1, mine));
+                bool still = caution > 0 && w.ThreatsInView(me.Id, radius * 1.5).Any(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine));
                 if (still || w.Hours - t.AsideSince < 2) return true;
                 string was = t.Shelter;
                 t.Shelter = t.ShelterFrom = null;
@@ -291,10 +312,14 @@ namespace BannerlordAgents.Tools
                 return false;
             }
             if (caution <= 0 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
-            PartyRow danger = w.EnemiesNear(me.Id, radius).Where(e => !spare.Contains(e.Id) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
+            PartyRow danger = w.ThreatsInView(me.Id, radius).Where(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
                                .OrderByDescending(World.StrengthOf).FirstOrDefault();
             if (danger == null) return false;
-            SettlementRow fort = w.NearestFort(me.Id);
+            // not into the place the danger is marching to besiege (it would trap the lord), nor, for an order told not to
+            // stay inside its own holding (defend's stay_inside 0), into that holding
+            string marchedOn = danger.Besieging ?? (danger.Doing == "BesiegeSettlement" || danger.Doing == "AssaultSettlement" ? danger.TargetSettlement : null);
+            string own = t.Order.At != null && t.Settings.TryGetValue("stay_inside", out double si) && si <= 0 ? t.Order.At : null;
+            SettlementRow fort = w.NearestFort(me.Id, h => h.Id != marchedOn && h.Id != own) ?? w.NearestFort(me.Id, h => h.Id != marchedOn) ?? w.NearestFort(me.Id);
             if (fort == null) return false;
             t.Shelter = fort.Id;
             t.ShelterFrom = danger.Id;
@@ -368,7 +393,7 @@ namespace BannerlordAgents.Tools
         /// <summary>The orders in force, for every poke: each lord's tool, where it stands, and its numbers if not the defaults.</summary>
         public static string InForce(World w)
         {
-            if (ById.Count == 0) return "- None. Every lord follows their own judgment.";
+            if (ById.Count == 0) return "- None. Every lord is led by the game's own AI.";
             var sb = new StringBuilder();
             foreach (ToolInstance t in ById.Values.OrderBy(x => x.Order.LordName))
             {
@@ -498,6 +523,8 @@ namespace BannerlordAgents.Tools
                     case "fort": return World.IsFort(H(a[0]));
                     case "enemies_near": return (double)_w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Count;
                     case "enemy_strength_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Sum(World.StrengthOf);
+                    case "threat_near": return _w.ThreatStrength(Id(a[0]), Expr.Number(a[1]));
+                    case "other_fort": return _w.OtherFort(Id(a[0]), _t.Order.Party)?.Id;
                     case "strongest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     case "weakest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;

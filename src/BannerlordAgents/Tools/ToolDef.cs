@@ -82,6 +82,7 @@ namespace BannerlordAgents.Tools
             ["besieged"] = 1, ["siege_strength"] = 1, ["inside_strength"] = 1, ["relief_strength"] = 1, ["besieger"] = 1, ["raided"] = 1, ["looted"] = 1,
             ["ours"] = 1, ["hostile"] = 1, ["friendly"] = 1,
             ["enemies_near"] = 2, ["enemy_strength_near"] = 2, ["strongest_enemy_near"] = 2, ["weakest_enemy_near"] = 2, ["nearest_enemy"] = 2, ["army_near"] = 2,
+            ["threat_near"] = 2, ["other_fort"] = 1,
             ["strength_of"] = 1, ["men_of"] = 1, ["in_view"] = 1, ["seen_ago"] = 1, ["gone"] = 1,
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
             ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1
@@ -276,7 +277,7 @@ namespace BannerlordAgents.Tools
         private static readonly object Gate = new object();
 
         /// <summary>The safety rule every tool and move carries unless it opts out.</summary>
-        public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "shelter in the nearest friendly castle or town when an enemy this many times stronger comes close; 0 never shelters" };
+        public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "shelter in the nearest friendly castle or town when an enemy lord, army or band of bandits this many times stronger comes close (lords camped in a siege the order is striking do not count); 0 never shelters" };
         public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "how close counts as close for caution, in map units" };
 
         public static Dictionary<string, ToolDef> All
@@ -317,9 +318,9 @@ namespace BannerlordAgents.Tools
             var sb = new StringBuilder();
             sb.AppendLine("ORDERS YOU CAN GIVE");
             sb.AppendLine();
-            sb.AppendLine("Moves (one step; when it is done, the lord stops or goes back to their own judgment):");
+            sb.AppendLine("Moves (one step; when it is done, the lord stops or goes back to the game's own AI):");
             foreach (ToolDef d in All.Values.Where(x => x.Kind == "move").OrderBy(x => x.Name)) sb.AppendLine(d.Describe());
-            sb.AppendLine("- **free**: the lord goes back to their own judgment.");
+            sb.AppendLine("- **free**: the lord goes back to the game's own AI.");
             sb.AppendLine();
             sb.AppendLine("Tools (they keep a lord acting between your answers, and call you back when they need you):");
             foreach (ToolDef d in All.Values.Where(x => x.Kind == "tool").OrderBy(x => x.Name)) sb.AppendLine(d.Describe());
@@ -327,7 +328,7 @@ namespace BannerlordAgents.Tools
             sb.AppendLine("Armies (order the army's leader; the leader's moves and tools move the whole army):");
             foreach (ToolDef d in All.Values.Where(x => x.Kind == "army").OrderBy(x => x.Name)) sb.AppendLine(d.Describe());
             sb.AppendLine("- **add** (lords): calls more lords into the leader's army, at the game's influence price. Lords too far away to be called yet are sent marching to join it (a join order each).");
-            sb.AppendLine("- **release** (lords): lets lords go from the leader's army; they go back to their own judgment. Without lords, release is the same as free.");
+            sb.AppendLine("- **release** (lords): lets lords go from the leader's army; they go back to the game's own AI. Without lords, release is the same as free.");
             sb.AppendLine("- **disband**: breaks up the leader's army.");
             sb.AppendLine("- The game's own rules still hold: an army left idle (holding, or waiting at a friendly place) for about two days breaks up, and so does one whose cohesion runs out.");
             sb.AppendLine();

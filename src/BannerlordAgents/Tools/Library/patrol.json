@@ -1,8 +1,11 @@
 {
   "tool": "patrol",
   "kind": "move",
-  "about": "Patrols around a holding until you give another order.",
+  "about": "Patrols around a holding until you give another order. With radius 0 the game leads the patrol, which ranges a quarter to half a day's march out from a castle or town (half that from a village); a radius keeps it within that many map units of the holding.",
   "at": "any_holding",
+  "settings": {
+    "radius": [0, 0, 80, "keep within this many map units of the holding; 0 lets the game range it"]
+  },
   "start": "patrol",
   "states": {
     "patrol": { "about": "patrolling around {at}", "do": "patrol at" }

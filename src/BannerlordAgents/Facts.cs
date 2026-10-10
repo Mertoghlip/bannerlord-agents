@@ -311,7 +311,7 @@ namespace BannerlordAgents
                 sb.AppendLine("- Influence of your other clans (an army's leader's clan pays influence for every lord called into it): "
                               + string.Join("; ", others.Select(c => c.Name + " " + Text.N((int)c.Influence))) + ".");
 
-            sb.AppendLine().AppendLine("EVERY LORD (" + lords.Count + "; an army counts with its leader; \"free\" lords follow their own judgment, not yours)");
+            sb.AppendLine().AppendLine("EVERY LORD (" + lords.Count + "; an army counts with its leader; \"free\" lords are led by the game's own AI, not by you)");
             var clanNames = s.Clans.ToDictionary(c => c.Id, c => c);
             foreach (Lord l in lords.OrderByDescending(l => l.Men))
             {

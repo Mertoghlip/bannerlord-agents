@@ -350,3 +350,36 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a join;
   - a relief weighing the garrison;
   - a day of recruitment numbers.
+
+### 19:30 · Version 0.6.1: defend and patrol fixed · commit (hash in the next commit; installed 19:29, again 19:30)
+- **Why:** Mert asked how the defend and patrol orders work, and then, after the walkthrough, "Yes, fix the weak spots." The walkthrough read the game's patrol in the 1.4.8 code and found five:
+  - the game's patrol ranges between half and all of half a day's march around a castle (20 to 41 map units at the orcs' median speed), beyond the 20 units defend watches, and defend had the danger rule off;
+  - a chase did not watch for a big force coming;
+  - under a strong siege, defend sheltered inside the besieged place, so a fall took the lord with it (the agent's own lesson after Spring 20);
+  - a lord below the ranks floor hid in a castle, where no one can recruit;
+  - only enemies in view counted: no bandits, no army that had just walked out of sight.
+- **What:**
+  - **A patrol kept within a radius:** a tool with a radius (defend, screen), or the plain patrol given one, now patrols from point to point within a quarter to three quarters of that radius from the gate, instead of the game's patrol. The plain patrol keeps the game's by default (radius 0), and its description now says how far that goes.
+  - **defend:**
+    - the danger rule is on around the lord itself;
+    - a chase breaks off when the threat near the holding reaches the sheltering line;
+    - a relief breaks off when enemy forces besides the besiegers come near;
+    - it shelters in the nearest other castle or town, not the one it guards, unless the new `stay_inside` setting is 1;
+    - from shelter, it strikes a siege that becomes breakable;
+    - below the ranks floor it refills in the nearest town or village, with a reminder to the agent after two days.
+  - **The threat near a place** (new): enemy lords, armies and bandits in view, and armies seen there in the last 6 hours, at their last place. Defend and raid weigh it when they decide to shelter or pull back.
+  - **The danger rule for every order:**
+    - it counts bandits;
+    - it never shelters a lord in the castle the danger is besieging or marching to besiege;
+    - it never puts defend's lord in its own holding unless told to stay inside;
+    - it no longer turns a relief back from the siege camp it is striking (the other lords camped there are part of that fight).
+  - **adjust** makes a tool's current move again, so a new radius takes effect at once.
+  - **The wording** the agent reads (the library, the report's realm in sum, the orders in force, the council's briefing, receipts) now says plainly that lords without orders are led by the game's own AI, as its instructions do.
+- **Checks:**
+  - the smoke test passed in full (106 checks, 9 new) and the war room's self-test too (38);
+  - 348 game references, 0 missing;
+  - the installed DLL has sha256 `8066213EEE80389D…`.
+- **Outside the repository:**
+  - the war room was stopped at 19:29:42 and 19:30:44 (idle) and restarted after each install;
+  - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` (17 orders, new defend and patrol) and refreshed the older chat's `CLAUDE.md` (the same wording); the bridge's settings were unchanged.
+- **Not yet seen in a game:** the patrol within a radius, a refill, and the new shelter choices.
