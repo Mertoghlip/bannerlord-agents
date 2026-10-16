@@ -1,6 +1,6 @@
 # Doctrine: the study behind the agent's instructions
 
-Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 14 principles, each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
+Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 15 principles (14 since Oct 9, the 15th since Oct 16), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
 
 ## Why, and the rule
 
@@ -13,7 +13,7 @@ So the instructions teach general principles with their history, and never this 
 **Where it changed the instructions** (`agent/warroom-system.template.md`, installed as `warroom-system.md`):
 - **A new "Who you are":** the commander's persona, in eight lines, each tied to a writer or a campaign.
 - **A new goal:** "Break the enemy's power to make war on you ... Keep your own ... Grow." The 0.4 goal's first line, "Keep every castle and town you hold", is gone: it pushed the agent to defend every place, which is the opposite of the doctrine (holdings are means; a field army lost for a doomed castle is the worse loss).
-- **A new "Doctrine" section:** 14 principles, below.
+- **A new "Doctrine" section:** 14 principles, below (a 15th added on Oct 16).
 - **The council of war:** what a council is for ([WARROOM.md](WARROOM.md#the-council-of-war)).
 - **Two wording changes:**
   - lords without the agent's orders are led by the game's own AI, said plainly;
@@ -61,7 +61,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 **The doctrine's answer** (principle 3) is the research's working rule: the side that time works against (far from home, its allies about to leave, weaker in the long run) must seek battle, on ground it chooses. The side that time favours can refuse it. Either way, fight only with an edge, or when forced, and strike at once when the edge is yours.
 
-## The 14 principles, and what each rests on
+## The 15 principles, and what each rests on
 
 | # | Principle (as the agent reads it, shortened) | What it rests on | What it means in this game |
 |---|---|---|---|
@@ -79,6 +79,29 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 | 12 | Hold what you can support; strike where the enemy is absent. | Baybars 1265–71 (razed coastal places, kept inland Safed, passed by Acre and Tripoli, sealed Antioch's port and passes first); Saladin razing Ascalon; Richard turning back from Jerusalem, given "the improbability that the city could be long held even if it were taken" (Painter); Ain Jalut after Hülegü left. | The frontier list shows enemy holdings and garrisons in sight. |
 | 13 | After a defeat, rally fast; then think long. | Vegetius III.25 ("human minds are carried away by success"); Kekaumenos WJ 15 (gather even a quarter of your men and strike that day); Basil II; Charles V; Jean de Bueil ("who endures, wins"). | Recruiting is slow; the council resets the realm's course after a loss. |
 | 14 | Initiative with judgment. | Kekaumenos WJ 10 ("let most of your actions be daring"); the taunts of cowardice after 1183 and the gamble of 1187 (Gillingham; Kedar); Philip VI mocked by his own nobles in 1339. | The agent is asked what it can do to the enemy, not only what the enemy can do. |
+| 15 | Read the enemy's aim from its road, not its errands; beware the feint. (Oct 16) | Edward III's letter of 1339 ("we held ever our road forward, our people burning and destroying commonly to the breadth of twelve or fourteen leagues"); *On Skirmishing* 8 (watch the dust and smoke to "form an estimate of their route of march") and 9 (keep watching the main body, "if it sets out on the road"); *Strategikon* IX.3 (some gather supplies "and others should follow along in regular formation"); Philip VI at Poissy, 1346. See [below](#principle-15-oct-16-reading-an-armys-aim). | Each enemy army's trail in the report (0.6.4): the agent sees the road, not only the hour's errand. |
+
+## Principle 15 (Oct 16): reading an army's aim
+
+**Mert, Oct 16:** "In an army, I might deviate slightly off course on my way to an objective to recruit or gather supplies, or maybe to engage an enemy I find vulnerable. The AI should still be getting the information it needs to infer what my main objective is, and slight deviations should not have it readjust its main strategy." Of the ways proposed, Mert chose two together: each enemy army's trail in the report (version 0.6.4, [TOOLS.md](TOOLS.md#what-the-agent-reads-besides-the-tools)) and a doctrine line. The line is general (judge by the course over days, beware the feint); it says nothing of this war or of how Mert plays.
+
+**The research** (one pass, Oct 16; the texts opened and quoted, unless marked):
+- **The sources say the parties range, not the army.** It was the detachments that turned aside every day, while the king or the emir and the formed body kept the road, so the principle says so:
+  - Edward III to his council, 1 November 1339 (Avesbury, tr. Locke): "So we held ever our road forward, our people burning and destroying commonly to the breadth of twelve or fourteen leagues of country."
+  - 1346 in Normandy, Northburgh's letter from Caen (Avesbury, p. 358): the king took his road, and the men of the host rode out robbing and destroying "v. od vj. lieus environ toutz les jours" (five or six leagues around every day; the Latin version in Murimuth says miles, so the unit is uncertain).
+  - 1346 on the Seine, Wynkeley's letter (Murimuth, p. 215): Philip VI followed the English king "diebus singulis" on the other bank, breaking the bridges, while burning spread "in latitudine xx. milliarium in circuitu" (about 20 miles round). The 40 miles in modern summaries (Ayton, Rogers) could not be checked.
+  - *Strategikon* IX.3: "All the men should not engage in pillaging, but if the opportunity for collecting supplies presents itself, some should go out gathering them, and others should follow along in regular formation."
+  - *On Skirmishing* 10: the horsemen who raid "separate themselves from the foot soldiers and move on a few days' distance ahead ... The baggage train with the infantry and their equipment follows behind."
+- **Watching the road:**
+  - *On Skirmishing* 8 ("Shadowing and following an army"): from the dust and smoke the commander "should be able to form an estimate of their route of march and where they are likely to camp".
+  - *On Skirmishing* 9: the general "should have figured out the places and villages which the enemy plan to attack", and leaves an officer "to keep an eye on the battle formation of the emir and to report back to him whatever he observes there, such as if it sets out on the road".
+  - Kekaumenos WJ 9: "Make it your practice to learn daily where and how your enemy is situated, what he is doing, what he expects, how large an army he has, what he wants ..."
+- **The feint, Poissy 1346:** the English reached Poissy on 13 August and found the bridge broken; the king's marshals burned Saint-Germain-en-Laye, Saint-Cloud, Boulogne and Bourg-la-Reine around Paris (Froissart, ed. Luce, III); on 16 August Edward crossed the Seine on the rebuilt bridge and marched north (Thompson, introduction to Avesbury, p. xlvi). Luce, from the documents: "Le roi de France tomba dans le piége": Philip posted his main force at the bridge of Antony, south of Paris, at the very moment the English crossed.
+- **Caveats:**
+  - Froissart puts Philip at Saint-Denis, north of Paris; the Antony position is Luce's, followed by a modern guide (Gumm). Calling the raids a deliberate feint is Luce's reading: Rogers and Ayton argue Edward wanted a battle on ground of his choosing. That Philip was out of place when the English crossed is solid.
+  - Vegetius III.6 is about keeping one's own march safe and secret, not reading the enemy's route; its closing line (learn the enemy's "present and future plans", catch them "seeking fodder and food") and III.10 (attack "those who loiter at a distance from their people for fodder or plunder") belong with principles 4 and 6, not here.
+  - "Comes nearer a new prize than the old", from the first draft, has no source, and was left out.
+  - Gaunt's 1373 raid and Normandy 1054 were not checked for this principle.
 
 ## The persona's eight lines, and their grounding
 
@@ -115,6 +138,7 @@ These are signs to watch for in Mert's standard test: load the Summer 9, 1087 sa
 - It does not feed a relief to a besieged place lord by lord, below the strength that would make the garrison sally out.
 - It masses before it strikes, or refuses battle and harasses, and it strikes when the enemy divides or wears out.
 - After a win, it follows up at once.
+- When Mert's army turns aside for a few hours (a village, a weak lord) and comes back to its road, the agent's plan holds; when the army takes a new road, the plan changes (principle 15).
 - Its plan and lessons say why, in its own words.
 
 ## Sources
@@ -131,6 +155,9 @@ These are signs to watch for in Mert's standard test: load the Summer 9, 1087 sa
 - Jean de Bueil, *Le Jouvencel*, ed. C. Favre and L. Lecestre (1887–89): https://archive.org/details/lejouvencel01buei , https://archive.org/details/lejouvencel02buei
 - Roger of Wendover, *Flowers of History*, tr. J. A. Giles, vol. 2 (1849): https://archive.org/details/rogerofwendovers02roge
 - *The Chronicle of Novgorod 1016–1471*, tr. R. Michell and N. Forbes (1914): https://archive.org/details/chronicleofnovgo00michrich
+- Edward III's letter of 1 November 1339, from Robert of Avesbury, tr. A. A. Locke (1913): https://www.deremilitari.org/RESOURCES/SOURCES/avesbury.htm
+- Adam Murimuth and Robert of Avesbury, *Continuatio chronicarum* and *De gestis mirabilibus regis Edwardi Tertii*, ed. E. M. Thompson (Rolls Series, 1889), with Northburgh's and Wynkeley's letters of 1346 and Thompson's introduction: https://archive.org/details/admurimuthconti00robegoog
+- Froissart, *Chroniques*, ed. S. Luce, vol. III (1872), with Luce's summary of chapter LIX: https://www.gutenberg.org/ebooks/72385
 - Hattin chronicle extracts (*De Expugnatione*, Ernoul, Imad ad-Din, Baha ad-Din), Fordham sourcebook translations: https://sourcebooks.fordham.edu/source/1187ernoul.asp
 
 **Scholarship**
@@ -147,6 +174,7 @@ These are signs to watch for in Mert's standard test: load the Summer 9, 1087 sa
 - Pow, S., "Deep Ditches and Well-Built Walls" (MA thesis, Calgary, 2012): https://ucalgary.scholaris.ca/server/api/core/bitstreams/f409356a-4e0d-4fa2-afa7-7add6193f94b/content ; Laszlovszky, J., et al., "Contextualizing the Mongol Invasion of Hungary in 1241–42" (2018): https://hunghist.org/83-articles/515-2018-2-laszlovszky ; Pinke, Z., et al., "Climate of doubt" (2017): https://pmc.ncbi.nlm.nih.gov/articles/PMC5629221/
 - Amitai-Preiss, R., *Mongols and Mamluks* (1995), chapter summaries: https://www.cambridge.org/core/books/abs/mongols-and-mamluks/the-battle-of-ayn-jlut/28AF2C512086301FC77D6DC25EAAF02D ; Fuess, A., "Rotting Ships and Razed Harbors", *Mamlūk Studies Review* 5 (2001): https://knowledge.uchicago.edu/record/1019
 - McMahon, L., "De Velitatione Bellica and Byzantine Guerrilla Warfare" (2016): https://ams.ceu.edu/2016/McMahon.pdf
+- Gumm, I., "The Battle of Crécy" (In the Footsteps, battlefield guide): https://www.inthefootsteps.com/battle-of-crecy.pdf ; Madden, M. M., *The Black Prince at War* (PhD thesis, Minnesota, 2014), read for the 1355 raid's width and spies, not cited in the principle: https://hdl.handle.net/11299/171443
 - Torres, O., "Los consejos de al-Harawi sobre estratagemas de guerra" (2017): https://dialnet.unirioja.es/descarga/articulo/6429172.pdf ; Rech, W., "Christine de Pizan on the laws of war" (2024): https://academic.oup.com/lril/article/12/1/47/7682371
 - Ambühl, R., *Prisoners of War in the Hundred Years War* (summary and review): https://www.medievalists.net/2010/04/prisoners-of-war-in-the-hundred-years-war-the-golden-age-of-private-ransoms/ , https://scholarworks.iu.edu/journals/index.php/tmr/article/download/18561/24674
 - Georgopoulou, M., review of Kennedy, *Crusader Castles* (1997): https://scholarworks.iu.edu/journals/index.php/tmr/article/view/14466/20584

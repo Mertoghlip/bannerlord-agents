@@ -36,8 +36,15 @@ namespace BannerlordAgents
             public readonly List<Notice> News = new List<Notice>();
             public readonly List<Trigger> Recent = new List<Trigger>();
             public readonly Dictionary<string, List<double>> Sightings = new Dictionary<string, List<double>>();
+            /// <summary>Each enemy army's trail, by party id (Trails).</summary>
+            public readonly Dictionary<string, ViewTrail> Trails = new Dictionary<string, ViewTrail>();
             public int Pokes, PokedHoursRunning;
         }
+
+        /// <summary>An enemy army's trail: a new point after this many map units marched, or this many hours; kept two days, at most 12 points.</summary>
+        private const float TrailStep = 10f;
+        private const double TrailEvery = 6, TrailKeep = 48;
+        private const int TrailMost = 12;
 
         private const double OutOfSightHours = 12;
         private const double ForgetHours = 72;
@@ -244,6 +251,7 @@ namespace BannerlordAgents
             }
             foreach (string id in m.LastSeen.Where(x => s.Hours - x.Value.SeenHours > ForgetHours).Select(x => x.Key).ToList())
                 m.LastSeen.Remove(id);
+            if (!isPlayer) Trails(m, s, sees, hostile, own);
 
             foreach (Notice n in m.Pending)
                 triggers.Add(new Trigger { Hours = n.Hours, Kind = n.Kind, Text = n.Text, Party = n.Party, Place = n.Place, Notice = n.Id });
@@ -288,7 +296,7 @@ namespace BannerlordAgents
             if (AgentChannel.On)
             {
                 // the look-ups go out before the poke, so they are there when the agent wakes
-                try { AgentChannel.WriteLookups(Facts.Lookups(w, m.LastSeen)); }
+                try { AgentChannel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
                 catch (Exception e) { Diag.Error("writing the look-up files", e); }
             }
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
@@ -328,6 +336,56 @@ namespace BannerlordAgents
                 string say = v.FactionName + ": " + triggers[0].Text + (triggers.Count > 1 ? " (+" + (triggers.Count - 1) + ")" : "");
                 Background.ToMain.Enqueue(() => Ui.Say(say, Colors.Yellow));
             }
+        }
+
+        /// <summary>
+        /// Each enemy army's trail (version 0.6.4; Mert, Oct 16: an army that turns aside to recruit, gather supplies or strike
+        /// a weak enemy has not changed its main aim, and the agent should be able to see that). Each hour an enemy army is
+        /// in view, a point is added when its course changed (what it is doing, or where it is going), when it has marched
+        /// TrailStep map units since the last point, when TrailEvery hours have passed, or when it came back into sight.
+        /// Points older than two days go, at most TrailMost are kept, and a trail ends when the army is seen broken up or
+        /// is gone. Only what the realm saw: the fog rule holds.
+        /// </summary>
+        private static void Trails(Memory m, Snapshot s, Dictionary<string, Sighting> sees, HashSet<string> hostile, List<SettlementRow> own)
+        {
+            var ended = new List<string>();
+            foreach (KeyValuePair<string, Sighting> kv in sees)
+            {
+                if (!s.PartyById.TryGetValue(kv.Key, out PartyRow r) || r.Attached || r.Kind != "lord" || !hostile.Contains(r.Faction ?? "")) continue;
+                if (r.ArmyMen <= 0)
+                {
+                    // seen without its army: the army broke up
+                    if (m.Trails.ContainsKey(r.Id)) ended.Add(r.Id);
+                    continue;
+                }
+                ViewParty vp = Views.Party(s, r, kv.Value, "enemy", own);
+                if (!m.Trails.TryGetValue(r.Id, out ViewTrail t)) m.Trails[r.Id] = t = new ViewTrail { Id = r.Id };
+                t.Lord = r.Leader;
+                t.Name = vp.Name;
+                t.FactionName = vp.FactionName;
+                t.ArmyMen = r.ArmyMen;
+                t.ArmyParties = r.ArmyParties;
+                t.Strength = vp.Strength;
+                TrailPoint last = t.Points.Count > 0 ? t.Points[t.Points.Count - 1] : null;
+                double gap = double.IsNaN(t.LastSeenHours) ? 0 : s.Hours - t.LastSeenHours;
+                bool back = last != null && gap >= 1.5;
+                if (last == null || back || vp.Doing != last.Doing || Views.Dist(last.X, last.Y, r.X, r.Y) >= TrailStep || s.Hours - last.Hours >= TrailEvery - 1e-6)
+                    t.Points.Add(new TrailPoint
+                    {
+                        Hours = s.Hours, X = r.X, Y = r.Y, Near = vp.Near, NearDistance = vp.NearDistance, NearestHolding = vp.NearestHolding,
+                        HoldingDistance = vp.HoldingDistance, Doing = vp.Doing, AfterGap = back ? gap : 0
+                    });
+                t.LastSeenHours = s.Hours;
+            }
+            foreach (KeyValuePair<string, ViewTrail> kv in m.Trails)
+            {
+                ViewTrail t = kv.Value;
+                t.InView = sees.ContainsKey(kv.Key);
+                t.Points.RemoveAll(p => s.Hours - p.Hours > TrailKeep);
+                if (t.Points.Count > TrailMost) t.Points.RemoveRange(0, t.Points.Count - TrailMost);
+                if (t.Points.Count == 0 || !s.PartyById.ContainsKey(kv.Key)) ended.Add(kv.Key);
+            }
+            foreach (string id in ended.Distinct()) m.Trails.Remove(id);
         }
 
         private static readonly HashSet<string> HeadingIn = new HashSet<string> { "GoToSettlement", "RaidSettlement", "BesiegeSettlement", "AssaultSettlement", "PatrolAroundPoint" };

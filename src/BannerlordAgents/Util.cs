@@ -69,6 +69,14 @@ namespace BannerlordAgents
             return seasonName + " " + (day + 1) + ", " + year + ", " + hour.ToString("00", Text.Inv) + ":00";
         }
 
+        /// <summary>"Summer 3, 14:00": the same without the year, for lists of times close together.</summary>
+        public static string WhenShort(double hours)
+        {
+            Parts(hours, out int season, out int day, out _, out int hour);
+            string seasonName = season < SeasonNames.Length ? SeasonNames[season] : "Season " + (season + 1);
+            return seasonName + " " + (day + 1) + ", " + hour.ToString("00", Text.Inv) + ":00";
+        }
+
         /// <summary>Season (0-based), day of the season (0-based), year and hour, as the game counts them; the self-check compares these with the game's own.</summary>
         public static void Parts(double hours, out int season, out int day, out long year, out int hour)
         {

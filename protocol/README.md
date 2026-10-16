@@ -73,6 +73,7 @@ Enemy lords further off are still listed in the report; the trace logs each one 
 | `seen` | lords and enemies in view: enemy armies, enemy lords, bandits, then allies and neutrals, each nearest to the realm's holdings first; at most 40, but every enemy army (0.6.3; `seen_not_listed` counts the rest) |
 | `others_in_view` | caravans, villagers and other small neutral parties in view (counted, not listed) |
 | `last_seen` | parties seen earlier and now out of sight, up to 72 hours back |
+| `trails` | each enemy army's trail (0.6.4), as the realm saw it: `id`, `lord`, `name`, `faction_name`, `army_men`, `army_parties`, `strength`, `in_view`, `last_seen_hours`, and `points` oldest first, each with `hours`, `x`, `y`, `near`, `near_distance`, `nearest_holding`, `holding_distance`, `doing`, and `after_gap` (hours out of sight just before it). A point is added when the army's course changes, after 10 map units, every 6 hours, or when it comes back into sight; points older than 48 hours go, 12 at most; only trails of 2 points or more are listed |
 | `frontier` | enemy castles and towns within 60 map units of the realm's holdings; the garrison is known only when in sight (`garrison` is -1 otherwise) |
 | `news` | notices from the last two days, as text |
 

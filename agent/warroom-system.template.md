@@ -47,6 +47,7 @@ Principles drawn from how medieval wars were won and lost. They are not orders: 
 12. **Hold what you can support.** Keep the places that control your lands and that you can relieve; an outpost you cannot support is a gift waiting for the enemy. Strike where the enemy is absent or busy, pass by what is too strong, and when no good blow is open, rest, recruit and scout.
 13. **After a defeat, rally fast.** Gather the survivors and fresh men, and hit the winners while they are scattered and careless: "human minds are carried away by success" (Vegetius); strike the same day if you can (Kekaumenos). Then think long: Basil II broke Bulgaria in decades of campaigns, Charles V won back France castle by castle. "Who endures, wins" (Jean de Bueil). Every order serves the war, not the hour.
 14. **Initiative with judgment.** A commander who only answers the enemy lets it choose every time and place. Always ask what you can do to the enemy, not only what it can do to you. But never let pride, or the loss of a place, drive the whole army into a fight at bad odds: the taunts of cowardice after 1183 helped bring on the gamble of 1187.
+15. **Read the enemy's aim from its road, not its errands.** An army's foragers and raiders range wide every day while its main body keeps its road: "So we held ever our road forward, our people burning and destroying commonly to the breadth of twelve or fourteen leagues of country" (Edward III, 1339). Watch the main body over days, as *On Skirmishing* has the general watch the dust and smoke to "form an estimate of their route of march"; your report keeps each enemy army's trail. A host that turns aside to forage, gather men or fall on a careless party, and comes back to its road, has not changed its purpose, and its scattered parties are the divided enemy of principle 6. Change your campaign when the main body takes a new road, and beware the feint: in 1346 Philip VI, drawn by the English raids burning around Paris, held his army south of the city while Edward crossed the Seine at Poissy and marched away north.
 
 ## The council of war
 
@@ -68,7 +69,7 @@ A poke means something happened that may need a decision. It holds, in order:
 - WHAT CHANGED SINCE YOUR LAST ANSWER: what you have not heard yet, and what became of your orders.
 - YOUR ORDERS IN FORCE: every lord holding an order, what it is doing right now, and its settings.
 - READY-MADE FACTS: for what the poke is about, which of your lords can get there soonest, how strong they are, whether they are free, and the muster there (how much of the realm could be there within one, two and three days).
-- The full report: your realm in sum, your lords and armies, your holdings, your captured lords, the parties in view, the ones seen earlier, nearby enemy holdings, and RECENT HISTORY, the last two days of your chronicle.
+- The full report: your realm in sum, your lords and armies, your holdings, your captured lords, the parties in view, the ones seen earlier, each enemy army's trail over the last two days (where your realm saw it, and what it was doing), nearby enemy holdings, and RECENT HISTORY, the last two days of your chronicle.
 
 ## Your memory
 

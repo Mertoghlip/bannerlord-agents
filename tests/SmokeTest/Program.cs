@@ -376,6 +376,7 @@ namespace SmokeTest
             FactsTests(dir, agentDir, moves, released, thens);
             DefendTests(moves, released);
             RefillAndReportTests(moves);
+            TrailTests();
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
@@ -717,6 +718,54 @@ namespace SmokeTest
             // and what each castle would hold against: garrison 600 behind level-1 walls (worth 2.43) holds against up to 1,457
             Check(report.Contains("Orc Castle [castle_orc] (castle): garrison 450, militia 120; walls level 1; defenders' strength 600, so it holds against besiegers up to strength 1,457"),
                   "the report says what each castle or town would hold against");
+        }
+
+        /// <summary>
+        /// Version 0.6.4: an enemy army's trail. It marches on a castle, turns aside into one of its own villages, comes back
+        /// to its road, goes out of sight and comes back: a point for each change of course and for the return, none for a
+        /// few units more of the same march; two days later the old points are gone, and a trail ends with its army.
+        /// </summary>
+        private static void TrailTests()
+        {
+            PartyRow Army(float x, float y, string target, string inside = null) => new PartyRow
+            {
+                Id = "p_arw", Leader = "lord_arw", Name = "Aragorn", Faction = "player_k", Kind = "lord", Men = 900, ArmyLeader = "p_arw", ArmyMen = 5532, ArmyParties = 15,
+                ArmyStrength = 14695, Strength = 2000, Speed = 3, X = x, Y = y, Doing = "GoToSettlement", TargetSettlement = target, InSettlement = inside, Spottable = true
+            };
+            Snapshot Unseen(double h, PartyRow a)
+            {
+                Snapshot s = ToolWorld(h, a);
+                s.WatchedSees.Remove(a.Id);
+                return s;
+            }
+            Brain.OnHour(ToolWorld(6000, Army(170, 120, "castle_orc")));
+            Brain.OnHour(ToolWorld(6001, Army(166, 118, "castle_orc")));
+            Brain.OnHour(ToolWorld(6002, Army(162, 116, "village_men")));
+            Brain.OnHour(ToolWorld(6003, Army(160, 110, "village_men", "village_men")));
+            Brain.OnHour(ToolWorld(6004, Army(158, 108, "castle_orc")));
+            for (int h = 6005; h <= 6007; h++) Brain.OnHour(Unseen(h, Army(150, 106, "castle_orc")));
+            Snapshot back = ToolWorld(6008, Army(140, 104, "castle_orc"));
+            Brain.OnHour(back);
+            Brain.Memory m = Brain.Get("orcs");
+            View v = Views.Build(back, "orcs", back.WatchedSees, back.HostileToWatched, m);
+            string report = Views.Report(v, null);
+            int points = m.Trails.TryGetValue("p_arw", out ViewTrail t) ? t.Points.Count : 0;
+            Check(points == 5 && v.Trails.Count == 1 && report.Contains("ENEMY ARMIES' TRAILS (1)") && report.Contains("Aragorn [lord_arw] (Kingdom of Arnor and Gondor), army of 5,532 men, strength 14,695, in view now")
+                  && report.Contains("going to Bree -> ") && report.Contains("inside Bree -> ") && report.Contains("(out of sight 4 h) "),
+                  "an enemy army's trail: a point for each change of course and for its return into sight, none for a few units more of the same march (" + points + " points)");
+            Dictionary<string, string> look = Facts.Lookups(Runner.WorldFor(back), m.LastSeen, m.Trails);
+            Check(look.TryGetValue("lord_arw", out string page) && page.Contains("Its trail as your realm saw it") && page.Contains("- (out of sight 4 h) "), "the enemy's look-up carries its trail");
+            // two days on, the old points are gone (one new point is no trail to show), and a trail ends with its army
+            Snapshot later = ToolWorld(6060, Army(139, 104, "castle_orc"));
+            Brain.OnHour(later);
+            View lv = Views.Build(later, "orcs", later.WatchedSees, later.HostileToWatched, m);
+            bool aged = m.Trails.TryGetValue("p_arw", out ViewTrail t2) && t2.Points.Count == 1 && lv.Trails.Count == 0;
+            PartyRow broken = Army(139, 104, "castle_orc");
+            broken.ArmyMen = 0;
+            broken.ArmyParties = 0;
+            broken.ArmyLeader = null;
+            Brain.OnHour(ToolWorld(6061, broken));
+            Check(aged && !m.Trails.ContainsKey("p_arw"), "a trail keeps two days, and ends when its army is seen broken up");
         }
 
         private sealed class TestScope : IScope

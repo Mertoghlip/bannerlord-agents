@@ -183,7 +183,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>The look-up files: one per holding of the realm, lord of the realm, and enemy it knows of.</summary>
-        public static Dictionary<string, string> Lookups(World w, Dictionary<string, ViewParty> lastSeen)
+        public static Dictionary<string, string> Lookups(World w, Dictionary<string, ViewParty> lastSeen, Dictionary<string, ViewTrail> trails = null)
         {
             var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             List<Lord> lords = OwnLords(w);
@@ -268,6 +268,11 @@ namespace BannerlordAgents
                 string state = kv.Value == null ? "in view now, " + Views.Doing(w.S, r) : "last seen " + Math.Round(w.Hours - kv.Value.SeenHours) + " hours ago, " + kv.Value.Doing;
                 sb.AppendLine(w.Name(id) + " [" + tag + "] (" + (kv.Value?.FactionName ?? Views.FactionName(w.S, r?.Faction)) + "): " + (men.HasValue ? Text.N(men.Value) + " men, " : "")
                               + "strength " + (str.HasValue ? Text.N((int)str.Value) : "?") + "; " + state + ". As of " + Text.When(w.Hours) + ".");
+                if (trails != null && trails.TryGetValue(id, out ViewTrail trail) && trail.Points.Count >= 2)
+                {
+                    sb.AppendLine("Its trail as your realm saw it, in the last two days, oldest first:");
+                    foreach (string step in Views.TrailSteps(trail)) sb.AppendLine("- " + step);
+                }
                 sb.AppendLine("Your holdings nearest to it:");
                 foreach (SettlementRow h in own.OrderBy(h => w.Distance(id, h.Id)).Take(5)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + Text.D((float)w.Distance(id, h.Id)) + " away");
                 sb.AppendLine("Your lords who can reach it soonest:");
@@ -280,7 +285,7 @@ namespace BannerlordAgents
                               + "- a holding of yours: your lords soonest to it, enemies near it, enemy castles and towns near it, and for a castle or town the muster there (every lord by how soon they could come, with running totals);\n"
                               + "- a lord of yours: men, strength, ranks, food, hours to each of your holdings, enemies near the lord;\n"
                               + "- a lord of yours held prisoner: where and since when, and your lords who can reach that place soonest;\n"
-                              + "- an enemy: where it is or was last seen, its strength, your holdings near it, your lords who can reach it soonest.\n"
+                              + "- an enemy: where it is or was last seen, its strength, for an army its trail over the last two days, your holdings near it, your lords who can reach it soonest.\n"
                               + "lookups/captured.txt lists all your lords held prisoner, by where they are held.\n"
                               + "Travel hours are rough: straight-line distance over the lord's speed.\n";
             return files;

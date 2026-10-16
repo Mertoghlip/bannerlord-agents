@@ -18,6 +18,8 @@ namespace BannerlordAgents
         public List<ViewParty> Seen = new List<ViewParty>();
         public int SeenNotListed;
         public List<ViewParty> LastSeen = new List<ViewParty>();
+        /// <summary>Each enemy army's trail over the last two days, as the realm saw it (0.6.4).</summary>
+        public List<ViewTrail> Trails = new List<ViewTrail>();
         public List<ViewHolding> Frontier = new List<ViewHolding>();
         public List<string> News = new List<string>();
         /// <summary>The news comes from the realm's chronicle (its recent history), not only from its notices.</summary>
@@ -47,6 +49,30 @@ namespace BannerlordAgents
         public int Men, ArmyMen, ArmyParties;
         public float Strength, X, Y, NearDistance, HoldingDistance;
         public double SeenHours;
+    }
+
+    /// <summary>
+    /// Where the realm saw an enemy army over the last two days, oldest first (Brain.Trails): so the agent can tell an
+    /// army's road from its errands (Mert, Oct 16: an army turning aside to recruit, forage or strike has not changed
+    /// its aim).
+    /// </summary>
+    internal sealed class ViewTrail
+    {
+        public string Id, Lord, Name, FactionName;
+        public int ArmyMen, ArmyParties;
+        public float Strength;
+        public bool InView;
+        public double LastSeenHours = double.NaN;
+        public List<TrailPoint> Points = new List<TrailPoint>();
+    }
+
+    internal sealed class TrailPoint
+    {
+        public double Hours;
+        public float X, Y, NearDistance, HoldingDistance;
+        public string Near, NearestHolding, Doing;
+        /// <summary>Hours out of sight just before this point; 0 when it was in view the hour before.</summary>
+        public double AfterGap;
     }
 
     internal sealed class ViewHolding
@@ -136,6 +162,8 @@ namespace BannerlordAgents
                     v.LastSeen.Add(last);
                     if (v.LastSeen.Count >= 25) break;
                 }
+                // a trail of one point says no more than the lists above
+                v.Trails = mem.Trails.Values.Where(t => t.Points.Count >= 2).OrderByDescending(t => t.Strength).ToList();
                 if (fid == Chronicle.Realm)
                 {
                     // the chronicle's last two days: the notices, and also the enemy armies sighted and the orders given
@@ -322,6 +350,14 @@ namespace BannerlordAgents
                         + ", " + Math.Round(v.Hours - p.SeenHours) + " hours ago, " + p.Doing + ".");
             }
 
+            if (v.Trails.Count > 0)
+            {
+                sb.AppendLine().AppendLine("ENEMY ARMIES' TRAILS (" + v.Trails.Count + "): where your realm saw each enemy army in the last two days, oldest first; a new point when its course changed, "
+                                           + "after every 10 map units, every 6 hours, or when it came back into sight");
+                foreach (ViewTrail t in v.Trails)
+                    sb.AppendLine("- " + TrailHead(t, v.Hours) + ": " + string.Join(" -> ", TrailSteps(t)) + ".");
+            }
+
             if (v.Frontier.Count > 0)
             {
                 sb.AppendLine().AppendLine("ENEMY HOLDINGS NEAR YOUR LANDS (" + v.Frontier.Count + ")");
@@ -452,6 +488,22 @@ namespace BannerlordAgents
         }
 
         private static string Tag(ViewParty p) => " [" + (p.Lord ?? p.Id) + "]";
+
+        /// <summary>An enemy army's trail, its first line: who, how strong, and whether it is in sight now.</summary>
+        public static string TrailHead(ViewTrail t, double now)
+            => t.Name + " [" + (t.Lord ?? t.Id) + "] (" + t.FactionName + "), army of " + Text.N(t.ArmyMen) + " men, strength " + Text.N((int)Math.Round(t.Strength))
+               + (t.InView ? ", in view now" : ", last seen " + Math.Round(now - t.LastSeenHours) + " hours ago");
+
+        /// <summary>The points of an enemy army's trail, oldest first: when, where (and how far from the realm's nearest holding), and what it was doing.</summary>
+        public static IEnumerable<string> TrailSteps(ViewTrail t)
+        {
+            foreach (TrailPoint p in t.Points)
+            {
+                string where = p.Near == null ? "in the wilds" : p.NearDistance < 1f ? "at " + p.Near : Text.D(p.NearDistance) + " from " + p.Near;
+                string fromOurs = p.NearestHolding != null && p.NearestHolding != p.Near ? " (" + Text.D(p.HoldingDistance) + " from your " + p.NearestHolding + ")" : "";
+                yield return (p.AfterGap >= 1.5 ? "(out of sight " + Math.Round(p.AfterGap) + " h) " : "") + Calendar.WhenShort(p.Hours) + ", " + where + fromOurs + ", " + p.Doing;
+            }
+        }
 
         private static string Where(ViewParty p) => p.Near != null ? (p.NearDistance < 1f ? "at " + p.Near : Text.D(p.NearDistance) + " from " + p.Near) : "in the wilds";
 

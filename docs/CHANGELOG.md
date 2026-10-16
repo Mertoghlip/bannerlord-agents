@@ -448,3 +448,21 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - an install at about 16:06 still carried the number 0.6.2 and was replaced at 16:10 by the same code numbered 0.6.3;
   - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` at 16:13 (defend's new refilling); the bridge's settings were unchanged.
 - **Not yet seen in a game:** the hook attaching and holding a lord; a refill broken off; the new report lines.
+
+### 16:56 · Version 0.6.4: each enemy army's trail, and a 15th principle of doctrine · installed 16:55
+- **Why:** Mert: "In an army, I might deviate slightly off course on my way to an objective to recruit or gather supplies, or maybe to engage an enemy I find vulnerable. The AI should still be getting the information it needs to infer what my main objective is, and slight deviations should not have it readjust its main strategy." Of seven ways proposed, Mert chose two together: "Lets try 6 and 1 at the same time."
+- **What:**
+  - **Each enemy army's trail** (proposal 1): a new report section, ENEMY ARMIES' TRAILS, gives, for each enemy army, where the realm saw it in the last two days, oldest first: when, where (and how far from the realm's nearest holding), and what it was doing.
+    - A point is added each hour the army is in view that its course changed, after every 10 map units of the same march, every 6 hours, or when it comes back into sight ("(out of sight 4 h)").
+    - 12 points at most; only trails of two points or more are shown; a trail ends when its army is seen broken up, or is gone.
+    - Only what the realm saw, so the fog rule holds. The enemy's look-up file carries the same trail, and the view's JSON a `trails` list.
+  - **Principle 15 of the doctrine** (proposal 6): "Read the enemy's aim from its road, not its errands", grounded in one research pass: Edward III's letter of 1339, *On Skirmishing* 8 and 9, and Philip VI misplaced south of Paris while the English crossed the Seine at Poissy in 1346 ([DOCTRINE.md](DOCTRINE.md#principle-15-oct-16-reading-an-armys-aim), with the caveats). The research corrected the first draft: the sources show the army's parties ranging wide while its main body keeps its road, not the army turning aside. The principle is general; it names nothing of this war or of how Mert plays.
+  - The instructions' list of the report's sections names the trails.
+- **Checks:**
+  - the smoke test passed in full (118 checks, 3 new: points for changes of course and a return into sight, none for a few more units of the same march; the look-up's trail; the two-day limit, and a trail ending with its army) and the war room's self-test too (38);
+  - 352 game references, 0 missing;
+  - the installed DLL has sha256 `42A4553B47417781…`.
+- **Outside the repository:**
+  - the war room was stopped before the builds (idle, the game closed), and restarted at 16:56:02;
+  - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (principle 15, the trails in the report's list) and rewrote `tools.txt`; the bridge's settings were unchanged.
+- **Not yet seen in a game:** a trail; the agent reading one. Proposed for the next run: Mert turns aside once or twice on the way to Western Moria, and we count how often the agent's plan changes.
