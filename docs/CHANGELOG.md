@@ -449,7 +449,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` at 16:13 (defend's new refilling); the bridge's settings were unchanged.
 - **Not yet seen in a game:** the hook attaching and holding a lord; a refill broken off; the new report lines.
 
-### 16:56 · Version 0.6.4: each enemy army's trail, and a 15th principle of doctrine · installed 16:55
+### 16:56 · Version 0.6.4: each enemy army's trail, and a 15th principle of doctrine · commit 5c8950d (installed 16:55)
 - **Why:** Mert: "In an army, I might deviate slightly off course on my way to an objective to recruit or gather supplies, or maybe to engage an enemy I find vulnerable. The AI should still be getting the information it needs to infer what my main objective is, and slight deviations should not have it readjust its main strategy." Of seven ways proposed, Mert chose two together: "Lets try 6 and 1 at the same time."
 - **What:**
   - **Each enemy army's trail** (proposal 1): a new report section, ENEMY ARMIES' TRAILS, gives, for each enemy army, where the realm saw it in the last two days, oldest first: when, where (and how far from the realm's nearest holding), and what it was doing.
