@@ -149,20 +149,114 @@ namespace BannerlordAgents.Tools
         /// and hostile lords and armies seen there within the last RecentHours, at the place they were last seen (an army
         /// that walked out of sight an hour ago has not gone away). A party known gone is not counted.
         /// </summary>
-        public double ThreatStrength(string place, double r)
+        public double ThreatStrength(string place, double r, string except = null)
         {
             if (!Where(place, out float px, out float py)) return 0;
-            double sum = ThreatsInView(place, r).Sum(StrengthOf);
+            double sum = ThreatsInView(place, r).Where(e => e.Id != except).Sum(StrengthOf);
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
                 ViewParty v = kv.Value;
-                if (v.Relation != "enemy" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                if (kv.Key == except || v.Relation != "enemy" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
                 if (Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py)) <= r) sum += v.Strength;
             }
             return sum;
         }
 
         public bool Besieged(SettlementRow h) => h != null && h.BesiegedBy != null;
+
+        // ---------- would a place hold? ----------
+
+        /// <summary>How far around a place the forces threatening it are counted, in map units.</summary>
+        public const double HoldRadius = 20;
+
+        /// <summary>
+        /// What a castle's or town's walls are worth to its defenders, by the game's own test for whether besiegers should
+        /// assault (BesiegerCamp.StartingAssaultOnBesiegedSettlementIsLogical, 1.4.8): they assault only when stronger than
+        /// the defenders times the settlement's advantage to the power 0.8, the advantage being (4 + wall level) over the
+        /// worth of their engines. Taken here with a ram and two towers built, the usual siege: 2.4 for walls of level 1,
+        /// 2.8 for level 2, 3.2 for level 3.
+        /// </summary>
+        public static double WallFactor(SettlementRow h) => Math.Pow((4.0 + Math.Max(1, h?.WallLevel ?? 1)) / 1.65, 0.8);
+
+        /// <summary>
+        /// The strength that would hold a castle or town: its garrison and militia (known for the realm's own places, and an
+        /// ally's in sight), the realm's lords inside it (and allies' inside a place in sight), the realm's lords holding an
+        /// order to defend or garrison it within HoldRadius of it (they shelter there too), and the given party.
+        /// </summary>
+        public double DefenceStrength(SettlementRow h, string withParty)
+        {
+            if (!IsFort(h)) return 0;
+            bool known = h.Faction == Realm || (S.InspectedByWatched != null && Realm == S.Watched && S.InspectedByWatched.Contains(h.Id));
+            double sum = known ? h.GarrisonStrength + h.MilitiaStrength : 0;
+            var counted = new HashSet<string>();
+            foreach (PartyRow r in S.Parties)
+            {
+                if (r.Kind != "lord" || r.Attached || r.InSettlement != h.Id) continue;
+                if (r.Faction != Realm && !(known && Ally(r.Faction))) continue;
+                sum += StrengthOf(r);
+                counted.Add(r.Id);
+            }
+            foreach (ToolInstance t in Runner.All())
+            {
+                if (t.Order.At != h.Id || (t.Def.Name != "defend" && t.Def.Name != "garrison")) continue;
+                PartyRow r = Party(t.Order.Party);
+                if (r == null || r.Attached || counted.Contains(r.Id)) continue;
+                double d = Distance(r.Id, h.Id);
+                if (double.IsNaN(d) || d > HoldRadius) continue;
+                sum += StrengthOf(r);
+                counted.Add(r.Id);
+            }
+            PartyRow me = Party(withParty);
+            if (me != null && !me.Attached && !counted.Contains(me.Id)) sum += StrengthOf(me);
+            return sum;
+        }
+
+        /// <summary>Would the defenders, with this party among them, hold the place against this much strength? (The game's assault test.)</summary>
+        public bool Holds(SettlementRow h, string withParty, double opposing) => IsFort(h) && DefenceStrength(h, withParty) * WallFactor(h) >= opposing;
+
+        /// <summary>
+        /// Where a lord goes when it must shelter:
+        /// - first the preferred place (the holding an order guards), then the realm's and its allies' castles and towns not
+        ///   under siege, nearest first, but only those the lord can reach before the danger (no nearer to it than to the
+        ///   lord); the preferred one may be under siege when there is no danger party (defend reinforcing its own walls);
+        /// - the first whose defenders, with this lord, would hold it against what threatens it (the danger, if there is
+        ///   one, and every force near that place: ThreatStrength) is the shelter: the lord goes inside (holds = true);
+        /// - if none would hold, the lord runs: with a danger party, toward the nearest of those places that takes it
+        ///   farther from the danger, stopping outside (running = true); without one (an order sheltering from the forces
+        ///   near its holding), into the nearest other castle or town not under siege.
+        /// Null when there is nowhere to go.
+        /// </summary>
+        public SettlementRow ChooseRefuge(string me, string preferred, double radius, PartyRow danger, out bool holds, out bool running)
+        {
+            holds = running = false;
+            if (!Where(me, out float mx, out float my)) return null;
+            double dangerStrength = danger != null ? StrengthOf(danger) : 0;
+            double DistTo(SettlementRow h, float x, float y) => Math.Sqrt((h.X - x) * (h.X - x) + (h.Y - y) * (h.Y - y));
+            // reached before the danger: the lord's hours to it, at its own speed, no more than the danger's at its speed
+            double mySpeed = Speed(Party(me)), itsSpeed = danger != null ? Speed(danger) : 1;
+            bool Reachable(SettlementRow h) => danger == null || DistTo(h, mx, my) < 2 || DistTo(h, mx, my) / mySpeed <= DistTo(h, danger.X, danger.Y) / itsSpeed;
+            List<SettlementRow> places = S.Settlements
+                .Where(h => IsFort(h) && (h.Faction == Realm || Ally(h.Faction)) && (!Besieged(h) || (h.Id == preferred && danger == null)))
+                .OrderBy(h => h.Id == preferred ? -1 : DistTo(h, mx, my)).ToList();
+            foreach (SettlementRow h in places)
+            {
+                if (!Reachable(h)) continue;
+                double opposing = dangerStrength + ThreatStrength(h.Id, radius, danger?.Id);
+                if (Holds(h, me, opposing)) { holds = true; return h; }
+            }
+            if (danger != null)
+            {
+                // run: toward the nearest place it reaches first that takes it farther from the danger, but never the place
+                // the danger is besieging or marching on
+                string marchedOn = danger.Besieging ?? (danger.Doing == "BesiegeSettlement" || danger.Doing == "AssaultSettlement" ? danger.TargetSettlement : null);
+                double fromDanger = Math.Sqrt((mx - danger.X) * (mx - danger.X) + (my - danger.Y) * (my - danger.Y));
+                SettlementRow away = places.Where(h => !Besieged(h) && h.Id != marchedOn && Reachable(h) && DistTo(h, danger.X, danger.Y) > fromDanger + 1)
+                                           .OrderBy(h => DistTo(h, mx, my)).FirstOrDefault();
+                if (away != null) running = true;
+                return away;
+            }
+            return places.Where(h => h.Id != preferred && !Besieged(h)).OrderBy(h => DistTo(h, mx, my)).FirstOrDefault();
+        }
 
         /// <summary>
         /// The besiegers' strength, if the realm can know it: always for its own holdings (their lords are told), else

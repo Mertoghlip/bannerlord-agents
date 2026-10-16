@@ -55,8 +55,12 @@ namespace BannerlordAgents
         public string BesiegedBy;
         public string Besieger;
         public int Garrison;
-        /// <summary>The watched realm's own castles and towns only: the garrison's strength, the game's own estimate.</summary>
-        public float GarrisonStrength;
+        /// <summary>
+        /// The watched realm's and its allies' castles and towns only: the garrison's and the militia's strength (the
+        /// game's own estimate) and the walls' level (1 to 3), which decide whether the place would hold an assault.
+        /// </summary>
+        public float GarrisonStrength, MilitiaStrength;
+        public int WallLevel;
         public int Militia;
         public string VillageState;
         public string Bound;

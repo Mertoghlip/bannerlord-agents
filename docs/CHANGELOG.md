@@ -383,3 +383,23 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room was stopped at 19:29:42 and 19:30:44 (idle) and restarted after each install;
   - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` (17 orders, new defend and patrol) and refreshed the older chat's `CLAUDE.md` (the same wording); the bridge's settings were unchanged.
 - **Not yet seen in a game:** the patrol within a radius, a refill, and the new shelter choices.
+
+## Friday, October 16
+
+### 15:19 · Version 0.6.2: shelter where the defence would hold, else run · commit (hash in the next commit; installed 15:19)
+- **Why:** Mert, on the danger rule: "IF the strength of all lords defending a place + the garrison of the sheltering location is enough to defend it against the opposing force, they SHOULD shelter there. If not, they should run." 0.6.1 never weighed whether a place would hold: it simply kept lords out of the castle the enemy marched on, and out of defend's own holding.
+- **What:**
+  - **Would it hold?** By the game's own test for whether besiegers should assault (read in 1.4.8): the defenders (garrison, militia, the realm's lords inside, the realm's lords holding a defend or garrison order for it within 20, and the lord itself), times what the walls are worth (2.4, 2.8 or 3.2 for wall levels 1 to 3, with a ram and two towers built), against the danger and every force threatening that place. The bridge now copies the militia's strength and the walls' level for the realm's and its allies' castles and towns.
+  - **The danger rule:**
+    - shelter in the first castle or town the lord reaches before the enemy (by both sides' speed) that would hold, even the one the enemy is marching on;
+    - if none would, fall back toward the nearest one it reaches first that is farther from the enemy (never the one the enemy marches on), stopping outside; if none, straight away from the enemy. It reconsiders every hour.
+    - A lord inside a place that would not hold now leaves; in a village it is treated as in the open.
+  - **defend** shelters inside its own holding when the defence would hold (even to reinforce it under siege), else in the nearest place that would; `stay_inside` 1 now means "inside whatever the odds".
+  - **garrison** gets `stay_inside` 1, so a garrisoning lord never walks out.
+  - The agent is told which it did and why, with the numbers.
+- **Checks:**
+  - the smoke test passed in full (109 checks; 3 new, 4 rewritten for the new rule) and the war room's self-test too (38);
+  - 351 game references, 0 missing;
+  - the installed DLL has sha256 `7908EFDBAA786E4A…`.
+- **Outside the repository:** `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` (the danger rule's and defend's descriptions, garrison's new setting). The war room was not running and was left off.
+- **Not yet seen in a game:** a lord running from a place that would not hold, or reinforcing one that would.

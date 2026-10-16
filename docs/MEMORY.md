@@ -125,7 +125,7 @@ This is the experiment behind the choice: answer time, usage, and the quality of
   - both memories' messages and instructions;
   - when a story is due;
   - the replay's view of what is now quiet.
-- The smoke test (106 checks since 0.6.1) covers the bridge's side:
+- The smoke test (109 checks since 0.6.2) covers the bridge's side:
   - the game's history first, marked;
   - notices, orders and refusals in the chronicle, and fights with bandits kept out;
   - a lord set free kept without a poke;

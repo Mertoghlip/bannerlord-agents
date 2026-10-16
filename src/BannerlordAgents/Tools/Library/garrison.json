@@ -4,6 +4,9 @@
   "about": "Goes inside one of your or an ally's castles or towns and stays there.",
   "calls_back": "the holding is besieged, or it falls",
   "at": "friendly_fort",
+  "settings": {
+    "stay_inside": [1, 0, 1, "1: stays inside even when an enemy comes that the place would not hold against; 0: leaves then, and shelters where the defence would hold or falls back"]
+  },
   "init": { "reported": "false" },
   "start": "go",
   "states": {

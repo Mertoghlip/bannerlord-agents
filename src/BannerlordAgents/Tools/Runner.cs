@@ -44,8 +44,9 @@ namespace BannerlordAgents.Tools
         public bool Entered, Finished;
         public Move Current, Pending;
         public bool HasCurrent, HasPending;
-        /// <summary>The safety rule: where the lord shelters and from whom; or where it buys food.</summary>
+        /// <summary>The safety rule: where the lord shelters and from whom (Running: no refuge would hold, so it falls back outside); or where it buys food.</summary>
         public string Shelter, ShelterFrom, SupplyAt;
+        public bool Running;
         public double AsideSince;
         public int Steps;
         public string LastStep;
@@ -291,6 +292,9 @@ namespace BannerlordAgents.Tools
 
         // ---------- the two rules every order carries ----------
 
+        /// <summary>The shelter of a lord running straight away from a danger, with no place to make for.</summary>
+        private const string Away = "(away)";
+
         private static bool Safety(ToolInstance t, PartyRow me, World w, Scope scope)
         {
             double caution = t.Def.Safety && t.Settings.TryGetValue("caution", out double c) ? c : 0;
@@ -300,36 +304,93 @@ namespace BannerlordAgents.Tools
             // striking a siege camp: every lord camped in that siege is part of the fight the order chose, not a danger to flee
             string siege = t.Current.Verb == "engage" ? w.Party(t.Current.Party)?.Besieging : null;
             bool Spared(PartyRow e) => spare.Contains(e.Id) || (siege != null && e.Besieging == siege);
+            PartyRow Danger(double within) => w.ThreatsInView(me.Id, within).Where(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
+                                                 .OrderByDescending(World.StrengthOf).FirstOrDefault();
+            // the order's own holding: always the shelter with stay_inside 1 (garrison's default); tried first, and kept only
+            // if it would hold, with stay_inside 0 (defend's default)
+            SettlementRow own = w.Holding(t.Order.At);
+            bool hasStay = t.Settings.TryGetValue("stay_inside", out double si);
+            bool alwaysOwn = hasStay && si > 0 && World.IsFort(own) && !w.Besieged(own);
+            string preferred = hasStay && World.IsFort(own) ? own.Id : null;
             if (t.Shelter != null)
             {
-                bool still = caution > 0 && w.ThreatsInView(me.Id, radius * 1.5).Any(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine));
-                if (still || w.Hours - t.AsideSince < 2) return true;
-                string was = t.Shelter;
-                t.Shelter = t.ShelterFrom = null;
-                Log(t, "sheltering", t.State, "the danger passed");
-                Resume(t, scope, w);
-                Diag.Event("tool", "resumed", new { id = t.Id, lord = t.Order.Lord, from = was });
-                return false;
+                PartyRow still = caution > 0 ? Danger(radius * 1.5) : null;
+                if (still == null && w.Hours - t.AsideSince >= 2)
+                {
+                    string was = t.Shelter;
+                    t.Shelter = t.ShelterFrom = null;
+                    t.Running = false;
+                    Log(t, "sheltering", t.State, "the danger passed");
+                    Resume(t, scope, w);
+                    Diag.Event("tool", "resumed", new { id = t.Id, lord = t.Order.Lord, from = was });
+                    return false;
+                }
+                // running from a danger no refuge would hold against: keep running from where the lord is now, and take a
+                // refuge that would hold as soon as one is in reach
+                if (still != null && t.Running && me.InSettlement == null && !me.InBattle) Shelter(t, me, w, still, mine, alwaysOwn ? own : null, preferred, again: true);
+                return true;
             }
-            if (caution <= 0 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
-            PartyRow danger = w.ThreatsInView(me.Id, radius).Where(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
-                               .OrderByDescending(World.StrengthOf).FirstOrDefault();
+            if (caution <= 0 || me.InBattle || me.Besieging != null) return false;
+            SettlementRow inside = w.Holding(me.InSettlement);
+            if (inside != null && World.IsFort(inside) && w.Besieged(inside)) return false;   // inside a besieged place: it cannot leave
+            PartyRow danger = Danger(radius);
             if (danger == null) return false;
-            // not into the place the danger is marching to besiege (it would trap the lord), nor, for an order told not to
-            // stay inside its own holding (defend's stay_inside 0), into that holding
-            string marchedOn = danger.Besieging ?? (danger.Doing == "BesiegeSettlement" || danger.Doing == "AssaultSettlement" ? danger.TargetSettlement : null);
-            string own = t.Order.At != null && t.Settings.TryGetValue("stay_inside", out double si) && si <= 0 ? t.Order.At : null;
-            SettlementRow fort = w.NearestFort(me.Id, h => h.Id != marchedOn && h.Id != own) ?? w.NearestFort(me.Id, h => h.Id != marchedOn) ?? w.NearestFort(me.Id);
-            if (fort == null) return false;
+            if (inside != null && World.IsFort(inside))
+            {
+                // inside a castle or town: stay if it would hold (or the order is told to stay in its own holding); else run
+                if ((alwaysOwn && inside.Id == own.Id) || w.Holds(inside, me.Id, World.StrengthOf(danger) + w.ThreatStrength(inside.Id, World.HoldRadius, danger.Id))) return false;
+            }
+            return Shelter(t, me, w, danger, mine, alwaysOwn ? own : null, preferred, again: false);
+        }
+
+        /// <summary>
+        /// The lord takes shelter from a danger, or runs from it (World.ChooseRefuge): inside the first castle or town it can
+        /// reach whose defenders, with it, would hold against the danger and every force near that place; if none would,
+        /// toward the nearest one that takes it farther from the danger, stopping outside. The agent is told which, and why.
+        /// </summary>
+        private static bool Shelter(ToolInstance t, PartyRow me, World w, PartyRow danger, double mine, SettlementRow forced, string preferred, bool again)
+        {
+            bool holds = forced != null, running = false;
+            SettlementRow fort = forced ?? w.ChooseRefuge(me.Id, preferred, World.HoldRadius, danger, out holds, out running);
+            if (fort == null)
+            {
+                // nowhere it can reach before the danger: straight away from it, twice the danger radius, again each hour
+                double dx = me.X - danger.X, dy = me.Y - danger.Y, len = Math.Sqrt(dx * dx + dy * dy);
+                if (len < 0.01) { dx = 1; dy = 0; len = 1; }
+                double far = Math.Max(12, 2 * (t.Settings.TryGetValue("danger_radius", out double dr) ? dr : Library.DangerRadius.Default));
+                bool first = t.Shelter == null;
+                t.Shelter = Away;
+                t.ShelterFrom = danger.Id;
+                t.Running = true;
+                if (!again) t.AsideSince = w.Hours;
+                t.Pending = new Move { Verb = "toward", X = (float)(me.X + dx / len * far), Y = (float)(me.Y + dy / len * far) };
+                t.HasPending = true;
+                if (first)
+                {
+                    Diag.Count("tool:ran");
+                    Poke(t, t.Order.LordName + " is falling back, away from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against " + Text.N((int)mine)
+                            + "): no castle or town it can reach before the enemy would hold against it, so it keeps out of reach in the open. The order resumes once the danger has passed.", w);
+                    Log(t, t.State, "running", "no refuge it could reach before the danger");
+                }
+                return true;
+            }
+            if (again && fort.Id == t.Shelter && running == t.Running) return true;   // the same plan as last hour
             t.Shelter = fort.Id;
             t.ShelterFrom = danger.Id;
-            t.AsideSince = w.Hours;
-            t.Pending = new Move { Verb = "enter", Place = fort.Id };
+            t.Running = running;
+            if (!again) t.AsideSince = w.Hours;
+            t.Pending = new Move { Verb = running ? "near" : "enter", Place = fort.Id };
             t.HasPending = true;
-            Diag.Count("tool:sheltered");
-            Poke(t, t.Order.LordName + " is sheltering in " + w.Name(fort.Id) + " from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against "
-                    + Text.N((int)mine) + "); the order resumes once the danger has passed.", w);
-            Log(t, t.State, "sheltering", "an enemy " + ToolDef.Num(caution) + " times stronger within " + ToolDef.Num(radius));
+            Diag.Count(running ? "tool:ran" : "tool:sheltered");
+            double opposing = World.StrengthOf(danger) + w.ThreatStrength(fort.Id, World.HoldRadius, danger.Id);
+            string why = running
+                ? t.Order.LordName + " is falling back toward " + w.Name(fort.Id) + ", away from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against "
+                  + Text.N((int)mine) + "): no castle or town it could reach first would hold against it, so it stays out of reach rather than be trapped inside."
+                : t.Order.LordName + " is sheltering in " + w.Name(fort.Id) + " from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against "
+                  + Text.N((int)mine) + "): " + (forced != null ? "its order keeps it inside." : "its defenders with " + t.Order.LordName + ", strength " + Text.N((int)w.DefenceStrength(fort, me.Id))
+                  + " behind walls worth " + ToolDef.Num(Math.Round(World.WallFactor(fort), 1)) + " times that, would hold against " + Text.N((int)opposing) + ".");
+            Poke(t, why + " The order resumes once the danger has passed.", w);
+            Log(t, t.State, running ? "running" : "sheltering", "an enemy stronger than its caution allows, within its danger radius");
             return true;
         }
 
@@ -399,7 +460,7 @@ namespace BannerlordAgents.Tools
             {
                 var scope = new Scope(t, w);
                 StateDef st = t.State != null && t.Def.States.TryGetValue(t.State, out StateDef s) ? s : null;
-                string doing = t.Shelter != null ? "sheltering in " + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom) + " (resumes once it has passed)"
+                string doing = t.Shelter != null ? (t.Shelter == Away ? "falling back, away from " + w.Name(t.ShelterFrom) : (t.Running ? "falling back toward " : "sheltering in ") + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom)) + " (resumes once it has passed)"
                              : t.SupplyAt != null ? "buying food at " + w.Name(t.SupplyAt) + " (resumes after)"
                              : st?.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : (t.State ?? "starting");
                 var what = new StringBuilder(t.Def.Name);
@@ -525,6 +586,8 @@ namespace BannerlordAgents.Tools
                     case "enemy_strength_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Sum(World.StrengthOf);
                     case "threat_near": return _w.ThreatStrength(Id(a[0]), Expr.Number(a[1]));
                     case "other_fort": return _w.OtherFort(Id(a[0]), _t.Order.Party)?.Id;
+                    case "refuge": return _w.ChooseRefuge(_t.Order.Party, Id(a[0]), Expr.Number(a[1]), null, out _, out _)?.Id;
+                    case "would_hold": { SettlementRow h = H(a[0]); return h != null && World.IsFort(h) && _w.Holds(h, _t.Order.Party, _w.ThreatStrength(h.Id, Expr.Number(a[1]))); }
                     case "strongest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     case "weakest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;

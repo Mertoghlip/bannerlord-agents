@@ -48,6 +48,8 @@ namespace BannerlordAgents
                 factions[k.StringId] = k;
             }
             long t1 = Perf.Now();
+            var allies = new HashSet<Kingdom>();
+            if (watched != null) foreach (Kingdom a in watched.AlliedKingdoms) if (a != null) allies.Add(a);
 
             foreach (Settlement s in Settlement.All)
             {
@@ -73,8 +75,15 @@ namespace BannerlordAgents
                 {
                     PartyBase g = s.Town.GarrisonParty?.Party;
                     r.Garrison = g?.NumberOfHealthyMembers ?? 0;
-                    // the game keeps this estimate until the garrison changes; only the watched realm's tools weigh it
-                    if (g != null && watched != null && f == watched) r.GarrisonStrength = (float)Math.Round(g.EstimatedStrength);
+                    // the game keeps these estimates until the party changes; only the watched realm's tools weigh them, for its
+                    // own and its allies' castles and towns (whether a place would hold an assault)
+                    if (watched != null && (f == watched || (f is Kingdom fk && allies.Contains(fk))))
+                    {
+                        if (g != null) r.GarrisonStrength = (float)Math.Round(g.EstimatedStrength);
+                        MobileParty militia = s.MilitiaPartyComponent?.MobileParty;
+                        if (militia != null && militia.IsActive) r.MilitiaStrength = (float)Math.Round(militia.Party.EstimatedStrength);
+                        r.WallLevel = s.Town.GetWallLevel();
+                    }
                 }
                 if (s.Village != null)
                 {

@@ -293,10 +293,11 @@ namespace SmokeTest
             moves.Clear();
             Runner.Start(902, new ToolOrder { Tool = "goto", Lord = "lord_azog", LordName = "Azog", Party = "p_azog", At = "castle_men" });
             Check(moves.Any(m => m.Key == 902 && m.Value.Verb == "near" && m.Value.Place == "castle_men"), "goto to an enemy holding stops close to it, not inside");
-            var hunter = new PartyRow { Id = "p_hunter", Leader = "lord_hunter", Name = "Elrohir", Faction = "player_k", Kind = "lord", Men = 500, Strength = 700, Speed = 6, X = 133, Y = 101, Doing = "Hold", Spottable = true };
+            var hunter = new PartyRow { Id = "p_hunter", Leader = "lord_hunter", Name = "Elrohir", Faction = "player_k", Kind = "lord", Men = 500, Strength = 700, Speed = 6, X = 124, Y = 101, Doing = "Hold", Spottable = true };
             moves.Clear();
             Brain.OnHour(ToolWorld(3008, bolg, azog, hunter));
-            Check(moves.Any(m => m.Key == 902 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "a lord on an order shelters in the nearest friendly castle from an enemy far stronger");
+            Check(moves.Any(m => m.Key == 902 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"),
+                  "a lord on an order shelters from an enemy far stronger in the nearest castle it reaches first whose defenders, with it, would hold");
             Check(Runner.InForce(Runner.WorldFor(ToolWorld(3008, bolg, azog, hunter))).Contains("sheltering in Orc Keep from Elrohir"), "the orders in force say who is sheltering, and from whom");
 
             // gather, then relieve: the army forms once its lord has come, and the next order starts
@@ -557,14 +558,22 @@ namespace SmokeTest
             Check(chased && moves.Any(m => m.Key == 915 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "a chase is broken off, into the nearest other castle, when a strong force comes into the area");
             Runner.Ended(915, "test over");
 
-            // the danger rule counts bandits
-            var lone = Lord("p_lone", 60, 40, 200, 60);
-            var band = new PartyRow { Id = "p_band", Name = "Sea Raiders", Faction = "looters", Kind = "bandit", Men = 80, Strength = 200, Speed = 5, X = 64, Y = 100, Doing = "Hold", Spottable = true };
+            // the danger rule counts bandits: a weak lord shelters in a castle that would hold against them...
+            var lone = Lord("p_lone", 92, 40, 200, 60);
+            var band = new PartyRow { Id = "p_band", Name = "Sea Raiders", Faction = "looters", Kind = "bandit", Men = 80, Strength = 200, Speed = 5, X = 86, Y = 100, Doing = "Hold", Spottable = true };
             Brain.OnHour(ToolWorld(5005, lone, band));
             moves.Clear();
             Runner.Start(916, new ToolOrder { Tool = "goto", Lord = "lord_p_lone", LordName = "Lone", Party = "p_lone", At = "castle_two" });
-            Check(moves.Any(m => m.Key == 916 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"), "the danger rule shelters a weak lord from a strong band of bandits too");
+            Check(moves.Any(m => m.Key == 916 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"), "the danger rule shelters a weak lord from a strong band of bandits, in a castle whose defenders would hold");
             Runner.Ended(916, "test over");
+            // ... and runs straight away from them when they stand nearer than it to every castle
+            var cut = Lord("p_cut", 60, 40, 200, 60);
+            var band2 = new PartyRow { Id = "p_band2", Name = "Sea Raiders", Faction = "looters", Kind = "bandit", Men = 80, Strength = 200, Speed = 5, X = 64, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(5005.5, cut, band2));
+            moves.Clear();
+            Runner.Start(919, new ToolOrder { Tool = "goto", Lord = "lord_p_cut", LordName = "Cut", Party = "p_cut", At = "castle_two" });
+            Check(moves.Any(m => m.Key == 919 && m.Value.Verb == "toward" && m.Value.X < 60), "with no castle it can reach before the enemy, a lord falls back straight away from it");
+            Runner.Ended(919, "test over");
 
             // ... but not from the other lords of a siege camp the order is striking
             var s1 = new PartyRow { Id = "p_s1", Leader = "lord_s1", Name = "Elrohir", Faction = "player_k", Kind = "lord", Men = 400, Strength = 500, Speed = 4, X = 101, Y = 102, Besieging = "castle_orc", Doing = "BesiegeSettlement", Spottable = true };
@@ -582,14 +591,39 @@ namespace SmokeTest
             Check(struck && !moves.Any(m => m.Key == 917 && m.Value.Verb == "enter"), "the danger rule does not turn a relief back from the siege camp it is striking");
             Runner.Ended(917, "test over");
 
-            // ... and never shelters a lord in the castle the danger is marching to besiege
+            // the castle the danger marches to besiege: inside it if its garrison and the lord, behind its walls, would hold it
+            // (600 + 300, times 2.4 for level-1 walls, against 2,000)...
             var near = Lord("p_near", 104, 200, 250, 300);
             var marcher = new PartyRow { Id = "p_march", Leader = "lord_march", Name = "Faramir", Faction = "player_k", Kind = "lord", Men = 1500, Strength = 2000, Speed = 4, X = 110, Y = 100, Doing = "BesiegeSettlement", TargetSettlement = "castle_orc", Spottable = true };
             Brain.OnHour(ToolWorld(5008, near, marcher));
             moves.Clear();
             Runner.Start(918, new ToolOrder { Tool = "goto", Lord = "lord_p_near", LordName = "Near", Party = "p_near", At = "village_orc" });
-            Check(moves.Any(m => m.Key == 918 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "the danger rule shelters a lord elsewhere than the castle the danger marches to besiege");
+            Check(moves.Any(m => m.Key == 918 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc"), "a lord shelters in the castle the danger marches on when its defenders, with the lord, would hold it");
             Runner.Ended(918, "test over");
+            // ... and runs, never toward that castle, when they would not (against 4,000)
+            var near2 = Lord("p_near2", 104, 200, 250, 300);
+            var marcher2 = new PartyRow { Id = "p_march2", Leader = "lord_march2", Name = "Faramir", Faction = "player_k", Kind = "lord", Men = 3000, Strength = 4000, Speed = 4, X = 110, Y = 100, Doing = "BesiegeSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            Brain.OnHour(ToolWorld(5008.5, near2, marcher2));
+            moves.Clear();
+            Runner.Start(920, new ToolOrder { Tool = "goto", Lord = "lord_p_near2", LordName = "Near2", Party = "p_near2", At = "village_orc" });
+            Check(moves.Any(m => m.Key == 920 && m.Value.Verb == "toward" && m.Value.X < 104) && !moves.Any(m => m.Key == 920 && m.Value.Place == "castle_orc"),
+                  "and runs, not into that castle, when they would not hold it");
+            Runner.Ended(920, "test over");
+
+            // inside a castle that would not hold: a garrison stays (its order), a resting lord leaves for a place out of reach
+            var keep = Lord("p_keep", 140, 250, 300, 300);
+            keep.InSettlement = "castle_two";
+            var rester = Lord("p_rest", 140, 150, 300, 200);
+            rester.InSettlement = "castle_two";
+            var horde = new PartyRow { Id = "p_horde", Leader = "lord_horde", Name = "Eomer", Faction = "player_k", Kind = "lord", Men = 3000, ArmyMen = 3000, ArmyParties = 4, ArmyStrength = 4000, Strength = 1500, Speed = 4, X = 146, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(5009, keep, rester, horde));
+            moves.Clear();
+            Runner.Start(921, new ToolOrder { Tool = "garrison", Lord = "lord_p_keep", LordName = "Keep", Party = "p_keep", At = "castle_two" });
+            Runner.Start(922, new ToolOrder { Tool = "rest", Lord = "lord_p_rest", LordName = "Rest", Party = "p_rest", At = "castle_two" });
+            Check(!moves.Any(m => m.Key == 921 && m.Value.Verb != "enter") && moves.Any(m => m.Key == 922 && m.Value.Verb == "near" && m.Value.Place == "castle_orc"),
+                  "inside a castle that would not hold: a garrison stays, a resting lord falls back toward a place out of the enemy's reach");
+            Runner.Ended(921, "test over");
+            Runner.Ended(922, "test over");
 
             // an army that walked out of sight is still a threat where it was last seen, for six hours
             var shadow = new PartyRow { Id = "p_shadow", Leader = "lord_shadow", Name = "Eomer", Faction = "player_k", Kind = "lord", Men = 1600, ArmyMen = 1600, ArmyParties = 2, ArmyStrength = 2000, Strength = 1100, Speed = 4, X = 105, Y = 100, Doing = "Hold", Spottable = true };
@@ -618,8 +652,8 @@ namespace SmokeTest
             s.FactionNames["player_k"] = "Kingdom of Arnor and Gondor";
             s.HostileToWatched.Add("player_k");
             s.HostileToPlayer.Add("orcs");
-            Add(s, new SettlementRow { Id = "castle_orc", Name = "Orc Castle", Kind = "castle", Faction = "orcs", X = 100, Y = 100, Garrison = 450, Militia = 120 });
-            Add(s, new SettlementRow { Id = "castle_two", Name = "Orc Keep", Kind = "castle", Faction = "orcs", X = 140, Y = 100, Garrison = 200, Militia = 80 });
+            Add(s, new SettlementRow { Id = "castle_orc", Name = "Orc Castle", Kind = "castle", Faction = "orcs", X = 100, Y = 100, Garrison = 450, GarrisonStrength = 600, Militia = 120, WallLevel = 1 });
+            Add(s, new SettlementRow { Id = "castle_two", Name = "Orc Keep", Kind = "castle", Faction = "orcs", X = 140, Y = 100, Garrison = 200, GarrisonStrength = 250, Militia = 80, WallLevel = 1 });
             Add(s, new SettlementRow { Id = "village_orc", Name = "Orc Village", Kind = "village", Faction = "orcs", X = 110, Y = 104, Militia = 40, Bound = "castle_orc", VillageState = "Normal" });
             Add(s, new SettlementRow { Id = "castle_men", Name = "Fornost", Kind = "castle", Faction = "player_k", X = 170, Y = 100, Garrison = 600, Militia = 200 });
             Add(s, new SettlementRow { Id = "village_men", Name = "Bree", Kind = "village", Faction = "player_k", X = 160, Y = 110, Militia = 30, Bound = "castle_men", VillageState = "Normal" });
