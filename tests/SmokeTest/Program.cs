@@ -375,6 +375,7 @@ namespace SmokeTest
 
             FactsTests(dir, agentDir, moves, released, thens);
             DefendTests(moves, released);
+            RefillAndReportTests(moves);
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
@@ -634,6 +635,88 @@ namespace SmokeTest
             much.WatchedSees.Remove("p_shadow");
             double recent = Runner.WorldFor(later).ThreatStrength("castle_orc", 20), stale = Runner.WorldFor(much).ThreatStrength("castle_orc", 20);
             Check(recent == 2000 && stale == 0, "an army out of sight counts where it was last seen for six hours (" + recent + " two hours on, " + stale + " eight hours on)");
+        }
+
+        /// <summary>
+        /// Version 0.6.3: defend refills only when the lord is not needed where it is (never an army's leader, never with an
+        /// enemy lord within twice its radius of the holding), breaks off when enemies come, and leaves a place that yields
+        /// few recruits in 12 hours, trying again two days later; the report lists every enemy army in view however many
+        /// bandits are near, and says what each castle and town would hold against.
+        /// </summary>
+        private static void RefillAndReportTests(List<KeyValuePair<int, Move>> moves)
+        {
+            PartyRow Lord(string id, float x, int men, int limit, float strength) => new PartyRow
+            {
+                Id = id, Leader = "lord_" + id, Name = id, Faction = "orcs", Kind = "lord", Men = men, SizeLimit = limit, Strength = strength, Speed = 4, FoodDays = 10, X = x, Y = 100, Doing = "Hold", Spottable = true
+            };
+            ToolOrder Defend(int id, string party) => new ToolOrder { Tool = "defend", Lord = "lord_" + party, LordName = party, Party = party, At = "castle_two" };
+            string InForce(Snapshot s) => Runner.InForce(Runner.WorldFor(s));
+
+            // an army's leader never leaves to refill, however thin its own ranks
+            var lead = Lord("p_lead", 125, 60, 300, 120);
+            lead.ArmyLeader = "p_lead";
+            lead.ArmyMen = 700;
+            lead.ArmyParties = 4;
+            lead.ArmyStrength = 900;
+            Brain.OnHour(ToolWorld(5020, lead));
+            moves.Clear();
+            Runner.Start(923, Defend(923, "p_lead"));
+            Check(!moves.Any(m => m.Key == 923 && m.Value.Verb == "recruit") && InForce(ToolWorld(5020, lead)).Contains("patrolling"), "an army's leader does not leave to refill, however thin its own ranks");
+            Runner.Ended(923, "test over");
+
+            // a lone thin lord stays while an enemy lord is within twice its radius of the holding (32 away, radius 20)...
+            var thin = Lord("p_thin", 130, 50, 300, 70);
+            var watcher = new PartyRow { Id = "p_wt", Leader = "lord_wt", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 40, Strength = 60, Speed = 5, X = 172, Y = 100, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(5021, thin, watcher));
+            moves.Clear();
+            Runner.Start(924, Defend(924, "p_thin"));
+            bool stayed = !moves.Any(m => m.Key == 924 && m.Value.Verb == "recruit");
+            // ... refills once it has gone...
+            moves.Clear();
+            Brain.OnHour(ToolWorld(5022, thin));
+            bool went = moves.Any(m => m.Key == 924 && m.Value.Verb == "recruit" && m.Value.Place == "village_orc");
+            Check(stayed && went, "a lone thin lord does not leave to refill while an enemy lord is near the holding, and goes once it has gone");
+            // ... and breaks off when an enemy lord comes near the holding
+            var comer = new PartyRow { Id = "p_cm", Leader = "lord_cm", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 40, Strength = 60, Speed = 5, X = 150, Y = 100, Doing = "Hold", Spottable = true };
+            moves.Clear();
+            Brain.OnHour(ToolWorld(5023, thin, comer));
+            Check(moves.Any(m => m.Key == 924 && m.Value.Verb == "patrol") && !InForce(ToolWorld(5023, thin, comer)).Contains("refilling"), "a lord refilling breaks off when an enemy lord comes near the holding");
+            Runner.Ended(924, "test over");
+
+            // a place that yields few recruits in 12 hours: back to defending, and no new try for two days
+            var dry = Lord("p_dry", 110, 50, 300, 70);
+            dry.Y = 104;
+            Brain.OnHour(ToolWorld(5030, dry));
+            Runner.Start(925, Defend(925, "p_dry"));
+            bool refilling = InForce(ToolWorld(5030, dry)).Contains("refilling its ranks at Orc Village");
+            for (int h = 5031; h <= 5041; h++) Brain.OnHour(ToolWorld(h, dry));
+            bool stillAt11 = InForce(ToolWorld(5041, dry)).Contains("refilling");
+            moves.Clear();
+            Brain.OnHour(ToolWorld(5042, dry));
+            bool back = moves.Any(m => m.Key == 925 && m.Value.Verb == "patrol");
+            for (int h = 5043; h <= 5050; h++) Brain.OnHour(ToolWorld(h, dry));
+            bool waits = InForce(ToolWorld(5050, dry)).Contains("patrolling");
+            Check(refilling && stillAt11 && back && waits, "a lord leaves a place that yields few recruits after 12 hours there, and does not try again at once ("
+                  + refilling + ", " + stillAt11 + ", " + back + ", " + waits + ")");
+            Runner.Ended(925, "test over");
+
+            // the report: an enemy army far off is listed though 45 bands of bandits near the holdings would fill the list
+            var crowd = new List<PartyRow>();
+            for (int i = 0; i < 45; i++)
+                crowd.Add(new PartyRow { Id = "p_bd" + i, Name = "Looters", Faction = "looters", Kind = "bandit", Men = 10, Strength = 12, Speed = 4, X = 100 + i * 0.1f, Y = 101, Doing = "Hold", Spottable = true });
+            crowd.Add(new PartyRow
+            {
+                Id = "p_aragorn", Leader = "lord_aragorn", Name = "Aragorn", Faction = "player_k", Kind = "lord", Men = 900, ArmyLeader = "p_aragorn", ArmyMen = 5532, ArmyParties = 15,
+                ArmyStrength = 14695, Strength = 2000, Speed = 3, X = 190, Y = 140, Doing = "GoToPoint", Spottable = true
+            });
+            Snapshot cs = ToolWorld(5060, crowd.ToArray());
+            View cv = Views.Build(cs, "orcs", cs.WatchedSees, cs.HostileToWatched, null);
+            string report = Views.Report(cv, null);
+            Check(cv.Seen.Count == 40 && cv.SeenNotListed == 6 && cv.Seen[0].Id == "p_aragorn" && report.Contains("army of 5,532 men, strength 14,695"),
+                  "the report lists an enemy army in view first, whatever the bandits near the holdings (" + cv.Seen.Count + " listed, " + cv.SeenNotListed + " not)");
+            // and what each castle would hold against: garrison 600 behind level-1 walls (worth 2.43) holds against up to 1,457
+            Check(report.Contains("Orc Castle [castle_orc] (castle): garrison 450, militia 120; walls level 1; defenders' strength 600, so it holds against besiegers up to strength 1,457"),
+                  "the report says what each castle or town would hold against");
         }
 
         private sealed class TestScope : IScope

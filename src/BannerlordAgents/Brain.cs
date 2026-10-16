@@ -225,7 +225,7 @@ namespace BannerlordAgents
                 {
                     Hours = s.Hours, Kind = "enemy_in_view", Party = r.Id,
                     Text = "Enemy " + (r.ArmyMen > 0 ? "army" : "lord") + " in view: " + vp.Name + " (" + vp.FactionName + "), "
-                           + Text.N(men) + " men, " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + "."
+                           + Text.N(men) + " men, strength " + Text.N((int)Math.Round(vp.Strength)) + ", " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + "."
                 };
                 triggers.Add(sighting);
                 if (!isPlayer) Sighted(m, s, r, vp);

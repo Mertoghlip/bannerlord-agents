@@ -82,7 +82,7 @@ namespace BannerlordAgents.Tools
             ["besieged"] = 1, ["siege_strength"] = 1, ["inside_strength"] = 1, ["relief_strength"] = 1, ["besieger"] = 1, ["raided"] = 1, ["looted"] = 1,
             ["ours"] = 1, ["hostile"] = 1, ["friendly"] = 1,
             ["enemies_near"] = 2, ["enemy_strength_near"] = 2, ["strongest_enemy_near"] = 2, ["weakest_enemy_near"] = 2, ["nearest_enemy"] = 2, ["army_near"] = 2,
-            ["threat_near"] = 2, ["other_fort"] = 1, ["refuge"] = 2, ["would_hold"] = 2,
+            ["threat_near"] = 2, ["enemy_threat_near"] = 2, ["other_fort"] = 1, ["refuge"] = 2, ["would_hold"] = 2,
             ["strength_of"] = 1, ["men_of"] = 1, ["in_view"] = 1, ["seen_ago"] = 1, ["gone"] = 1,
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
             ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1

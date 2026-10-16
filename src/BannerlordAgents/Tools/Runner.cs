@@ -80,6 +80,17 @@ namespace BannerlordAgents.Tools
         {
             if (ById.Count > 0) Diag.Event("tool", "cleared", new { count = ById.Count });
             ById.Clear();
+            NamesSeen.Clear();
+        }
+
+        /// <summary>The names of the parties tools act on, kept for the call-back once a party is gone and the world no longer knows it.</summary>
+        private static readonly Dictionary<string, string> NamesSeen = new Dictionary<string, string>();
+
+        private static void RememberName(string id, World w)
+        {
+            if (id == null || w.Party(id) == null) return;
+            string name = w.Name(id);
+            if (name != id) NamesSeen[id] = name;
         }
 
         /// <summary>A fresh id for a tool instance (game's thread, when it takes an order).</summary>
@@ -178,6 +189,8 @@ namespace BannerlordAgents.Tools
             PartyRow me = w.Party(t.Order.Party);
             if (me == null || me.Attached) return;   // gone (the game's thread ends the order and tells us), or marching in another's army
             var scope = new Scope(t, w);
+            RememberName(t.Order.Target, w);
+            if (t.Memory.TryGetValue("target", out object mt)) RememberName(mt as string, w);
             if (!t.Entered)
             {
                 foreach (var kv in t.Def.Init) t.Memory[kv.Key] = kv.Value.Eval(scope);
@@ -446,7 +459,11 @@ namespace BannerlordAgents.Tools
         /// <summary>A value as the agent reads it: names for ids, whole numbers with separators.</summary>
         public static string Show(object v, World w)
         {
-            if (v is string id) return w.Name(id);
+            if (v is string id)
+            {
+                string name = w.Name(id);
+                return name == id && NamesSeen.TryGetValue(id, out string known) ? known : name;
+            }
             if (v is double d && !double.IsNaN(d)) return Math.Abs(d) >= 10 ? Text.N((int)Math.Round(d)) : Expr.Show(d);
             return Expr.Show(v);
         }
@@ -585,6 +602,7 @@ namespace BannerlordAgents.Tools
                     case "enemies_near": return (double)_w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Count;
                     case "enemy_strength_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Sum(World.StrengthOf);
                     case "threat_near": return _w.ThreatStrength(Id(a[0]), Expr.Number(a[1]));
+                    case "enemy_threat_near": return _w.EnemyThreat(Id(a[0]), Expr.Number(a[1]));
                     case "other_fort": return _w.OtherFort(Id(a[0]), _t.Order.Party)?.Id;
                     case "refuge": return _w.ChooseRefuge(_t.Order.Party, Id(a[0]), Expr.Number(a[1]), null, out _, out _)?.Id;
                     case "would_hold": { SettlementRow h = H(a[0]); return h != null && World.IsFort(h) && _w.Holds(h, _t.Order.Party, _w.ThreatStrength(h.Id, Expr.Number(a[1]))); }

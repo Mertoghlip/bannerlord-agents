@@ -108,6 +108,7 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - **A call that sends nothing for 45 s counts as stalled:** it is stopped and asked once more.
 - **An answer that types tool calls as text, or runs past 16,000 characters, counts as a runaway,** and is stopped and asked once more. This was seen when the instructions promised look-ups to a call that had no tools; now the look-ups section is dropped whenever reading is off.
 - **A poke from before the war room started** is answered only if it is under 2 minutes old.
+- **One war room per agent folder** (since 0.6.3): `WarRoom run` holds a lock for the folder while it runs (a named mutex, `LiveLock`). A second `run` stops at once, and `once` and `council` refuse while it runs. On Oct 16 a `once` started beside a running war room answered the first poke too, and the game carried out both answers' orders: two of the agent's army calls were refused and its siege host was split.
 
 ## Logs (`%LOCALAPPDATA%\BannerlordAgents\logs\warroom`)
 
@@ -126,7 +127,7 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 ## Other commands
 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
-- `WarRoom council`: a council of war sits now (the game must be running).
+- `WarRoom council`: a council of war sits now (the game must be running, and no `WarRoom run` for the folder: that one holds its own councils).
 - `WarRoom selftest`: the memory and the council checked in a scratch folder, without any call (38 checks; `scripts\deploy.ps1` runs it before installing).
 
 ## Replay

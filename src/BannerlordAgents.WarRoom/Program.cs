@@ -18,6 +18,49 @@ namespace BannerlordAgents.WarRoom
     ///                                                 answers recorded pokes in order with the realm's memory carried along,
     ///                                                 to compare the two memories (docs/MEMORY.md)
     /// </summary>
+    /// <summary>
+    /// One war room answers an agent folder's pokes. "run" holds this lock (a named mutex, per folder) while it runs, and
+    /// "once" and "council" refuse to answer beside it: on Oct 16 a "once" beside a running war room answered the first
+    /// poke too, and the game carried out both answers' orders.
+    /// </summary>
+    internal static class LiveLock
+    {
+        private static string Name(Config c)
+        {
+            byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(c.AgentDir).TrimEnd('\\', '/').ToLowerInvariant()));
+            return @"Local\BannerlordAgents.WarRoom." + Convert.ToHexString(hash, 0, 8);
+        }
+
+        /// <summary>The lock for "run", or null when another war room holds it.</summary>
+        public static Mutex Take(Config c)
+        {
+            var m = new Mutex(false, Name(c));
+            try
+            {
+                if (m.WaitOne(0)) return m;
+            }
+            catch (AbandonedMutexException) { return m; }   // a war room that was killed: the lock is ours now
+            m.Dispose();
+            return null;
+        }
+
+        /// <summary>Is a war room running for this folder?</summary>
+        public static bool Running(Config c)
+        {
+            if (!Mutex.TryOpenExisting(Name(c), out Mutex m)) return false;
+            using (m)
+            {
+                try
+                {
+                    if (!m.WaitOne(0)) return true;
+                    m.ReleaseMutex();
+                    return false;
+                }
+                catch (AbandonedMutexException) { m.ReleaseMutex(); return false; }
+            }
+        }
+    }
+
     internal static class Program
     {
         private static int Main(string[] args)
@@ -28,10 +71,22 @@ namespace BannerlordAgents.WarRoom
             if (mode == "selftest") return SelfTest.Run();   // its own scratch folder: the live agent folder is never read or written
             string dir = Arg(args, "--dir");
             Config c = Config.Load(dir);
+            if ((mode == "once" || mode == "council") && LiveLock.Running(c))
+            {
+                Console.WriteLine("A war room is already answering the pokes of " + c.AgentDir + " (WarRoom run), so " + mode + " would answer beside it and the game "
+                                  + "would carry out both sets of orders. Leave it to the running war room, or stop that one first.");
+                return 1;
+            }
             switch (mode)
             {
                 case "run":
                     {
+                        using Mutex live = LiveLock.Take(c);
+                        if (live == null)
+                        {
+                            Console.WriteLine("A war room is already answering the pokes of " + c.AgentDir + "; this one stops, so no poke is answered twice.");
+                            return 1;
+                        }
                         var room = new Room(c);
                         using var cts = new CancellationTokenSource();
                         Console.CancelKeyPress += (s, e) => { e.Cancel = true; cts.Cancel(); };

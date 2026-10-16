@@ -58,6 +58,9 @@ namespace BannerlordAgents
         public string Threat;
         public int ThreatMen;
         public float ThreatDistance;
+        /// <summary>The realm's own castles and towns: wall level, the defenders' strength (garrison, militia, lords inside), and the besiegers' strength it holds against.</summary>
+        public int WallLevel;
+        public float Defence, LordsInside, HoldsUpTo;
     }
 
     /// <summary>The sections a poke adds before the report: what changed since the agent's last answer, its orders in force, ready-made facts.</summary>
@@ -100,8 +103,15 @@ namespace BannerlordAgents
                 string relation = enemy ? "enemy" : allies.Contains(r.Faction ?? "") ? "ally" : "neutral";
                 v.Seen.Add(Party(s, r, kv.Value, relation, own));
             }
-            v.Seen = v.Seen.OrderBy(x => x.Relation == "enemy" ? 0 : 1).ThenBy(x => x.HoldingDistance).ToList();
-            if (v.Seen.Count > 40) { v.SeenNotListed = v.Seen.Count - 40; v.Seen = v.Seen.Take(40).ToList(); }
+            // what the cap of 40 cuts first: bandits and others before any enemy lord, and an enemy army never (Oct 16: 15 to 24
+            // bands near the villages pushed Aragorn's army of 5,532 out of the list for days, though the realm saw it)
+            v.Seen = v.Seen.OrderBy(SeenRank).ThenBy(x => x.HoldingDistance).ToList();
+            if (v.Seen.Count > 40)
+            {
+                int keep = Math.Max(40, v.Seen.Count(x => SeenRank(x) == 0));
+                v.SeenNotListed = v.Seen.Count - keep;
+                v.Seen = v.Seen.Take(keep).ToList();
+            }
 
             foreach (SettlementRow h in own)
             {
@@ -266,10 +276,20 @@ namespace BannerlordAgents
             }
 
             sb.AppendLine().AppendLine("YOUR HOLDINGS (" + v.Holdings.Count + ")");
+            if (v.Holdings.Any(h => h.WallLevel > 0))
+                sb.AppendLine("A castle or town holds when its defenders' strength (garrison, militia and the lords inside) times what its walls are worth (2.4 at wall level 1, "
+                              + "2.8 at level 2, 3.2 at level 3) is at least its besiegers' strength: the game's own test for storming, once the besiegers have a ram and "
+                              + "siege towers built. Lords you shelter inside add their strength. Besiegers above that may storm at any hour, the sooner the stronger "
+                              + "they are; below it they wait, but after four days of siege the bar falls hour by hour, to the defenders' bare strength by about the "
+                              + "sixth day.");
             foreach (ViewHolding h in v.Holdings)
             {
                 var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ")");
                 if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + ", militia " + Text.N(h.Militia));
+                if (h.WallLevel > 0)
+                    line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
+                                + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")
+                                + ", so it holds against besiegers up to strength " + Text.N((int)Math.Round(h.HoldsUpTo)));
                 if (!string.IsNullOrEmpty(h.Status)) line.Append("; " + h.Status);
                 if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Text.D(h.ThreatDistance));
                 sb.AppendLine(line.Append('.').ToString());
@@ -297,7 +317,8 @@ namespace BannerlordAgents
             {
                 sb.AppendLine().AppendLine("SEEN EARLIER, NOW OUT OF SIGHT (" + v.LastSeen.Count + ")");
                 foreach (ViewParty p in v.LastSeen)
-                    sb.AppendLine("- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + Text.N(p.ArmyMen > 0 ? p.ArmyMen : p.Men) + " men, last seen " + Where(p)
+                    sb.AppendLine("- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + (p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) : Text.N(p.Men)) + " men, strength "
+                        + Text.N((int)p.Strength) + ", last seen " + Where(p)
                         + ", " + Math.Round(v.Hours - p.SeenHours) + " hours ago, " + p.Doing + ".");
             }
 
@@ -345,6 +366,9 @@ namespace BannerlordAgents
             return new { Forces = forces, Holdings = holdings };
         }
 
+        /// <summary>The order of the IN VIEW list: enemy armies, enemy lords, bandits, then allies and neutrals.</summary>
+        private static int SeenRank(ViewParty x) => x.Relation != "enemy" ? 3 : x.Kind == "bandit" ? 2 : x.ArmyMen > 0 ? 0 : 1;
+
         public static ViewParty Party(Snapshot s, PartyRow r, Sighting seen, string relation, List<SettlementRow> own)
         {
             var vp = new ViewParty
@@ -366,11 +390,26 @@ namespace BannerlordAgents
 
         public static ViewHolding Holding(Snapshot s, SettlementRow h, bool counted)
         {
-            return new ViewHolding
+            var vh = new ViewHolding
             {
                 Id = h.Id, Name = h.Name, Kind = h.Kind, Faction = h.Faction, FactionName = FactionName(s, h.Faction),
                 Garrison = counted ? h.Garrison : -1, Militia = h.Militia, X = h.X, Y = h.Y, Status = Status(s, h)
             };
+            if (counted && Tools.World.IsFort(h))
+            {
+                // the would-it-hold test of the tools (World.Holds), for the lords inside now: garrison, militia and the
+                // realm's and its allies' lords sheltering there, times what the walls are worth
+                HashSet<string> allies = s.Factions.TryGetValue(h.Faction ?? "", out FactionRow fr) ? new HashSet<string>(fr.Allies) : new HashSet<string>();
+                float inside = 0;
+                foreach (PartyRow r in s.Parties)
+                    if (r.Kind == "lord" && !r.Attached && r.InSettlement == h.Id && (r.Faction == h.Faction || allies.Contains(r.Faction ?? "")))
+                        inside += r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength;
+                vh.WallLevel = Math.Max(1, h.WallLevel);
+                vh.LordsInside = inside;
+                vh.Defence = h.GarrisonStrength + h.MilitiaStrength + inside;
+                vh.HoldsUpTo = (float)(vh.Defence * Tools.World.WallFactor(h));
+            }
+            return vh;
         }
 
         public static string Status(Snapshot s, SettlementRow h)

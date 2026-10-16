@@ -30,7 +30,7 @@ Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' a
 ### The session
 - Which build of the mod ran, with its file time and fingerprint.
 - The full mod list with versions, and every setting as read, including any line not understood.
-- A start-up self-check: the realm under watch and its lords, the war with you, the calendar, the game's sight rules, Party AI Controls' list, the game hooks, the log folder, the freeze probe, the agent's folder, and the helper's cores.
+- A start-up self-check: the realm under watch and its lords, the war with you, the calendar, the game's sight rules, Party AI Controls' list, the game hooks, whether held lords are kept from Party AI Controls' hourly look (0.6.3), the log folder, the freeze probe, the agent's folder, and the helper's cores.
 - Every console command typed, and the first line of its answer.
 - Every change of game speed, pause, battle, menu and screen, and every time the game window loses focus, in real and in-game time.
 - Loading another save: proof that nothing from the old one carried over.

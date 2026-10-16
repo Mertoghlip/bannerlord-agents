@@ -149,10 +149,15 @@ namespace BannerlordAgents.Tools
         /// and hostile lords and armies seen there within the last RecentHours, at the place they were last seen (an army
         /// that walked out of sight an hour ago has not gone away). A party known gone is not counted.
         /// </summary>
-        public double ThreatStrength(string place, double r, string except = null)
+        public double ThreatStrength(string place, double r, string except = null) => Threat(place, r, except, true);
+
+        /// <summary>The same without bandits: hostile lords and armies only, the forces that make a lord needed where it is.</summary>
+        public double EnemyThreat(string place, double r) => Threat(place, r, null, false);
+
+        private double Threat(string place, double r, string except, bool bandits)
         {
             if (!Where(place, out float px, out float py)) return 0;
-            double sum = ThreatsInView(place, r).Where(e => e.Id != except).Sum(StrengthOf);
+            double sum = (bandits ? ThreatsInView(place, r) : EnemiesNear(place, r)).Where(e => e.Id != except).Sum(StrengthOf);
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
                 ViewParty v = kv.Value;

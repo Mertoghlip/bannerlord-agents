@@ -15,8 +15,8 @@ using TaleWorlds.CampaignSystem.Settlements;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The only two places where the logs hook into the game's own code instead of just reading it. Each has its own
-    /// switch; if one cannot attach, it says so and everything else carries on.
+    /// The only places where we hook into the game's own code instead of just reading it. Each has its own switch; if
+    /// one cannot attach, it says so and everything else carries on.
     /// - The movement watcher (full detail only). Every movement command in the game passes through one common step,
     ///   MobileParty.ResetAllMovementParameters. When anything other than us calls it for a lord holding our order,
     ///   the log names who: the game calling him into an army, its rule that a lord fights an enemy attacking the
@@ -24,14 +24,21 @@ namespace BannerlordAgents
     /// - The AI's reasons. The game's hourly decision step for a party (AiPartyThinkBehavior.PartyHourlyAiTick) gives
     ///   every option a score (besiege here, raid there, defend that) and then picks. For the watched realm's lords,
     ///   the options, their scores and the choice are recorded in lords.log.
+    /// - Keeping held lords held (always on; the one hook that changes what happens). Party AI Controls looks at every
+    ///   lord party each hour (PartyAIThinker.OnHourlyTickParty) and, for a lord it does not manage that stands still
+    ///   (Hold) with the game's AI switched off, switches the AI back on: it takes a lord we hold for a stuck one. The
+    ///   game then changed the lord's plan within the hour (Oct 16: 40 times in a few game days). Right after that
+    ///   look, a lord one of our orders holds is held again.
     /// Harmony 2.4.2 comes from TAOM.Dependencies. Only InstallCore touches it, so a missing Harmony disables these
-    /// two pieces and nothing else.
+    /// pieces and nothing else.
     /// </summary>
     internal static class GameHooks
     {
         private const string Owner = "bannerlordagents.logs";
-        public static string Status = "not attached";
-        public static bool WitnessInstalled, ReasonsInstalled;
+        private static readonly Dictionary<string, string> Parts = new Dictionary<string, string>();
+        public static string Status => Parts.Count == 0 ? "not attached" : string.Join("; ", Parts.Values);
+        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled;
+        private static bool _keepHeldTried;
         private static object _harmony;
 
         /// <summary>Game's thread: at start-up and whenever the settings change. Attaches what is wanted and not yet attached.</summary>
@@ -39,12 +46,13 @@ namespace BannerlordAgents
         {
             bool wantWitness = Settings.Witness && Settings.Full;
             bool wantReasons = Settings.AiReasons;
-            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled))
+            bool wantKeep = !KeepHeldInstalled && !_keepHeldTried;
+            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep)
             {
-                try { InstallCore(wantWitness, wantReasons); }
+                try { InstallCore(wantWitness, wantReasons, wantKeep); }
                 catch (Exception e)
                 {
-                    Status = "could not attach (" + e.GetType().Name + ": " + e.Message + ")";
+                    Parts["error"] = "could not attach (" + e.GetType().Name + ": " + e.Message + ")";
                     Diag.Swallowed("game hooks", e);
                     Log.Line("game hooks: " + Status);
                 }
@@ -55,38 +63,56 @@ namespace BannerlordAgents
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void InstallCore(bool witness, bool reasons)
+        private static void InstallCore(bool witness, bool reasons, bool keep)
         {
             var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
-            var notes = new List<string>();
+            Parts.Remove("error");
             if (witness && !WitnessInstalled)
             {
                 MethodInfo target = typeof(MobileParty).GetMethod("ResetAllMovementParameters", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (target == null) notes.Add("movement watcher: the game's common movement step was not found, so it is off");
+                if (target == null) Parts["witness"] = "movement watcher: the game's common movement step was not found, so it is off";
                 else
                 {
                     h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(WitnessPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
                     WitnessInstalled = Ours(target);
-                    notes.Add("movement watcher " + (WitnessInstalled ? "attached" : "did not attach") + Others(target));
+                    Parts["witness"] = "movement watcher " + (WitnessInstalled ? "attached" : "did not attach") + Others(target);
                 }
             }
             if (reasons && !ReasonsInstalled)
             {
                 MethodInfo target = typeof(AiPartyThinkBehavior).GetMethod("PartyHourlyAiTick", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (target == null) notes.Add("AI reasons: the game's decision step was not found, so it is off");
+                if (target == null) Parts["reasons"] = "AI reasons: the game's decision step was not found, so it is off";
                 else
                 {
                     h.Patch(target,
                             prefix: new HarmonyLib.HarmonyMethod(typeof(ThinkPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
                             postfix: new HarmonyLib.HarmonyMethod(typeof(ThinkPatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
                     ReasonsInstalled = Ours(target);
-                    notes.Add("AI reasons " + (ReasonsInstalled ? "attached" : "did not attach") + Others(target));
+                    Parts["reasons"] = "AI reasons " + (ReasonsInstalled ? "attached" : "did not attach") + Others(target);
                 }
             }
-            Status = string.Join("; ", notes);
+            if (keep && !KeepHeldInstalled)
+            {
+                _keepHeldTried = true;
+                Type pai = HarmonyLib.AccessTools.TypeByName("PartyAIControls.CampaignBehaviors.PartyAIThinker");
+                MethodInfo target = pai?.GetMethod("OnHourlyTickParty", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, new[] { typeof(MobileParty) }, null);
+                if (pai == null) Parts["keep"] = "Party AI Controls is not loaded, so nothing wakes held lords";
+                else if (target == null) Parts["keep"] = "Party AI Controls' hourly look at parties was not found, so it may wake held lords (the order is then re-applied each hour)";
+                else
+                {
+                    h.Patch(target,
+                            prefix: new HarmonyLib.HarmonyMethod(typeof(KeepHeldPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
+                            postfix: new HarmonyLib.HarmonyMethod(typeof(KeepHeldPatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    KeepHeldInstalled = Ours(target);
+                    Parts["keep"] = "held lords kept from Party AI Controls' hourly look: " + (KeepHeldInstalled ? "attached" : "did not attach") + Others(target);
+                }
+            }
             Log.Line("game hooks: " + Status);
-            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, status = Status });
+            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, status = Status });
         }
+
+        /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>
+        public static bool PartyAiControlsLoaded => HarmonyLib.AccessTools.TypeByName("PartyAIControls.CampaignBehaviors.PartyAIThinker") != null;
 
         private static bool Ours(MethodBase m)
         {
@@ -112,6 +138,19 @@ namespace BannerlordAgents
     {
         private static void Prefix(MobileParty mobileParty, out Reasons.Before __state) => __state = Reasons.Before_(mobileParty);
         private static void Postfix(MobileParty mobileParty, Reasons.Before __state) => Reasons.After(mobileParty, __state);
+    }
+
+    /// <summary>Party AI Controls' hourly look at one party (its first argument): held before it, woken by it, held again if the lord is ours.</summary>
+    internal static class KeepHeldPatch
+    {
+        private static void Prefix(MobileParty __0, out bool __state) => __state = __0?.Ai != null && __0.Ai.DoNotMakeNewDecisions;
+
+        private static void Postfix(MobileParty __0, bool __state)
+        {
+            if (!__state || __0?.Ai == null || __0.Ai.DoNotMakeNewDecisions) return;
+            try { Orders.KeepHeld(__0); }
+            catch (Exception e) { Diag.Swallowed("keeping a held lord held", e); }
+        }
     }
 
     /// <summary>The movement watcher's records. The hook may run on any thread; the lord watch reads the records on the game's thread.</summary>

@@ -64,6 +64,7 @@ namespace BannerlordAgents
                 bool witness = Settings.Witness && Settings.Full, reasons = Settings.AiReasons;
                 return (witness && !GameHooks.WitnessInstalled) || (reasons && !GameHooks.ReasonsInstalled) ? GameHooks.Status : null;
             });
+            Check("held lords kept held", () => GameHooks.KeepHeldInstalled || !GameHooks.PartyAiControlsLoaded ? null : GameHooks.Status);
             Check("settings", () => Settings.Unknown.Count == 0 ? null : "lines not understood: " + string.Join(" | ", Settings.Unknown));
             Check("log folder", () => Diag.SessionDir == null ? "there is no session folder, so the detailed logs are off" : null);
             Check("freeze probe", () => !Settings.FreezeProbe || File.Exists(Probe.Exe) ? null : "the probe is not installed (" + Probe.Exe + ")");

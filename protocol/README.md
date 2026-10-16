@@ -70,7 +70,7 @@ Enemy lords further off are still listed in the report; the trace logs each one 
 | `captives` | the watched realm's lords held prisoner (0.6): `hero`, `name`, `holding` with `holding_name`, `holding_kind`, `holding_faction` (where they are held), or `party_lord`, `party_name`, `party_faction` (the party holding them, when not in a holding), and `since` (in-game hour) |
 | `sum` | the watched realm in a few numbers (0.6): `lords`, `men` and `strength` (an army counted with its leader), `armies`, `army_lords` (parties in them), `ordered` (holding the agent's orders), `forts`, `garrison_men`, `militia`, `besieged`, `villages`, `looted`, `raided`, `captives` |
 | `holdings` | the realm's own settlements, as *view holdings*, each with the nearest enemy in view |
-| `seen` | lords and enemies in view, nearest to the realm's holdings first, at most 40 (`seen_not_listed` counts the rest) |
+| `seen` | lords and enemies in view: enemy armies, enemy lords, bandits, then allies and neutrals, each nearest to the realm's holdings first; at most 40, but every enemy army (0.6.3; `seen_not_listed` counts the rest) |
 | `others_in_view` | caravans, villagers and other small neutral parties in view (counted, not listed) |
 | `last_seen` | parties seen earlier and now out of sight, up to 72 hours back |
 | `frontier` | enemy castles and towns within 60 map units of the realm's holdings; the garrison is known only when in sight (`garrison` is -1 otherwise) |
@@ -78,7 +78,7 @@ Enemy lords further off are still listed in the report; the trace logs each one 
 
 A **view party** has `id`, `name`, `faction`, `faction_name`, `relation` (own, enemy, ally, neutral), `kind` (lord, bandit, ...), `men`, `army_men` and `army_parties` (when it leads an army), `strength` (the game's own estimate), `x`, `y`, `near` and `near_distance` (the nearest settlement), `nearest_holding` and `holding_distance` (the realm's nearest holding), `doing`, `seen_by`, and `seen_hours`.
 
-A **view holding** has `id`, `name`, `kind` (town, castle, village), `faction`, `faction_name`, `garrison`, `militia`, `x`, `y`, `status` (under siege by ..., being raided, looted), and `threat`, `threat_men`, `threat_distance`.
+A **view holding** has `id`, `name`, `kind` (town, castle, village), `faction`, `faction_name`, `garrison`, `militia`, `x`, `y`, `status` (under siege by ..., being raided, looted), and `threat`, `threat_men`, `threat_distance`. The realm's own castles and towns also have (0.6.3) `wall_level`, `defence` (garrison, militia and the lords inside, the realm's and its allies'), `lords_inside` (that part of it) and `holds_up_to` (the besiegers' strength it holds against: defence times what the walls are worth, `World.WallFactor`).
 
 ## Decision (the player's)
 

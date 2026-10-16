@@ -1001,6 +1001,19 @@ namespace BannerlordAgents
             Toggled.Add(p);
         }
 
+        /// <summary>
+        /// Game's thread, right after Party AI Controls' hourly look at a party switched the game's AI back on for it (it does
+        /// so for any lord it does not manage that stands still with the AI off): if one of our orders holds that lord,
+        /// switch it off again before the game's own hourly decision can change the lord's plan. Not marked as our switch,
+        /// since to the lord watch nothing changed.
+        /// </summary>
+        public static void KeepHeld(MobileParty p)
+        {
+            if (p == null || p.Ai.DoNotMakeNewDecisions || !Active.Any(o => o.Party == p)) return;
+            p.Ai.SetDoNotMakeNewDecisions(true);
+            Diag.Count("order:kept held against Party AI Controls");
+        }
+
         /// <summary>Is he getting closer? No progress for 6 in-game hours, away from his target and out of battle, is an alarm.</summary>
         private static void Progress(HandOrder o, float? d, double now)
         {
@@ -1246,7 +1259,9 @@ namespace BannerlordAgents
                 case "garrison":
                 case "enter":
                 case "recruit": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
-                case "near": return o.Place != null && (b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f;
+                // on the way to a spot close to the place (its target there), or standing close to it
+                case "near": return o.Place != null && ((b == AiBehavior.GoToPoint && p.TargetPosition.Distance(o.Place.GatePosition) < 12f)
+                                                        || ((b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f));
                 case "toward": return b == AiBehavior.GoToPoint || b == AiBehavior.Hold;
                 case "leave": return p.CurrentSettlement == null;
                 case "patrol": return o.Radius > 0f ? b == AiBehavior.GoToPoint || b == AiBehavior.Hold : b == AiBehavior.PatrolAroundPoint && p.TargetSettlement == o.Place;

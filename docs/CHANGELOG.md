@@ -403,3 +403,48 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the installed DLL has sha256 `7908EFDBAA786E4A…`.
 - **Outside the repository:** `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` (the danger rule's and defend's descriptions, garrison's new setting). The war room was not running and was left off.
 - **Not yet seen in a game:** a lord running from a place that would not hold, or reinforcing one that would.
+
+### 15:22 to 15:47 · A live session on 0.6.2 (the Summer 9, 1087 save)
+- **What happened:**
+  - the bridge loaded cleanly (self-check 9 of 9; one 27 s stall while the save loaded, not ours); 70 in-game hours, Summer 9, 09:00 to Summer 12, 06:00; 40 pokes, 16 answers, 3 councils of war, 4 stories; fog check 0 leaks in 110 reports;
+  - the war room was not running when Mert asked how the agent was doing; Claude started it at 15:37:59;
+  - **a mistake of Claude's:** a `WarRoom once` run by hand beside it answered the first poke (#133) too, and the bridge carried out both answers. The opening was a mix of two plans: two of the agent's army calls were refused, and its 8-lord siege of Eastern Moria was split between two smaller armies. The agent recovered within a few game hours, but the run is not a clean test. 0.6.3 makes it impossible (below);
+  - **the shelter rule of 0.6.2, seen working:** Othrod sheltered in Gramburg (defenders 1,207 behind walls worth 2.4, against 220); Morzash went inside Starkmoore from 3,675; Naglur stayed inside Eaworth from 8,501;
+  - the agent massed three armies against Rohan's raiders, beat Amalgun and Galenor, and lost Othrod, Krumbash, Mughrim and Urshza to capture, each marching alone through the raiders' ground (and Sorgard of Woses to Corsairs of Umbar);
+  - in the north it called off its siege of Eastern Moria when Aragorn's army (5,532 men, strength 14,695) was seen heading for Western Moria, and set two armies to defend it.
+- **Found in the logs** (fixed in 0.6.3):
+  - Party AI Controls switched the game's AI back on for held lords standing still, 40 times; orders were given again 92 times, 8 fought over, 6 "stuck";
+  - defend's refill rule sent nearly every defender off to recruit: the realm's lords stood at 25% of their size limits on average, against a floor of 40%. Both armies sent to defend Western Moria left it this way (Gashnar's two days at 31% in Western Moria, then a village; Vrakdush's to Naerondol, 35 hours away);
+  - the report's list of parties in view hit its cap of 40 in every report (30 to 97 cut, 11 to 24 of the 40 shown being bandits) and cut Aragorn's army after its one sighting, though the realm kept seeing it;
+  - the report never said what a castle would hold against, so the agent could not match a defence to an attack;
+  - a lord sent to stand near a far place had its order given again every check until it got there; one call-back named a party by its code (`lord_4_18_party_1`).
+- **Western Moria against Aragorn, by the game's assault test:** garrison 767 and militia 280 (an estimated 1,500 strength; its wall level was not in the report) behind walls worth 2.4 to 3.2 hold against about 3,600 to 4,800, against Aragorn's 14,695. With both armies inside (about 2,000 more) it held against about 8,400 to 11,200, still too little. The muster showed 15 lords, strength 5,157, within two days, which would have held at any wall level. Aragorn never came into sight of Western Moria in the 70 hours played.
+
+### 16:10 · Version 0.6.3: held lords kept held, refilling only when not needed, every enemy army in the report · installed 16:10
+- **Why:** the live session above. Mert, on refilling: "some lords might be needed urgently and may be weak individually but massing them together still makes them strong. It should be able to order them to mass together and fight if it needs to rather than being forced to recruit. It's still a good idea for lords to be recruiting if they are not needed urgently."
+- **What:**
+  - **Held lords kept held:** a hook right after Party AI Controls' hourly look at a party (`PartyAIThinker.OnHourlyTickParty`) holds again a lord one of our orders holds. That look switches the game's AI back on for every lord it does not manage that stands still with the AI off (read in its decompile); the game puts lords into that state in some 36 places, so our own moves could not avoid it. A new self-check says whether the hook attached.
+  - **defend refills only when the lord is not needed:**
+    - never an army's leader: the agent massed it for a reason;
+    - never while the holding is besieged or an enemy lord or army is within twice the radius (bandits do not count);
+    - it breaks off when enemy lords come near, leaves a place that gives fewer than 5 points of ranks in 12 hours (trying again two days later), and comes back after two days at most;
+    - `floor` 0 still means it never leaves to refill.
+  - **The report:**
+    - the list of parties in view is cut allies and neutrals first, then bandits, then enemy lords, and never an enemy army;
+    - a sighting and the last-seen list give an army's strength;
+    - each castle and town shows its wall level, its defenders' strength (garrison, militia, the lords inside) and the besiegers' strength it holds against, with one line on the game's test (above it, besiegers may storm at any hour; below, they wait, but the bar falls after four days of siege, to the defenders' bare strength by about the sixth day).
+  - **Smaller:**
+    - a lord sent near a far place is on course while it heads there;
+    - a call-back names a party that is gone by its name;
+    - `WarRoom run` holds a lock for its agent folder, so a second `run`, `once` or `council` refuses to answer beside it.
+  - **Not changed:** the agent's instructions. Everything new is facts and order rules; nothing of Mert's own plan.
+- **Checks:**
+  - the smoke test passed in full (115 checks, 6 new) and the war room's self-test too (38);
+  - 352 game references, 0 missing; Party AI Controls' names (`PartyAIThinker`, `OnHourlyTickParty`) are in its installed `PartyAIUpdated.dll`;
+  - the lock tried by hand: `once` and a second `run` both refused beside the running war room;
+  - the installed DLL has sha256 `1947ADBAF5338759…`.
+- **Outside the repository:**
+  - the war room was stopped at about 16:05 and 16:09 (idle, the game closed) for the builds, and restarted at 16:10:32 as 0.6.3;
+  - an install at about 16:06 still carried the number 0.6.2 and was replaced at 16:10 by the same code numbered 0.6.3;
+  - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` at 16:13 (defend's new refilling); the bridge's settings were unchanged.
+- **Not yet seen in a game:** the hook attaching and holding a lord; a refill broken off; the new report lines.
