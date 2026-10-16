@@ -1,4 +1,4 @@
-﻿# Change log
+# Change log
 
 Every change to the project, oldest first, so the checkpoint (Oct 27) and the final report (Dec 1) can say what changed, when, why, and what it did.
 
@@ -13,7 +13,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Tuesday, October 6
 
-### 23:37 Â· The project set up Â· commit 94236cf
+### 23:37 · The project set up · commit 94236cf
 - **What:**
   - the separate BannerlordAgents game module: it loads, logs the session start and the real seconds per in-game day, and has `agents.status`;
   - the build reads the game's files from the local install, and none are committed;
@@ -21,12 +21,12 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the plan (`docs/PLAN.md`) and the notes for Claude (`CLAUDE.md`).
 - **Why:** the proposal was submitted on Oct 6. Mert asked for a mod of its own, to avoid mix-ups, and for everything on GitHub.
 
-### 23:42 Â· The Oct 5 brief saved Â· commit 1fb2ef3
+### 23:42 · The Oct 5 brief saved · commit 1fb2ef3
 - **What:** `docs/proposal/brief.md`, exported word for word from the Claude doc "CS 329M Project Brief: Bannerlord Agents".
 
 ## Wednesday, October 7
 
-### 14:52 Â· The plan updated Â· commit 7e548af
+### 14:52 · The plan updated · commit 7e548af
 - **What:**
   - live play: the clock never stops for an agent;
   - first tests on the Misty Mountain Orcs in Mert's own campaign;
@@ -35,13 +35,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `docs/FIRST-TESTS.md` written, in seven phases.
 - **Why:** Mert's decisions of Oct 7.
 
-### 15:01 Â· The plan: a ruler's decisions and vassal orders Â· commit 149e293
+### 15:01 · The plan: a ruler's decisions and vassal orders · commit 149e293
 - **What:**
   - the recorder also covers realm decisions and the vassal orders Mert gives in conversation, read from Party AI Controls without changing it;
   - phase 7 added (Opus runs the whole orc realm);
   - a drawing board for parked ideas.
 
-### 15:33 Â· Install 1, version 0.2.0, into the game Â· commit 731d76a (pushed 15:37)
+### 15:33 · Install 1, version 0.2.0, into the game · commit 731d76a (pushed 15:37)
 - **What:**
   - the orcs' view and pokes, and the written report;
   - the play recorder;
@@ -50,11 +50,11 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the smoke test, 7 checks.
 - **Before the install:** Mert's 3 newest saves were copied to `C:\BannerlordArchive\save-backups\*.before-agents-20261007-1533.sav` and checked identical.
 
-### About 19:10 Â· The launcher: Bannerlord Agents ticked (outside the repository)
+### About 19:10 · The launcher: Bannerlord Agents ticked (outside the repository)
 - **What:** BannerlordAgents was enabled in the launcher's module list (`LauncherData.xml`), after RTSCameraUniversal.
 - **Backup:** `LauncherData.xml.bak-20261007-1910-before-agents`.
 
-### 19:28 Â· The agent channel and the agent chat Â· commit c21078f
+### 19:28 · The agent channel and the agent chat · commit c21078f
 - **What:**
   - the agent channel: `pokes.log`, `poke.txt`, `report.txt`, answer files in, receipts out, in three modes (off, shadow, live);
   - orders get the recruit and free verbs, and `agents.vassal` orders Mert's own lords;
@@ -67,7 +67,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, October 8
 
-### 00:36 Â· Version 0.3, the strategists' logs Â· commit b6a4c09 (installed about 00:35)
+### 00:36 · Version 0.3, the strategists' logs · commit b6a4c09 (installed about 00:35)
 - **What:**
   - a folder of detailed logs for every game launch;
   - a watchdog, the freeze probe, and alarms;
@@ -82,7 +82,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - files are swapped in whole, never half-written.
 - **Checks:** the smoke test passed in full; the reference check found 248 game references, 0 missing.
 
-### 15:24 to 15:51 Â· The first live session (phases 0, 1, 2 and 5)
+### 15:24 to 15:51 · The first live session (phases 0, 1, 2 and 5)
 - **What:** 27 minutes of Mert's campaign with version 0.3 and the orc agent (Opus 5.5) in shadow mode.
 - **Numbers:**
   - no errors from our code;
@@ -91,24 +91,24 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - 3 crashes from TAOM, caused by ghost troops.
 - **Where:** the logs are in `%LOCALAPPDATA%\BannerlordAgents\logs\sessions\20261008-152439`, and the report is below (15:54).
 
-### About 15:51 Â· The fixes mod: ghost troops inside battles in progress (outside the repository)
+### About 15:51 · The fixes mod: ghost troops inside battles in progress (outside the repository)
 - **What:** TFAOMFixes' troop repair also cleans the battles a save was still fighting: each battle's own troop lists, and each side's chosen troop for the battle calculation. It runs at every load and with `tfaomfix.troop_check fix`.
 - **Why:** the first session's 3 crashes came from 24 ghost troop types hidden in saved battles.
 - **Where:**
   - the source is `C:\BannerlordArchive\src-TFAOMFixes148\TroopRepair.cs`, with the old source kept in `src-TFAOMFixes148-before-battlerepair-20261008`;
-  - the installed DLL has sha256 `774c17b06ab445fcâ€¦`;
+  - the installed DLL has sha256 `774c17b06ab445fc…`;
   - the old DLL is kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-battlerepair-20261008-1551`.
 - **Checks:** 502 references, 0 missing.
 - **Still to check:** at the next load, the fixes mod's boot log should count the ghosts it found inside battles.
 
-### 15:54 Â· The first session's report Â· commit 69fa761
+### 15:54 · The first session's report · commit 69fa761
 - **What:** `docs/reports/2026-10-08-first-live-session.md`.
 
-### 16:56 Â· Why the orcs were poked 125 times Â· commit 0f3aec7
+### 16:56 · Why the orcs were poked 125 times · commit 0f3aec7
 - **What:** `docs/reports/2026-10-08-pokes.md`: every poke by type, the battles by who fought whom, and what each cut would save.
 - **Finding:** 100 of the 122 battles were small fights, and the cuts would take the 125 pokes to 58.
 
-### 17:14 Â· Version 0.3.1, fewer pokes Â· commit f47a05b (installed 17:14)
+### 17:14 · Version 0.3.1, fewer pokes · commit f47a05b (installed 17:14)
 - **What:**
   - a battle pokes only when fought at a town, castle or village (an assault, a sally, a raid) or with lords on both sides. Fights with bandits, caravans and villagers go to the logs only, marked as not poked;
   - an enemy lord pokes only within 30 of one of the realm's holdings (the new setting `sighting_distance`), or when heading for, besieging or raiding one, or chasing one of its parties. Armies always poke. A lord who comes close while already in view now pokes too, which the old rule missed;
@@ -117,10 +117,10 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the summary gains a "Not poked" line, and the smoke test grows to 41 checks.
 - **Why:** Mert's go-ahead on the four cuts after the breakdown.
 - **Expected:** about 58 of the first session's 125 pokes, 7 a day instead of 15, plus a few for lords who come close while in view.
-- **Checks:** the smoke test passed in full; 253 game references, 0 missing; the installed DLL has sha256 `0E13B00DB78F626Dâ€¦`.
+- **Checks:** the smoke test passed in full; 253 game references, 0 missing; the installed DLL has sha256 `0E13B00DB78F626D…`.
 - **Outside the repository:** the agent's instructions were reinstalled into its folder. They tell it what no longer pokes, and take effect when the agent chat is restarted.
 
-### 20:24 Â· The agent's folder readied for the war room (outside the repository)
+### 20:24 · The agent's folder readied for the war room (outside the repository)
 - **What:** `scripts/setup-agent.ps1 -Mode live`, in its new form (part of version 0.4.0, below):
   - the bridge's settings: `agent = live`, `agent_lords = all`, and `agent_dir = C:\Users\karab\Projects\orc-war-council\warroom` (until then shadow mode and `...\channel`);
   - in the agent's folder: `warroom-system.md`, the war room's instructions for the agent; the channel folder `warroom\`, with `orders\done`, `lookups\` and the order library `tools.txt`;
@@ -128,7 +128,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the journal: the agent chat's journal is kept as `journal-chat-20261008.md`. `journal.md` carries over its plan in three sections (standing plan, lords and their tasks, lessons), reworded for the new orders, without its list of problems.
 - **Why:** Mert's "turn the agent on and let's begin testing": Opus 5.5 commands every orc lord, live.
 
-### 21:14 Â· Version 0.4.0: tools, armies and the war room Â· commit 1f87367 (installed 20:59, again 21:10 and 21:14)
+### 21:14 · Version 0.4.0: tools, armies and the war room · commit 1f87367 (installed 20:59, again 21:10 and 21:14)
 - **What:**
   - **The behavior language and the tool engine** (`src/BannerlordAgents/Tools`, [TOOLS.md](TOOLS.md)):
     - a tool is a small JSON file of settings, states, rules and call-backs, read by a checker before it runs;
@@ -175,7 +175,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Recruit accepted castles, which give no recruits (fixed for the 21:10 install).
   - A tool's first rules waited an hour, and the logs showed a tool's settings as they were later, not at the moment.
   - Log and console lines that called every lord "he" now say "the lord" (21:14 install).
-- **Checks:** the smoke test passed in full (67 checks), with 292 game references and 0 missing. The installed DLL has sha256 `C01CD6034D5C608Bâ€¦` (`346CD41F5119D59Eâ€¦` at 20:59, `EBDC30CDABF86E4Fâ€¦` at 21:10).
+- **Checks:** the smoke test passed in full (67 checks), with 292 game references and 0 missing. The installed DLL has sha256 `C01CD6034D5C608B…` (`346CD41F5119D59E…` at 20:59, `EBDC30CDABF86E4F…` at 21:10).
 - **Outside the repository:**
   - the order library `tools.txt` was rewritten at each install;
   - the war room was started at 21:18 in its own minimized window ("War room"). It runs at below-normal priority and waits for the game.
@@ -188,11 +188,11 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Friday, October 9
 
-### About 10:27 Â· The old agent chat wrote into the old journal (outside the repository)
+### About 10:27 · The old agent chat wrote into the old journal (outside the repository)
 - **What:** the agent chat of Oct 8, still open in VS Code, added a "Problems" section to `orc-war-council\journal.md`. It said that no pokes had come for about 8 hours, and that Mert had asked it to stop watching for them.
 - **Effect:** none on the war room. The journal's plan and lessons become the first campaign's notes (below), and its lords' tasks and problems do not carry over. The chat itself has nothing left to answer and should be closed.
 
-### 10:56 to 11:00 Â· The memory checked against Claude Code, with a small model
+### 10:56 to 11:00 · The memory checked against Claude Code, with a small model
 - **The war room's settings** (`orc-war-council\warroom.txt`) gained the memory keys (`memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit`) when the new war room first read them. The old values were kept.
 - **Both memories, end to end** (replay in order, Haiku 4.5, pokes #6, #10 and #54):
 
@@ -204,7 +204,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The conversation was resumed each poke.
   - The notes changed with each answer.
 
-### 11:01 Â· Version 0.5.0: each realm's memory of the war Â· commit 999f913 (installed 11:01)
+### 11:01 · Version 0.5.0: each realm's memory of the war · commit 999f913 (installed 11:01)
 - **What** ([MEMORY.md](MEMORY.md)):
   - **The chronicle (bridge):** every non-quiet notice the realm gets, every enemy army it sees come into view, and every order the agent gives (carried out or refused, with its reason).
     - At the first load, what the game's own history log still holds about the realm fills the time before the chronicle's own lines, marked as such.
@@ -225,7 +225,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:**
   - the smoke test passed in full (77 checks) and the war room's self-test too (26; first written here as 25);
   - 327 game references, 0 missing;
-  - the installed DLL has sha256 `05AC49E933B36345â€¦`.
+  - the installed DLL has sha256 `05AC49E933B36345…`.
 - **Outside the repository:**
   - the 0.4.0 war room was stopped at about 10:57 for the rebuild;
   - `scripts/setup-agent.ps1 -Mode live` (11:01) installed the new `warroom-system.md` and `chronicler-system.md`, and refreshed `tools.txt`;
@@ -238,7 +238,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - answer time with the memory added.
 - **Not yet run:** the full comparison of the two memories with Opus 5.5, about 120 calls; it waits for Mert's go-ahead.
 
-### 11:42 to 11:51 Â· The second live session, with tools and memory ([report](reports/2026-10-09-second-live-session.md))
+### 11:42 to 11:51 · The second live session, with tools and memory ([report](reports/2026-10-09-second-live-session.md))
 - **What:** Mert loaded the Summer 9, 1087 save, the starting point of the first session, and marched on Western Moria. The orcs ran on version 0.5.0, live, under Opus 5.5.
 - **Numbers:**
   - the game's history held 318 entries about the orcs, read in 56 ms;
@@ -257,7 +257,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - at the first poke (11:47:48) the war room took the old journal over as the notes of campaign `Ah2auppicLLJ` (`orc-war-council\memory\Ah2auppicLLJ\`) and renamed it `journal-before-memory-20261009-1147.md`;
   - the bridge started `chronicle_mistymountainorcs.jsonl` in the campaign's folder.
 
-### 11:55 Â· Version 0.5.1: army fixes Â· commit 8111644 (installed 11:55)
+### 11:55 · Version 0.5.1: army fixes · commit 8111644 (installed 11:55)
 - **What:**
   - gather judges its army from the next hour on, and a new "fail" ending keeps an army that truly broke up from starting its next order, setting its lord free;
   - gather and add form the army with the lords who can come, naming the ones left out;
@@ -269,13 +269,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:**
   - the smoke test (81 checks) and the war room's self-test (28) passed;
   - 327 game references, 0 missing;
-  - the installed DLL has sha256 `384C41BEBCA7AAA9â€¦`.
+  - the installed DLL has sha256 `384C41BEBCA7AAA9…`.
 - **Outside the repository:**
   - the war room was stopped and restarted at 11:55 and again at 11:57 for the rebuilds;
   - `tools.txt` was rewritten;
   - in `memory\Ah2auppicLLJ\snapshots.jsonl`, the old journal's notes were re-dated from "any date" to poke #1 (Summer 9, 1087, 09:00), so reloading that save starts the orcs afresh (backup `snapshots.jsonl.bak-20261009-before-seed-date`).
 
-### 12:01 to 12:15 Â· The third run, and what the orcs were missing
+### 12:01 to 12:15 · The third run, and what the orcs were missing
 - **What:** Mert reloaded the Summer 9, 1087 save on 0.5.1 and marched on Western Moria again (his standing test), then closed the game for a diagnosis.
 - **The fixes held:**
   - the chronicle was cut back 24 lines and the memory went back to empty;
@@ -286,7 +286,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The diagnosis, from the game at 19:00** (Mert: "Why do the orcs have so little men?"):
   - **The realm:** 49 lords' parties with 8,257 men, strength 14,494, against Mert's army at 14,674; 12 of those parties (2,275 men) belong to clans outside the ruler's. Garrisons 4,249 men; militia 2,496.
   - **Thin parties:** 24% full on average (median 22%; 12 lords under 15%).
-  - **Losses:** the game's records hold 158 captures of orc lords (27 on Spring 20, 1087, and 18 on Spring 7). Four villages were looted and SÃ­dwic was being raided.
+  - **Losses:** the game's records hold 158 captures of orc lords (27 on Spring 20, 1087, and 18 on Spring 7). Four villages were looted and Sídwic was being raided.
   - **Scattered:** eight lords were "defending Bar-noss" against a 205-man raider.
   - **Command:** only 3 of the 49 lords held the agent's orders. The instructions told it to give only the changes, so the other lords stayed with the game's AI.
   - **Recruiting rules, read in the game's code:**
@@ -302,7 +302,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - build the council of war (E1);
   - rewrite the agent's instructions as a medieval commander's, from a study of medieval doctrine, without giving it his own plan (E3).
 
-### 13:30 Â· Version 0.6.0: the council of war, the missing facts, a commander's doctrine Â· commit 71cbbcc (installed about 13:30)
+### 13:30 · Version 0.6.0: the council of war, the missing facts, a commander's doctrine · commit 71cbbcc (installed about 13:30)
 - **What the agent now sees:**
   - **YOUR REALM IN SUM:** the field forces, the castles and towns, the villages, and how many lords are prisoners.
   - **YOUR CAPTURED LORDS:** each one, grouped by where they are held, and since when, from the game's own prisoner records (`Hero.PartyBelongedToAsPrisoner`, `CaptivityStartTime`).
@@ -340,7 +340,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:**
   - the smoke test passed in full (97 checks, 16 new) and the war room's self-test too (38, 10 new);
   - 348 game references, 0 missing;
-  - the installed DLL has sha256 `4161700C8FEDADB0â€¦`.
+  - the installed DLL has sha256 `4161700C8FEDADB0…`.
 - **Outside the repository:**
   - the 0.5.0 war room was stopped at 13:30:04 (it was idle);
   - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` in `C:\Users\karab\Projects\orc-war-council`, and the older chat's `CLAUDE.md` with its goal brought in line. It also rewrote `tools.txt` (17 orders), and rewrote the bridge's settings unchanged (live, all lords);
@@ -351,7 +351,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a relief weighing the garrison;
   - a day of recruitment numbers.
 
-### 19:30 Â· Version 0.6.1: defend and patrol fixed Â· commit 013fd4d (installed 19:29, again 19:30)
+### 19:30 · Version 0.6.1: defend and patrol fixed · commit 013fd4d (installed 19:29, again 19:30)
 - **Why:** Mert asked how the defend and patrol orders work, and then, after the walkthrough, "Yes, fix the weak spots." The walkthrough read the game's patrol in the 1.4.8 code and found five:
   - the game's patrol ranges between half and all of half a day's march around a castle (20 to 41 map units at the orcs' median speed), beyond the 20 units defend watches, and defend had the danger rule off;
   - a chase did not watch for a big force coming;
@@ -378,7 +378,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:**
   - the smoke test passed in full (106 checks, 9 new) and the war room's self-test too (38);
   - 348 game references, 0 missing;
-  - the installed DLL has sha256 `8066213EEE80389Dâ€¦`.
+  - the installed DLL has sha256 `8066213EEE80389D…`.
 - **Outside the repository:**
   - the war room was stopped at 19:29:42 and 19:30:44 (idle) and restarted after each install;
   - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` (17 orders, new defend and patrol) and refreshed the older chat's `CLAUDE.md` (the same wording); the bridge's settings were unchanged.
@@ -386,7 +386,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Friday, October 16
 
-### 15:19 Â· Version 0.6.2: shelter where the defence would hold, else run Â· commit (hash in the next commit; installed 15:19)
+### 15:19 · Version 0.6.2: shelter where the defence would hold, else run · commit e4fc561 (installed 15:19)
 - **Why:** Mert, on the danger rule: "IF the strength of all lords defending a place + the garrison of the sheltering location is enough to defend it against the opposing force, they SHOULD shelter there. If not, they should run." 0.6.1 never weighed whether a place would hold: it simply kept lords out of the castle the enemy marched on, and out of defend's own holding.
 - **What:**
   - **Would it hold?** By the game's own test for whether besiegers should assault (read in 1.4.8): the defenders (garrison, militia, the realm's lords inside, the realm's lords holding a defend or garrison order for it within 20, and the lord itself), times what the walls are worth (2.4, 2.8 or 3.2 for wall levels 1 to 3, with a ram and two towers built), against the danger and every force threatening that place. The bridge now copies the militia's strength and the walls' level for the realm's and its allies' castles and towns.
@@ -400,6 +400,6 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:**
   - the smoke test passed in full (109 checks; 3 new, 4 rewritten for the new rule) and the war room's self-test too (38);
   - 351 game references, 0 missing;
-  - the installed DLL has sha256 `7908EFDBAA786E4Aâ€¦`.
+  - the installed DLL has sha256 `7908EFDBAA786E4A…`.
 - **Outside the repository:** `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` (the danger rule's and defend's descriptions, garrison's new setting). The war room was not running and was left off.
 - **Not yet seen in a game:** a lord running from a place that would not hold, or reinforcing one that would.
