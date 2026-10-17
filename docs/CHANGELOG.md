@@ -607,3 +607,24 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repository:**
   - the war room and the dashboard were stopped at 00:12 (idle, the game closed) and restarted, detached, at 00:31:19;
   - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (principles 16 and 17) and wrote `tools.txt` with 19 orders.
+
+### 01:55 · Version 0.7.3: the game's clocks (marches by the game's exact speed rule; sieges and battles run ahead) · commit (this commit; installed 01:48)
+- **Why:** Mert: "We should be adjusting our prediction of the marching speed of a force based on the game's exact equations, so the ai has a good idea on where its own/enemies' armies will reach their waypoint. We should do the same about siege and battle timers so it can plan ahead."
+- **The research** (three passes on the 1.4.8 code, the decompiled TAOM 2.0.26, and the pack's CheatsForBannerlord, ImprovedGarrisons and TFAOMFixes; [TOOLS.md](TOOLS.md#the-games-clocks-marches-sieges-and-battles-run-ahead-since-073)):
+  - the models in force: TAOM's speed, siege event, combat simulation and military power models (the last registered wins);
+  - **a party covers its speed / 1.2 map units an hour**, and every factor, the ground and the night included, adds into one sum (base x (1 + sum), at least 1). Our old reckonings took the speed as map units an hour (some 20% too quick) and multiplied the ground in;
+  - TAOM adds its peoples' ground and night bonuses; a siege camp's preparations (48 man-days at √men a day), its engines one at a time, a storm rolled about 3 times an hour by the game's formula; a storm fought one round an hour (two in any other battle), the attackers' blows growing only with the defenders' number.
+- **What:**
+  - `src/Common/GamePace.cs`, the marching rule, one file built into the module and the way-finder;
+  - the hourly copy reads each lord's speed sum from the game's own cache, the ground under it, its people, its scout's perks, snowfall; once a load the speed model, the peoples' bonuses (from the game's feats) and the perk values; every siege and every battle with their numbers; the whole planned way (128 corners) of every marching lord;
+  - what the rules leave unexplained in a lord's speed is measured hourly and carried (on Oct 16 about +0.19 a lord, likely the scout's Uncanny Insight), sampled as `march:unexplained`;
+  - the report: arrival times for the realm's lords and for lords in view ("there in about 52 hours (Summer 12, 04:00)"), "if it kept on" for those seen earlier, and a new **SIEGES AND BATTLES** section with each siege's and battle's clock and how the game runs them; the facts', look-ups' and `hours_to` travel hours by the same rule; the "ask the way" tool and the dashboard's ways from each party's speed sum, the marching notes with the game's numbers and the peoples' bonuses;
+  - `Dashboard etacheck`: the rule against the arrivals in the frames.
+- **Checks:**
+  - **on the real hours** (Oct 16's load, 438 marches to a holding with their arrival seen, the base parts worked out from the men since those frames predate 0.7.3): median error 4.2% (+1.4% signed) against 9.0% for the old sum and 6.8% for the old way-finder; marches of 12 hours or more: 2.5% (+0.5%) against 8.8% and 6.1%. 301 lone lords moved 0.81 of their speed in an hour;
+  - the siege clock on the code's worked example (2,000 men, a level-1 castle): preparations 25.8 hours, a ram at 32.3, a storm more likely than not by 49.8 hours (the research pass: about 50); a storm of 960 against 4,500: 28 strikes a round against 58, the attackers losing about 20 men an hour (Hollin Gate: about 25);
+  - the smoke test passed in full (168 checks; 16 new), the war room's self-test (46), the dashboard's (27, 1 new); 477 game references, 0 missing; the installed DLL has sha256 `BF050D93806A44DC…`.
+- **Outside the repository:**
+  - the war room and the dashboard were stopped for the build (idle, the game closed) and restarted, detached, at 01:53:40;
+  - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (the report's arrivals and clocks named) and wrote `tools.txt` (19 orders); `marching.txt` is rewritten at the first answer of the next game.
+- **Not yet seen in a game:** the new copy's cost on the game's thread; how much of each lord's speed the named rules explain with the real base parts; a siege's or a battle's clock against what then happens.

@@ -52,48 +52,39 @@ namespace BannerlordAgents.Routes
         }
 
         /// <summary>
-        /// Hours to march a way at a party's pace (its speed on open ground by day, map units an hour), slowed by the ground
-        /// under each stretch and by night, starting at an in-game hour.
+        /// Hours to march a way at a party's pace, by the game's own rules (GamePace: its speed sum with each stretch's ground and
+        /// the night added in, map units an hour = speed / 1.2), starting at an in-game hour. Since 0.7.3; before, the pace was
+        /// taken as map units an hour and the ground and night multiplied in, some 20% too quick.
         /// </summary>
-        public static double Hours(RouteResult r, WalkMap m, float pace, double startHours, SpeedFactors f, out double arrive)
+        public static double Hours(RouteResult r, WalkMap m, BannerlordAgents.Common.Pace p, double startHours, out double arrive)
         {
             arrive = startHours;
-            if (r == null || !r.Ok || pace <= 0.05f) return double.NaN;
-            int rise = m.Meta.SunRise, set = m.Meta.SunSet;
-            double t = startHours;
-            const float step = 0.5f;
-            for (int i = 1; i < r.Points.Count; i++)
-            {
-                float[] a = r.Points[i - 1], b = r.Points[i];
-                float dx = b[0] - a[0], dy = b[1] - a[1], len = (float)Math.Sqrt(dx * dx + dy * dy);
-                if (len <= 0) continue;
-                for (float d = 0; d < len; d += step)
-                {
-                    float piece = Math.Min(step, len - d);
-                    byte g = m.GroundAt(a[0] + dx / len * d, a[1] + dy / len * d);
-                    double speed = pace * f.Of(g) * (IsNight(t, rise, set) ? f.Night : 1f);
-                    t += piece / Math.Max(0.05, speed);
-                }
-            }
-            arrive = t;
-            return t - startHours;
+            if (r == null || !r.Ok || p == null || p.Base <= 0.05f) return double.NaN;
+            return BannerlordAgents.Common.GamePace.March(r.Points, m != null ? (Func<float, float, int>)((x, y) => m.GroundAt(x, y)) : null, p, startHours, out arrive, out _);
         }
 
         /// <summary>How marching works, in plain words: the first answer of the "ask the way" tool in a call carries it, and so does marching.txt.</summary>
-        public static string Rules(WalkMap m, SpeedFactors f)
+        public static string Rules(IDictionary<string, string> peopleBonuses = null) => BannerlordAgents.Common.GamePace.Rules(peopleBonuses);
+
+        /// <summary>
+        /// Each people's march bonuses in words, from the bridge's table (culture id: bonuses by GamePace kind) and names:
+        /// "Misty Mountain Orcs" -> "+10% on snow".
+        /// </summary>
+        public static Dictionary<string, string> PeopleBonuses(IDictionary<string, float[]> table, IDictionary<string, string> names)
         {
-            int rise = m?.Meta.SunRise ?? 2, set = m?.Meta.SunSet ?? 22;
-            string Pct(byte g) => Math.Round((1 - f.Of(g)) * 100).ToString("0") + "%";
-            return "HOW MARCHING WORKS\n"
-                + "- A party plans its whole way when it sets off and takes the shortest way over walkable ground: open land, forest, steppe, desert, snow, swamp, dunes and beach. "
-                + "Mountains, cliffs, canyons, lakes, rivers and the sea cannot be crossed; a river only at a bridge or a ford. It plans again whenever its destination moves "
-                + "(chasing a party) or it gets a new one.\n"
-                + "- It takes the shortest way, not the fastest. Ground slows it as it goes: forest by " + Pct(Ground.Forest) + ", fords and bridges by " + Pct(Ground.Fording)
-                + ", desert and dunes by " + Pct(Ground.Desert) + ", and night (from " + set.ToString("00") + ":00 to " + rise.ToString("00") + ":00) by "
-                + Math.Round((1 - f.Night) * 100).ToString("0") + "%. Snowfall slows it by 10% more. So a short way through forest can take longer than a longer way round.\n"
-                + "- A party's pace on open ground by day depends on its size, its men on foot and on horse, its wounded, its herds and its cargo; an army's pace counts all its parties together.\n"
-                + "- Where only one bridge, ford or pass joins two lands, every way between them goes through it.\n"
-                + "(Slowing: " + f.Source + ".)";
+            var words = new Dictionary<string, string>();
+            if (table == null) return words;
+            string[] kind = { null, "on open plains", "in forest", "in swamps", "on steppe", "in desert", "on snow", "by night" };
+            foreach (KeyValuePair<string, float[]> kv in table.OrderBy(k => k.Key))
+            {
+                var parts = new List<string>();
+                for (int i = 1; i < kv.Value.Length && i < kind.Length; i++)
+                    if (Math.Abs(kv.Value[i]) > 0.001f) parts.Add((kv.Value[i] > 0 ? "+" : "") + Math.Round(kv.Value[i] * 100) + "% " + kind[i]);
+                if (parts.Count == 0) continue;
+                string name = names != null && names.TryGetValue(kv.Key, out string n) && !string.IsNullOrWhiteSpace(n) ? n : kv.Key;
+                words[name] = string.Join(", ", parts);
+            }
+            return words;
         }
     }
 }

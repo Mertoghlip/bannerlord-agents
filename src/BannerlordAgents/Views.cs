@@ -28,6 +28,8 @@ namespace BannerlordAgents
         /// <summary>The watched realm only: its lords held prisoner, and the whole realm in a few numbers.</summary>
         public List<ViewCaptive> Captives = new List<ViewCaptive>();
         public RealmSum Sum;
+        /// <summary>The game's clocks the realm can see (0.7.3, Forecast): each siege and each battle, run ahead by the game's own rules.</summary>
+        public List<string> Clocks = new List<string>();
     }
 
     internal sealed class ViewCaptive
@@ -54,6 +56,14 @@ namespace BannerlordAgents
         /// <summary>The same two distances by road, as the game reckons a march (Roads; NaN when not known), and the entrance of the ground it stood on (0.7.1).</summary>
         public float NearRoad = float.NaN, HoldingRoad = float.NaN;
         public string Entrance;
+        /// <summary>
+        /// When it gets where it is going, by the game's own marching rules along the way the game planned for it ("there in about
+        /// 14 hours (Summer 19, 14:00)"), and that hour (NaN when not reckoned); and its march, the parts of its speed sum, for the
+        /// "ask the way" tool (0.7.3, Forecast, GamePace).
+        /// </summary>
+        public string Arrives;
+        public double ArrivesAt = double.NaN;
+        public Common.Pace March;
     }
 
     /// <summary>
@@ -205,7 +215,97 @@ namespace BannerlordAgents
                 foreach (CaptiveRow c in s.Captives) v.Captives.Add(Captive(s, c));
                 v.Sum = Sum(s, fid, own);
             }
+            v.Clocks = Clocks(s, fid, sees, allies);
             return v;
+        }
+
+        /// <summary>The doings whose holding a march ends at (not a patrol round it, nor a chase).</summary>
+        private static bool MarchesTo(PartyRow r) => r.Doing == "GoToSettlement" || r.Doing == "BesiegeSettlement" || r.Doing == "RaidSettlement" || r.Doing == "DefendSettlement" || r.Doing == "AssaultSettlement";
+
+        /// <summary>
+        /// The sieges and battles the realm can see, each with its clock run ahead (Forecast): a siege of its own holding or by
+        /// its own or an ally's lords, or in its sight (the camp's leader seen, or the place inspected); a battle with any of its
+        /// lords in it, at its holding, or with any party in it in sight. Its own side's morale is known; another's is not, and
+        /// is taken as middling (50).
+        /// </summary>
+        public static List<string> Clocks(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> allies)
+        {
+            var lines = new List<string>();
+            bool Friend(string f) => f != null && (f == fid || allies.Contains(f));
+            bool Sees(string party) => party != null && sees != null && sees.ContainsKey(party);
+            string PartyName(string id) => id != null && s.PartyById.TryGetValue(id, out PartyRow p) ? p.Name ?? id : id != null && s.SettlementById.TryGetValue(id, out SettlementRow h) ? h.Name : "?";
+            string LordTag(string id) => id != null && s.PartyById.TryGetValue(id, out PartyRow p) && p.Faction == fid && p.Leader != null ? " [" + p.Leader + "]" : "";
+            foreach (SiegeRow g in s.Sieges)
+            {
+                if (!s.SettlementById.TryGetValue(g.Settlement, out SettlementRow h)) continue;
+                bool ours = Friend(h.Faction), theirs = Friend(g.BesiegerFaction);
+                bool inspected = s.InspectedByWatched != null && fid == s.Watched && s.InspectedByWatched.Contains(h.Id);
+                if (!ours && !theirs && !Sees(g.Besieger) && !inspected) continue;
+                Forecast.SiegeClock c = Forecast.Siege(g, s.Hours);
+                lines.Add(h.Name + " [" + h.Id + "] (" + h.Kind + ", " + FactionName(s, h.Faction) + "), besieged by " + PartyName(g.Besieger) + LordTag(g.Besieger)
+                          + " (" + FactionName(s, g.BesiegerFaction) + ") since " + Text.When(g.StartHours) + " (" + Math.Round(s.Hours - g.StartHours) + " hours)"
+                          + (g.Storming ? "; a storm is being fought now" : "") + ": " + Forecast.SiegeText(s, g, c, ours));
+            }
+            foreach (BattleRow b in s.Battles)
+            {
+                bool att = Friend(b.Attackers.Faction), def = Friend(b.Defenders.Faction);
+                SettlementRow at = b.Settlement != null && s.SettlementById.TryGetValue(b.Settlement, out SettlementRow hh) ? hh : null;
+                bool seen = b.Attackers.Parties.Concat(b.Defenders.Parties).Any(Sees);
+                if (!att && !def && !(at != null && at.Faction == fid) && !seen) continue;
+                // who is marching to it: parties the realm sees or its own, heading for its holding, not yet in it
+                var joiners = new List<Tuple<bool, int, double>>();
+                if (at != null)
+                    foreach (PartyRow r in s.Parties)
+                    {
+                        if (r.Kind != "lord" || r.Attached || r.InBattle || r.TargetSettlement != at.Id || !MarchesTo(r)) continue;
+                        if (r.Faction != fid && !Sees(r.Id)) continue;
+                        bool toAttackers = r.Faction == b.Attackers.Faction || (s.Factions.TryGetValue(b.Attackers.Faction ?? "", out FactionRow af) && af.Allies.Contains(r.Faction ?? ""));
+                        bool toDefenders = r.Faction == b.Defenders.Faction || (s.Factions.TryGetValue(b.Defenders.Faction ?? "", out FactionRow df) && df.Allies.Contains(r.Faction ?? ""));
+                        if (toAttackers == toDefenders) continue;
+                        Forecast.Arrival a = Forecast.ArrivalOf(s, r, 72);
+                        double when = a != null && a.Reached ? a.At : s.Hours + 1;
+                        int men = r.ArmyMen > 0 ? r.ArmyMen : r.Men;
+                        joiners.Add(Tuple.Create(toAttackers, men, when));
+                    }
+                float? mA = att ? (float?)null : 50f, mD = def ? (float?)null : 50f;
+                Forecast.BattleClock c = Forecast.Battle(b, s.Hours, joiners, mA, mD);
+                var sb = new StringBuilder();
+                sb.Append(at != null ? "At " + at.Name + " [" + at.Id + "]" : "In the field near " + Near(s, b.X, b.Y)).Append(": ").Append(Forecast.KindText(b.Kind))
+                  .Append(" since ").Append(Text.When(b.StartHours)).Append(" (").Append(Math.Round(s.Hours - b.StartHours)).Append(" hours). ");
+                sb.Append("Attackers: ").Append(SideText(s, fid, b.Attackers, PartyName, LordTag)).Append("; defenders: ").Append(SideText(s, fid, b.Defenders, PartyName, LordTag)).Append(". ");
+                sb.Append("At the game's rates now the attackers lose about ").Append(Math.Round(c.AttackerLossPerHour)).Append(" men an hour, the defenders about ").Append(Math.Round(c.DefenderLossPerHour)).Append(". ");
+                if (!double.IsNaN(c.EndsAt))
+                    sb.Append("Run ahead, the ").Append(c.Winner).Append(" win").Append(c.How == "rout" ? " when the other side's morale breaks" : " when the other side is all down")
+                      .Append(", in about ").Append(Forecast.HoursText(c.EndsAt - s.Hours)).Append(" (").Append(Text.When(c.EndsAt)).Append("), ")
+                      .Append(Text.N(c.Winner == "attackers" ? c.AttackersLeft : c.DefendersLeft)).Append(" of them still standing.");
+                else sb.Append("Run ahead five days, it has not ended (").Append(Text.N(c.AttackersLeft)).Append(" attackers, ").Append(Text.N(c.DefendersLeft)).Append(" defenders left).");
+                if (joiners.Count > 0)
+                {
+                    int toA = joiners.Where(j => j.Item1).Sum(j => j.Item2), toD = joiners.Where(j => !j.Item1).Sum(j => j.Item2);
+                    double firstAt = joiners.Min(j => j.Item3);
+                    sb.Append(" Marching to it: ").Append(joiners.Count).Append(joiners.Count == 1 ? " lord" : " lords").Append(toA > 0 ? ", " + Text.N(toA) + " men for the attackers" : "")
+                      .Append(toD > 0 ? ", " + Text.N(toD) + " men for the defenders" : "").Append(", the first in about ").Append(Forecast.HoursText(Math.Max(0, firstAt - s.Hours))).Append(" (counted in).");
+                }
+                if (att || def)
+                {
+                    BattleSideRow mine = att ? b.Attackers : b.Defenders;
+                    sb.Append(" Your side's morale ").Append(Math.Round(mine.Morale)).Append(mine.SettlementLed ? " (behind walls: it never breaks)" : "").Append("; the other side's is not known to you, taken as middling.");
+                }
+                lines.Add(sb.ToString());
+            }
+            return lines;
+        }
+
+        private static string SideText(Snapshot s, string fid, BattleSideRow side, Func<string, string> name, Func<string, string> tag)
+        {
+            string who = side.SettlementLed ? "the holding's garrison and those with it" : name(side.Leader) + tag(side.Leader) + (side.Parties.Count > 1 ? " and " + (side.Parties.Count - 1) + " more parties" : "");
+            return who + " (" + FactionName(s, side.Faction) + "), " + Text.N(side.Healthy) + " men standing" + (side.Casualties > 0 ? ", " + Text.N(side.Casualties) + " fallen so far" : "");
+        }
+
+        private static string Near(Snapshot s, float x, float y)
+        {
+            SettlementRow h = NearestSettlement(s, x, y, out float d);
+            return h == null ? "nowhere known" : h.Name + " (" + Text.D(d) + " away)";
         }
 
         /// <summary>A captured lord as the realm knows it: where they are held (a holding, or the party holding them) and since when.</summary>
@@ -306,11 +406,15 @@ namespace BannerlordAgents
             }
 
             sb.AppendLine().AppendLine("YOUR LORDS AND ARMIES (" + v.Forces.Count + ", " + Text.N(v.Forces.Sum(f => f.ArmyMen > 0 ? f.ArmyMen : f.Men)) + " men)");
+            if (v.Forces.Concat(v.Seen).Any(p => p.Arrives != null))
+                sb.AppendLine("\"There in about N hours\", here and below, is the game's own reckoning of the march: along the way the game planned for that party, at its "
+                              + "own speed (set by its men, horses, wounded, prisoners and loads), slowed by forest, fords and bridges and by night, as it comes. "
+                              + "It holds while the party keeps that course.");
             foreach (ViewParty f in v.Forces)
             {
                 string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
                 Tools.ToolInstance held = Tools.Runner.ForParty(f.Id);
-                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing
+                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + (f.Arrives != null ? ", " + f.Arrives : "")
                               + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
             }
 
@@ -318,9 +422,9 @@ namespace BannerlordAgents
             if (v.Holdings.Any(h => h.WallLevel > 0))
                 sb.AppendLine("A castle or town holds when its defenders' strength (garrison, militia and the lords inside) times what its walls are worth (2.4 at wall level 1, "
                               + "2.8 at level 2, 3.2 at level 3) is at least its besiegers' strength: the game's own test for storming, once the besiegers have a ram and "
-                              + "siege towers built. Lords you shelter inside add their strength. Besiegers above that may storm at any hour, the sooner the stronger "
-                              + "they are; below it they wait, but after four days of siege the bar falls hour by hour, to the defenders' bare strength by about the "
-                              + "sixth day.");
+                              + "siege towers built. Lords you shelter inside add their strength. Besiegers above that may storm, the sooner the stronger they are; "
+                              + "below it they wait, but after four days of siege the bar falls hour by hour, to the defenders' bare strength by about the sixth day. "
+                              + "SIEGES AND BATTLES runs each siege's clock.");
             foreach (ViewHolding h in v.Holdings)
             {
                 var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ")");
@@ -340,6 +444,19 @@ namespace BannerlordAgents
                 foreach (string line in CaptiveLines(v.Captives)) sb.AppendLine("- " + line);
             }
 
+            if (v.Clocks.Count > 0)
+            {
+                sb.AppendLine().AppendLine("SIEGES AND BATTLES (" + v.Clocks.Count + "), run ahead by the game's own clock");
+                sb.AppendLine("The game's rules: a siege camp builds its preparations, then one engine at a time; it may storm only once the preparations are done and an "
+                              + "engine is built, and its commander then tries about three times an hour, the likelier the more the besiegers outweigh the defenders "
+                              + "with their walls, and hardly at all while an engine stands half built. A place out of food loses a tenth of its garrison to hunger each "
+                              + "day (wounded, not killed); it never surrenders. A storm is fought one round an hour, any other battle two; in a storm the attackers' "
+                              + "blows grow only with the defenders' numbers, so a few defenders hold a great host for hours. A side that loses a round by much loses "
+                              + "morale and breaks at none, but men behind walls never break. Nobody can leave a battle once in it, and lords who reach it join it. "
+                              + "Each line counts what you can see as it is now.");
+                foreach (string c in v.Clocks) sb.AppendLine("- " + c);
+            }
+
             sb.AppendLine().AppendLine("IN VIEW (" + v.Seen.Count + (v.SeenNotListed > 0 ? ", and " + v.SeenNotListed + " more further off" : "") + ")");
             if (v.Seen.Count == 0) sb.AppendLine("- No lords or enemies in view.");
             foreach (ViewParty p in v.Seen)
@@ -348,7 +465,7 @@ namespace BannerlordAgents
                 string where = p.NearestHolding == null ? Where(p)
                              : Roads.Both(p.HoldingDistance, p.HoldingRoad) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? "; " + Where(p) : "");
                 sb.AppendLine("- " + p.Relation.ToUpperInvariant() + " " + p.Name + Tag(p) + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
-                    + "; " + where + "; " + p.Doing + "; seen by " + p.SeenBy + ".");
+                    + "; " + where + "; " + p.Doing + (p.Arrives != null ? ", " + p.Arrives : "") + "; seen by " + p.SeenBy + ".");
             }
             if (v.OthersInView > 0) sb.AppendLine("- Also in view: " + v.OthersInView + " caravans, villagers and other small parties.");
 
@@ -358,7 +475,8 @@ namespace BannerlordAgents
                 foreach (ViewParty p in v.LastSeen)
                     sb.AppendLine("- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + (p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) : Text.N(p.Men)) + " men, strength "
                         + Text.N((int)p.Strength) + ", last seen " + Where(p)
-                        + ", " + Math.Round(v.Hours - p.SeenHours) + " hours ago, " + p.Doing + ".");
+                        + ", " + Math.Round(v.Hours - p.SeenHours) + " hours ago, " + p.Doing
+                        + (!double.IsNaN(p.ArrivesAt) && p.ArrivesAt > v.Hours ? " (if it kept on, there about " + Text.When(p.ArrivesAt) + ")" : "") + ".");
             }
 
             if (v.Trails.Count > 0)
@@ -427,6 +545,22 @@ namespace BannerlordAgents
             };
             vp.Toward = Toward(r);
             vp.Entrance = r.InSettlement ?? r.Entrance;
+            if (r.Kind == "lord")
+            {
+                Common.Pace pace = Forecast.PaceOf(s, r);
+                if (pace != null) { pace.PerkValues = null; vp.March = pace; }
+                // arrival: a march to a holding (not a patrol round it), or one of the realm's own lords walking to a point of its order
+                bool toHolding = MarchesTo(r) && r.TargetSettlement != null;
+                if (toHolding || (relation == "own" && r.Doing == "GoToPoint"))
+                {
+                    Forecast.Arrival a = Forecast.ArrivalOf(s, r);
+                    if (a != null && (toHolding || a.Length > 3))
+                    {
+                        vp.Arrives = Forecast.ArrivalText(a);
+                        vp.ArrivesAt = a.Reached ? a.At : double.NaN;
+                    }
+                }
+            }
             SettlementRow near = NearestSettlement(s, r.X, r.Y, out float nd);
             if (near != null) { vp.Near = near.Name; vp.NearDistance = Text.R1(nd); vp.NearRoad = R1(Roads.To(s, r, near)); }
             if (own != null && own.Count > 0 && relation != "own")

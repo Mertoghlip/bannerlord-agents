@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BannerlordAgents.Common;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.CharacterDevelopment;
 using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
+using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
+using TaleWorlds.CampaignSystem.Siege;
 using HarmonyLib;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
@@ -56,10 +60,12 @@ namespace BannerlordAgents
             var allies = new HashSet<Kingdom>();
             if (watched != null) foreach (Kingdom a in watched.AlliedKingdoms) if (a != null) allies.Add(a);
 
+            var besieged = new List<Settlement>();
             foreach (Settlement s in Settlement.All)
             {
                 if (s == null || s.IsHideout) continue;
                 IFaction f = s.MapFaction;
+                if (s.SiegeEvent != null) besieged.Add(s);
                 var r = new SettlementRow
                 {
                     Id = s.StringId,
@@ -114,6 +120,9 @@ namespace BannerlordAgents
                 IFaction f = p.MapFaction;
                 if (f != null && !factions.ContainsKey(f.StringId)) factions[f.StringId] = f;
             }
+            MarchRules(snap);
+            Sieges(snap, besieged);
+            Battles(snap);
             long t3 = Perf.Now();
 
             foreach (KeyValuePair<string, IFaction> kv in factions)
@@ -302,14 +311,282 @@ namespace BannerlordAgents
             r.SeenByPlayer = p.IsVisible && !p.IsMainParty;
             r.Spottable = inside == null || leader?.ClanBanner != null
                           || (me != null && me.IsSiegeAssault && party.Side == BattleSideEnum.Attacker);
-            if (Settings.Dashboard) Way(p, r, inside == null && me == null && !r.Attached);
+            // the way and the speed's parts: lords always (their arrival times, 0.7.3), caravans for the dashboard
+            if (p.IsLordParty || Settings.Dashboard) Way(p, r, inside == null && me == null && !r.Attached);
+            if (p.IsLordParty && !r.Attached) Pace(p, r, leader);
             return r;
+        }
+
+        // ---------- the march's parts (0.7.3, GamePace) ----------
+
+        // the game's own cache of a party's base speed: the very sum it moves the party with (MobileParty.CalculateSpeedForPartyUnified)
+        private static readonly AccessTools.FieldRef<MobileParty, ExplainedNumber> BaseSpeedField = Field<ExplainedNumber>("_lastCalculatedBaseSpeedExplained");
+
+        /// <summary>
+        /// A lord's march, as the parts of the game's speed sum (GamePace): the base number and the base factors from the game's
+        /// cache (no new sum: an army's leader's cache pools its parties), the ground under it, its people as TAOM finds it (the
+        /// lord's culture, else its realm's, else its owner's: CultureFeatAdapter.ResolvePartyCulture), its scout's ground and
+        /// hour perks, the share on foot (Forest Kin needs three quarters), and snowfall where it stands.
+        /// </summary>
+        private static void Pace(MobileParty p, PartyRow r, Hero leader)
+        {
+            try
+            {
+                if (BaseSpeedField != null)
+                {
+                    ExplainedNumber e = BaseSpeedField(p);
+                    r.SpeedBase = (float)Math.Round(e.BaseNumber, 4);
+                    r.SpeedFactors = (float)Math.Round(e.SumOfFactors, 4);
+                }
+                PathFaceRecord face = p.CurrentNavigationFace;
+                if (face.IsValid()) r.Terrain = (int)Campaign.Current.MapSceneWrapper.GetFaceTerrainType(face);
+                r.Culture = (leader?.Culture ?? p.MapFaction?.Culture ?? p.Owner?.Culture)?.StringId;
+                Hero scout = p.EffectiveScout;
+                if (scout != null)
+                {
+                    int perks = 0;
+                    if (scout.GetPerkValue(DefaultPerks.Scouting.ForestKin)) perks |= GamePace.PerkForestKin;
+                    if (scout.GetPerkValue(DefaultPerks.Scouting.Pathfinder)) perks |= GamePace.PerkPathfinder;
+                    if (scout.GetPerkValue(DefaultPerks.Scouting.DesertBorn)) perks |= GamePace.PerkDesertBorn;
+                    if (scout.GetPerkValue(DefaultPerks.Scouting.NightRunner)) perks |= GamePace.PerkNightRunner;
+                    if (scout.GetPerkValue(DefaultPerks.Scouting.DayTraveler)) perks |= GamePace.PerkDayTraveler;
+                    r.ScoutPerks = perks;
+                    if ((perks & GamePace.PerkForestKin) != 0)
+                    {
+                        int all = p.MemberRoster.TotalManCount;
+                        r.FootShare = all > 0 ? (float)Math.Round((float)p.Party.NumberOfMenWithoutHorse / all, 3) : 1f;
+                    }
+                }
+                MapWeatherModel.WeatherEvent w = Campaign.Current.Models.MapWeatherModel.GetWeatherEventInPosition(p.Position.ToVec2());
+                r.Snowing = w == MapWeatherModel.WeatherEvent.Snowy || w == MapWeatherModel.WeatherEvent.Blizzard;
+                if (FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 4);
+            }
+            catch (Exception e) { Diag.Swallowed("a lord's speed parts", e); }
+        }
+
+        private static string _rulesFor;
+        private static Dictionary<string, float[]> _cultureSpeeds;
+        private static Dictionary<string, string> _cultureNames;
+        private static string _speedModel;
+        private static PerkValues _perkValues;
+
+        /// <summary>A new campaign: the marching rules are read again.</summary>
+        public static void ResetRules() => _rulesFor = null;
+
+        /// <summary>
+        /// The marching rules in force, read once a load: the speed model's name; each people's march bonuses (TAOM's feats as the
+        /// game holds them: a feat whose id ends in _forest_speed, _snow_speed, _desert_speed, _plain_speed, _swamp_speed,
+        /// _steppe_speed or _night_speed, with its own EffectBonus), only when the model in force is TAOM's, which is what adds
+        /// them; and the scout perks' values.
+        /// </summary>
+        private static void MarchRules(Snapshot snap)
+        {
+            string key = snap.Campaign + "|" + Bridge.LoadId;
+            if (_rulesFor != key)
+            {
+                _rulesFor = key;
+                _speedModel = Campaign.Current.Models.PartySpeedCalculatingModel?.GetType().FullName;
+                _cultureSpeeds = null;
+                try
+                {
+                    if (_speedModel != null && _speedModel.IndexOf("Taom", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        var table = new Dictionary<string, float[]>();
+                        var names = new Dictionary<string, string>();
+                        foreach (CultureObject c in TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
+                        {
+                            if (c == null) continue;
+                            float[] f = null;
+                            foreach (FeatObject feat in c.GetCulturalFeats())
+                            {
+                                int kind = FeatKind(feat?.StringId);
+                                if (kind <= 0) continue;
+                                if (f == null) f = new float[GamePace.Kinds];
+                                f[kind] += feat.EffectBonus;
+                            }
+                            if (f != null) { table[c.StringId] = f; names[c.StringId] = c.Name?.ToString() ?? c.StringId; }
+                        }
+                        _cultureSpeeds = table;
+                        _cultureNames = names;
+                    }
+                    _perkValues = new PerkValues
+                    {
+                        ForestKin = DefaultPerks.Scouting.ForestKin.PrimaryBonus, Pathfinder = DefaultPerks.Scouting.Pathfinder.PrimaryBonus,
+                        DesertBorn = DefaultPerks.Scouting.DesertBorn.PrimaryBonus, NightRunner = DefaultPerks.Scouting.NightRunner.PrimaryBonus,
+                        DayTraveler = DefaultPerks.Scouting.DayTraveler.PrimaryBonus
+                    };
+                    Diag.Event("march", "rules", new { model = _speedModel, peoples = _cultureSpeeds?.Count ?? 0, bonuses = _cultureSpeeds?.ToDictionary(kv => kv.Key, kv => string.Join(" ", kv.Value.Select(v => v.ToString("0.##")))) });
+                }
+                catch (Exception e) { Diag.Swallowed("reading the marching rules in force", e); }
+            }
+            snap.SpeedModel = _speedModel;
+            snap.CultureSpeeds = _cultureSpeeds;
+            snap.CultureNames = _cultureNames;
+            snap.PerkValues = _perkValues;
+        }
+
+        private static int FeatKind(string id)
+        {
+            if (id == null) return 0;
+            if (id.EndsWith("_forest_speed", StringComparison.Ordinal)) return GamePace.KindForest;
+            if (id.EndsWith("_snow_speed", StringComparison.Ordinal)) return GamePace.KindSnow;
+            if (id.EndsWith("_desert_speed", StringComparison.Ordinal)) return GamePace.KindDesert;
+            if (id.EndsWith("_plain_speed", StringComparison.Ordinal)) return GamePace.KindPlain;
+            if (id.EndsWith("_swamp_speed", StringComparison.Ordinal)) return GamePace.KindSwamp;
+            if (id.EndsWith("_steppe_speed", StringComparison.Ordinal)) return GamePace.KindSteppe;
+            if (id.EndsWith("_night_speed", StringComparison.Ordinal)) return GamePace.KindNight;
+            return 0;
+        }
+
+        // ---------- sieges and battles (0.7.3, Forecast) ----------
+
+        private static readonly SiegeEngineType[] Buildable = { DefaultSiegeEngineTypes.Ram, DefaultSiegeEngineTypes.SiegeTower, DefaultSiegeEngineTypes.Ballista, DefaultSiegeEngineTypes.Onager, DefaultSiegeEngineTypes.Trebuchet };
+
+        /// <summary>
+        /// Every siege on the map as the game runs it: the camp's preparations and engines, each engine type's building rate by
+        /// the model in force (GetConstructionProgressPerHour: the camp's men, its engineer, the pack's mods), the numbers of
+        /// the game's storm test (StartingAssaultOnBesiegedSettlementIsLogical: the defenders inside it counts, the besiegers,
+        /// the walls' worth now, the engines built, the most advanced unfinished one), and the place's food.
+        /// </summary>
+        private static void Sieges(Snapshot snap, List<Settlement> besieged)
+        {
+            if (besieged.Count == 0) return;
+            SiegeEventModel sm = Campaign.Current.Models.SiegeEventModel;
+            CombatSimulationModel cm = Campaign.Current.Models.CombatSimulationModel;
+            foreach (Settlement s in besieged)
+            {
+                try
+                {
+                    SiegeEvent ev = s.SiegeEvent;
+                    BesiegerCamp camp = ev?.BesiegerCamp;
+                    if (camp == null || s.Town == null) continue;
+                    var g = new SiegeRow
+                    {
+                        Settlement = s.StringId, Besieger = camp.LeaderParty?.StringId, BesiegerFaction = camp.MapFaction?.StringId,
+                        Strategy = camp.SiegeStrategy?.StringId, StartHours = Math.Round(ev.SiegeStartTime.ToHours, 2), WallLevel = s.Town.GetWallLevel()
+                    };
+                    SiegeEvent.SiegeEnginesContainer engines = camp.SiegeEngines;
+                    if (engines != null)
+                    {
+                        g.Prep = (float)Math.Round(engines.SiegePreparations?.Progress ?? 0f, 4);
+                        g.PrepRate = sm.GetConstructionProgressPerHour(DefaultSiegeEngineTypes.Preparations, ev, camp);
+                        foreach (SiegeEvent.SiegeEngineConstructionProgress e in engines.DeployedMeleeSiegeEngines.Concat(engines.DeployedRangedSiegeEngines))
+                            if (e?.SiegeEngine != null) g.Engines.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints) });
+                        foreach (SiegeEvent.SiegeEngineConstructionProgress e in engines.ReservedSiegeEngines)
+                            if (e?.SiegeEngine != null) g.Engines.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints), Reserve = true });
+                    }
+                    foreach (SiegeEngineType t in Buildable) g.Rates[t.StringId] = (float)Math.Round(sm.GetConstructionProgressPerHour(t, ev, camp), 5);
+                    MBReadOnlyList<float> walls = s.SettlementWallSectionHitPointsRatioList;
+                    if (walls != null && walls.Count > 0) { g.WallShare = (float)Math.Round(walls.Average(), 3); g.WallsDown = s.SettlementTotalWallHitPoints < 1e-5f; }
+                    g.Advantage = (float)Math.Round(cm.GetSettlementAdvantage(s), 4);
+                    g.Built = cm.GetNumberOfEquipmentsBuilt(s);
+                    g.MaxProgress = (float)Math.Round(cm.GetMaximumSiegeEquipmentProgress(s), 4);
+                    // the storm test's defenders: the parties inside it counts (lords not shy of a fight, the militia, the garrison)
+                    bool playerInside = MobileParty.MainParty?.CurrentSettlement == s;
+                    float d = 0, a = 0;
+                    foreach (PartyBase x in s.GetInvolvedPartiesForEventType())
+                        if (x.IsMobile && x.MobileParty.CurrentSettlement == s && (x.MobileParty.Aggressiveness > 0.01f || x.MobileParty.IsMilitia || x.MobileParty.IsGarrison))
+                            d += (playerInside ? 0.5f : 1f) * x.CalculateCurrentStrength();
+                    foreach (PartyBase x in camp.GetInvolvedPartiesForEventType()) a += x.CalculateCurrentStrength();
+                    g.Defenders = (float)Math.Round(d, 1);
+                    g.Attackers = (float)Math.Round(a, 1);
+                    g.PlayerInside = playerInside;
+                    PartyBase garrison = s.Town.GarrisonParty?.Party;
+                    if (garrison != null)
+                    {
+                        g.GarrisonPower = (float)Math.Round((playerInside ? 0.5f : 1f) * garrison.CalculateCurrentStrength(), 1);
+                        g.GarrisonRegulars = garrison.MemberRoster.TotalRegulars;
+                        g.GarrisonWounded = garrison.MemberRoster.TotalWoundedRegulars;
+                    }
+                    g.Food = (float)Math.Round(s.Town.FoodStocks, 1);
+                    g.FoodChange = (float)Math.Round(s.Town.FoodChange, 2);
+                    g.FoodCap = s.Town.FoodStocksUpperLimit();
+                    g.Starving = s.Town.FoodStocks <= 0;
+                    Army army = camp.LeaderParty?.Army;
+                    if (army != null) { g.Cohesion = (float)Math.Round(army.Cohesion, 2); g.CohesionPerDay = (float)Math.Round(army.DailyCohesionChange, 2); }
+                    g.Storming = s.Party?.MapEvent != null && s.Party.MapEvent.IsSiegeAssault;
+                    snap.Sieges.Add(g);
+                }
+                catch (Exception e) { Diag.Swallowed("copying a siege's clock", e); }
+            }
+        }
+
+        /// <summary>
+        /// Every battle with a lord or a holding in it: its kind, place and start, and each side's healthy men, losses, mean troop
+        /// power by the model in force (MilitaryPowerModel.GetTroopPower, with the side's leader's modifier and the battle's
+        /// context), battle advantage (GetBattleAdvantage) and morale weighted by men.
+        /// </summary>
+        private static void Battles(Snapshot snap)
+        {
+            MBReadOnlyList<MapEvent> all = Campaign.Current.MapEventManager?.MapEvents;
+            if (all == null) return;
+            CombatSimulationModel cm = Campaign.Current.Models.CombatSimulationModel;
+            foreach (MapEvent me in all)
+            {
+                try
+                {
+                    if (me == null || me.IsFinalized) continue;
+                    bool lords = me.InvolvedParties.Any(x => x.IsMobile && x.MobileParty.IsLordParty);
+                    Settlement at = me.MapEventSettlement;
+                    if (!lords && (at == null || !at.IsFortification)) continue;
+                    var b = new BattleRow
+                    {
+                        Kind = me.IsSiegeAssault ? "siege" : me.IsSallyOut ? "sally" : me.IsSiegeOutside ? "siege_outside" : me.IsRaid ? "raid" : me.IsFieldBattle ? "field" : me.EventType.ToString().ToLowerInvariant(),
+                        Settlement = at?.StringId, Town = at != null && at.IsTown, X = Text.R1(me.Position.X), Y = Text.R1(me.Position.Y),
+                        StartHours = Math.Round(me.BattleStartTime.ToHours, 2), Retreating = me.RetreatingSide == BattleSideEnum.None ? null : me.RetreatingSide.ToString().ToLowerInvariant()
+                    };
+                    b.Key = (me.AttackerSide.LeaderParty?.Id ?? "?") + "@" + b.StartHours.ToString("0.00", Text.Inv);
+                    if (at != null && at.IsFortification) b.SettlementAdvantage = (float)Math.Round(cm.GetSettlementAdvantage(at), 4);
+                    cm.GetBattleAdvantage(me, out ExplainedNumber defAdv, out ExplainedNumber attAdv);
+                    Side(me, me.AttackerSide, BattleSideEnum.Attacker, b.Attackers, attAdv.ResultNumber);
+                    Side(me, me.DefenderSide, BattleSideEnum.Defender, b.Defenders, defAdv.ResultNumber);
+                    snap.Battles.Add(b);
+                }
+                catch (Exception e) { Diag.Swallowed("copying a battle's clock", e); }
+            }
+        }
+
+        private static void Side(MapEvent me, MapEventSide side, BattleSideEnum which, BattleSideRow row, float advantage)
+        {
+            MilitaryPowerModel pm = Campaign.Current.Models.MilitaryPowerModel;
+            PartyBase leader = side.LeaderParty;
+            row.Leader = leader?.MobileParty?.StringId ?? leader?.Settlement?.StringId;
+            row.Faction = side.MapFaction?.StringId;
+            row.SettlementLed = leader != null && !leader.IsMobile;
+            row.Advantage = (float)Math.Round(advantage, 4);
+            row.Casualties = side.TroopCasualties;
+            row.StartHealthy = side.HealthyTroopCountAtMapEventStart;
+            float modifier = leader?.LeaderHero != null ? pm.GetPowerModifierOfHero(leader.LeaderHero) : 0f;
+            double power = 0, moraleSum = 0;
+            int healthy = 0, wounded = 0, moraleMen = 0;
+            foreach (MapEventParty mp in side.Parties)
+            {
+                PartyBase pb = mp.Party;
+                if (pb == null) continue;
+                if (pb.IsMobile) row.Parties.Add(pb.MobileParty.StringId);
+                int partyHealthy = 0;
+                foreach (TroopRosterElement el in pb.MemberRoster.GetTroopRoster())
+                {
+                    int n = el.Number - el.WoundedNumber;
+                    if (n <= 0 || el.Character == null) continue;
+                    power += n * pm.GetTroopPower(el.Character, which, me.SimulationContext, modifier);
+                    partyHealthy += n;
+                    wounded += el.WoundedNumber;
+                }
+                healthy += partyHealthy;
+                if (pb.IsMobile && partyHealthy > 0) { moraleSum += pb.MobileParty.Morale * partyHealthy; moraleMen += partyHealthy; }
+            }
+            row.Healthy = healthy;
+            row.Wounded = wounded;
+            row.Power = healthy > 0 ? (float)Math.Round(power / healthy, 4) : 1f;
+            row.Morale = moraleMen > 0 ? (float)Math.Round(moraleSum / moraleMen, 1) : 50f;
         }
 
         // the game keeps whether a party is walking its planned way, and its speed with the ground counted, in fields of its own
         private static readonly AccessTools.FieldRef<MobileParty, bool> PathModeField = Field<bool>("_pathMode");
         private static readonly AccessTools.FieldRef<MobileParty, float> FinalSpeedField = Field<float>("_lastCalculatedSpeed");
-        public const int MostRoutePoints = 48;
+        /// <summary>The whole of the game's planned way (a NavigationPath holds 128 corners), so a march's arrival is reckoned to its end.</summary>
+        public const int MostRoutePoints = 128;
 
         private static AccessTools.FieldRef<MobileParty, T> Field<T>(string name)
         {
@@ -319,7 +596,8 @@ namespace BannerlordAgents
 
         /// <summary>Both of the game's fields the dashboard reads were found (the self-check).</summary>
         public static string WayFieldsProblem => PathModeField == null || FinalSpeedField == null
-            ? "MobileParty." + (PathModeField == null ? "_pathMode" : "_lastCalculatedSpeed") + " was not found, so the dashboard shows no planned ways" : null;
+            ? "MobileParty." + (PathModeField == null ? "_pathMode" : "_lastCalculatedSpeed") + " was not found, so the dashboard shows no planned ways"
+            : BaseSpeedField == null ? "MobileParty._lastCalculatedBaseSpeedExplained was not found, so march times use the speed number alone (0.7.3)" : null;
 
         /// <summary>
         /// Where a party walks to, and, for a lord or caravan on the march, the corners still ahead of the way the game planned
@@ -330,7 +608,7 @@ namespace BannerlordAgents
             CampaignVec2 to = p.MoveTargetPoint;
             r.Tx = Text.R1(to.X);
             r.Ty = Text.R1(to.Y);
-            if (p.IsLordParty && FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 2);
+            if (p.IsLordParty && FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 4);
             if (!marching || !(p.IsLordParty || p.IsCaravan)) return;
             float dx = to.X - p.Position.X, dy = to.Y - p.Position.Y;
             if (dx * dx + dy * dy < 0.25f) return;

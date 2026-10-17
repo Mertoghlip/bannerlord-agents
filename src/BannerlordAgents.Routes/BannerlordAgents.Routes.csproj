@@ -11,7 +11,12 @@
     <RootNamespace>BannerlordAgents.Routes</RootNamespace>
     <AssemblyName>BannerlordAgents.Routes</AssemblyName>
     <PlatformTarget>x64</PlatformTarget>
-    <Version>0.7.2</Version>
+    <Version>0.7.3</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- the game's marching rule, one file shared with the game module (src/Common) -->
+    <Compile Include="..\Common\GamePace.cs" Link="Common\GamePace.cs" />
+  </ItemGroup>
 
 </Project>

@@ -10,7 +10,7 @@ powershell -ExecutionPolicy Bypass -File scripts\dashboard.ps1
 
 It opens http://localhost:7329/ in the browser. The page is served on this laptop only. The dashboard only reads files the bridge and the war room write, so it can be started and closed at any time, with the game running or not. The agent never sees it: its files are under `%LOCALAPPDATA%\BannerlordAgents`, which the agent's calls cannot read. `Dashboard.exe` runs at below-normal priority with efficiency mode, like the war room. Its log is in `logs\dashboard\`.
 
-`Dashboard.exe selftest` checks the way-finder, the atlas, the map picture and the log on made-up data (23 checks; `deploy.ps1` runs it). `Dashboard.exe atlas` works out the crossing atlas now and prints it. `Dashboard.exe route x1,y1 x2,y2` describes one way.
+`Dashboard.exe selftest` checks the way-finder, the atlas, the map picture and the log on made-up data (27 checks in 0.7.3; `deploy.ps1` runs it). `Dashboard.exe atlas` works out the crossing atlas now and prints it. `Dashboard.exe route x1,y1 x2,y2` describes one way. `Dashboard.exe learncheck` measures our ways against the game's planned ways in the newest load; `Dashboard.exe etacheck [load]` (0.7.3) measures the game's marching rule (GamePace) against the arrivals the frames show, beside the old reckonings (docs/TOOLS.md, "The game's clocks"). Since 0.7.3 a party's "its way" card times the march by the same rule, from the party's speed sum in the frame (`march` in the request).
 
 ## What the page shows
 

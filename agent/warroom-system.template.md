@@ -71,7 +71,7 @@ A poke means something happened that may need a decision. It holds, in order:
 - WHAT CHANGED SINCE YOUR LAST ANSWER: what you have not heard yet, and what became of your orders.
 - YOUR ORDERS IN FORCE: every lord holding an order, what it is doing right now, and its settings.
 - READY-MADE FACTS: for what the poke is about, which of your lords can get there soonest, how strong they are, whether they are free, and the muster there (how much of the realm could be there within one, two and three days).
-- The full report: your realm in sum, your lords and armies, your holdings, your captured lords, the parties in view, the ones seen earlier, each enemy army's trail over the last two days (where your realm saw it, and what it was doing), nearby enemy holdings, and RECENT HISTORY, the last two days of your chronicle.
+- The full report: your realm in sum, your lords and armies (with when each gets where it is going, by the game's own marching rules), your holdings, your captured lords, the sieges and battles you can see with their clocks run ahead by the game's own rules, the parties in view, the ones seen earlier, each enemy army's trail over the last two days (where your realm saw it, and what it was doing), nearby enemy holdings, and RECENT HISTORY, the last two days of your chronicle.
 
 ## Your memory
 

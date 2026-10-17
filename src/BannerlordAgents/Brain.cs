@@ -172,6 +172,7 @@ namespace BannerlordAgents
             Diag.Event("hour", Text.When(s.Hours), new { parties = s.Parties.Count, settlements = s.Settlements.Count, worker_lag_ms = Math.Round(lagMs, 1), parts_ms = s.PartsMs?.Select(x => Math.Round(x, 3)).ToArray() });
             Audit.CheckSnapshot(s);
             Audit.Sight(s);
+            Forecast.Calibrate(s);
             if (s.Sight != null) Audit.PlayerSight(s.Sight, s.Hours);
             if (s.Watched != null) Chronicle.Ensure(s.Watched, Views.FactionName(s, s.Watched), s.Hours);
             // the tools first: their call-backs of this hour go out with this hour's poke

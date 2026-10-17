@@ -636,7 +636,7 @@ namespace BannerlordAgents.Tools
                 switch (fn.ToLowerInvariant())
                 {
                     case "distance": return Nan(_w.Distance(Id(a[0]), Id(a[1])));
-                    case "hours_to": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return double.IsNaN(d) ? null : (object)(d / World.Speed(me)); }
+                    case "hours_to": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return double.IsNaN(d) ? null : (object)(d / _w.PerHour(me)); }
                     case "inside": return me != null && Id(a[0]) != null && me.InSettlement == Id(a[0]);
                     case "within": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return !double.IsNaN(d) && d <= Expr.Number(a[1]); }
                     case "besieged": return _w.Besieged(H(a[0]));

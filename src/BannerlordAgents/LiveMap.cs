@@ -107,7 +107,9 @@ namespace BannerlordAgents
             var frame = new
             {
                 V = 1, s.Campaign, s.LoadId, s.Hours, s.Date, s.Night, Player = s.PlayerFaction, s.PlayerParty, s.Watched, Map = s.MapCrc,
-                Factions = factions, Settlements = s.Settlements, Parties = s.Parties, Realms = realms
+                Factions = factions, Settlements = s.Settlements, Parties = s.Parties, Realms = realms,
+                // the marching rules in force, and every siege and battle with its numbers (0.7.3)
+                s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.Sieges, s.Battles
             };
             string json = JsonConvert.SerializeObject(frame, Compact);
             string name = "h" + ((long)Math.Floor(s.Hours + 1e-6)).ToString(Text.Inv) + ".json.gz";
@@ -137,13 +139,23 @@ namespace BannerlordAgents
             var own = s.Parties.Where(r => r.Faction == fid && r.Kind == "lord" && !r.Attached).Select(r => new
             {
                 r.Id, Lord = r.Leader, Name = r.Name ?? r.Id, r.X, r.Y, r.Men, r.ArmyMen, Strength = r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength,
-                Pace = r.Speed, r.FinalSpeed, Doing = Views.Doing(s, r), r.InSettlement, r.Route, r.Tx, r.Ty
+                Pace = r.Speed, r.FinalSpeed, March = MarchOf(s, r), Doing = Views.Doing(s, r), r.InSettlement, r.Route, r.Tx, r.Ty
             }).ToList();
             Files.Overwrite(Path.Combine(Root, Safe(s.Campaign), "view_" + Safe(fid) + ".json"), Json.Line(new
             {
                 s.Campaign, s.LoadId, Realm = fid, RealmName = v.FactionName, s.Hours, s.Date, Map = s.MapCrc, Own = own,
-                v.Seen, v.LastSeen, v.Trails, v.Holdings
+                v.Seen, v.LastSeen, v.Trails, v.Holdings,
+                // the marching rules in force, for the "ask the way" tool (GamePace, 0.7.3): the speed model, each people's bonuses, the scout perks' values
+                s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.PerkValues
             }));
+        }
+
+        /// <summary>A lord's march for the view file: the parts of its speed sum (its perk values go once, at the top).</summary>
+        private static Common.Pace MarchOf(Snapshot s, PartyRow r)
+        {
+            Common.Pace p = Forecast.PaceOf(s, r);
+            if (p != null) p.PerkValues = null;
+            return p;
         }
 
         /// <summary>Only the newest keep_loads loads of a campaign keep their frames.</summary>

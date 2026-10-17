@@ -11,7 +11,9 @@ namespace BannerlordAgents.WarRoom
     internal sealed class Known
     {
         public string Id, Lord, Name, What;
-        public float X, Y, Pace;
+        public float X, Y;
+        /// <summary>Its march as the game reckons it (GamePace, from the bridge's view file), or a pace known only by its trail.</summary>
+        public BannerlordAgents.Common.Pace March;
         public string PaceFrom;
         /// <summary>The in-game hour this position is from (an enemy's last sighting); NaN for a holding.</summary>
         public double At = double.NaN;
@@ -168,9 +170,10 @@ namespace BannerlordAgents.WarRoom
             string error = null;
             Known from = null, to = null;
             double hours = double.NaN;
+            JsonObject view = null;
             try
             {
-                JsonObject view = ReadView();
+                view = ReadView();
                 if (view == null) error = "Your realm's view is not ready yet; ask again in a moment.";
                 WalkMap m = view == null ? null : MapFor(_root, (string)view["map"]);
                 if (error == null && m == null) error = "The map is not ready yet, so the way cannot be worked out.";
@@ -191,8 +194,7 @@ namespace BannerlordAgents.WarRoom
             if (error == null && !_toldRules)
             {
                 _toldRules = true;
-                WalkMap m = _map;
-                text += "\n\n" + Marching.Rules(m, SpeedFactors.Load(m?.Dir));
+                text += "\n\n" + Marching.Rules(People(view));
             }
             Log(new
             {
@@ -206,7 +208,6 @@ namespace BannerlordAgents.WarRoom
         private List<string> Answer(WalkMap m, JsonObject view, List<Known> known, Known from, Known to, List<string> also, double now)
         {
             Atlas atlas = Atlas.Load(m.Dir);
-            SpeedFactors sf = SpeedFactors.Load(m.Dir);
             GameCalendar cal = Calendar();
             var lines = new List<string> { "THE WAY FROM " + Head(from) + " TO " + Head(to) };
             lines.Add("- " + Describe(from, now));
@@ -214,7 +215,7 @@ namespace BannerlordAgents.WarRoom
             RouteResult r;
             lock (Gate) r = _finder.Find(from.X, from.Y, to.X, to.Y);
             double start = double.IsNaN(from.At) ? now : from.At;
-            List<string> way = Explain.Way(m, atlas, r, from.Pace, from.PaceFrom, start, sf, cal.When, out double _, out double arrive);
+            List<string> way = Explain.Way(m, atlas, r, from.March, from.PaceFrom, start, cal.When, out double _, out double arrive);
             foreach (string l in way) lines.Add("- " + l);
             if (r.Ok && !double.IsNaN(from.At) && from.At < now - 0.5)
                 lines.Add("- That is if it marched on from where it was seen " + Words.N(now - from.At) + " hours ago, at once and without turning aside.");
@@ -229,8 +230,8 @@ namespace BannerlordAgents.WarRoom
                     RouteResult rk;
                     lock (Gate) rk = _finder.Find(k.X, k.Y, to.X, to.Y);
                     if (!rk.Ok) { lines.Add("- " + k.Name + ": no way there (" + rk.Why + ")."); continue; }
-                    double hk = Marching.Hours(rk, m, k.Pace, double.IsNaN(k.At) ? now : k.At, sf, out double ak);
-                    race.Add((k.Name, ak, " (" + Words.N(rk.Length) + " by the shortest way at " + Words.D1(k.Pace) + " an hour, " + k.PaceFrom
+                    double hk = Marching.Hours(rk, m, k.March, double.IsNaN(k.At) ? now : k.At, out double ak);
+                    race.Add((k.Name, ak, " (" + Words.N(rk.Length) + " by the shortest way " + Explain.PaceWords(k.March) + ", " + k.PaceFrom
                                           + (double.IsNaN(k.At) || k.At >= now - 0.5 ? "" : ", from where it was seen " + Words.N(now - k.At) + " hours ago") + ")"));
                     _ = hk;
                 }
@@ -260,30 +261,40 @@ namespace BannerlordAgents.WarRoom
         private static List<Known> Gather(JsonObject view, WalkMap m)
         {
             var list = new List<Known>();
-            var ownPaces = new List<float>();
+            var ownPaces = new List<BannerlordAgents.Common.Pace>();
             foreach (JsonObject o in (view["own"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
             {
-                float pace = F(o["pace"]);
-                if (pace <= 0.05f) pace = F(o["final_speed"]);
-                if (pace > 0.05f) ownPaces.Add(pace);
+                // its march as the game reckons it; a view from before 0.7.3 gave only its speed number
+                BannerlordAgents.Common.Pace march = MarchOf(o["march"]);
+                if (march == null)
+                {
+                    float pace = F(o["pace"]);
+                    if (pace <= 0.05f) pace = F(o["final_speed"]);
+                    if (pace > 0.05f) march = BannerlordAgents.Common.Pace.FromSpeed(pace);
+                }
+                if (march != null) ownPaces.Add(march);
                 int men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 list.Add(new Known
                 {
-                    Id = Str(o["id"]), Lord = Str(o["lord"]), Name = Str(o["name"]), X = F(o["x"]), Y = F(o["y"]), Pace = pace, PaceFrom = "its own pace", Own = true,
+                    Id = Str(o["id"]), Lord = Str(o["lord"]), Name = Str(o["name"]), X = F(o["x"]), Y = F(o["y"]), March = march, PaceFrom = "its own pace, by the game's rules", Own = true,
                     What = "your own" + (I(o["army_men"]) > 0 ? " army" : "") + ", " + Words.N(men) + " men, " + (Str(o["doing"]) ?? "")
                 });
             }
-            float usual = ownPaces.Count > 0 ? ownPaces.OrderBy(x => x).ElementAt(ownPaces.Count / 2) : 3.4f;
+            BannerlordAgents.Common.Pace usual = ownPaces.Count > 0 ? ownPaces.OrderBy(x => x.OpenSpeed).ElementAt(ownPaces.Count / 2) : BannerlordAgents.Common.Pace.FromSpeed(3.4f);
             var trails = (view["trails"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().ToList();
             void Enemy(JsonObject o, bool inView)
             {
                 string id = Str(o["id"]);
                 if (id == null || list.Any(k => k.Id == id)) return;
-                (float pace, string from) = TrailPace(trails.FirstOrDefault(t => Str(t["id"]) == id), usual);
+                // an enemy in view: its march as the game reckons it (its speed shows on the map); seen earlier: as it was then;
+                // else the pace its trail shows; else the usual pace of the realm's own lords
+                BannerlordAgents.Common.Pace march = MarchOf(o["march"]);
+                string from = inView ? "its own pace as the map shows it, by the game's rules" : "its own pace when last seen, by the game's rules";
+                if (march == null) (march, from) = TrailPace(trails.FirstOrDefault(t => Str(t["id"]) == id), usual);
                 int men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 list.Add(new Known
                 {
-                    Id = id, Lord = Str(o["lord"]), Name = Str(o["name"]), X = F(o["x"]), Y = F(o["y"]), At = Num(o["seen_hours"]), Pace = pace, PaceFrom = from, Toward = Str(o["toward"]),
+                    Id = id, Lord = Str(o["lord"]), Name = Str(o["name"]), X = F(o["x"]), Y = F(o["y"]), At = Num(o["seen_hours"]), March = march, PaceFrom = from, Toward = Str(o["toward"]),
                     What = (Str(o["relation"]) ?? "seen") + (I(o["army_men"]) > 0 ? " army" : "") + " of " + (Str(o["faction_name"]) ?? "?") + ", " + Words.N(men) + " men, " + (Str(o["doing"]) ?? "")
                            
                 });
@@ -298,8 +309,8 @@ namespace BannerlordAgents.WarRoom
             return list;
         }
 
-        /// <summary>An enemy's pace from the trail the realm saw (map units marched over the hours between its first and last points), else the usual pace of the realm's own lords.</summary>
-        private static (float, string) TrailPace(JsonObject trail, float usual)
+        /// <summary>An enemy's pace from the trail the realm saw (map units marched over the hours between its first and last points, all in), else the usual pace of the realm's own lords.</summary>
+        private static (BannerlordAgents.Common.Pace, string) TrailPace(JsonObject trail, BannerlordAgents.Common.Pace usual)
         {
             var pts = (trail?["points"] as JsonArray)?.OfType<JsonObject>().ToList();
             if (pts != null && pts.Count >= 2)
@@ -307,9 +318,35 @@ namespace BannerlordAgents.WarRoom
                 double span = Num(pts[pts.Count - 1]["hours"]) - Num(pts[0]["hours"]);
                 float d = 0;
                 for (int i = 1; i < pts.Count; i++) d += WalkMap.Dist(F(pts[i - 1]["x"]), F(pts[i - 1]["y"]), F(pts[i]["x"]), F(pts[i]["y"]));
-                if (span >= 2 && d >= 3) return ((float)Math.Max(0.5, d / span), "the pace its trail shows, errands included");
+                if (span >= 2 && d >= 3) return (BannerlordAgents.Common.Pace.FromUnitsPerHour((float)Math.Max(0.5, d / span)), "the pace its trail shows, errands included");
             }
             return (usual, "its own pace is not known; this is the usual pace of your lords");
+        }
+
+        /// <summary>A march from the bridge's view file (GamePace's parts, snake_case), or null.</summary>
+        public static BannerlordAgents.Common.Pace MarchOf(JsonNode n)
+        {
+            if (n is not JsonObject o) return null;
+            float b = F(o["base"]);
+            if (b <= 0.05f) return null;
+            var p = new BannerlordAgents.Common.Pace { Base = b, Factors = F(o["factors"]), Other = F(o["other"]), Perks = I(o["perks"]), Flat = F(o["flat"]) };
+            float foot = F(o["foot_share"]);
+            if (foot > 0) p.FootShare = foot;
+            if (o["feats"] is JsonArray fa) p.Feats = fa.Select(x => F(x)).ToArray();
+            return p;
+        }
+
+        /// <summary>The peoples' march bonuses in words, from the view file's table of the rules in force.</summary>
+        private static Dictionary<string, string> People(JsonObject view)
+        {
+            var table = new Dictionary<string, float[]>();
+            var names = new Dictionary<string, string>();
+            if (view?["culture_speeds"] is JsonObject cs)
+                foreach (KeyValuePair<string, JsonNode> kv in cs)
+                    if (kv.Value is JsonArray a) table[kv.Key] = a.Select(x => F(x)).ToArray();
+            if (view?["culture_names"] is JsonObject cn)
+                foreach (KeyValuePair<string, JsonNode> kv in cn) names[kv.Key] = Str(kv.Value);
+            return Marching.PeopleBonuses(table, names);
         }
 
         private static Known Find(List<Known> known, WalkMap m, string q)
@@ -334,9 +371,11 @@ namespace BannerlordAgents.WarRoom
         {
             try
             {
-                string dir = WalkMap.FindDir(root);
-                WalkMap m = dir == null ? null : WalkMap.Load(dir);
-                string text = Marching.Rules(m, SpeedFactors.Load(dir)) + "\n";
+                // the peoples' march bonuses come from the newest view file the bridge wrote (the rules in force in that game)
+                string live = Path.Combine(root, "live");
+                FileInfo newest = Directory.Exists(live) ? new DirectoryInfo(live).GetFiles("view_*.json", SearchOption.AllDirectories).OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault() : null;
+                JsonObject view = newest == null ? null : JsonNode.Parse(Room.ReadShared(newest.FullName) ?? "{}") as JsonObject;
+                string text = Marching.Rules(People(view)) + "\n";
                 string path = Path.Combine(channelDir, "marching.txt");
                 if (Room.ReadShared(path) != text) File.WriteAllText(path, text, new UTF8Encoding(false));
             }

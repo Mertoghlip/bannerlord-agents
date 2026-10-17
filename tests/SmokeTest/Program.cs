@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using BannerlordAgents;
 using BannerlordAgents.Tools;
+using Common = BannerlordAgents.Common;
 using Newtonsoft.Json.Linq;
 
 namespace SmokeTest
@@ -380,6 +381,7 @@ namespace SmokeTest
             TrailTests();
             WatchShadowTests(dir, moves, released);
             SiegeReliefTests(dir);
+            GameClockTests(dir);
             RoadTests();
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
@@ -432,7 +434,7 @@ namespace SmokeTest
             // join: the far lord marches to the army's leader; gather waits for it even once the army is otherwise complete
             var leader = new PartyRow { Id = "p_ldr", Leader = "lord_ldr", Name = "Mauhur", Faction = "orcs", Kind = "lord", Men = 300, Strength = 400, ArmyLeader = "p_ldr", ArmyMen = 450, ArmyParties = 2, ArmyStrength = 600, Speed = 4, FoodDays = 9, X = 139, Y = 100, Doing = "GoToPoint", Spottable = true };
             var member = new PartyRow { Id = "p_mem", Leader = "lord_mem", Name = "Snaga", Faction = "orcs", Kind = "lord", Men = 150, Strength = 200, ArmyLeader = "p_ldr", Attached = true, Speed = 4, FoodDays = 9, X = 139, Y = 100, Doing = "EscortParty", Spottable = true };
-            var far = new PartyRow { Id = "p_far", Leader = "lord_far2", Name = "Radbug", Faction = "orcs", Kind = "lord", Men = 250, SizeLimit = 300, Strength = 320, Speed = 4, FoodDays = 9, X = 400, Y = 100, Doing = "Hold", Spottable = true };
+            var far = new PartyRow { Id = "p_far", Leader = "lord_far2", Name = "Radbug", Faction = "orcs", Kind = "lord", Men = 250, SizeLimit = 300, Strength = 320, Speed = 4, FoodDays = 9, X = 350, Y = 100, Doing = "Hold", Spottable = true };   // 210 to Orc Keep: about 66 hours at speed 4 by the game's rules (3.2 map units an hour over a day)
             Brain.OnHour(ToolWorld(4002, leader, member, far));
             var ga = new ToolOrder { Tool = "gather", Lord = "lord_ldr", LordName = "Mauhur", Party = "p_ldr", At = "castle_two", Then = JObject.Parse("{\"do\":\"defend\",\"at\":\"castle_two\"}") };
             ga.Lords.Add("p_mem");
@@ -906,6 +908,97 @@ namespace SmokeTest
         }
 
         /// <summary>
+        /// Version 0.7.3, the game's clocks (Mert, Oct 17: march speed "based on the game's exact equations", and "the same about
+        /// siege and battle timers so it can plan ahead"): the speed sum with the ground and night added in, a party covering its
+        /// speed / 1.2 an hour; an arrival along the planned way across a night; the siege's preparations, engines and storm chance
+        /// against the worked example of the 1.4.8 code (2,000 men at a level-1 castle: preparations 25.8 hours, a ram at 32.2, a
+        /// storm more likely than not by about 50 hours); a storm's strikes per round by the game's formula; and the report.
+        /// </summary>
+        private static void GameClockTests(string dir)
+        {
+            // the speed sum: base x (1 + factors + ground + night), at least 1; 1.2 speed to the map unit an hour
+            float b = (float)(4 * Math.Pow(200.0 / 2130, 0.4));
+            var army = new Common.Pace { Base = b, Factors = 1.7f / b - 1 };
+            Check(Math.Abs(Common.GamePace.Speed(army, Common.GamePace.Plain, false) - 1.7f) < 1e-3 && Math.Abs(Common.GamePace.PerHour(1.7f) - 1.4167f) < 1e-3,
+                  "an army of 2,130 men at speed 1.7 on open ground by day covers 1.42 map units an hour");
+            Check(Math.Abs(Common.GamePace.Speed(army, Common.GamePace.Forest, false) - b * (1.7f / b - 0.3f)) < 1e-3 && Common.GamePace.Speed(army, Common.GamePace.Forest, true) == 1f,
+                  "forest adds -0.3 to the one sum (not x 0.7), and with night's -0.25 it falls to the game's floor of 1");
+            var orcs = new Common.Pace { Base = 2f, Factors = 0f, Feats = new float[Common.GamePace.Kinds] };
+            orcs.Feats[Common.GamePace.KindSnow] = 0.1f;
+            Check(Math.Abs(Common.GamePace.Speed(orcs, Common.GamePace.Snow, false) - 2.2f) < 1e-4 && Math.Abs(Common.GamePace.Speed(orcs, Common.GamePace.Plain, true) - 1.5f) < 1e-4,
+                  "a people's bonus for its ground adds in too (Misty Mountain Orcs +10% on snow)");
+            Check(Math.Abs(Common.GamePace.Residual(army, b * (1.7f / b - 0.25f), Common.GamePace.Plain, true, false)) < 1e-4,
+                  "what the rules leave unexplained in a speed now is measured from it: nothing, for a plain night march");
+
+            // an arrival along the way the game planned: 100 east over open ground at speed 2.4 (2 an hour by day, 1.5 by night)
+            MapGround.Override = new MapGround("test", Enumerable.Repeat((byte)Common.GamePace.Plain, 400 * 400).ToArray(), 0, 0, 1, 400, 400);
+            var marcher = new PartyRow { Id = "p_mar", Leader = "lord_mar", Name = "Ugluk", Faction = "orcs", Kind = "lord", Men = 120, Strength = 150, Speed = 2.4f, SpeedBase = 2.4f, FinalSpeed = 2.4f,
+                                         Terrain = Common.GamePace.Plain, X = 100, Y = 50, Tx = 200, Ty = 50, Route = new[] { 150f, 50f, 200f, 50f }, Doing = "GoToSettlement", TargetSettlement = "castle_far", Spottable = true };
+            Snapshot sw = ToolWorld(24 * 300 + 6, marcher);
+            Add(sw, new SettlementRow { Id = "castle_far", Name = "Far Keep", Kind = "castle", Faction = "orcs", X = 200, Y = 50, Garrison = 100 });
+            Forecast.Arrival a = Forecast.ArrivalOf(sw, marcher);
+            Check(a != null && a.Reached && Math.Abs(a.Hours - 52) < 0.6, "100 units from 06:00 at speed 2.4: 32 that day, 6 in the night, 40 the next day, 6 the next night, 16 more: about 52 hours (" + (a == null ? "none" : a.Hours.ToString("0.0")) + ")");
+            View vw = Views.Build(sw, "orcs", sw.WatchedSees, sw.HostileToWatched, Brain.Get("orcs"));
+            string rw = Views.Report(vw, null);
+            Check(rw.Contains("going to Far Keep, there in about 52 hours (") && rw.Contains("is the game's own reckoning of the march"),
+                  "the report gives the arrival with its hour, and says how it is reckoned: " + string.Join(" | ", rw.Split('\n').Where(l => l.Contains("Ugluk") || l.Contains("reckoning"))));
+            MapGround.Override = null;
+
+            // the siege's clock: 2,000 healthy besiegers, a level-1 castle, defenders 450, besiegers 2,600, from hour 0 of the siege
+            double k = Math.Sqrt(2000) / 24.0;
+            var g = new SiegeRow
+            {
+                Settlement = "castle_orc", Besieger = "p_sieger2", BesiegerFaction = "player_k", Strategy = "siege_strategy_prepare_assault", StartHours = 24 * 400, WallLevel = 1,
+                Prep = 0, PrepRate = (float)(k / 48), Advantage = 5f, Defenders = 450, Attackers = 2600, GarrisonPower = 300, Food = 400, FoodChange = -40, GarrisonRegulars = 300
+            };
+            g.Rates["ram"] = (float)(k / 12); g.Rates["siege_tower_level1"] = (float)(k / 16); g.Rates["ballista"] = (float)(k / 8); g.Rates["onager"] = (float)(k / 20); g.Rates["trebuchet"] = (float)(k / 24);
+            Forecast.SiegeClock c = Forecast.Siege(g, g.StartHours);
+            double since(double t) => t - g.StartHours;
+            Check(Math.Abs(since(c.PrepDoneAt) - 25.8) < 0.3 && c.Engines.Count >= 3 && c.Engines[0].Key == "ram" && Math.Abs(since(c.Engines[0].Value) - 32.2) < 0.4 && Math.Abs(since(c.Engines[2].Value) - 49.4) < 0.5,
+                  "preparations about 25.8 hours (48 man-days at the square root of 2,000 a day), then a ram at 32.2, two towers by 49.4 (" + since(c.PrepDoneAt).ToString("0.0") + ", "
+                  + string.Join(", ", c.Engines.Take(3).Select(e => e.Key + " " + since(e.Value).ToString("0.0"))) + ")");
+            Check(!double.IsNaN(c.MedianAt) && since(c.MedianAt) > 44 && since(c.MedianAt) < 56 && c.Within24 < 0.01,
+                  "no storm the first day; more likely than not by about 50 hours, as the code's worked example gives (" + (double.IsNaN(c.MedianAt) ? "never" : since(c.MedianAt).ToString("0.0")) + ")");
+            Check(Math.Abs(since(c.FoodOutAt) - 240) < 0.5, "400 food falling 40 a day lasts 10 days");
+            var weak = new SiegeRow { Settlement = g.Settlement, Strategy = g.Strategy, StartHours = g.StartHours, WallLevel = 1, Prep = 1, PrepRate = g.PrepRate, Advantage = 5f, Defenders = 1000, Attackers = 1500 };
+            foreach (KeyValuePair<string, float> kv in g.Rates) weak.Rates[kv.Key] = kv.Value;
+            Forecast.SiegeClock cw = Forecast.Siege(weak, weak.StartHours);
+            Check(double.IsNaN(cw.FirstChanceAt) || since(cw.FirstChanceAt) > 96, "besiegers only 1.5 times the defenders wait for the bar to fall after the fourth day (" + (double.IsNaN(cw.FirstChanceAt) ? "never" : since(cw.FirstChanceAt).ToString("0")) + ")");
+
+            // a storm's strikes per round (DefaultCombatSimulationModel): the attackers' depend on the defenders' number only
+            Forecast.StrikesPerRound(true, false, 3.18f, 960, 4500, out double byA, out double byD);
+            Forecast.StrikesPerRound(true, false, 3.18f, 2050, 4500, out double byA2, out _);
+            Check(byA == 28 && byD == 58 && byA2 == 28, "a storm: 960 attackers against 4,500 strike 28 times a round, the defenders 58, and 2,050 attackers no more (" + byA + ", " + byD + ", " + byA2 + ")");
+            Forecast.StrikesPerRound(false, false, 1f, 2050, 4500, out double fA, out double fD);
+            Check(fA == Math.Round(Math.Pow(2050, 0.6), MidpointRounding.ToEven) && fD == Math.Round(Math.Pow(4500, 0.6), MidpointRounding.ToEven), "in the field each side's strikes grow with its own men (" + fA + ", " + fD + ")");
+            var storm = new BattleRow { Kind = "siege", Settlement = "castle_men", StartHours = 24 * 400, SettlementAdvantage = 3.18f };
+            storm.Attackers = new BattleSideRow { Faction = "orcs", Healthy = 960, Power = 1.3f, Advantage = 0.9f, Morale = 40 };
+            storm.Defenders = new BattleSideRow { Faction = "player_k", Healthy = 4500, Power = 1.6f, Advantage = 1f, Morale = 50, SettlementLed = true };
+            Forecast.BattleClock bc = Forecast.Battle(storm, storm.StartHours);
+            Check(bc.Winner == "defenders" && bc.AttackerLossPerHour > 10 && bc.AttackerLossPerHour < 30 && bc.DefenderLossPerHour > 3 && bc.DefenderLossPerHour < 12,
+                  "a storm of 960 against 4,500 behind walls: the attackers lose about " + Math.Round(bc.AttackerLossPerHour) + " an hour, the defenders " + Math.Round(bc.DefenderLossPerHour) + ", and the defenders win ("
+                  + bc.How + ", in " + (double.IsNaN(bc.EndsAt) ? "more than 5 days" : Math.Round(bc.EndsAt - storm.StartHours) + " hours") + ")");
+
+            // the report: the siege of the realm's own castle and the storm, with their clocks
+            var sieger = new PartyRow { Id = "p_sieger2", Leader = "lord_sieger2", Name = "Elessar", Faction = "player_k", Kind = "lord", Men = 1500, Strength = 2600, Speed = 3, X = 103, Y = 100, Besieging = "castle_orc", Doing = "BesiegeSettlement", Spottable = true };
+            Snapshot ss = ToolWorld(g.StartHours + 10, sieger);
+            ss.SettlementById["castle_orc"].BesiegedBy = "player_k";
+            ss.SettlementById["castle_orc"].Besieger = "p_sieger2";
+            g.Prep = 0.39f;
+            ss.Sieges.Add(g);
+            View vs = Views.Build(ss, "orcs", ss.WatchedSees, ss.HostileToWatched, Brain.Get("orcs"));
+            string rs = Views.Report(vs, null);
+            Check(rs.Contains("SIEGES AND BATTLES (1)") && rs.Contains("Orc Castle [castle_orc] (castle, Misty Mountain Orcs), besieged by Elessar (Kingdom of Arnor and Gondor)")
+                  && rs.Contains("preparations done in about 16 hours") && rs.Contains("A storm could come from") && rs.Contains("food lasts about"),
+                  "the report runs the siege of the realm's own castle ahead: preparations, engines, the storm's chance, the food");
+            Check(Audit.Fog(vs, rs, ss.WatchedSees, ss.InspectedByWatched).Count == 0, "and passes the fog check");
+            string viewFile = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(dir)) ?? dir, "live", "smoketest", "view_orcs.json");
+            Brain.OnHour(sw);
+            string vf = File.Exists(viewFile) ? Read(viewFile) : "";
+            Check(vf.Contains("\"march\":{\"base\":2.4"), "the agent's view file carries each lord's march for the \"ask the way\" tool");
+        }
+
+        /// <summary>
         /// Version 0.7.1, road distances (Mert, Oct 16: "distances should be given both as the crow flies and the actual travel
         /// distance"): through the party's entrance and the game's table between holdings, the nearest holding chosen by road,
         /// both in the report, the poke rule by road, and times in the facts by road.
@@ -930,8 +1023,8 @@ namespace SmokeTest
             Check(seen != null && seen.NearestHolding == "Orc Keep" && report.Contains("22.4 (27.4 by road) from your Orc Keep"), "the report gives the nearest holding by road, both as the crow flies and by road");
             Check(report.Contains("as the crow flies, then in brackets by road"), "and says what the two distances are");
             Check(Math.Abs(Runner.WorldFor(s).RoadDistance("p_ugr", "p_far") - 183.9) < 0.3, "between two parties, each through its own entrance (" + Text.D((float)Runner.WorldFor(s).RoadDistance("p_ugr", "p_far")) + ")");
-            Check(Facts.Lookups(Runner.WorldFor(s), Brain.Get("orcs").LastSeen, Brain.Get("orcs").Trails).TryGetValue("lord_ugr", out string page) && page.Contains("Orc Keep [castle_two]: about 9 h"),
-                  "a lord's look-up gives hours by road (45 by road at 5 an hour)");
+            Check(Facts.Lookups(Runner.WorldFor(s), Brain.Get("orcs").LastSeen, Brain.Get("orcs").Trails).TryGetValue("lord_ugr", out string page) && page.Contains("Orc Keep [castle_two]: about 11 h"),
+                  "a lord's look-up gives hours by road at its pace by the game's rules (45 by road at speed 5: 4.0 map units an hour over a day, night counted)");
             Brain.OnHour(ToolWorld(7101, far, ug));
             Check(!Roads.Known, "without the game's table (a made-up world) distances go back to the crow's alone");
         }

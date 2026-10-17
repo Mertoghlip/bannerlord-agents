@@ -17,6 +17,7 @@ Version 0.7 (Oct 16). Mert: "the pathfinding for the game is also an important f
   - night −25%. Night is any hour outside `CampaignTime.SunRise` to `SunSet`, 2 to 22 in the default time model.
   - The base speed counts the whole army together: men on foot and on horse, wounded, herds, cargo.
   - The path is the shortest, not the fastest: speed does not enter it.
+  - **Since 0.7.3 (GamePace, docs/TOOLS.md "The game's clocks"):** every one of these is added into the speed's one sum (base x (1 + factors), at least 1), not multiplied; TAOM adds its peoples' ground and night bonuses (`TaomPartySpeedModel`); and a party covers its speed / 1.2 map units an hour. Before 0.7.3 the way-finder took the base speed as map units an hour and multiplied the ground in.
 
 ## The walking map (`MapExport`, the bridge, once per map)
 
@@ -41,8 +42,8 @@ Version 0.7 (Oct 16). Mert: "the pathfinding for the game is also an important f
   - `FromPoints` describes a given way, such as the game's own plan.
   - Each way is analysed: the ground it crosses; its bridges and fords in order, with how far along; and its narrowest place, the walkable width across, measured every 2 units where under 30.
 - **`Marching`:**
-  - The hours a way takes at a pace: the base speed, slowed by the ground under each stretch and by night, hour by hour from a start.
-  - The plain-words rules ("HOW MARCHING WORKS"), from the measured slowing when there is enough, else the game's own numbers.
+  - The hours a way takes at a party's march (`Common.Pace`: the parts of its speed sum, from the view file), by the game's rule (`Common.GamePace.March`, shared with the game module): the ground under each stretch and the night added into the sum as they come, speed / 1.2 map units an hour. An enemy known only by its trail goes at the trail's pace, all in.
+  - The plain-words rules ("HOW MARCHING WORKS"): the game's own numbers and the peoples' bonuses in force (`GamePace.Rules`, `Marching.PeopleBonuses`). The measured slowing (`speed_factors.json`) is shown on the dashboard only.
 - **`Atlas`** (`atlas.json` beside the map, worked out once per map in the background by whichever of the dashboard and the war room finds it missing first, under a lock per map; until then the tool says what closing a crossing costs is not worked out yet):
   1. The ways between each town or castle and its 4 nearest neighbours within 180 units.
   2. Every cell of those ways that is a bridge or ford, or where walkable ground narrows to under 12 units across.

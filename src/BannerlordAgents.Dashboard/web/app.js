@@ -654,18 +654,26 @@ function waysHtml(title, d) {
   return '<h4>' + title + '</h4><ul>' + (d.lines || []).map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
 }
 
+// a party's march for the way's time (0.7.3): its speed sum's parts from the frame, as the game reckons them (GamePace)
+function marchOf(p) {
+  if (!p.speed_base) return { base: p.speed };
+  const feats = S.frame && S.frame.culture_speeds && p.culture ? S.frame.culture_speeds[p.culture] : null;
+  return { base: p.speed_base, factors: p.speed_factors || 0, perks: p.scout_perks || 0, foot_share: p.foot_share || 1, feats: feats || null };
+}
+
 function paceFor(it) {
   const p = it.row;
-  if (p && (S.mode === 'truth' || it.rel === 'own') && p.speed) return [p.speed, 'its own pace'];
+  if (p && (S.mode === 'truth' || it.rel === 'own') && (p.speed_base || p.speed)) return [marchOf(p), "its own pace, by the game's rules"];
+  if (it.vp && it.vp.march) return [it.vp.march, "its pace as its realm saw it, by the game's rules"];
   const t = S.model && S.model.trails.find((x) => x.id === it.id);
   if (t && t.points && t.points.length >= 2) {
     const a = t.points[0], b = t.points[t.points.length - 1];
     let d = 0;
     for (let i = 1; i < t.points.length; i++) d += Math.hypot(t.points[i].x - t.points[i - 1].x, t.points[i].y - t.points[i - 1].y);
     const span = b.hours - a.hours;
-    if (span >= 2 && d >= 3) return [d / span, 'the pace its trail shows'];
+    if (span >= 2 && d >= 3) return [{ flat: d / span }, 'the pace its trail shows'];
   }
-  return [3.4, 'a typical pace (its own is not known)'];
+  return [{ base: 3.4 }, 'a typical pace (its own is not known)'];
 }
 
 async function wayFor(it) {
@@ -677,7 +685,7 @@ async function wayFor(it) {
   try {
     if (!known && p && routeOf(p) && !it.ghost) {
       const pts = routeOf(p);
-      const d = await getJSON('/api/way', { method: 'POST', body: JSON.stringify({ crc: S.mapCrc, points: pts, pace, hours: S.frame.hours, pace_from: paceFrom }) });
+      const d = await getJSON('/api/way', { method: 'POST', body: JSON.stringify({ crc: S.mapCrc, points: pts, march: pace, hours: S.frame.hours, pace_from: paceFrom }) });
       S.way = { points: pts, colour: relColour(it.rel), dash: null, crossings: d.crossings };
       box.innerHTML = waysHtml(p.straight ? 'Walking straight there' : 'The way the game planned for it', d);
     } else {
@@ -687,7 +695,7 @@ async function wayFor(it) {
       if (!gate) { box.innerHTML = '<h4>Its way</h4><div class="muted">' + (it.ghost ? 'Not known: it was not heading for a holding when last seen.' : 'Not heading for a holding' + (p && known ? ' (as far as its realm can tell)' : '') + '.') + '</div>'; requestDraw(); return; }
       const gx = gate.gx || gate.x, gy = gate.gy || gate.y;
       const start = it.ghost ? S.frame.hours - it.ago : S.frame.hours;
-      const d = await getJSON('/api/route?crc=' + encodeURIComponent(S.mapCrc || '') + '&fx=' + it.x + '&fy=' + it.y + '&tx=' + gx + '&ty=' + gy + '&pace=' + pace + '&hours=' + start + '&pace_from=' + encodeURIComponent(paceFrom));
+      const d = await getJSON('/api/route?crc=' + encodeURIComponent(S.mapCrc || '') + '&fx=' + it.x + '&fy=' + it.y + '&tx=' + gx + '&ty=' + gy + '&march=' + encodeURIComponent(JSON.stringify(pace)) + '&hours=' + start + '&pace_from=' + encodeURIComponent(paceFrom));
       S.way = { points: d.points, colour: relColour(it.rel), dash: [6, 5], crossings: d.crossings };
       box.innerHTML = waysHtml((it.ghost ? 'If it marched on from where it was seen to ' : 'If it marches on to ') + esc(s.name) + ' (our prediction)', d);
     }
@@ -713,7 +721,7 @@ async function askTo(x, y, placeName) {
   box.hidden = false;
   box.innerHTML = '<h4>Asked: the way to ' + esc(placeName || 'that spot') + '</h4><div class="muted">Working it out&hellip;</div>';
   try {
-    const d = await getJSON('/api/route?crc=' + encodeURIComponent(S.mapCrc || '') + '&fx=' + it.x + '&fy=' + it.y + '&tx=' + x + '&ty=' + y + '&pace=' + pace + '&hours=' + S.frame.hours + '&pace_from=' + encodeURIComponent(paceFrom));
+    const d = await getJSON('/api/route?crc=' + encodeURIComponent(S.mapCrc || '') + '&fx=' + it.x + '&fy=' + it.y + '&tx=' + x + '&ty=' + y + '&march=' + encodeURIComponent(JSON.stringify(pace)) + '&hours=' + S.frame.hours + '&pace_from=' + encodeURIComponent(paceFrom));
     S.asked = { points: d.points, crossings: d.crossings };
     box.innerHTML = waysHtml('Asked: the way to ' + esc(placeName || 'that spot'), d);
   } catch (e) { box.innerHTML = '<h4>Asked</h4><div class="muted">' + esc(e.message) + '</div>'; }

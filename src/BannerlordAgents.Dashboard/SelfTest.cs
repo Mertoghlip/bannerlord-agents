@@ -53,14 +53,18 @@ namespace BannerlordAgents.Dashboard
             bool learnt = unlearned.Learn(new List<float[]> { new[] { 40f, 30.5f }, new[] { 60f, 30.5f } });
             Check(learnt && new Finder(unlearned).Find(20, 29, 80, 29).Ok && unlearned.Learned >= 4, "a way the game planned across it opens it (" + unlearned.Learned + " cells learned)");
 
-            // the time
-            SpeedFactors sf = SpeedFactors.Default();
-            double hOpen = Marching.Hours(f.Find(5, 30, 45, 30), m, 4f, 6, sf, out _);
-            Check(Math.Abs(hOpen - 10) < 0.3, "40 units of open plain at 4 an hour by day take 10 hours (" + Words.D1(hOpen) + ")");
-            double hWood = Marching.Hours(wood, m, 4f, 6, sf, out _);
+            // the time, by the game's rules (GamePace): a speed of 4.8 covers 4 map units an hour (speed / 1.2); forest adds -0.3 to the sum
+            var speed48 = BannerlordAgents.Common.Pace.FromSpeed(4.8f);
+            double hOpen = Marching.Hours(f.Find(5, 30, 45, 30), m, speed48, 6, out _);
+            Check(Math.Abs(hOpen - 10) < 0.3, "40 units of open plain at speed 4.8 (4 map units an hour) by day take 10 hours (" + Words.D1(hOpen) + ")");
+            double hWood = Marching.Hours(wood, m, speed48, 6, out _);
             Check(hWood > 20 / 4.0 + 1, "through the wood it is slower (" + Words.D1(hWood) + " hours for 20 units)");
-            double hNight = Marching.Hours(f.Find(5, 30, 45, 30), m, 4f, 22, sf, out _);
+            double hNight = Marching.Hours(f.Find(5, 30, 45, 30), m, speed48, 22, out _);
             Check(hNight > hOpen + 0.5, "setting off at night it takes longer (" + Words.D1(hNight) + " hours)");
+            var forested = new BannerlordAgents.Common.Pace { Base = 2f, Factors = 0.1f };
+            Check(Math.Abs(BannerlordAgents.Common.GamePace.Speed(forested, Ground.Forest, true) - 2f * (1 + 0.1f - 0.3f - 0.25f)) < 1e-4
+                  && Math.Abs(BannerlordAgents.Common.GamePace.Speed(forested, Ground.Forest, true, true) - 1f) < 1e-4,
+                  "the ground and the night add into the speed's one sum, and the game's floor of 1 holds (" + BannerlordAgents.Common.GamePace.Speed(forested, Ground.Forest, true) + ")");
             var cal = new GameCalendar();
             Check(cal.When(24 * 21 * 4 + 24 * 22 + 15) == "Summer 2, 1, 15:00", "the calendar: " + cal.When(24 * 21 * 4 + 24 * 22 + 15));
 
@@ -76,10 +80,12 @@ namespace BannerlordAgents.Dashboard
             Check(back != null && back.Crossings.Count == a.Crossings.Count, "the atlas is kept and read back (" + back?.Crossings.Count + ")");
 
             // the words
-            List<string> lines = Explain.Way(m, a, river, 4f, "its own pace", 6, sf, cal.WhenShort, out double hours, out _);
+            List<string> lines = Explain.Way(m, a, river, BannerlordAgents.Common.Pace.FromSpeed(4f), "its own pace", 6, cal.WhenShort, out double hours, out _);
             string all = string.Join(" ", lines);
             Check(all.Contains("map units") && all.Contains("bridge") && all.Contains("no other way") && !double.IsNaN(hours), "the answer names the way's length, the bridge and that it is the only way: " + all);
-            Check(Marching.Rules(m, sf).Contains("shortest way, not the fastest"), "how marching works is told in plain words");
+            string rules = Marching.Rules(Marching.PeopleBonuses(new Dictionary<string, float[]> { ["orcs"] = new[] { 0, 0, 0, 0, 0, 0, 0.1f, 0 } }, new Dictionary<string, string> { ["orcs"] = "Misty Mountain Orcs" }));
+            Check(rules.Contains("shortest way, not the fastest") && rules.Contains("divided by 1.2") && rules.Contains("Misty Mountain Orcs +10% on snow"),
+                  "how marching works is told in plain words, the game's numbers and the peoples' bonuses with it");
             RouteResult given = f.FromPoints(new List<float[]> { new[] { 20f, 29f }, new[] { 50f, 30.5f }, new[] { 80f, 29f } });
             Check(given.Ok && given.Crossings.Count == 1, "a way given by its corners is described too (" + given.Crossings.Count + " crossing)");
 

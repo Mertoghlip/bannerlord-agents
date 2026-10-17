@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.7.2</Version>
+    <Version>0.7.3</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -21,6 +21,11 @@
   <ItemGroup>
     <!-- tests/SmokeTest runs the worker's half (views, pokes, reports, records) outside the game -->
     <InternalsVisibleTo Include="SmokeTest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- the game's marching rule, one file shared with the way-finder (src/Common, docs/ROUTES.md) -->
+    <Compile Include="..\Common\GamePace.cs" Link="Common\GamePace.cs" />
   </ItemGroup>
 
   <ItemGroup>

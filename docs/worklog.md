@@ -19,3 +19,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Oct 16 | | Version 0.7.0: the dashboard (a live map of what each realm sees, legend, cards, the agent's moves, rewind), the walking map and the way-finder, the crossing atlas, the agent's "ask the way" tool served inside its calls, the accuracy check; installed | 2 |
 | Oct 16 | | Version 0.7.1 (watch, shadow, every distance by road too); its first live session (the siege of Hollin Gate) | 2 |
 | Oct 17 | | Version 0.7.2: the siege relief alarm counts every enemy lord coming, enemy castles' militia in the report, doctrine principles 16 and 17; where the Hollin Gate siege's hours went, read in the game's code | 2 |
+| Oct 17 | | Version 0.7.3: the game's clocks: march times by the game's exact speed rule (read in the code and TAOM, checked on 438 real marches), siege and battle clocks run ahead, in the report, facts and the way-finder | 3 |

@@ -51,12 +51,12 @@ namespace BannerlordAgents.Routes
         }
 
         /// <summary>The ground a way crosses, largest share first ("plain 62%, forest 30%, ford 1%").</summary>
-        public static string GroundText(RouteResult r, SpeedFactors f)
+        public static string GroundText(RouteResult r)
         {
             float total = r.OnGround.Values.Sum();
             if (total <= 0) return "";
             var parts = r.OnGround.Where(kv => kv.Value / total >= 0.02f || Ground.IsCrossing(kv.Key)).OrderByDescending(kv => kv.Value)
-                .Select(kv => Ground.Name(kv.Key) + " " + Words.Pct(kv.Value / total) + (f != null && f.Of(kv.Key) < 0.99f ? " (slower)" : ""));
+                .Select(kv => Ground.Name(kv.Key) + " " + Words.Pct(kv.Value / total) + (BannerlordAgents.Common.GamePace.GroundFactor(kv.Key, 0, 1f, null) < -0.001f ? " (slower)" : ""));
             return string.Join(", ", parts);
         }
 
@@ -69,11 +69,19 @@ namespace BannerlordAgents.Routes
             return "if it were closed the way from " + e.From + " to " + e.To + " would grow from " + Words.N(e.Before) + " to " + Words.N(e.After);
         }
 
+        /// <summary>"at its speed 1.7 (1.4 map units an hour on open ground by day)", or for a pace known only as units an hour, "at 1.3 an hour, all in".</summary>
+        public static string PaceWords(BannerlordAgents.Common.Pace p)
+        {
+            if (p.Flat > 0) return "at " + Words.D1(p.Flat) + " map units an hour, all in";
+            float open = p.OpenSpeed;
+            return "at its speed " + Words.D1(open) + " (" + Words.D1(BannerlordAgents.Common.GamePace.PerHour(open)) + " map units an hour on open ground by day; forest, fords, bridges and night slower, as they come)";
+        }
+
         /// <summary>
         /// The answer about one way: its length against the straight line, the time at the party's pace (null pace: no time),
         /// the ground, the crossings and what closing each would cost, and the narrowest place.
         /// </summary>
-        public static List<string> Way(WalkMap m, Atlas atlas, RouteResult r, float pace, string paceFrom, double startHours, SpeedFactors f, Func<double, string> when, out double hours, out double arrive)
+        public static List<string> Way(WalkMap m, Atlas atlas, RouteResult r, BannerlordAgents.Common.Pace pace, string paceFrom, double startHours, Func<double, string> when, out double hours, out double arrive)
         {
             hours = arrive = double.NaN;
             var lines = new List<string>();
@@ -83,13 +91,13 @@ namespace BannerlordAgents.Routes
                 return lines;
             }
             string time = "";
-            if (pace > 0.05f)
+            if (pace != null && pace.Base > 0.05f)
             {
-                hours = Marching.Hours(r, m, pace, startHours, f, out arrive);
-                time = "; about " + Words.N(hours) + " hours at " + Words.D1(pace) + " an hour on open ground by day (" + paceFrom + "), so about " + when(arrive);
+                hours = Marching.Hours(r, m, pace, startHours, out arrive);
+                time = "; about " + Words.N(hours) + " hours " + PaceWords(pace) + " (" + paceFrom + "), so about " + when(arrive);
             }
             lines.Add("By the shortest way: " + Words.N(r.Length) + " map units (" + Words.N(r.Straight) + " as the crow flies)" + time + ".");
-            string ground = GroundText(r, f);
+            string ground = GroundText(r);
             if (ground.Length > 0) lines.Add("Ground on the way: " + ground + ".");
             List<WayCrossing> xs = Crossings(m, atlas, r);
             if (xs.Count == 0) lines.Add("No bridge, ford or narrow pass on the way.");

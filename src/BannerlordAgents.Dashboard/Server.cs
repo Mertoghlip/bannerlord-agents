@@ -178,7 +178,33 @@ namespace BannerlordAgents.Dashboard
             float fx = F(q.QueryString["fx"]), fy = F(q.QueryString["fy"]), tx = F(q.QueryString["tx"]), ty = F(q.QueryString["ty"]);
             Costs costs = Costs.ByName(q.QueryString["costs"]);
             RouteResult r = _store.WithFinder(m, f => f.Find(fx, fy, tx, ty, costs));
-            Json(res, Describe(m, r, F(q.QueryString["pace"]), D(q.QueryString["hours"]), q.QueryString["pace_from"] ?? "its pace"));
+            JsonNode march = null;
+            try { if (!string.IsNullOrEmpty(q.QueryString["march"])) march = JsonNode.Parse(q.QueryString["march"]); } catch (System.Text.Json.JsonException) { }
+            Json(res, Describe(m, r, MarchOf(march, F(q.QueryString["pace"])), D(q.QueryString["hours"]), q.QueryString["pace_from"] ?? "its pace"));
+        }
+
+        /// <summary>
+        /// A party's march for the way's time: its speed sum's parts as the page sends them from the frame (base, factors, perks,
+        /// foot_share, feats: GamePace), or units an hour all in (flat, from a trail), or only a speed number (pace).
+        /// </summary>
+        private static BannerlordAgents.Common.Pace MarchOf(JsonNode n, float pace)
+        {
+            if (n is JsonObject o)
+            {
+                float Fv(string k) => o[k] is JsonValue v && v.TryGetValue(out double d) ? (float)d : 0f;
+                float flat = Fv("flat");
+                if (flat > 0.05f) return BannerlordAgents.Common.Pace.FromUnitsPerHour(flat);
+                float b = Fv("base");
+                if (b > 0.05f)
+                {
+                    var p = new BannerlordAgents.Common.Pace { Base = b, Factors = Fv("factors"), Other = Fv("other"), Perks = (int)Fv("perks") };
+                    float foot = Fv("foot_share");
+                    if (foot > 0) p.FootShare = foot;
+                    if (o["feats"] is JsonArray fa) p.Feats = fa.Select(x => x is JsonValue xv && xv.TryGetValue(out double d) ? (float)d : 0f).ToArray();
+                    return p;
+                }
+            }
+            return pace > 0.05f ? BannerlordAgents.Common.Pace.FromSpeed(pace) : null;
         }
 
         private void Way(HttpListenerResponse res, HttpListenerRequest q)
@@ -191,15 +217,15 @@ namespace BannerlordAgents.Dashboard
             RouteResult r = _store.WithFinder(m, f => f.FromPoints(pts));
             float pace = body["pace"] is JsonValue pv && pv.TryGetValue(out double pd) ? (float)pd : 0;
             double hours = body["hours"] is JsonValue hv && hv.TryGetValue(out double hd) ? hd : double.NaN;
-            Json(res, Describe(m, r, pace, hours, (string)body["pace_from"] ?? "its pace"));
+            Json(res, Describe(m, r, MarchOf(body["march"], pace), hours, (string)body["pace_from"] ?? "its pace"));
         }
 
-        private object Describe(WalkMap m, RouteResult r, float pace, double hours, string paceFrom)
+        private object Describe(WalkMap m, RouteResult r, BannerlordAgents.Common.Pace pace, double hours, string paceFrom)
         {
             Atlas atlas = _store.Atlas(m);
             SpeedFactors sf = _store.Speeds(m);
             GameCalendar cal = GameCalendar.From(_store.Current()?["calendar"]);
-            List<string> lines = Explain.Way(m, atlas, r, pace, paceFrom, double.IsNaN(hours) ? 0 : hours, sf, cal.When, out double h, out double arrive);
+            List<string> lines = Explain.Way(m, atlas, r, pace, paceFrom, double.IsNaN(hours) ? 0 : hours, cal.When, out double h, out double arrive);
             float total = r.OnGround.Values.Sum();
             return new
             {

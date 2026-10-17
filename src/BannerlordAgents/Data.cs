@@ -37,8 +37,23 @@ namespace BannerlordAgents
         public string Raiding;
         /// <summary>For an army's leader: the whole army's strength, the game's own estimate.</summary>
         public float ArmyStrength;
-        /// <summary>Map units per in-game hour, as the game last worked it out (lords only).</summary>
+        /// <summary>
+        /// The game's speed on its base (open ground by day, no night), as it last worked it out (lords only). Not map units an
+        /// hour: a party covers its speed / 1.2 each hour (GamePace).
+        /// </summary>
         public float Speed;
+        /// <summary>
+        /// The parts of its speed sum (GamePace, 0.7.3), for lords not marching in someone else's army: the base number and the
+        /// sum of the base factors, from the game's own cache (the very numbers it moves the party with); the ground under it
+        /// now (the game's TerrainType); its people for TAOM's march bonuses (the lord's culture, else its realm's); its scout's
+        /// ground and hour perks (GamePace.Perk flags); the share of its men on foot; and snowfall where it stands.
+        /// </summary>
+        public float SpeedBase, SpeedFactors;
+        public int Terrain;
+        public string Culture;
+        public int ScoutPerks;
+        public float FootShare = 1f;
+        public bool Snowing;
         /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts, and the lord's clan.</summary>
         public int SizeLimit, FoodDays = -1;
         public string Clan;
@@ -108,6 +123,76 @@ namespace BannerlordAgents
         public int Militia;
         public string VillageState;
         public string Bound;
+    }
+
+    /// <summary>
+    /// One siege as the game runs it, copied hourly for its clock (0.7.3, Forecast.Siege; read in the 1.4.8 code and the pack's
+    /// mods): the camp's preparations and engines with the rate each is built at by the model in force, the numbers of the
+    /// game's storm test, and the besieged place's food.
+    /// </summary>
+    internal sealed class SiegeRow
+    {
+        public string Settlement, Besieger, BesiegerFaction, Strategy;
+        public double StartHours;
+        /// <summary>The camp's preparations: progress 0 to 1, and how much of it a hour (GetConstructionProgressPerHour).</summary>
+        public float Prep, PrepRate;
+        /// <summary>The camp's engines, deployed and in reserve.</summary>
+        public List<EngineRow> Engines = new List<EngineRow>();
+        /// <summary>Progress a hour for each engine type the camp could build next, by the model in force.</summary>
+        public Dictionary<string, float> Rates = new Dictionary<string, float>();
+        public int WallLevel;
+        /// <summary>Every wall section down (the walls then count a quarter), and the walls' mean standing share.</summary>
+        public bool WallsDown;
+        public float WallShare = 1f;
+        /// <summary>The storm test's numbers now: the place's advantage, engines counted as built, the most-advanced unfinished one's progress.</summary>
+        public float Advantage = 1f, MaxProgress;
+        public int Built;
+        /// <summary>The storm test's strengths: the defenders it counts (halved with the player inside) and the besiegers; the garrison's part of the defenders.</summary>
+        public float Defenders, Attackers, GarrisonPower;
+        public bool PlayerInside;
+        /// <summary>The place's food, its change a day, its store's limit; the garrison's regulars and wounded; starving now.</summary>
+        public float Food, FoodChange;
+        public int FoodCap, GarrisonRegulars, GarrisonWounded;
+        public bool Starving;
+        /// <summary>The besieging army's cohesion and its change a day (-1 when the camp's leader leads no army).</summary>
+        public float Cohesion = -1f, CohesionPerDay;
+        /// <summary>A storm is being fought now.</summary>
+        public bool Storming;
+    }
+
+    internal sealed class EngineRow
+    {
+        public string Type;
+        public float Progress, Hitpoints;
+        public bool Reserve;
+    }
+
+    /// <summary>
+    /// One battle on the map, copied hourly for its clock (0.7.3, Forecast.Battle; MapEvent in 1.4.8 with TAOM's combat models):
+    /// its kind, where, since when, and each side's healthy men, losses, mean troop power by the model in force, advantage
+    /// and morale.
+    /// </summary>
+    internal sealed class BattleRow
+    {
+        public string Key, Kind, Settlement;
+        /// <summary>At a town (a storm's strike rule changes below 100 defenders there, 30 at a castle).</summary>
+        public bool Town;
+        public float X, Y;
+        public double StartHours;
+        public float SettlementAdvantage = 1f;
+        public string Retreating;
+        public BattleSideRow Attackers = new BattleSideRow(), Defenders = new BattleSideRow();
+    }
+
+    internal sealed class BattleSideRow
+    {
+        public string Leader, Faction;
+        /// <summary>Led by a holding (siege defenders): its men never rout, their morale counts at least 30.</summary>
+        public bool SettlementLed;
+        public int Healthy, Wounded, Casualties, StartHealthy;
+        /// <summary>Mean troop power of the healthy men (MilitaryPowerModel.GetTroopPower), the side's battle advantage, and morale weighted by men.</summary>
+        public float Power = 1f, Advantage = 1f, Morale = 50f;
+        public List<string> Parties = new List<string>();
     }
 
     /// <summary>A lord of the watched realm held prisoner, from the game's own records (what the encyclopedia shows).</summary>
@@ -226,6 +311,17 @@ namespace BannerlordAgents
         public List<ClanRow> Clans = new List<ClanRow>();
         /// <summary>How far a lord may be from an army's leader and still be called into the army (the game's rule, in map units along the way).</summary>
         public float CallRange;
+        /// <summary>
+        /// The marching rules in force (0.7.3, GamePace): the speed model's name, each people's march bonuses by culture id (TAOM's
+        /// feats, read from the game at load; null when the model in force is not TAOM's), and the scout perks' values.
+        /// </summary>
+        public string SpeedModel;
+        public Dictionary<string, float[]> CultureSpeeds;
+        public Dictionary<string, string> CultureNames;
+        public Common.PerkValues PerkValues;
+        /// <summary>Every siege now, and every battle with a lord or a holding in it (Capture.Sieges, Capture.Battles; 0.7.3).</summary>
+        public List<SiegeRow> Sieges = new List<SiegeRow>();
+        public List<BattleRow> Battles = new List<BattleRow>();
 
         // for the logs (docs/LOGGING.md)
         /// <summary>When the copy began (UTC ticks), so the logs can say how long the worker took after it.</summary>

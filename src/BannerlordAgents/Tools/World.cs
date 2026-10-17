@@ -134,7 +134,19 @@ namespace BannerlordAgents.Tools
             return false;
         }
 
+        /// <summary>The game's speed number for a party (its base: open ground, by day), as its tooltip shows it there.</summary>
         public static float Speed(PartyRow r) => r != null && r.Speed > 0.2f ? r.Speed : DefaultSpeed;
+
+        /// <summary>
+        /// Map units the party covers in an hour over a whole day on open ground, night counted, by the game's own rules
+        /// (GamePace: its speed sum, / 1.2): for marches known only by their length (0.7.3; before, distance over the speed
+        /// number, some 20% too quick).
+        /// </summary>
+        public double PerHour(PartyRow r)
+        {
+            float u = Forecast.DayPerHour(S, r);
+            return u > 0.05f ? u : Speed(r) * Common.GamePace.UnitsPerSpeedHour;
+        }
 
         public bool InView(string id)
         {

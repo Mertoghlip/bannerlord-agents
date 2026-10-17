@@ -114,7 +114,7 @@ namespace BannerlordAgents
         {
             double d = w.RoadDistance(lord.Id, place);
             if (double.IsNaN(d)) d = w.Distance(lord.Id, place);
-            return double.IsNaN(d) ? double.NaN : d / World.Speed(lord);
+            return double.IsNaN(d) ? double.NaN : d / w.PerHour(lord);
         }
 
         /// <summary>"12 (14 by road)" between two things the realm knows of.</summary>
@@ -193,7 +193,7 @@ namespace BannerlordAgents
             }
             List<Lord> free = lords.Where(l => l.Order == "free").ToList();
             sb.AppendLine("- Your lords leading parties: " + lords.Count + "; free: " + free.Count + " (strength " + Text.N((int)free.Sum(l => l.Strength))
-                          + "); holding your orders: " + (lords.Count - free.Count) + ". Travel times are rough: distance over the lord's speed.");
+                          + "); holding your orders: " + (lords.Count - free.Count) + ". Travel hours are by road at the lord's own pace by the game's rules (a party covers its speed / 1.2 map units an hour, a quarter less by night); forest, fords and bridges on the way slow it further.");
             return sb.ToString().TrimEnd();
         }
 
@@ -302,7 +302,7 @@ namespace BannerlordAgents
                               + "- a lord of yours held prisoner: where and since when, and your lords who can reach that place soonest;\n"
                               + "- an enemy: where it is or was last seen, its strength, for an army its trail over the last two days, your holdings near it, your lords who can reach it soonest.\n"
                               + "lookups/captured.txt lists all your lords held prisoner, by where they are held.\n"
-                              + "Travel hours are by road where the game knows the way (else as the crow flies), over the lord's pace on open ground; forest, fords and night slow a march further.\n";
+                              + "Travel hours are by road where the game knows the way (else as the crow flies), at the lord's own pace by the game's rules (its speed / 1.2 map units an hour on open ground, night counted); forest, fords and bridges on the way slow it further.\n";
             return files;
         }
 
