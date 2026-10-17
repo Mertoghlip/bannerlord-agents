@@ -554,7 +554,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room's self-test passed (46);
   - `toolcheck --big` passed.
 
-### 22:10 · Version 0.7.1: watch, shadow, and every distance by road too · commit (this commit; installed 22:09)
+### 22:10 · Version 0.7.1: watch, shadow, and every distance by road too · commit 359149f (installed 22:09)
 - **Why:** Mert, on the agent screening round Western Moria to find Aragorn's army: "It would be a much smarter move to send a weaker lord to scout on the road to western moria from hollin gate to keep tabs on Aragorn's army ... I think the AI is smart enough to do this, but just doesn't have the tools to do so."
   - Checked against the night's frames: every order that places a lord was tied to a holding, and the report gave distances as the crow flies (Hollin Gate to Western Moria 53, by road about 260 north round the mountains).
   - Mert: "Implement 1 and 2. In the report, distances should be given both as the crow flies and the actual travel distance."
