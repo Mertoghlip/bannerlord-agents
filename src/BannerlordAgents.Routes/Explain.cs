@@ -100,13 +100,45 @@ namespace BannerlordAgents.Routes
                 {
                     string at = Words.N(x.At) + " along";
                     string what = x.Atlas != null ? Closing(x.Atlas) : atlas == null ? "what closing it would cost is not worked out yet" : "other ways round lie close by";
-                    parts.Add(x.Name + " (" + at + (x.Kind == "pass" ? ", " + Words.D1(x.Width) + " across" : "") + "; " + what + ")");
+                    parts.Add(x.Name + " [" + SpotId(x.X, x.Y) + "] (" + at + (x.Kind == "pass" ? ", " + Words.D1(x.Width) + " across" : "") + "; " + what + ")");
                 }
                 lines.Add("Crossings on the way, in order: " + string.Join("; ", parts) + (xs.Count > 6 ? "; and " + (xs.Count - 6) + " more" : "") + ".");
             }
             if (r.NarrowWidth < Atlas.PassWidth && !xs.Any(x => WalkMap.Dist(x.X, x.Y, r.NarrowX, r.NarrowY) < Math.Max(6f, x.Width + 3f)))
-                lines.Add("Narrowest place: " + Words.D1(r.NarrowWidth) + " across, " + m.Describe(r.NarrowX, r.NarrowY) + ".");
+                lines.Add("Narrowest place: " + Words.D1(r.NarrowWidth) + " across, " + m.Describe(r.NarrowX, r.NarrowY) + " [" + SpotId(r.NarrowX, r.NarrowY) + "].");
+            List<float[]> spots = SpotsAlong(r, 6);
+            if (spots.Count > 0)
+                lines.Add("Spots on the way, by how far along (a watch can be posted on any of them): "
+                          + string.Join("; ", spots.Select(p => Words.N(p[2]) + " along, " + m.Describe(p[0], p[1]) + " [" + SpotId(p[0], p[1]) + "]")) + ".");
             return lines;
+        }
+
+        /// <summary>A spot's id, as orders name it: "p673_994" (map units, east then north).</summary>
+        public static string SpotId(float x, float y) => "p" + Math.Round(x).ToString("0") + "_" + Math.Round(y).ToString("0");
+
+        /// <summary>Points spread evenly along a way (x, y, how far along), at most most of them, none closer than 15 apart or to its ends.</summary>
+        public static List<float[]> SpotsAlong(RouteResult r, int most)
+        {
+            var list = new List<float[]>();
+            if (r == null || !r.Ok || r.Length < 30) return list;
+            int n = Math.Min(most, (int)(r.Length / 15f) - 1);
+            for (int k = 1; k <= n; k++)
+            {
+                float want = r.Length * k / (n + 1), along = 0;
+                for (int i = 1; i < r.Points.Count; i++)
+                {
+                    float[] a = r.Points[i - 1], b = r.Points[i];
+                    float len = WalkMap.Dist(a[0], a[1], b[0], b[1]);
+                    if (along + len >= want && len > 0)
+                    {
+                        float t = (want - along) / len;
+                        list.Add(new[] { a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, want });
+                        break;
+                    }
+                    along += len;
+                }
+            }
+            return list;
         }
     }
 }

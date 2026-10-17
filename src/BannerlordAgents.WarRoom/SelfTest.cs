@@ -187,7 +187,7 @@ namespace BannerlordAgents.WarRoom
                   "the tool answers Claude Code's handshake and lists itself; a notification gets no answer");
             string Call(string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ask_the_way\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
             string a1 = Call("{\"from\":\"lord_bolg\",\"to\":\"town_b\"}");
-            Check(a1 != null && a1.StartsWith("THE WAY FROM Bolg [lord_bolg] TO Bree [town_b]") && a1.Contains("bridge") && a1.Contains("no other way") && a1.Contains(", so about ")
+            Check(a1 != null && a1.StartsWith("THE WAY FROM Bolg [lord_bolg] TO Bree [town_b]") && a1.Contains("bridge") && a1.Contains("no other way") && a1.Contains(", so about ") && a1.Contains("Spots on the way") && System.Text.RegularExpressions.Regex.IsMatch(a1, @"the bridge [^[]*[pd+_d+]")
                   && a1.Contains("HOW MARCHING WORKS"), "a lord's way over the bridge, its time at its own pace, the bridge the only way, and how marching works: " + a1?.Replace("\n", " | "));
             string a2 = Call("{\"from\":\"p_ar\",\"to\":\"Edoras\",\"also_from\":[\"p_bolg\"]}");
             Check(a2 != null && a2.Contains("pace its trail shows") && a2.Contains("WHO GETS THERE FIRST") && !a2.Contains("HOW MARCHING WORKS"),

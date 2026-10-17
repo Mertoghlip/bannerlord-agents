@@ -60,19 +60,20 @@ namespace BannerlordAgents.Tools
         {
             ["goto"] = "holding", ["enter"] = "holding", ["near"] = "holding", ["patrol"] = "holding", ["defend"] = "holding",
             ["besiege"] = "holding", ["raid"] = "holding", ["recruit"] = "holding",
-            ["engage"] = "party", ["follow"] = "party", ["toward"] = "party", ["join"] = "party",
+            ["engage"] = "party", ["follow"] = "party", ["toward"] = "party", ["join"] = "party", ["shadow"] = "party",
+            ["post"] = "spot",
             ["leave"] = "none", ["hold"] = "none"
         };
 
         /// <summary>What "at" and "target" may be, as the order is checked against the game.</summary>
-        public static readonly string[] AtKinds = { "own_fort", "own_holding", "own_town_or_village", "friendly_town_or_village", "friendly_fort", "friendly_holding", "enemy_fort", "enemy_village", "enemy_holding", "any_holding" };
+        public static readonly string[] AtKinds = { "own_fort", "own_holding", "own_town_or_village", "friendly_town_or_village", "friendly_fort", "friendly_holding", "enemy_fort", "enemy_village", "enemy_holding", "any_holding", "spot_or_holding" };
         public static readonly string[] TargetKinds = { "enemy_lord", "own_lord" };
 
         /// <summary>Built-in names every tool can read.</summary>
         public static readonly HashSet<string> BuiltIns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "me", "strength", "men", "ranks", "wounded", "food_days", "hours_in_state", "hours_running", "in_army", "leads_army",
-            "army_lords", "army_coming", "army_complete", "army_joining", "in_settlement", "besieging", "at", "target", "caution", "danger_radius"
+            "army_lords", "army_coming", "army_complete", "army_joining", "in_settlement", "besieging", "at", "target", "caution", "danger_radius", "now"
         };
 
         /// <summary>The functions, with how many arguments each takes.</summary>
@@ -85,7 +86,8 @@ namespace BannerlordAgents.Tools
             ["threat_near"] = 2, ["enemy_threat_near"] = 2, ["other_fort"] = 1, ["refuge"] = 2, ["would_hold"] = 2,
             ["strength_of"] = 1, ["men_of"] = 1, ["in_view"] = 1, ["seen_ago"] = 1, ["gone"] = 1,
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
-            ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1
+            ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1,
+            ["doing_of"] = 1, ["toward_of"] = 1, ["where_of"] = 1
         };
 
         public bool Valid => Problems.Count == 0;
@@ -261,6 +263,7 @@ namespace BannerlordAgents.Tools
                 case "enemy_village": return "an enemy village";
                 case "enemy_holding": return "an enemy holding";
                 case "any_holding": return "any holding";
+                case "spot_or_holding": return "a spot [pX_Y] named in an \"ask the way\" answer (a crossing or a point on a way), or any holding";
                 case "enemy_lord": return "an enemy lord or army";
                 case "own_lord": return "one of your lords";
                 default: return kind;

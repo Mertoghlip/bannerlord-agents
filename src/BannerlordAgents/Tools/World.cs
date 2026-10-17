@@ -63,6 +63,7 @@ namespace BannerlordAgents.Tools
         {
             x = y = 0;
             if (id == null) return false;
+            if (Spots.TryParse(id, out x, out y)) return true;
             SettlementRow h = Holding(id);
             if (h != null) { x = h.X; y = h.Y; return true; }
             PartyRow r = Party(id);
@@ -75,6 +76,62 @@ namespace BannerlordAgents.Tools
         {
             if (!Where(a, out float ax, out float ay) || !Where(b, out float bx, out float by)) return double.NaN;
             return Math.Sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+        }
+
+        /// <summary>
+        /// The distance by road between two things the realm knows of, as the game reckons a march (Roads): holdings by the
+        /// game's own table, a party through the entrance of the ground it stands on (an enemy seen earlier, through where it
+        /// was seen). NaN when the game's table lacks the way, or for a spot (no entrance known).
+        /// </summary>
+        public double RoadDistance(string a, string b)
+        {
+            if (!Locate(a, out float ax, out float ay, out string ea, out SettlementRow ha) || !Locate(b, out float bx, out float by, out string eb, out SettlementRow hb)) return double.NaN;
+            if (ha != null && hb != null) return S.Roads != null && S.Roads.TryGet(ha.Id, hb.Id, out float d) ? d : double.NaN;
+            if (hb != null) return Roads.To(S, ax, ay, ea, null, hb);
+            if (ha != null) return Roads.To(S, bx, by, eb, null, ha);
+            return Roads.Between(S, ax, ay, ea, bx, by, eb);
+        }
+
+        /// <summary>What a party is doing, as the realm knows it: in view (or its own) now, else as last seen; null if never seen.</summary>
+        public string DoingOf(string id)
+        {
+            PartyRow r = Lead(Party(id));
+            if (r != null && Visible(r)) return Views.Doing(S, r);
+            return id != null && _lastSeen.TryGetValue(r?.Id ?? id, out ViewParty v) ? v.Doing : null;
+        }
+
+        /// <summary>The holding a party is heading for (going to, besieging, raiding...), as the realm knows it; null for none.</summary>
+        public string TowardOf(string id)
+        {
+            PartyRow r = Lead(Party(id));
+            if (r != null && Visible(r)) return Views.Toward(r);
+            return id != null && _lastSeen.TryGetValue(r?.Id ?? id, out ViewParty v) ? v.Toward : null;
+        }
+
+        /// <summary>Where a party is, in words, with the realm's nearest holding: "12 (14 by road) from Caradhras; 63 (260 by road) from your Western Moria".</summary>
+        public string WhereOf(string id)
+        {
+            PartyRow r = Lead(Party(id));
+            ViewParty v = null;
+            if (r != null && Visible(r)) v = Views.Party(S, r, null, "enemy", S.Settlements.Where(h => h.Faction == Realm).ToList());
+            else if (id != null) _lastSeen.TryGetValue(r?.Id ?? id, out v);
+            if (v == null) return "where not known";
+            string near = v.Near == null ? "in the wilds" : v.NearDistance < 1f ? "at " + v.Near : Roads.Both(v.NearDistance, v.NearRoad) + " from " + v.Near;
+            return near + (v.NearestHolding != null && v.NearestHolding != v.Near ? "; " + Roads.Both(v.HoldingDistance, v.HoldingRoad) + " from your " + v.NearestHolding : "");
+        }
+
+        /// <summary>Where something is and the entrance its road distances count from (a holding: itself, at its gate).</summary>
+        private bool Locate(string id, out float x, out float y, out string entrance, out SettlementRow holding)
+        {
+            x = y = 0;
+            entrance = null;
+            holding = Holding(id);
+            if (holding != null) { x = holding.Gx != 0 || holding.Gy != 0 ? holding.Gx : holding.X; y = holding.Gx != 0 || holding.Gy != 0 ? holding.Gy : holding.Y; entrance = holding.Id; return true; }
+            if (id == null || Spots.TryParse(id, out x, out y)) return id != null;
+            PartyRow r = Party(id);
+            if (r != null && Visible(r)) { x = r.X; y = r.Y; entrance = r.InSettlement ?? r.Entrance; return true; }
+            if (_lastSeen.TryGetValue(id, out ViewParty v)) { x = v.X; y = v.Y; entrance = v.Entrance; return true; }
+            return false;
         }
 
         public static float Speed(PartyRow r) => r != null && r.Speed > 0.2f ? r.Speed : DefaultSpeed;
@@ -384,6 +441,7 @@ namespace BannerlordAgents.Tools
         public string Name(string id)
         {
             if (id == null) return "none";
+            if (Spots.TryParse(id, out float sx, out float sy)) return Spots.Describe(S, sx, sy);
             SettlementRow h = Holding(id);
             if (h != null) return h.Name ?? id;
             PartyRow r = Party(id);

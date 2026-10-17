@@ -54,12 +54,48 @@ namespace BannerlordAgents
         public float Tx, Ty, FinalSpeed;
         public float[] Route;
         public bool Straight;
+        /// <summary>
+        /// The holding whose gate the game counts this party's road distances from (MapDistanceModel.GetClosestEntranceToFace
+        /// for the ground it stands on): with the game's table of road distances between holdings (RoadBook), the travel
+        /// distance to anywhere, as the game reckons it (Roads, 0.7.1).
+        /// </summary>
+        public string Entrance;
+    }
+
+    /// <summary>
+    /// The game's own road distances between holdings (its navigation cache: the real way between gates), copied once on the
+    /// game's thread (Capture.RoadsFor): every holding of the realms followed to every other, and each holding to its nearest
+    /// neighbours. Never changed once handed to the worker: a new copy replaces it.
+    /// </summary>
+    internal sealed class RoadBook
+    {
+        public readonly Dictionary<string, Dictionary<string, float>> Rows = new Dictionary<string, Dictionary<string, float>>();
+        public int Pairs;
+
+        public void Set(string a, string b, float d)
+        {
+            if (!Rows.TryGetValue(a, out Dictionary<string, float> row)) Rows[a] = row = new Dictionary<string, float>();
+            if (!row.ContainsKey(b)) Pairs++;
+            row[b] = d;
+        }
+
+        public bool TryGet(string a, string b, out float d)
+        {
+            d = float.NaN;
+            if (a == null || b == null) return false;
+            if (a == b) { d = 0; return true; }
+            return (Rows.TryGetValue(a, out Dictionary<string, float> r1) && r1.TryGetValue(b, out d)) || (Rows.TryGetValue(b, out Dictionary<string, float> r2) && r2.TryGetValue(a, out d));
+        }
+
+        public bool HasRow(string a) => a != null && Rows.ContainsKey(a);
     }
 
     internal sealed class SettlementRow
     {
         public string Id, Name, Kind, Faction;
         public float X, Y;
+        /// <summary>The gate, where parties march to and where the game counts road distances from.</summary>
+        public float Gx, Gy;
         public string BesiegedBy;
         public string Besieger;
         public int Garrison;
@@ -169,6 +205,8 @@ namespace BannerlordAgents
         public string PlayerFaction, PlayerParty, Watched;
         /// <summary>The walking map's checksum (MapExport), so the dashboard knows which map the world stands on.</summary>
         public string MapCrc;
+        /// <summary>The game's road distances between holdings (Capture.RoadsFor); null when not copied.</summary>
+        public RoadBook Roads;
         public List<PartyRow> Parties = new List<PartyRow>(4096);
         public Dictionary<string, PartyRow> PartyById = new Dictionary<string, PartyRow>(4096);
         public List<SettlementRow> Settlements = new List<SettlementRow>(1024);

@@ -326,11 +326,22 @@ namespace BannerlordAgents
             {
                 string words = a.At ?? a.Target;
                 if (string.IsNullOrWhiteSpace(words)) { error = def.Name + " needs \"at\": " + ToolDef.Plain(def.At) + "."; return null; }
-                Settlement s = FindSettlement(words, out error);
-                if (s == null) return null;
-                error = CheckAt(def.At, s, realm);
-                if (error != null) return null;
-                o.At = s.StringId;
+                if (def.At == "spot_or_holding" && Spots.TryParse(words, out float sx, out float sy))
+                {
+                    // a spot: it must be ground a party can stand on (the game's own test), or next to it
+                    string spot = WalkableSpot(sx, sy, out error);
+                    if (spot == null) return null;
+                    if (spot != Spots.Id(sx, sy)) notes.Add(Spots.Id(sx, sy) + " is not walkable ground, so the post is the nearest spot that is, " + spot);
+                    o.At = spot;
+                }
+                else
+                {
+                    Settlement s = FindSettlement(words, out error);
+                    if (s == null) return null;
+                    error = CheckAt(def.At, s, realm);
+                    if (error != null) return null;
+                    o.At = s.StringId;
+                }
             }
             if (def.Target != null)
             {
@@ -375,6 +386,34 @@ namespace BannerlordAgents
                 if (Library.Get(next) == null && next != "free" && next != "disband") { error = "the next order (then) is not an order: '" + next + "'."; return null; }
             }
             return o;
+        }
+
+        /// <summary>A spot's id when a party can stand there, else the nearest walkable spot within 4 units; null (and why) when there is none.</summary>
+        private static string WalkableSpot(float x, float y, out string error)
+        {
+            error = null;
+            var nav = MobileParty.NavigationType.Default;
+            var at = new CampaignVec2(new Vec2(x, y), true);
+            if (NavigationHelper.IsPositionValidForNavigationType(at, nav)) return Spots.Id(x, y);
+            CampaignVec2 near = Campaign.Current.MapSceneWrapper.GetAccessiblePointNearPosition(in at, 4f);
+            if (near.IsValid() && NavigationHelper.IsPositionValidForNavigationType(near, nav) && near.ToVec2().Distance(at.ToVec2()) <= 4.5f) return Spots.Id(near.X, near.Y);
+            error = Spots.Id(x, y) + " is not ground a party can stand on (mountain, water or off the map), and nothing walkable is within 4 of it.";
+            return null;
+        }
+
+        /// <summary>"4 west of Western Moria": a point on the map by its nearest holding (game's thread).</summary>
+        private static string SpotText(float x, float y)
+        {
+            Settlement best = null;
+            float bd = float.MaxValue;
+            foreach (Settlement s in Settlement.All)
+            {
+                if (s == null || s.IsHideout) continue;
+                float d = s.Position.ToVec2().Distance(new Vec2(x, y));
+                if (d < bd) { bd = d; best = s; }
+            }
+            if (best == null) return Spots.Id(x, y);
+            return bd < 1.5f ? "at " + Names.Settlement(best) : Math.Round(bd).ToString("0", Text.Inv) + " " + Spots.Compass(best.Position.X, best.Position.Y, x, y) + " of " + Names.Settlement(best);
         }
 
         /// <summary>Is this holding the kind the tool asks for, for this realm? Null when it is; else why not.</summary>
@@ -512,6 +551,7 @@ namespace BannerlordAgents
                 case "engage": return o.Target != null && o.Target.IsActive && realm != null && FactionManager.IsAtWarAgainstFaction(o.Target.MapFaction, realm);
                 case "follow":
                 case "join": return o.Target != null && o.Target.IsActive && o.Target != o.Party;
+                case "shadow": return o.Target != null && o.Target.IsActive;
                 case "goto":
                 case "enter":
                 case "recruit":
@@ -531,7 +571,7 @@ namespace BannerlordAgents
         private static string DescribeTool(ToolDef def, ToolOrder o)
         {
             string lord = o.LordName;
-            string at = o.At != null ? Names.Settlement(Settlement.Find(o.At)) : null;
+            string at = o.At != null && !Spots.Is(o.At) ? Names.Settlement(Settlement.Find(o.At)) : null;
             string target = o.Target != null ? Names.Party(FindPartyById(o.Target)) : null;
             string with = o.Lords.Count > 0 ? string.Join(", ", o.Lords.Select(p => Names.Party(FindPartyById(p)))) : null;
             string text;
@@ -546,6 +586,8 @@ namespace BannerlordAgents
                 case "hold": text = lord + " holds position"; break;
                 case "gather": text = lord + " gathers an army at " + at + " with " + with; break;
                 case "join": text = lord + " marches to join " + target + "'s army"; break;
+                case "watch": text = lord + " keeps watch " + (o.At != null && Spots.TryParse(o.At, out float wx, out float wy) ? SpotText(wx, wy) + " [" + o.At + "]" : "at " + at); break;
+                case "shadow": text = lord + " shadows " + target; break;
                 default:
                     text = lord + " " + def.Name + (at != null ? " " + at : "") + (target != null ? " " + target : "") + (with != null ? ", with " + with : ""); break;
             }
@@ -960,6 +1002,19 @@ namespace BannerlordAgents
                     Hold(p);
                     continue;
                 }
+                if (o.Verb == "post" && p.Position.ToVec2().Distance(new Vec2(o.X, o.Y)) < 1.5f)
+                {
+                    // on its post: it stands there, watching
+                    if (!o.Arrived)
+                    {
+                        o.Arrived = true;
+                        o.ArrivedAt = now;
+                        Diag.Count("order:arrived");
+                        Diag.Event("order", "arrived", new { id = o.Id, tool = o.Tool, lord = o.Lord?.StringId, post = Spots.Id(o.X, o.Y) });
+                    }
+                    if (p.DefaultBehavior != AiBehavior.Hold) Hold(p);
+                    continue;
+                }
                 if (o.Verb == "patrol" && o.Radius > 0f && o.HasPoint && p.Position.ToVec2().Distance(new Vec2(o.X, o.Y)) < 1.5f)
                 {
                     // a patrol kept within its radius reached this point: on to the next
@@ -1017,7 +1072,7 @@ namespace BannerlordAgents
         /// <summary>Is he getting closer? No progress for 6 in-game hours, away from his target and out of battle, is an alarm.</summary>
         private static void Progress(HandOrder o, float? d, double now)
         {
-            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow" || o.Verb == "join") return;
+            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow" || o.Verb == "join" || o.Verb == "shadow") return;
             if (d.Value < o.BestDistance - 0.5f)
             {
                 o.BestDistance = d.Value;
@@ -1210,6 +1265,12 @@ namespace BannerlordAgents
                     case "toward":
                         p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(new CampaignVec2(new Vec2(o.X, o.Y), true), nav, 2f), p.NavigationCapability);
                         break;
+                    case "post":
+                    case "shadow":
+                        // to a point (a watch's post; the shadow's place this hour), and standing there once arrived
+                        var pt = new CampaignVec2(new Vec2(o.X, o.Y), true);
+                        p.SetMoveGoToPoint(NavigationHelper.IsPositionValidForNavigationType(pt, nav) ? pt : NavigationHelper.FindReachablePointAroundPosition(pt, nav, 2f), p.NavigationCapability);
+                        break;
                     case "leave":
                         if (p.CurrentSettlement != null) LeaveSettlementAction.ApplyForParty(p);
                         p.SetMoveModeHold();
@@ -1262,7 +1323,9 @@ namespace BannerlordAgents
                 // on the way to a spot close to the place (its target there), or standing close to it
                 case "near": return o.Place != null && ((b == AiBehavior.GoToPoint && p.TargetPosition.Distance(o.Place.GatePosition) < 12f)
                                                         || ((b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f));
-                case "toward": return b == AiBehavior.GoToPoint || b == AiBehavior.Hold;
+                case "toward":
+                case "post":
+                case "shadow": return b == AiBehavior.GoToPoint || b == AiBehavior.Hold;
                 case "leave": return p.CurrentSettlement == null;
                 case "patrol": return o.Radius > 0f ? b == AiBehavior.GoToPoint || b == AiBehavior.Hold : b == AiBehavior.PatrolAroundPoint && p.TargetSettlement == o.Place;
                 case "defend": return (b == AiBehavior.DefendSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
@@ -1512,6 +1575,8 @@ namespace BannerlordAgents
                 case "enter": return lord + " goes inside " + Names.Settlement(o.Place);
                 case "near": return lord + " goes close to " + Names.Settlement(o.Place);
                 case "toward": return lord + " marches to where " + Names.Party(o.Target) + " was last seen";
+                case "post": return lord + " keeps watch " + SpotText(o.X, o.Y);
+                case "shadow": return lord + " shadows " + Names.Party(o.Target) + " from about " + Text.D(o.Radius);
                 case "leave": return lord + " leaves the holding";
                 case "patrol": return lord + " patrols around " + Names.Settlement(o.Place);
                 case "defend": return lord + " defends " + Names.Settlement(o.Place);
@@ -1530,7 +1595,8 @@ namespace BannerlordAgents
         {
             MobileParty p = o.Party;
             if (p == null || !p.IsActive) return null;
-            if (o.Verb == "toward") return p.Position.ToVec2().Distance(new Vec2(o.X, o.Y));
+            if (o.Verb == "toward" || o.Verb == "post") return p.Position.ToVec2().Distance(new Vec2(o.X, o.Y));
+            if (o.Verb == "shadow") return null;   // it keeps its distance; it is not trying to arrive
             if (o.Place != null) return p.Position.Distance(o.Place.Position);
             if (o.Target != null && o.Target.IsActive) return p.Position.Distance(o.Target.Position);
             return null;

@@ -54,7 +54,7 @@ The agent reads it in every call as `tools.txt` (written from the same code; `ag
 | Group | Orders |
 |---|---|
 | Moves | goto, patrol, engage, follow, leave, recruit, hold, free |
-| Tools | defend, garrison, besiege, raid, hunt, screen, rest |
+| Tools | defend, garrison, besiege, raid, hunt, screen, rest, watch, shadow (0.7.1) |
 | Armies | gather, relieve, join, add, release, disband |
 | Changing orders | a new order replaces the old one; adjust (settings only); no orders at all is a valid answer; then |
 
@@ -94,6 +94,14 @@ What each one does, takes, sets and calls back on is in `tools.txt`. The definit
   - **breaking a siege**: until it is broken, the besiegers grow too strong, or other enemy forces come near beside them.
 - **The threat near a place** (`threat_near`, since 0.6.1): the strength of the hostile lords, armies and bandits in view within the radius, and of the hostile lords and armies seen there in the last 6 hours, at the place they were last seen, unless known gone. Defend and raid weigh it when they decide to shelter or pull back; striking still needs an enemy in view. `enemy_threat_near` (0.6.3) is the same without bandits: the forces that make a lord needed where it is.
 
+### Watch and shadow (since 0.7.1)
+
+Mert, Oct 16: the agent screened round Western Moria to "find Aragorn's army after Hollin Gate". Sending a weaker lord to keep tabs on the road from Hollin Gate would have been smarter, but the agent had no order for it: every order that places a lord was tied to a holding. The game's own way there runs about 260 map units north round the mountains, though the two are 53 apart as the crow flies, and the screen never left the town's surroundings.
+- **Spots.** A spot is a point on the map that is no holding, named by where it is: `p673_994`, map units east and north. The "ask the way" answers name spots: each crossing on the way, the narrowest place, and up to 6 points spread along it ([ROUTES.md](ROUTES.md)). A spot is geography, so naming one tells the agent nothing its realm could not know. The bridge checks it is ground a party can stand on (`NavigationHelper.IsPositionValidForNavigationType`), else takes the nearest walkable point within 4 (`GetAccessiblePointNearPosition`, with a note in the receipt), else refuses. Spots are exempt from the unknown-id alarm, and the orders in force name them ("the spot 4 west of Western Moria [p673_994]").
+- **watch** (at: a spot or a holding): to the post (`post`: a point; at a holding, its gate, outside), then it stands there. It reports when it has taken up the watch, each enemy army within `watch_radius` (12) with its men, strength, distance from the post, what it is doing and where it is, and again when that army has gone out of sight. With `also_lords` 1 it reports enemy lords too. Its caution makes it fall back from anything too strong and return to its post once the danger has passed.
+- **shadow** (target: an enemy lord or army): it keeps about `keep` (8) map units from its target, its point worked out again every hour: closing in when farther than keep + 2, stepping back to keep + 3 when nearer than keep - 2, standing in between. It reports at once, when the target heads for a new place (`toward_of`), and every `report_hours` (6). Out of sight, it goes to where the target was last seen (`toward`), and gives up after `lose_hours` (8). Its target is spared by the safety rule (it keeps its own distance) unless the target turns to chase it.
+- **A trap found writing them:** a rule's `set` happens before its call-back is filled in, so a call-back naming a value the rule clears names the cleared value. watch keeps the departed army under its own name (`gone_army`) for that call-back.
+
 ### Breaking a siege: when the defenders inside join (since 0.6)
 Read in the 1.4.8 code (`SallyOutsCampaignBehavior`, `StartBattleAction`, `MapEvent.Initialize`, `Town.GetDefenderParties`):
 - A relief force that attacks the besiegers starts a "siege outside" battle. All the besieging lords fight it together.
@@ -132,20 +140,20 @@ The defend tool, shortened:
   "when": [ { "if": "hours_in_state >= 3 and not besieged(at) and enemy_strength_near(at, radius) < strength * shelter_at * 0.8", "go": "patrol" } ] }
 ```
 
-- **Moves:** goto, enter, near (close to a holding's gate), toward (where a party was last seen), leave, patrol, defend, engage, follow, join (follow an army's leader and join once it can be called), besiege, raid, recruit and hold.
+- **Moves:** goto, enter, near (close to a holding's gate), toward (where a party was last seen), leave, patrol, defend, engage, follow, join (follow an army's leader and join once it can be called), besiege, raid, recruit and hold; since 0.7.1, post (stand on a spot, or at a holding's gate, outside) and shadow (keep `keep` map units from a party, worked out again every hour).
 - **Expressions:** numbers, true, false and none; + - * /; == != < <= > >=; and, or, not.
   - A comparison with something unknown (none) is false, so no rule fires on a missing fact.
   - `{...}` in a call-back is filled in, with ids shown as names.
 - **Names:**
   - the order's own: `me`, `at`, `target`, `lords`, and the settings;
   - about the lord: `strength` and `men` (the whole army's when the lord leads one), `ranks`, `wounded`, `food_days`;
-  - about time: `hours_in_state`, `hours_running`;
+  - about time: `hours_in_state`, `hours_running`, `now` (the in-game hour, 0.7.1);
   - about armies and places: `in_army`, `leads_army`, `army_lords`, `army_coming`, `army_complete`, `army_joining` (lords holding a join order for this lord's army), `in_settlement`, `besieging`.
 - **Functions** (their names say what they do):
   - places and distance: `distance`, `hours_to`, `inside`, `within`, `fort`, `nearest_fort`, `nearest_supply`, `next_village`;
   - holdings: `besieged`, `siege_strength`, `inside_strength`, `relief_strength`, `besieger`, `raided`, `looted`, `ours`, `hostile`, `friendly`, `other_fort` (the nearest castle or town of the realm or an ally, not under siege, other than the one given);
   - enemies near a place: `enemies_near`, `enemy_strength_near`, `strongest_enemy_near`, `weakest_enemy_near`, `nearest_enemy`, `army_near` (enemy lords and armies in view), and `threat_near` (also bandits, and armies seen there in the last 6 hours), `enemy_threat_near` (the same without bandits);
-  - a party: `strength_of`, `men_of`, `in_view`, `seen_ago`, `gone`;
+  - a party: `strength_of`, `men_of`, `in_view`, `seen_ago`, `gone`; since 0.7.1 `doing_of`, `toward_of` (the holding it heads for) and `where_of` (where it is, in words, with both distances), as the realm knows it (in view now, else as last seen);
   - the order's lords: `lords_arrived`, `lords_count`;
   - general: `min`, `max`, `pick`, `round`.
 - **The checker** reads every tool before it runs: moves, functions, how many values each takes, names, states, ranges. Its problems are an alarm. The same checker will read the agent's own tools.
@@ -153,6 +161,7 @@ The defend tool, shortened:
 ## What the agent reads besides the tools
 
 - **WHAT CHANGED SINCE YOUR LAST ANSWER:** the reasons of every poke that came after the one it answered, and what became of its orders. The tools' call-backs are among them.
+- **Distances (since 0.7.1; Mert, Oct 16: "distances should be given both as the crow flies and the actual travel distance"):** every distance in the report, the facts and the look-ups is given as the crow flies and then by road, "63.0 (260.0 by road)". The road figure is the game's own: its table of the real way between every two holdings' gates (`MapDistanceModel.GetDistance(Settlement, Settlement)`, copied at load into a `RoadBook`), and from a party through the holding whose gate serves the ground it stands on (`GetClosestEntranceToFace`, copied hourly as `PartyRow.Entrance`), as `DefaultMapDistanceModel.GetDistance(MobileParty, Settlement)` does (`Roads.To`, `Roads.Between`). "The nearest of your holdings" is now the nearest by road, the one a party could reach soonest. The poke rule's `sighting_distance` is by road, and the facts' and look-ups' travel hours too. The tools' own rules (radius, within) stay as the crow flies.
 - **YOUR ORDERS IN FORCE:** each held lord's order, what it is doing right now (sheltering, buying food, waiting for an army), its settings that differ from the defaults, and its next order.
 - **READY-MADE FACTS:** for up to four things the poke is about (a holding, an enemy), the realm's lords who can get there soonest, with strength, rough hours and whether they are free; and the enemies near it. Since 0.6 also:
   - **the muster** at the first holding the poke is about: how many lords, men and strength could be there within one, two and three days, as running totals, and how many of the first day's a leader there could call into an army at once;

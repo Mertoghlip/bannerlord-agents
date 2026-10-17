@@ -51,6 +51,9 @@ namespace BannerlordAgents
         public int Men, ArmyMen, ArmyParties;
         public float Strength, X, Y, NearDistance, HoldingDistance;
         public double SeenHours;
+        /// <summary>The same two distances by road, as the game reckons a march (Roads; NaN when not known), and the entrance of the ground it stood on (0.7.1).</summary>
+        public float NearRoad = float.NaN, HoldingRoad = float.NaN;
+        public string Entrance;
     }
 
     /// <summary>
@@ -73,6 +76,7 @@ namespace BannerlordAgents
         public double Hours;
         public float X, Y, NearDistance, HoldingDistance;
         public string Near, NearestHolding, Doing;
+        public float NearRoad = float.NaN, HoldingRoad = float.NaN;
         /// <summary>Hours out of sight just before this point; 0 when it was in view the hour before.</summary>
         public double AfterGap;
     }
@@ -86,6 +90,7 @@ namespace BannerlordAgents
         public string Threat;
         public int ThreatMen;
         public float ThreatDistance;
+        public float ThreatRoad = float.NaN;
         /// <summary>The realm's own castles and towns: wall level, the defenders' strength (garrison, militia, lords inside), and the besiegers' strength it holds against.</summary>
         public int WallLevel;
         public float Defence, LordsInside, HoldsUpTo;
@@ -133,7 +138,7 @@ namespace BannerlordAgents
             }
             // what the cap of 40 cuts first: bandits and others before any enemy lord, and an enemy army never (Oct 16: 15 to 24
             // bands near the villages pushed Aragorn's army of 5,532 out of the list for days, though the realm saw it)
-            v.Seen = v.Seen.OrderBy(SeenRank).ThenBy(x => x.HoldingDistance).ToList();
+            v.Seen = v.Seen.OrderBy(SeenRank).ThenBy(Reach).ToList();
             if (v.Seen.Count > 40)
             {
                 int keep = Math.Max(40, v.Seen.Count(x => SeenRank(x) == 0));
@@ -144,13 +149,16 @@ namespace BannerlordAgents
             foreach (SettlementRow h in own)
             {
                 ViewHolding vh = Holding(s, h, true);
+                // the enemy in view that could reach it soonest: by road where the game's table knows the way
+                float ThreatRoad(ViewParty x) => s.PartyById.TryGetValue(x.Id, out PartyRow xr) ? Roads.To(s, xr, h) : float.NaN;
                 ViewParty threat = v.Seen.Where(x => x.Relation == "enemy" && x.Kind == "lord")
-                                         .OrderBy(x => Dist(x.X, x.Y, h.X, h.Y)).FirstOrDefault();
+                                         .OrderBy(x => float.IsNaN(ThreatRoad(x)) ? Dist(x.X, x.Y, h.X, h.Y) + 1e6f : ThreatRoad(x)).FirstOrDefault();
                 if (threat != null)
                 {
                     vh.Threat = threat.Name;
                     vh.ThreatMen = threat.ArmyMen > 0 ? threat.ArmyMen : threat.Men;
                     vh.ThreatDistance = Text.R1(Dist(threat.X, threat.Y, h.X, h.Y));
+                    vh.ThreatRoad = R1(ThreatRoad(threat));
                 }
                 v.Holdings.Add(vh);
             }
@@ -270,7 +278,8 @@ namespace BannerlordAgents
             sb.AppendLine("REPORT FOR " + v.FactionName.ToUpperInvariant());
             sb.AppendLine("Ruler: " + (v.Ruler ?? "unknown") + ". " + Text.When(v.Hours) + ", " + (v.Night ? "night." : "daytime."));
             sb.AppendLine("At war with: " + (v.AtWar.Count > 0 ? string.Join(", ", v.AtWar) : "no one") + ". Allies: " + (v.Allies.Count > 0 ? string.Join(", ", v.Allies) : "none") + ".");
-            sb.AppendLine("Distances are in map units. A party is seen only within sight of your lords, castles and towns. Ids in [brackets] are what orders should name."
+            sb.AppendLine("Distances are in map units: as the crow flies, then in brackets by road, the way the game reckons a march round mountains and rivers" + (Roads.Known ? "" : " (by road not known in this report)")
+                          + ". A party is seen only within sight of your lords, castles and towns. Ids in [brackets] are what orders should name."
                           + (x != null && x.Lookups ? " More on any id: lookups/<id>.txt." : ""));
 
             if (triggers != null && triggers.Count > 0)
@@ -321,7 +330,7 @@ namespace BannerlordAgents
                                 + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")
                                 + ", so it holds against besiegers up to strength " + Text.N((int)Math.Round(h.HoldsUpTo)));
                 if (!string.IsNullOrEmpty(h.Status)) line.Append("; " + h.Status);
-                if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Text.D(h.ThreatDistance));
+                if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Roads.Both(h.ThreatDistance, h.ThreatRoad));
                 sb.AppendLine(line.Append('.').ToString());
             }
 
@@ -337,7 +346,7 @@ namespace BannerlordAgents
             {
                 string size = p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) + " men" : Text.N(p.Men) + " men";
                 string where = p.NearestHolding == null ? Where(p)
-                             : Text.D(p.HoldingDistance) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? " (" + Where(p) + ")" : "");
+                             : Roads.Both(p.HoldingDistance, p.HoldingRoad) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? "; " + Where(p) : "");
                 sb.AppendLine("- " + p.Relation.ToUpperInvariant() + " " + p.Name + Tag(p) + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
                     + "; " + where + "; " + p.Doing + "; seen by " + p.SeenBy + ".");
             }
@@ -416,13 +425,23 @@ namespace BannerlordAgents
                 X = r.X, Y = r.Y, Doing = Doing(s, r), SeenBy = seen?.By, SeenHours = s.Hours
             };
             vp.Toward = Toward(r);
+            vp.Entrance = r.InSettlement ?? r.Entrance;
             SettlementRow near = NearestSettlement(s, r.X, r.Y, out float nd);
-            if (near != null) { vp.Near = near.Name; vp.NearDistance = Text.R1(nd); }
+            if (near != null) { vp.Near = near.Name; vp.NearDistance = Text.R1(nd); vp.NearRoad = R1(Roads.To(s, r, near)); }
             if (own != null && own.Count > 0 && relation != "own")
             {
-                SettlementRow h = own.OrderBy(o => Dist(o.X, o.Y, r.X, r.Y)).First();
+                // the realm's holding it can reach soonest: nearest by road where the game's table knows the way, else as the crow flies
+                SettlementRow byRoad = null;
+                float best = float.MaxValue;
+                foreach (SettlementRow o in own)
+                {
+                    float rd = Roads.To(s, r, o);
+                    if (!float.IsNaN(rd) && rd < best) { best = rd; byRoad = o; }
+                }
+                SettlementRow h = byRoad ?? own.OrderBy(o => Dist(o.X, o.Y, r.X, r.Y)).First();
                 vp.NearestHolding = h.Name;
                 vp.HoldingDistance = Text.R1(Dist(h.X, h.Y, r.X, r.Y));
+                vp.HoldingRoad = byRoad != null ? Text.R1(best) : float.NaN;
             }
             return vp;
         }
@@ -517,13 +536,13 @@ namespace BannerlordAgents
         {
             foreach (TrailPoint p in t.Points)
             {
-                string where = p.Near == null ? "in the wilds" : p.NearDistance < 1f ? "at " + p.Near : Text.D(p.NearDistance) + " from " + p.Near;
-                string fromOurs = p.NearestHolding != null && p.NearestHolding != p.Near ? " (" + Text.D(p.HoldingDistance) + " from your " + p.NearestHolding + ")" : "";
+                string where = p.Near == null ? "in the wilds" : p.NearDistance < 1f ? "at " + p.Near : Roads.Both(p.NearDistance, p.NearRoad) + " from " + p.Near;
+                string fromOurs = p.NearestHolding != null && p.NearestHolding != p.Near ? ", " + Roads.Both(p.HoldingDistance, p.HoldingRoad) + " from your " + p.NearestHolding : "";
                 yield return (p.AfterGap >= 1.5 ? "(out of sight " + Math.Round(p.AfterGap) + " h) " : "") + Calendar.WhenShort(p.Hours) + ", " + where + fromOurs + ", " + p.Doing;
             }
         }
 
-        private static string Where(ViewParty p) => p.Near != null ? (p.NearDistance < 1f ? "at " + p.Near : Text.D(p.NearDistance) + " from " + p.Near) : "in the wilds";
+        private static string Where(ViewParty p) => p.Near != null ? (p.NearDistance < 1f ? "at " + p.Near : Roads.Both(p.NearDistance, p.NearRoad) + " from " + p.Near) : "in the wilds";
 
         public static SettlementRow NearestSettlement(Snapshot s, float x, float y, out float distance)
         {
@@ -546,5 +565,9 @@ namespace BannerlordAgents
         private static string SName(Snapshot s, string id) => id != null && s.SettlementById.TryGetValue(id, out SettlementRow h) ? h.Name : "somewhere";
         private static string PName(Snapshot s, string id) => id != null && s.PartyById.TryGetValue(id, out PartyRow p) ? p.Name ?? "a party" : "a party";
         public static float Dist(float x1, float y1, float x2, float y2) => (float)Math.Sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
+        private static float R1(float v) => float.IsNaN(v) ? float.NaN : Text.R1(v);
+
+        /// <summary>How far a party is from the realm's reach: by road where known, else as the crow flies (the poke rule's distance).</summary>
+        public static float Reach(ViewParty p) => float.IsNaN(p.HoldingRoad) ? p.HoldingDistance : p.HoldingRoad;
     }
 }

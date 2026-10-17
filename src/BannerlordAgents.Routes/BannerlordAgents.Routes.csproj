@@ -11,7 +11,7 @@
     <RootNamespace>BannerlordAgents.Routes</RootNamespace>
     <AssemblyName>BannerlordAgents.Routes</AssemblyName>
     <PlatformTarget>x64</PlatformTarget>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
   </PropertyGroup>
 
 </Project>

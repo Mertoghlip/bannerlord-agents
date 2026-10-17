@@ -1,0 +1,33 @@
+{
+  "tool": "shadow",
+  "kind": "tool",
+  "about": "Trails an enemy lord or army at a distance, to keep it in sight without fighting it: the lord keeps about keep map units from it, steps back when it comes closer, and tells you where it is and what it is doing every report_hours, and whenever it heads for a new place. If the target turns to chase it, its caution makes it fall back (and it comes back to the trail once the danger has passed). Out of sight, it goes to where the target was last seen, and gives up after lose_hours.",
+  "calls_back": "it first has the target in sight, every report_hours with where the target is and what it is doing, when the target heads for a new place, when it loses sight of it or finds it again, and when the target is gone or lost",
+  "target": "enemy_lord",
+  "settings": {
+    "keep": [8, 4, 20, "how far to stay from the target, in map units (a lord sees about 10 to 15, an army farther)"],
+    "report_hours": [6, 1, 48, "how often to report where the target is, in in-game hours"],
+    "lose_hours": [8, 1, 48, "give up when the target has not been seen for this many hours"]
+  },
+  "init": { "course": "none", "reported_at": "now", "started": "false" },
+  "start": "trail",
+  "states": {
+    "trail": { "about": "shadowing {target} from about {keep}", "do": "shadow target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up), so {me} stopped shadowing it." },
+        { "if": "not in_view(target)", "go": "search", "poke": "{me} lost sight of {target}, last seen {doing_of(target)}, {where_of(target)}; it goes to where it was last seen." },
+        { "if": "not started", "go": "trail", "set": { "started": "true", "course": "toward_of(target)", "reported_at": "now" },
+          "poke": "{me} is shadowing {target} ({men_of(target)} men, strength {strength_of(target)}): {doing_of(target)}; {where_of(target)}." },
+        { "if": "toward_of(target) != course", "go": "trail", "set": { "course": "toward_of(target)", "reported_at": "now" },
+          "poke": "{me}, shadowing {target}: it has changed course and is now {doing_of(target)}; {where_of(target)}." },
+        { "if": "now - reported_at >= report_hours", "go": "trail", "set": { "reported_at": "now" },
+          "poke": "{me}, shadowing {target} ({men_of(target)} men, strength {strength_of(target)}): {doing_of(target)}; {where_of(target)}." } ] },
+    "search": { "about": "looking for {target} where it was last seen", "do": "toward target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up), so {me} stopped shadowing it." },
+        { "if": "in_view(target)", "go": "trail", "set": { "course": "toward_of(target)", "reported_at": "now" },
+          "poke": "{me} has {target} in sight again: {doing_of(target)}; {where_of(target)}." },
+        { "if": "seen_ago(target) > lose_hours", "go": "over", "poke": "{me} lost track of {target} and stopped shadowing it." } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

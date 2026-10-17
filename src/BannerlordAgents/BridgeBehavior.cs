@@ -44,6 +44,11 @@ namespace BannerlordAgents
             int warmed = Names.WarmUp();
             double warmMs = Perf.Ms(t);
             Watched = Resolve(Settings.Watch);
+            // the game's road distances, copied at load (a loading screen) rather than in the first hour's copy
+            Capture.ResetRoads();
+            long tr = Perf.Now();
+            RoadBook roads = Capture.RoadsFor(Watched, Clan.PlayerClan?.MapFaction);
+            Log.Line("roads: the game's road distances copied: " + (roads?.Rows.Count ?? 0) + " holdings, " + (roads?.Pairs ?? 0) + " pairs, in " + Perf.Ms(tr).ToString("0", Text.Inv) + " ms");
             string id = CampaignId;
             // the game's own history of the watched realm starts its chronicle (only for the time before our own lines)
             long th = Perf.Now();

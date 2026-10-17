@@ -142,7 +142,7 @@ namespace BannerlordAgents.WarRoom
             ["name"] = ToolName,
             ["description"] = "The way one army would march to a holding or to another army, found as the game itself finds ways: its length, the hours it takes at "
                               + "that army's pace (an enemy's from where your realm last saw it), the ground it crosses, and the bridges, fords and narrow passes on it with "
-                              + "what closing each would cost. Optionally, who would get there first. How marching works is in the first answer, and in marching.txt.",
+                              + "what closing each would cost, and spots [pX_Y] on the way where a watch can be posted. Optionally, who would get there first. How marching works is in the first answer, and in marching.txt.",
             ["inputSchema"] = new JsonObject
             {
                 ["type"] = "object",

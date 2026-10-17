@@ -12,7 +12,7 @@ namespace BannerlordAgents
     ///   there soonest, with their strength and whether they are free, and the enemies around it;
     /// - the look-up files (channel\lookups\&lt;id&gt;.txt), one per holding, lord and enemy the realm knows, for details on
     ///   request: travel hours to every holding, who is near, where an enemy was last seen.
-    /// Travel hours are rough: straight-line distance over the lord's speed. Worker thread.
+    /// Travel hours: the distance by road (Roads; else as the crow flies) over the lord's pace on open ground. Worker thread.
     /// </summary>
     internal static class Facts
     {
@@ -109,10 +109,26 @@ namespace BannerlordAgents
             return lines;
         }
 
+        /// <summary>Hours to march there at the lord's pace on open ground: by road where the game's table knows the way (0.7.1), else as the crow flies.</summary>
         private static double Hours(World w, PartyRow lord, string place)
         {
-            double d = w.Distance(lord.Id, place);
+            double d = w.RoadDistance(lord.Id, place);
+            if (double.IsNaN(d)) d = w.Distance(lord.Id, place);
             return double.IsNaN(d) ? double.NaN : d / World.Speed(lord);
+        }
+
+        /// <summary>"12 (14 by road)" between two things the realm knows of.</summary>
+        private static string Far(World w, string a, string b)
+        {
+            double d = w.Distance(a, b);
+            return double.IsNaN(d) ? "?" : Roads.Both((float)d, (float)w.RoadDistance(a, b));
+        }
+
+        /// <summary>For ordering: by road where known, else as the crow flies.</summary>
+        private static double Reach(World w, string a, string b)
+        {
+            double r = w.RoadDistance(a, b);
+            return double.IsNaN(r) ? w.Distance(a, b) : r;
         }
 
         private static string H(double hours) => double.IsNaN(hours) ? "?" : hours < 1 ? "under an hour" : "about " + Math.Round(hours) + " h";
@@ -122,8 +138,7 @@ namespace BannerlordAgents
 
         private static string EnemyLine(World w, PartyRow e, string place)
         {
-            double d = w.Distance(e.Id, place);
-            return w.Name(e.Id) + " [" + w.Tag(e.Id) + "] (strength " + Text.N((int)World.StrengthOf(e)) + ", " + (double.IsNaN(d) ? "?" : Text.D((float)d)) + " away, "
+            return w.Name(e.Id) + " [" + w.Tag(e.Id) + "] (strength " + Text.N((int)World.StrengthOf(e)) + ", " + Far(w, e.Id, place) + " away, "
                    + Views.Doing(w.S, e) + ")";
         }
 
@@ -168,11 +183,11 @@ namespace BannerlordAgents
                     p = w.Lead(p);
                     subjects++;
                     string where = w.InView(p.Id) ? "in view" : "last seen " + Math.Round(w.SeenAgo(p.Id)) + " hours ago";
-                    SettlementRow home = w.S.Settlements.Where(x => x.Faction == w.Realm).OrderBy(x => w.Distance(p.Id, x.Id)).FirstOrDefault();
+                    SettlementRow home = w.S.Settlements.Where(x => x.Faction == w.Realm).OrderBy(x => Reach(w, p.Id, x.Id)).FirstOrDefault();
                     List<string> near = lords.Where(l => !double.IsNaN(Hours(w, l.Row, p.Id))).OrderBy(l => Hours(w, l.Row, p.Id)).Take(5).Select(l => LordLine(w, l, p.Id)).ToList();
                     double? str = w.KnownStrength(p.Id);
                     sb.AppendLine("- " + w.Name(p.Id) + " [" + w.Tag(p.Id) + "] (" + where + ", strength " + (str.HasValue ? Text.N((int)str.Value) : "?")
-                                  + (home != null ? ", " + Text.D((float)w.Distance(p.Id, home.Id)) + " from your " + home.Name : "") + "): your lords who can reach it soonest "
+                                  + (home != null ? ", " + Far(w, p.Id, home.Id) + " from your " + home.Name : "") + "): your lords who can reach it soonest "
                                   + (near.Count > 0 ? string.Join("; ", near) : "none") + ".");
                 }
             }
@@ -201,7 +216,7 @@ namespace BannerlordAgents
                 foreach (PartyRow e in foes.Take(12)) sb.AppendLine("- " + EnemyLine(w, e, h.Id));
                 List<SettlementRow> hostile = w.S.Settlements.Where(x => World.IsFort(x) && w.HostileFaction(x.Faction)).OrderBy(x => w.Distance(h.Id, x.Id))
                                                .Where(x => w.Distance(h.Id, x.Id) <= 60).Take(5).ToList();
-                if (hostile.Count > 0) sb.AppendLine("Enemy castles and towns within 60: " + string.Join("; ", hostile.Select(x => x.Name + " [" + x.Id + "] " + Text.D((float)w.Distance(h.Id, x.Id)) + " away")) + ".");
+                if (hostile.Count > 0) sb.AppendLine("Enemy castles and towns within 60: " + string.Join("; ", hostile.Select(x => x.Name + " [" + x.Id + "] " + Far(w, h.Id, x.Id) + " away")) + ".");
                 if (World.IsFort(h))
                 {
                     sb.AppendLine("Muster here: every lord of yours by how soon they could be here, with running totals. * = a leader here could call them into an army at once; the others march first (gather and add send them to join by themselves):");
@@ -274,7 +289,7 @@ namespace BannerlordAgents
                     foreach (string step in Views.TrailSteps(trail)) sb.AppendLine("- " + step);
                 }
                 sb.AppendLine("Your holdings nearest to it:");
-                foreach (SettlementRow h in own.OrderBy(h => w.Distance(id, h.Id)).Take(5)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + Text.D((float)w.Distance(id, h.Id)) + " away");
+                foreach (SettlementRow h in own.OrderBy(h => Reach(w, id, h.Id)).Take(5)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + Far(w, id, h.Id) + " away");
                 sb.AppendLine("Your lords who can reach it soonest:");
                 foreach (Lord l in lords.OrderBy(l => Hours(w, l.Row, id)).Take(8)) sb.AppendLine("- " + LordLine(w, l, id));
                 files[tag] = sb.ToString();
@@ -287,7 +302,7 @@ namespace BannerlordAgents
                               + "- a lord of yours held prisoner: where and since when, and your lords who can reach that place soonest;\n"
                               + "- an enemy: where it is or was last seen, its strength, for an army its trail over the last two days, your holdings near it, your lords who can reach it soonest.\n"
                               + "lookups/captured.txt lists all your lords held prisoner, by where they are held.\n"
-                              + "Travel hours are rough: straight-line distance over the lord's speed.\n";
+                              + "Travel hours are by road where the game knows the way (else as the crow flies), over the lord's pace on open ground; forest, fords and night slow a march further.\n";
             return files;
         }
 

@@ -489,7 +489,7 @@ namespace BannerlordAgents
             {
                 if (string.IsNullOrWhiteSpace(v)) continue;
                 string s = v.Trim().Trim('[', ']');
-                if (s.IndexOf(' ') >= 0 || s.IndexOf('_') < 0) continue;   // a name, not an id
+                if (s.IndexOf(' ') >= 0 || s.IndexOf('_') < 0 || Tools.Spots.Is(s)) continue;   // a name, not an id; or a spot on the map (geography, never hidden)
                 if (Shown.Contains(s)) continue;
                 Diag.Count("agent:unknown id");
                 Diag.Event("answer", "unknown id", new { id = s, file = o.File, index = o.Index });

@@ -143,7 +143,8 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [ ] First live session with 0.6: does the council mass the realm, and what does recruitment show?
 - [x] The dashboard (Oct 16, 0.7; [DASHBOARD.md](DASHBOARD.md)): a live map in the browser of what each realm sees, built from the very view its report was written from, with what the report left out marked; icons and a legend; the planned ways; the agent's moves beside it; a rewind over every hour of a load
 - [x] Ways and crossings (Oct 16, 0.7; [ROUTES.md](ROUTES.md)): the game's walking map copied once per map; a way-finder that takes the game's shortest way, checked against the game's own planned ways; the crossings that matter (bridges, fords, passes) and what closing each would cost; the agent's "ask the way" tool, a real tool in each answer and council, facts only
-- [ ] First live session with 0.7: the map copy's time, the accuracy check's numbers, and whether the agent asks the way and uses the crossings
+- [ ] First live session with 0.7: the map copy's time, the accuracy check's numbers, and whether the agent asks the way and uses the crossings. *Oct 16: the map copied in 4 s; the war room froze with the tool and the map had false walls, both fixed the same evening.*
+- [x] Watch, shadow and distances by road (Oct 16, 0.7.1): a lord can keep watch on a spot of a road or trail an enemy army at a distance; every distance the agent reads is given as the crow flies and by road (the game's own reckoning)
 - [x] Faction authority: an agent orders only its own lords. **free** hands a lord back.
 - [ ] First tests, phase 7: Opus 5.5 commands the whole orc realm with those tools, in your campaign. *Set up Oct 8, 21:14; a first short run on Oct 9 ([report](reports/2026-10-09-second-live-session.md)), which led to version 0.5.1.*
 - [ ] Run control: a fixed starting save, a 60-day limit, the player parked far away, a fixed speed, and autosave with resume

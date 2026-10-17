@@ -257,7 +257,7 @@ namespace SmokeTest
 
             List<string> problems = Library.Problems();
             Check(problems.Count == 0, "the tool library passes its own checks" + (problems.Count > 0 ? ": " + string.Join("; ", problems) : ""));
-            Check(Library.All.Count == 17, "the library holds 17 orders (7 moves, 7 tools, 3 for armies), got " + Library.All.Count);
+            Check(Library.All.Count == 19, "the library holds 19 orders (7 moves, 9 tools, 3 for armies), got " + Library.All.Count);
             Check(Library.Text().Contains("**join** (target: one of your lords)") && Library.Text().Contains("more than 1.5 times the besiegers' strength"),
                   "the library has the join order, and relieve says when the defenders inside sally out");
             var scope = new TestScope();
@@ -378,6 +378,8 @@ namespace SmokeTest
             DefendTests(moves, released);
             RefillAndReportTests(moves);
             TrailTests();
+            WatchShadowTests(dir, moves, released);
+            RoadTests();
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
@@ -767,6 +769,106 @@ namespace SmokeTest
             broken.ArmyLeader = null;
             Brain.OnHour(ToolWorld(6061, broken));
             Check(aged && !m.Trails.ContainsKey("p_arw"), "a trail keeps two days, and ends when its army is seen broken up");
+        }
+
+        /// <summary>
+        /// Version 0.7.1, watch and shadow (Mert, Oct 16: a weaker lord sent to keep tabs on the road from Hollin Gate, rather than
+        /// screening round Western Moria). Watch: to its post (a spot), takes up the watch, reports an enemy army within its
+        /// radius and again when it is out of sight. Shadow: keeps its distance from its target (closing in, stepping back),
+        /// reports at once and when the target heads for a new place, goes to where it was last seen when out of sight, and gives up.
+        /// </summary>
+        private static void WatchShadowTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released)
+        {
+            float sx, sy;
+            Check(Spots.TryParse("[p125_112]", out sx, out sy) && sx == 125 && sy == 112 && !Spots.Is("lord_MM1_1") && Spots.Id(124.6f, 111.7f) == "p125_112", "a spot is named by where it is: p125_112");
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            var grish = new PartyRow { Id = "p_gri", Leader = "lord_gri", Name = "Grishnakh", Faction = "orcs", Kind = "lord", Men = 80, SizeLimit = 100, Strength = 90, Speed = 6, FoodDays = 10, X = 115, Y = 110, Doing = "Hold", Spottable = true };
+            Brain.OnHour(ToolWorld(7000, grish));
+            Check(Runner.WorldFor(ToolWorld(7000, grish)).Name("p125_112").StartsWith("the spot ", StringComparison.Ordinal), "a spot reads as \"the spot ... of\" its nearest holding: " + Runner.WorldFor(ToolWorld(7000, grish)).Name("p125_112"));
+            moves.Clear();
+            Runner.Start(950, new ToolOrder { Tool = "watch", Lord = "lord_gri", LordName = "Grishnakh", Party = "p_gri", At = "p125_112" });
+            Check(moves.Any(m => m.Key == 950 && m.Value.Verb == "post" && m.Value.X == 125 && m.Value.Y == 112), "watch sends the lord to its post, the spot");
+            grish.X = 125; grish.Y = 112;
+            Brain.OnHour(ToolWorld(7001, grish));
+            Check(Notices().Contains("Grishnakh has taken up the watch at the spot"), "it says when it has taken up the watch");
+            var rider = new PartyRow { Id = "p_rider", Leader = "lord_rider", Name = "Eomer", Faction = "player_k", Kind = "lord", Men = 900, ArmyLeader = "p_rider", ArmyMen = 2400, ArmyParties = 6, ArmyStrength = 3000, Strength = 1100, Speed = 5,
+                                       X = 135, Y = 112, Doing = "GoToSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            Brain.OnHour(ToolWorld(7002, grish, rider));
+            Check(Notices().Contains("Grishnakh, keeping watch at the spot") && Notices().Contains("sees an enemy army: Eomer, 2,400 men, strength 3,000") && Notices().Contains("going to Orc Castle"),
+                  "an enemy army within its radius is reported with its strength and what it is doing");
+            Brain.OnHour(ToolWorld(7003, grish));
+            Check(Notices().Contains("Eomer has gone out of sight; when last seen it was going to Orc Castle"), "and again when it has gone out of sight");
+            Check(Runner.InForce(Runner.WorldFor(ToolWorld(7003, grish))).Contains("watch the spot") && Runner.InForce(Runner.WorldFor(ToolWorld(7003, grish))).Contains("[p125_112]"),
+                  "the orders in force name the post by the spot and its id");
+
+            // shadow: closes to keep (8) from its target, steps back when it comes nearer, reports, follows its course, searches, gives up
+            var lurtz = new PartyRow { Id = "p_lur", Leader = "lord_lur", Name = "Lurtz", Faction = "orcs", Kind = "lord", Men = 90, SizeLimit = 100, Strength = 100, Speed = 6, FoodDays = 10, X = 150, Y = 130, Doing = "Hold", Spottable = true };
+            PartyRow Host(float x, string target) => new PartyRow
+            {
+                Id = "p_hostx", Leader = "lord_hostx", Name = "Imrahil", Faction = "player_k", Kind = "lord", Men = 1000, ArmyLeader = "p_hostx", ArmyMen = 3000, ArmyParties = 8, ArmyStrength = 4000, Strength = 1200, Speed = 4,
+                X = x, Y = 130, Doing = "GoToSettlement", TargetSettlement = target, Spottable = true
+            };
+            Brain.OnHour(ToolWorld(7010, lurtz, Host(170, "castle_orc")));
+            moves.Clear();
+            Runner.Start(951, new ToolOrder { Tool = "shadow", Lord = "lord_lur", LordName = "Lurtz", Party = "p_lur", Target = "p_hostx" });
+            Move first = moves.LastOrDefault(m => m.Key == 951).Value;
+            Check(first.Verb == "shadow" && Math.Abs(first.X - 162) < 0.6f && Math.Abs(first.Y - 130) < 0.6f, "shadow closes to 8 from its target, on its own side (" + first + ")");
+            Check(Notices().Contains("Lurtz is shadowing Imrahil (3,000 men, strength 4,000): going to Orc Castle"), "and says so at once, with what the target is doing");
+            lurtz.X = 156;
+            moves.Clear();
+            Brain.OnHour(ToolWorld(7011, lurtz, Host(160, "castle_orc")));
+            Move back = moves.LastOrDefault(m => m.Key == 951).Value;
+            Check(back.Verb == "shadow" && back.X < 150 && back.X > 147, "the target coming nearer, it steps back to 11 (" + back + ")");
+            Brain.OnHour(ToolWorld(7012, lurtz, Host(158, "castle_two")));
+            Check(Notices().Contains("Lurtz, shadowing Imrahil: it has changed course and is now going to Orc Keep"), "a target heading for a new place is reported");
+            moves.Clear();
+            Snapshot gone = ToolWorld(7013, lurtz, Host(150, "castle_two"));
+            gone.WatchedSees.Remove("p_hostx");
+            Brain.OnHour(gone);
+            Snapshot gone2 = ToolWorld(7014, lurtz, Host(145, "castle_two"));
+            gone2.WatchedSees.Remove("p_hostx");
+            Brain.OnHour(gone2);
+            Check(Notices().Contains("Lurtz lost sight of Imrahil") && moves.Any(m => m.Key == 951 && m.Value.Verb == "toward"), "out of sight, it goes to where the target was last seen");
+            released.Clear();
+            for (int h = 7015; h <= 7024; h++)
+            {
+                Snapshot unseen = ToolWorld(h, lurtz, Host(140, "castle_two"));
+                unseen.WatchedSees.Remove("p_hostx");
+                Brain.OnHour(unseen);
+            }
+            Check(released.Contains(951) && Notices().Contains("Lurtz lost track of Imrahil and stopped shadowing it"), "and gives up after lose_hours");
+            Runner.Reset();
+        }
+
+        /// <summary>
+        /// Version 0.7.1, road distances (Mert, Oct 16: "distances should be given both as the crow flies and the actual travel
+        /// distance"): through the party's entrance and the game's table between holdings, the nearest holding chosen by road,
+        /// both in the report, the poke rule by road, and times in the facts by road.
+        /// </summary>
+        private static void RoadTests()
+        {
+            var far = new PartyRow { Id = "p_far", Leader = "lord_far2", Name = "Beregond", Faction = "player_k", Kind = "lord", Men = 400, Strength = 500, Speed = 4, X = 150, Y = 120, Doing = "Hold", Spottable = true, Entrance = "castle_men" };
+            var ug = new PartyRow { Id = "p_ugr", Leader = "lord_ugr", Name = "Shagrat", Faction = "orcs", Kind = "lord", Men = 200, SizeLimit = 250, Strength = 250, Speed = 5, FoodDays = 10, X = 100, Y = 100, Doing = "Hold", InSettlement = "castle_orc", Entrance = "castle_orc", Spottable = true };
+            Snapshot s = ToolWorld(7100, far, ug);
+            s.Roads = new RoadBook();
+            s.Roads.Set("castle_men", "castle_orc", 200);
+            s.Roads.Set("castle_men", "castle_two", 35);
+            s.Roads.Set("castle_men", "village_orc", 190);
+            s.Roads.Set("castle_orc", "castle_two", 45);
+            s.Roads.Set("castle_men", "village_men", 15);
+            Brain.OnHour(s);
+            float toOrc = Roads.To(s, far, s.SettlementById["castle_orc"]), toTwo = Roads.To(s, far, s.SettlementById["castle_two"]);
+            Check(Math.Abs(toOrc - 183.9f) < 0.2f && Math.Abs(toTwo - 27.4f) < 0.2f, "by road through its entrance: to Orc Castle " + Text.D(toOrc) + " (53.9 as the crow flies), to Orc Keep " + Text.D(toTwo));
+            View v = Views.Build(s, "orcs", s.WatchedSees, s.HostileToWatched, Brain.Get("orcs"));
+            string report = Views.Report(v, null);
+            ViewParty seen = v.Seen.FirstOrDefault(x => x.Id == "p_far");
+            Check(seen != null && seen.NearestHolding == "Orc Keep" && report.Contains("22.4 (27.4 by road) from your Orc Keep"), "the report gives the nearest holding by road, both as the crow flies and by road");
+            Check(report.Contains("as the crow flies, then in brackets by road"), "and says what the two distances are");
+            Check(Math.Abs(Runner.WorldFor(s).RoadDistance("p_ugr", "p_far") - 183.9) < 0.3, "between two parties, each through its own entrance (" + Text.D((float)Runner.WorldFor(s).RoadDistance("p_ugr", "p_far")) + ")");
+            Check(Facts.Lookups(Runner.WorldFor(s), Brain.Get("orcs").LastSeen, Brain.Get("orcs").Trails).TryGetValue("lord_ugr", out string page) && page.Contains("Orc Keep [castle_two]: about 9 h"),
+                  "a lord's look-up gives hours by road (45 by road at 5 an hour)");
+            Brain.OnHour(ToolWorld(7101, far, ug));
+            Check(!Roads.Known, "without the game's table (a made-up world) distances go back to the crow's alone");
         }
 
         /// <summary>

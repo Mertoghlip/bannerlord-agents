@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Settlements;
@@ -66,6 +68,8 @@ namespace BannerlordAgents
                     Faction = f?.StringId,
                     X = Text.R1(s.Position.X),
                     Y = Text.R1(s.Position.Y),
+                    Gx = Text.R1(s.GatePosition.X),
+                    Gy = Text.R1(s.GatePosition.Y),
                     Militia = (int)s.Militia
                 };
                 if (s.SiegeEvent != null)
@@ -121,6 +125,7 @@ namespace BannerlordAgents
             }
 
             if (watched != null) Realm(watched, snap);
+            snap.Roads = RoadsFor(watched, player);
             long t4 = Perf.Now();
             if (withVision && watched != null) Vision.FactionSees(watched, live, snap);
             long t5 = Perf.Now();
@@ -139,6 +144,70 @@ namespace BannerlordAgents
         }
 
         private static double Ms(long a, long b) => (b - a) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+
+        // ---------- the game's road distances (0.7.1) ----------
+
+        private static RoadBook _roads;
+        private const int Neighbours = 12;
+
+        /// <summary>A new campaign: the road table is copied again at its first hour.</summary>
+        public static void ResetRoads() => _roads = null;
+
+        /// <summary>
+        /// The game's own road distances (its navigation cache, filled for every pair of holdings when the campaign starts or
+        /// read from the map pack's file, so these are lookups, not searches): each holding of the watched realm and of the
+        /// player's to every holding, and each holding to its 12 nearest. The first copy is made at load; a holding a realm
+        /// gains later gets its row in the next hour's copy. A new book replaces the old, so the worker's copy never changes.
+        /// </summary>
+        public static RoadBook RoadsFor(IFaction watched, IFaction player)
+        {
+            try
+            {
+                MapDistanceModel model = Campaign.Current.Models.MapDistanceModel;
+                List<Settlement> all = Settlement.All.Where(x => x != null && !x.IsHideout).ToList();
+                var need = new List<Settlement>();
+                foreach (Settlement s in all)
+                    if ((watched != null && s.MapFaction == watched) || (player != null && s.MapFaction == player))
+                        if (_roads == null || !_roads.HasRow(s.StringId)) need.Add(s);
+                if (_roads != null && need.Count == 0) return _roads;
+                var book = new RoadBook();
+                if (_roads != null)
+                    foreach (KeyValuePair<string, Dictionary<string, float>> row in _roads.Rows)
+                        foreach (KeyValuePair<string, float> kv in row.Value) book.Set(row.Key, kv.Key, kv.Value);
+                else
+                    foreach (Settlement a in all)
+                        foreach (Settlement b in all.Where(x => x != a).OrderBy(x => x.Position.DistanceSquared(a.Position)).Take(Neighbours))
+                            book.Set(a.StringId, b.StringId, Road(model, a, b));
+                foreach (Settlement a in need)
+                    foreach (Settlement b in all)
+                        if (b != a) book.Set(a.StringId, b.StringId, Road(model, a, b));
+                Diag.Event("roads", "copied", new { rows = book.Rows.Count, pairs = book.Pairs, new_rows = need.Count });
+                return _roads = book;
+            }
+            catch (Exception e)
+            {
+                Diag.Swallowed("copying the game's road distances", e);
+                return _roads;
+            }
+        }
+
+        private static float Road(MapDistanceModel model, Settlement a, Settlement b)
+        {
+            float d = model.GetDistance(a, b, false, false, MobileParty.NavigationType.Default);
+            return d >= 0 && d < 1e7f ? Text.R1(d) : float.NaN;
+        }
+
+        /// <summary>The holding whose gate the game counts a party's road distances from (the ground it stands on decides).</summary>
+        private static string Entrance(MobileParty p)
+        {
+            try
+            {
+                PathFaceRecord face = p.CurrentNavigationFace;
+                if (!face.IsValid()) return null;
+                return Campaign.Current.Models.MapDistanceModel.GetClosestEntranceToFace(face, MobileParty.NavigationType.Default).Item1?.StringId;
+            }
+            catch (Exception e) { Diag.Swallowed("the game's closest entrance for a party", e); return null; }
+        }
 
         /// <summary>
         /// The watched realm's own records: its lords held prisoner (where, by whom, since when), its clans' influence and
@@ -209,6 +278,7 @@ namespace BannerlordAgents
             r.Leader = leader?.StringId;
             Settlement inside = p.CurrentSettlement;
             r.InSettlement = inside?.StringId;
+            r.Entrance = inside != null ? inside.StringId : Entrance(p);
             Army army = p.Army;
             if (army != null)
             {

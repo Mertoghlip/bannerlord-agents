@@ -167,6 +167,7 @@ namespace BannerlordAgents
         public static void OnHour(Snapshot s)
         {
             Latest = s;
+            Roads.Known = s.Roads != null;
             double lagMs = s.Wall > 0 ? (DateTime.UtcNow.Ticks - s.Wall) / 10000.0 : -1;
             Diag.Event("hour", Text.When(s.Hours), new { parties = s.Parties.Count, settlements = s.Settlements.Count, worker_lag_ms = Math.Round(lagMs, 1), parts_ms = s.PartsMs?.Select(x => Math.Round(x, 3)).ToArray() });
             Audit.CheckSnapshot(s);
@@ -281,7 +282,7 @@ namespace BannerlordAgents
                 close.Add(r.Id);
                 if (first || (m.LastClose.TryGetValue(r.Id, out double last) && s.Hours - last < OutOfSightHours)) continue;
                 int men = r.ArmyMen > 0 ? r.ArmyMen : r.Men;
-                string where = vp.NearestHolding != null ? Text.D(vp.HoldingDistance) + " from " + vp.NearestHolding : "near " + (vp.Near ?? "nowhere known");
+                string where = vp.NearestHolding != null ? Roads.Both(vp.HoldingDistance, vp.HoldingRoad) + " from " + vp.NearestHolding : "near " + (vp.Near ?? "nowhere known");
                 var sighting = new Trigger
                 {
                     Hours = s.Hours, Kind = "enemy_in_view", Party = r.Id,
@@ -426,8 +427,8 @@ namespace BannerlordAgents
                 if (last == null || back || vp.Doing != last.Doing || Views.Dist(last.X, last.Y, r.X, r.Y) >= TrailStep || s.Hours - last.Hours >= TrailEvery - 1e-6)
                     t.Points.Add(new TrailPoint
                     {
-                        Hours = s.Hours, X = r.X, Y = r.Y, Near = vp.Near, NearDistance = vp.NearDistance, NearestHolding = vp.NearestHolding,
-                        HoldingDistance = vp.HoldingDistance, Doing = vp.Doing, AfterGap = back ? gap : 0
+                        Hours = s.Hours, X = r.X, Y = r.Y, Near = vp.Near, NearDistance = vp.NearDistance, NearRoad = vp.NearRoad, NearestHolding = vp.NearestHolding,
+                        HoldingDistance = vp.HoldingDistance, HoldingRoad = vp.HoldingRoad, Doing = vp.Doing, AfterGap = back ? gap : 0
                     });
                 t.LastSeenHours = s.Hours;
             }
@@ -450,7 +451,7 @@ namespace BannerlordAgents
         /// </summary>
         private static bool Close(Snapshot s, string fid, PartyRow r, ViewParty vp, List<SettlementRow> own, HashSet<string> ownIds)
         {
-            if (r.ArmyMen > 0 || own.Count == 0 || vp.HoldingDistance < Settings.SightingDistance) return true;
+            if (r.ArmyMen > 0 || own.Count == 0 || Views.Reach(vp) < Settings.SightingDistance) return true;   // within reach by road, where the game's table knows the way
             if ((r.Besieging != null && ownIds.Contains(r.Besieging)) || (r.Raiding != null && ownIds.Contains(r.Raiding))) return true;
             if (r.TargetSettlement != null && ownIds.Contains(r.TargetSettlement) && HeadingIn.Contains(r.Doing ?? "")) return true;
             return r.Doing == "EngageParty" && r.TargetParty != null && s.PartyById.TryGetValue(r.TargetParty, out PartyRow chased) && chased.Faction == fid;

@@ -16,9 +16,9 @@ namespace BannerlordAgents.Tools
         public float X, Y, R;
 
         public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party && Math.Abs(R - o.R) < 0.01f
-                                    && (Verb != "toward" || (Math.Abs(X - o.X) < 1f && Math.Abs(Y - o.Y) < 1f));
+                                    && ((Verb != "toward" && Verb != "post" && Verb != "shadow") || (Math.Abs(X - o.X) < 1f && Math.Abs(Y - o.Y) < 1f));
 
-        public override string ToString() => Verb + (Place != null ? " " + Place : "") + (Party != null ? " " + Party : "") + (Verb == "toward" ? " (" + X + ", " + Y + ")" : "")
+        public override string ToString() => Verb + (Place != null ? " " + Place : "") + (Party != null ? " " + Party : "") + (Verb == "toward" || Verb == "post" || Verb == "shadow" ? " (" + X + ", " + Y + ")" : "")
                                              + (R > 0 ? " within " + R : "");
     }
 
@@ -199,7 +199,15 @@ namespace BannerlordAgents.Tools
             }
             // the rules run in the hour a tool starts too, so a first step that decides at once (go in, or stop close) does
             if (!Safety(t, me, w, scope) && !Supply(t, me, w, scope) && !t.Finished)
+            {
                 Rules(t, scope, w);
+                // a shadow follows its target: its point is worked out again every hour (sent only when it moved)
+                if (!t.Finished && t.Shelter == null && t.SupplyAt == null && t.Def.States.TryGetValue(t.State, out StateDef live) && live.Do?.Verb == "shadow")
+                {
+                    t.Pending = Resolve(t, live.Do, scope, w);
+                    t.HasPending = true;
+                }
+            }
             Issue(t, w);
         }
 
@@ -256,14 +264,47 @@ namespace BannerlordAgents.Tools
                     return new Move { Verb = a.Verb, Place = id, R = r };
                 }
             }
+            else if (kind == "spot")
+            {
+                // a post: a spot on the map, or a holding's gate (standing outside, not going in)
+                SettlementRow h = w.Holding(id);
+                if (h != null) return new Move { Verb = "post", X = h.Gx != 0 || h.Gy != 0 ? h.Gx : h.X, Y = h.Gx != 0 || h.Gy != 0 ? h.Gy : h.Y };
+                if (Spots.TryParse(id, out float sx, out float sy)) return new Move { Verb = "post", X = sx, Y = sy };
+            }
             else if (a.Verb == "toward")
             {
                 if (id != null && w.Where(id, out float x, out float y)) return new Move { Verb = "toward", Party = id, X = x, Y = y };
+            }
+            else if (a.Verb == "shadow")
+            {
+                if (id != null && (w.Party(id) != null || w.Where(id, out _, out _))) return Shadow(t, w, id);
             }
             else if (id != null && w.Party(id) != null) return new Move { Verb = a.Verb, Party = w.Lead(w.Party(id)).Id };
             Diag.Count("tool:no target");
             Diag.Event("tool", "no target", new { id = t.Id, tool = t.Def.Name, state = t.State, @do = a.ToString(), value = Expr.Show(v) });
             return new Move { Verb = "hold" };
+        }
+
+        /// <summary>
+        /// The shadow's move this hour (0.7.1): a point keep map units from its target, on its own side; nearer than that by two,
+        /// it steps back to keep + 3; within two of keep, it stays where it is. The target out of sight: where it was last seen.
+        /// Worked out again every hour, as the target moves.
+        /// </summary>
+        private static Move Shadow(ToolInstance t, World w, string id)
+        {
+            PartyRow me = w.Party(t.Order.Party);
+            PartyRow target = w.Lead(w.Party(id));
+            string tid = target?.Id ?? id;
+            if (me == null || !w.Where(tid, out float tx, out float ty)) return new Move { Verb = "hold" };
+            if (!w.InView(tid)) return new Move { Verb = "toward", Party = tid, X = tx, Y = ty };
+            double keep = t.Settings.TryGetValue("keep", out double k) ? k : 8;
+            double dx = me.X - tx, dy = me.Y - ty, d = Math.Sqrt(dx * dx + dy * dy);
+            if (d < 0.01) { dx = 1; dy = 0; d = 1; }
+            double at;
+            if (d > keep + 2) at = keep;
+            else if (d < keep - 2) at = keep + 3;
+            else return new Move { Verb = "shadow", Party = tid, X = me.X, Y = me.Y, R = (float)keep };
+            return new Move { Verb = "shadow", Party = tid, X = (float)(tx + dx / d * at), Y = (float)(ty + dy / d * at), R = (float)keep };
         }
 
         /// <summary>A state that ends the tool: the next order (then) starts, or the lord is freed, or holds where it is.</summary>
@@ -316,7 +357,9 @@ namespace BannerlordAgents.Tools
             var spare = new HashSet<string> { t.Order.Target, t.Current.Party, scope.Get("target") as string };
             // striking a siege camp: every lord camped in that siege is part of the fight the order chose, not a danger to flee
             string siege = t.Current.Verb == "engage" ? w.Party(t.Current.Party)?.Besieging : null;
-            bool Spared(PartyRow e) => spare.Contains(e.Id) || (siege != null && e.Besieging == siege);
+            // a shadow keeps its own distance from its target, but a target that turns to chase it is a danger like any other
+            bool shadowing = t.Current.Verb == "shadow";
+            bool Spared(PartyRow e) => (spare.Contains(e.Id) && !(shadowing && e.Doing == "EngageParty" && e.TargetParty == me.Id)) || (siege != null && e.Besieging == siege);
             PartyRow Danger(double within) => w.ThreatsInView(me.Id, within).Where(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
                                                  .OrderByDescending(World.StrengthOf).FirstOrDefault();
             // the order's own holding: always the shelter with stay_inside 1 (garrison's default); tried first, and kept only
@@ -580,6 +623,7 @@ namespace BannerlordAgents.Tools
                     case "in_settlement": return me?.InSettlement != null;
                     case "besieging": return me?.Besieging != null;
                     case "lords": return (double)_t.Order.Lords.Count;
+                    case "now": return _w.Hours;
                 }
                 if (_t.Settings.TryGetValue(name, out double v)) return v;
                 if (_t.Memory.TryGetValue(name, out object o)) return o;
@@ -642,6 +686,10 @@ namespace BannerlordAgents.Tools
                             }
                             return (double)n;
                         }
+                    // what a party is doing, where it is heading and where it is, as the realm knows it (in view now, else as last seen)
+                    case "doing_of": return _w.DoingOf(Id(a[0]));
+                    case "toward_of": return _w.TowardOf(Id(a[0]));
+                    case "where_of": return _w.WhereOf(Id(a[0]));
                     case "min": return Nan(Math.Min(Expr.Number(a[0]), Expr.Number(a[1])));
                     case "max": return Nan(Math.Max(Expr.Number(a[0]), Expr.Number(a[1])));
                     case "pick": return Expr.Truthy(a[0]) ? a[1] : a[2];

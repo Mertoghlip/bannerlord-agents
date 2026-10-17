@@ -1,0 +1,26 @@
+{
+  "tool": "watch",
+  "kind": "tool",
+  "about": "Posts the lord at one spot to keep watch, for example on a road or at a crossing: a spot [pX_Y] named in an \"ask the way\" answer, or a holding (it stands at the gate, outside). It stays on its post and tells you each enemy army that comes within watch_radius of it, with its strength, where it is and what it is doing, and again when that army has gone out of sight. With also_lords 1 it tells you of enemy lords too. Its caution makes it fall back from anything too strong, and it goes back to its post once the danger has passed.",
+  "calls_back": "it reaches its post, an enemy army (or with also_lords, an enemy lord) comes within watch_radius of it, and when that one is out of sight again",
+  "at": "spot_or_holding",
+  "settings": {
+    "watch_radius": [12, 3, 30, "how far from the post an enemy is reported, in map units (a lord sees about 10 to 15)"],
+    "also_lords": [0, 0, 1, "1 also reports enemy lords that are not in an army"]
+  },
+  "init": { "reported": "none", "reported_lord": "none", "gone_army": "none" },
+  "start": "go",
+  "states": {
+    "go": { "about": "going to keep watch at {at}", "do": "post at",
+      "when": [ { "if": "within(at, 3)", "go": "watch", "poke": "{me} has taken up the watch at {at}." } ] },
+    "watch": { "about": "keeping watch at {at}", "do": "post at",
+      "when": [
+        { "if": "army_near(at, watch_radius) != none and army_near(at, watch_radius) != reported", "go": "watch", "set": { "reported": "army_near(at, watch_radius)" },
+          "poke": "{me}, keeping watch at {at}, sees an enemy army: {army_near(at, watch_radius)}, {men_of(army_near(at, watch_radius))} men, strength {strength_of(army_near(at, watch_radius))}, {distance(army_near(at, watch_radius), at)} from the post; {doing_of(army_near(at, watch_radius))}; {where_of(army_near(at, watch_radius))}." },
+        { "if": "also_lords > 0 and nearest_enemy(at, watch_radius) != none and nearest_enemy(at, watch_radius) != reported and nearest_enemy(at, watch_radius) != reported_lord", "go": "watch", "set": { "reported_lord": "nearest_enemy(at, watch_radius)" },
+          "poke": "{me}, keeping watch at {at}, sees an enemy lord: {nearest_enemy(at, watch_radius)}, {men_of(nearest_enemy(at, watch_radius))} men, strength {strength_of(nearest_enemy(at, watch_radius))}, {distance(nearest_enemy(at, watch_radius), at)} from the post; {doing_of(nearest_enemy(at, watch_radius))}." },
+        { "if": "reported != none and not in_view(reported)", "go": "watch", "set": { "gone_army": "reported", "reported": "none" },
+          "poke": "{me}, keeping watch at {at}: {gone_army} has gone out of sight; when last seen it was {doing_of(gone_army)}, {where_of(gone_army)}." },
+        { "if": "reported_lord != none and not in_view(reported_lord)", "go": "watch", "set": { "reported_lord": "none" } } ] }
+  }
+}

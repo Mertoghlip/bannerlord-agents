@@ -553,3 +553,29 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the dashboard's self-test passed (26 checks, 3 new: a river closed without its bridge, a bridge rebuilt from its centre, a way learned across it);
   - the war room's self-test passed (46);
   - `toolcheck --big` passed.
+
+### 22:10 · Version 0.7.1: watch, shadow, and every distance by road too · commit (this commit; installed 22:09)
+- **Why:** Mert, on the agent screening round Western Moria to find Aragorn's army: "It would be a much smarter move to send a weaker lord to scout on the road to western moria from hollin gate to keep tabs on Aragorn's army ... I think the AI is smart enough to do this, but just doesn't have the tools to do so."
+  - Checked against the night's frames: every order that places a lord was tied to a holding, and the report gave distances as the crow flies (Hollin Gate to Western Moria 53, by road about 260 north round the mountains).
+  - Mert: "Implement 1 and 2. In the report, distances should be given both as the crow flies and the actual travel distance."
+- **What:**
+  - **watch** (a spot or a holding): the lord goes to its post and stands there. It reports when it takes up the watch, each enemy army within `watch_radius` (12) with its strength, what it is doing and where it is, and again when that army has gone out of sight; with `also_lords` 1, enemy lords too. Its caution makes it fall back and return.
+  - **shadow** (an enemy lord or army): keeps about `keep` (8) map units from its target, its point worked out again every hour. It reports at once, when the target heads for a new place, and every `report_hours` (6). Out of sight, it searches where the target was last seen and gives up after `lose_hours` (8). It falls back if the target turns to chase it.
+  - **Spots** (`p673_994`): the "ask the way" answers name the spot of each crossing, of the narrowest place, and of up to 6 points along the way. The bridge checks a spot is walkable ground (else the nearest walkable within 4, or refuses). The instructions' "Asking the way" section says a watch can be posted on one.
+  - **Distances by road:** everywhere the agent reads a distance (the report, the sightings, the trails, the facts, the look-ups), it reads "63.0 (260.0 by road)", the road figure being the game's own.
+    - The game's table of road distances between holdings is copied at load; each party's entrance is copied hourly.
+    - The nearest holding is the nearest by road, the poke rule's reach is by road, and the facts' travel hours are by road.
+    - The report's header says what the two numbers are.
+  - **The dashboard** draws each watch's post, tied to its lord.
+  - New in the order language: the moves `post` and `shadow`, the name `now`, and the functions `doing_of`, `toward_of` and `where_of`.
+- **Checks:**
+  - the smoke test passed in full (145 checks, 7 new for watch, shadow and spots, 7 for road distances);
+  - the war room's self-test passed (46; the answer names the bridge's spot and the spots along the way);
+  - the dashboard's self-test passed (26);
+  - 390 game references, 0 missing;
+  - the installed DLL has sha256 `C4A6D0851389AB80…`.
+  - Found while testing: a rule's `set` is made before its call-back is filled in, so watch's "gone out of sight" first named "none". It now keeps the army under its own name.
+- **Outside the repository:**
+  - the war room and the dashboard were stopped at 22:08 (idle, the game closed), and restarted, detached, at 22:09:45;
+  - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` and wrote `tools.txt` with 19 orders.
+- **Not yet seen in a game:** the road table's size and copy time at load; the hourly cost of the entrances; a watch or a shadow in play.

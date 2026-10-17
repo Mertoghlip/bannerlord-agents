@@ -333,6 +333,15 @@ function drawCrossingIcon(g, x, y, c, big) {
   g.restore();
 }
 
+// a watch's post: a small flag on a staff
+function drawPost(g, x, y) {
+  g.save();
+  g.strokeStyle = '#1b1f1d'; g.lineWidth = 1.6;
+  g.beginPath(); g.moveTo(x, y + 6); g.lineTo(x, y - 8); g.stroke();
+  g.fillStyle = C.own; g.beginPath(); g.moveTo(x, y - 8); g.lineTo(x + 8, y - 5); g.lineTo(x, y - 2); g.closePath(); g.fill();
+  g.restore();
+}
+
 function polyline(g, pts, colour, width, dash, alpha) {
   if (!pts || pts.length < 2) return;
   g.save();
@@ -468,6 +477,14 @@ function draw() {
       g.strokeText(label, x + partyRadius(it) + 5, y + 4); g.fillText(label, x + partyRadius(it) + 5, y + 4);
     }
   }
+  // each watch's post (an order in force naming a spot [pX_Y]), tied to its lord
+  for (const it of M.items) {
+    const m = it.held && /\[p(\d+)_(\d+)\]/.exec(it.held);
+    if (!m) continue;
+    const px = sx(+m[1]), py = sy(+m[2]);
+    polyline(g, [[it.x, it.y], [+m[1], +m[2]]], C.own, 1.2, [3, 3], 0.8);
+    drawPost(g, px, py);
+  }
   // the selection, its way and the way asked
   if (S.way && S.way.points) polyline(g, S.way.points, S.way.colour, 3.2, S.way.dash, 0.95);
   if (S.asked && S.asked.points) polyline(g, S.asked.points, C.accent, 3, [6, 4], 1);
@@ -533,6 +550,7 @@ function buildLegend() {
   row('Villagers', (g) => drawPartyIcon(g, 15, 10, { kind: 'villager', rel: 'neutral' }));
   row('Fighting', (g) => drawPartyIcon(g, 13, 11, lord('enemy', { battle: true })));
   row('Holding the agent\'s order', (g) => drawPartyIcon(g, 13, 9, lord('own', { held: 'x' })));
+  row('A watch post (its lord at the dashed line\'s end)', (g) => drawPost(g, 14, 12));
   group('What it knows');
   row('Seen earlier, now out of sight', (g) => drawPartyIcon(g, 15, 10, lord('enemy', { ghost: true }), 0.42));
   row('In sight but left out of its report', (g) => drawPartyIcon(g, 15, 10, lord('enemy', { cut: true })));
