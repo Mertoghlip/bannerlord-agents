@@ -527,7 +527,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the bridge writes its two new settings into `settings.txt` at its next load.
 - **Not yet seen in a game:** the map copy (its time, and whether north is up); the frames' real size; the accuracy check's numbers; the atlas on the real map; the agent asking the way.
 
-### 21:15 to 21:45 · First session on 0.7.0, and two fixes (war room 0.7.0 rebuilt; the game module unchanged)
+### 21:15 to 21:45 · First session on 0.7.0, and two fixes · commit 7c61e4d (war room and dashboard rebuilt; the game module unchanged)
 - **Seen working:**
   - the walking map copied in 4 s (272 ms of the game's thread over 68 frames): 1,638 x 1,550 cells, 147 bridge and ford faces;
   - the self-check passed 12 of 12;
