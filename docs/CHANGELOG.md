@@ -608,7 +608,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room and the dashboard were stopped at 00:12 (idle, the game closed) and restarted, detached, at 00:31:19;
   - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (principles 16 and 17) and wrote `tools.txt` with 19 orders.
 
-### 01:55 · Version 0.7.3: the game's clocks (marches by the game's exact speed rule; sieges and battles run ahead) · commit (this commit; installed 01:48)
+### 01:55 · Version 0.7.3: the game's clocks (marches by the game's exact speed rule; sieges and battles run ahead) · commit 66226fe (installed 01:48)
 - **Why:** Mert: "We should be adjusting our prediction of the marching speed of a force based on the game's exact equations, so the ai has a good idea on where its own/enemies' armies will reach their waypoint. We should do the same about siege and battle timers so it can plan ahead."
 - **The research** (three passes on the 1.4.8 code, the decompiled TAOM 2.0.26, and the pack's CheatsForBannerlord, ImprovedGarrisons and TFAOMFixes; [TOOLS.md](TOOLS.md#the-games-clocks-marches-sieges-and-battles-run-ahead-since-073)):
   - the models in force: TAOM's speed, siege event, combat simulation and military power models (the last registered wins);
