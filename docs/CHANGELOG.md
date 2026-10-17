@@ -479,7 +479,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The council of war (19:43:23 to 19:44:42, 7,462 tokens of thinking) gave one order, Grakmaw to hunt Ulf and then defend Hollin Gate, and a new plan.
 - **A gap found:** the army dropped out of the report's SEEN EARLIER list, cut by bands seen since (its cap of 25 kept the most recent). Fixed in 0.7.0.
 
-### 21:10 · Version 0.7.0: the dashboard, ways and crossings, and the agent's "ask the way" tool · commit (this commit; installed about 21:03)
+### 21:10 · Version 0.7.0: the dashboard, ways and crossings, and the agent's "ask the way" tool · commit f80d788 (installed about 21:03)
 - **Why:** Mert: "I want to make diagnostics and monitoring by me a lot easier ... a dashboard with a live map of the game. I basically want to be able to see exactly what each agent sees, have everything they see be depicted by icons with a legend, switch between agents, and have a log depicting the moves of the agent I am following on the side. When I click on a given icon on the map, I should be able to see where it is moving." And on pathfinding: clicking an icon should show how the army would find its way, and the agent should know how pathfinding works, "only exposed to it after it specifically asks for it for a specific army". Mert approved the plan ("Perfect. Implement all now.") and all its recommendations: a real tool rather than ready-made pages, no doctrine principle on crossings for now, and the rewind built now.
 - **What:**
   - **The dashboard** (`src/BannerlordAgents.Dashboard`, `scripts\dashboard.ps1`, http://localhost:7329/; [DASHBOARD.md](DASHBOARD.md)):
