@@ -17,6 +17,20 @@ namespace BannerlordAgents.WarRoom
     }
 
     /// <summary>
+    /// Tools the war room itself serves the agent during a call (0.7: "ask the way"), as an in-process ("sdk") MCP server that
+    /// Claude Code reaches over the call's own stream. A real tool, so safe mode stays on: Claude Code's safe mode switches
+    /// off every MCP server it would start itself, but not one its host serves (tried Oct 16).
+    /// </summary>
+    internal interface IToolHost
+    {
+        /// <summary>The server's name: its tools are mcp__(name)__(tool).</summary>
+        string Server { get; }
+        IEnumerable<string> Tools { get; }
+        /// <summary>One JSON-RPC message from Claude Code; the answer, or null for a notification.</summary>
+        System.Text.Json.Nodes.JsonNode Handle(System.Text.Json.Nodes.JsonObject message);
+    }
+
+    /// <summary>
     /// One headless Claude Code call on the subscription: the system prompt from a file, the message on standard input,
     /// the answer and its usage as JSON. No session is kept (except the one long conversation of the conversation
     /// memory), no project instructions are loaded (safe mode), and the only tool is Read, inside the channel folder
@@ -62,7 +76,7 @@ namespace BannerlordAgents.WarRoom
         /// (resume true), for the one-long-conversation memory; without one, nothing is kept. A cancelled call is stopped.
         /// </summary>
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
-                                     string sessionId = null, bool resume = false, CancellationToken cancel = default)
+                                     string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null)
         {
             var r = new CallResult();
             var psi = new ProcessStartInfo(exe)
@@ -90,6 +104,16 @@ namespace BannerlordAgents.WarRoom
                 psi.ArgumentList.Add(resume ? "--resume" : "--session-id");
                 psi.ArgumentList.Add(sessionId);
             }
+            if (tools != null)
+            {
+                // the message and the tool's answers go as JSON lines on standard input; each variadic flag is followed by another flag
+                foreach (string a in new[]
+                {
+                    "--input-format", "stream-json",
+                    "--mcp-config", "{\"mcpServers\":{\"" + tools.Server + "\":{\"type\":\"sdk\",\"name\":\"" + tools.Server + "\"}}}", "--strict-mcp-config",
+                    "--allowedTools", string.Join(",", tools.Tools.Select(t => "mcp__" + tools.Server + "__" + t))
+                }) psi.ArgumentList.Add(a);
+            }
             if (thinkingCap > 0) psi.Environment["MAX_THINKING_TOKENS"] = thinkingCap.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var sw = Stopwatch.StartNew();
             Process p;
@@ -105,11 +129,25 @@ namespace BannerlordAgents.WarRoom
                 double firstText = -1;
                 long lastEvent = sw.ElapsedMilliseconds;
                 var got = new ManualResetEventSlim(false);
+                var inGate = new object();
+                StreamWriter stdin = new StreamWriter(p.StandardInput.BaseStream, new UTF8Encoding(false));
+                bool stdinOpen = true;
+                void Send(string line)
+                {
+                    lock (inGate)
+                    {
+                        if (!stdinOpen) return;
+                        try { stdin.Write(line + "\n"); stdin.Flush(); }
+                        catch (IOException) { stdinOpen = false; }
+                        catch (ObjectDisposedException) { stdinOpen = false; }
+                    }
+                }
                 p.OutputDataReceived += (s, e) =>
                 {
                     if (e.Data == null) { got.Set(); return; }
                     if (e.Data.Length == 0) return;
                     Interlocked.Exchange(ref lastEvent, sw.ElapsedMilliseconds);
+                    if (tools != null && e.Data.Contains("\"control_request\"")) Control(e.Data, tools, Send);
                     lock (events)
                     {
                         // keys come in any order, so look for the type, then make sure
@@ -126,7 +164,16 @@ namespace BannerlordAgents.WarRoom
                 p.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (err) if (err.Length < 20_000) err.AppendLine(e.Data); };
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
-                using (var w = new StreamWriter(p.StandardInput.BaseStream, new UTF8Encoding(false))) w.Write(prompt);
+                if (tools == null)
+                {
+                    lock (inGate) { stdin.Write(prompt); stdin.Dispose(); stdinOpen = false; }
+                }
+                else
+                {
+                    // the host's handshake names the tools it serves, then the message; standard input stays open for the tools' answers
+                    Send(JsonSerializer.Serialize(new { type = "control_request", request_id = "warroom-init", request = new { subtype = "initialize", sdkMcpServers = new[] { tools.Server } } }));
+                    Send(JsonSerializer.Serialize(new { type = "user", message = new { role = "user", content = prompt } }));
+                }
                 // the answer ends the call, not the program's exit: Claude Code sometimes lingers after answering
                 string stopped = null;
                 while (!got.Wait(500))
@@ -145,6 +192,11 @@ namespace BannerlordAgents.WarRoom
                             break;
                         }
                     }
+                }
+                lock (inGate)
+                {
+                    if (stdinOpen) { try { stdin.Dispose(); } catch (IOException) { } }
+                    stdinOpen = false;
                 }
                 if (!p.WaitForExit(2000)) { try { p.Kill(true); } catch { } }
                 r.Seconds = sw.Elapsed.TotalSeconds;
@@ -182,6 +234,51 @@ namespace BannerlordAgents.WarRoom
             catch (Exception e) { r.Error = "the answer could not be read: " + e.Message; }
             finally { p.Dispose(); }
             return r;
+        }
+
+        /// <summary>
+        /// A control request from Claude Code: a message for the tools the war room serves is answered by them; anything else
+        /// (the reply to our own handshake comes as a control_response, not here) is answered as not supported.
+        /// </summary>
+        private static void Control(string line, IToolHost tools, Action<string> send)
+        {
+            System.Text.Json.Nodes.JsonObject o;
+            try { o = System.Text.Json.Nodes.JsonNode.Parse(line) as System.Text.Json.Nodes.JsonObject; }
+            catch (JsonException) { return; }
+            if (o == null || (string)o["type"] != "control_request") return;
+            string id = (string)o["request_id"];
+            var req = o["request"] as System.Text.Json.Nodes.JsonObject;
+            string subtype = (string)req?["subtype"];
+            if (subtype == "mcp_message" && req["message"] is System.Text.Json.Nodes.JsonObject msg)
+            {
+                System.Text.Json.Nodes.JsonNode answer;
+                try { answer = tools.Handle(msg); }
+                catch (Exception e)
+                {
+                    answer = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["jsonrpc"] = "2.0", ["id"] = msg["id"]?.DeepClone(),
+                        ["error"] = new System.Text.Json.Nodes.JsonObject { ["code"] = -32603, ["message"] = "the tool failed: " + e.Message }
+                    };
+                }
+                answer ??= new System.Text.Json.Nodes.JsonObject { ["jsonrpc"] = "2.0", ["result"] = new System.Text.Json.Nodes.JsonObject(), ["id"] = 0 };
+                var reply = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["type"] = "control_response",
+                    ["response"] = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["subtype"] = "success", ["request_id"] = id,
+                        ["response"] = new System.Text.Json.Nodes.JsonObject { ["mcp_response"] = answer }
+                    }
+                };
+                send(reply.ToJsonString());
+                return;
+            }
+            send(new System.Text.Json.Nodes.JsonObject
+            {
+                ["type"] = "control_response",
+                ["response"] = new System.Text.Json.Nodes.JsonObject { ["subtype"] = "error", ["request_id"] = id, ["error"] = "the war room does not handle " + (subtype ?? "this request") }
+            }.ToJsonString());
         }
 
         /// <summary>The text of one streamed text_delta event.</summary>

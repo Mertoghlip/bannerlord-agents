@@ -198,6 +198,7 @@ namespace SmokeTest
             Check(cutPokes.Contains("\"party\":\"lord_far\"") && cutPokes.Contains("\"party\":\"lord_drifter\""), "each of those pokes names its lord");
 
             ToolTests(dir, agentDir);
+            DashboardTests(root, dir);
 
             // an enemy army in view is history; then an earlier save is loaded, and the chronicle forgets what came after it
             Files.FlushAll();
@@ -766,6 +767,64 @@ namespace SmokeTest
             broken.ArmyLeader = null;
             Brain.OnHour(ToolWorld(6061, broken));
             Check(aged && !m.Trails.ContainsKey("p_arw"), "a trail keeps two days, and ends when its army is seen broken up");
+        }
+
+        /// <summary>
+        /// Version 0.7, the dashboard: the hourly frame (every party with its planned way, and the realm's view with what its
+        /// report left out), the agent's own view file for the "ask the way" tool (nothing the realm did not see), where each
+        /// record file stood when the load began, the holding a seen party heads for, and SEEN EARLIER never cutting an army.
+        /// </summary>
+        private static void DashboardTests(string root, string dir)
+        {
+            PartyRow Band(int i, float x) => new PartyRow { Id = "band_" + i, Name = "Looters", Faction = "player_k", Kind = "bandit", Men = 10, Strength = 6, X = x, Y = 130, Doing = "PatrolAroundPoint", Spottable = true };
+            var army = new PartyRow
+            {
+                Id = "p_host", Leader = "lord_host", Name = "Elrohir", Faction = "player_k", Kind = "lord", Men = 600, ArmyLeader = "p_host", ArmyMen = 3000, ArmyParties = 8, ArmyStrength = 7000,
+                Strength = 900, Speed = 3.2f, FinalSpeed = 2.4f, X = 150, Y = 120, Doing = "GoToSettlement", TargetSettlement = "castle_orc", Spottable = true,
+                Tx = 100, Ty = 99, Route = new[] { 130f, 112f, 101f, 100f }
+            };
+            var hidden = new PartyRow { Id = "p_hidden", Leader = "lord_hidden", Name = "Glorfindel", Faction = "player_k", Kind = "lord", Men = 300, Strength = 500, X = 300, Y = 300, Doing = "Hold", Spottable = true };
+            var own = new PartyRow { Id = "p_ugluk", Leader = "lord_ugluk", Name = "Ugluk", Faction = "orcs", Kind = "lord", Men = 250, Strength = 300, Speed = 3.6f, FinalSpeed = 3.6f, X = 105, Y = 101, Doing = "GoToPoint", Spottable = true,
+                                 Tx = 120, Ty = 102, Route = new[] { 120f, 102f } };
+            var first = new List<PartyRow> { army, hidden, own };
+            for (int i = 0; i < 45; i++) first.Add(Band(i, 110 + i));
+            Snapshot s1 = ToolWorld(6100, first.ToArray());
+            s1.WatchedSees.Remove("p_hidden");
+            Brain.OnHour(s1);
+            string current = Path.Combine(root, "live", "current.json");
+            Check(File.Exists(current), "the dashboard's pointer to the newest hour is written (live\\current.json)");
+            JObject cur = File.Exists(current) ? JObject.Parse(Read(current)) : new JObject();
+            string framePath = Path.Combine((string)cur["dir"] ?? "", "frames", (string)cur["frame"] ?? "");
+            Check(File.Exists(framePath) && ((string)cur["frame"]) == "h6100.json.gz" && cur["calendar"]?["days_in_season"] != null, "the hour's frame is written, named by its hour, with the calendar beside it (" + cur["frame"] + ")");
+            JObject frame = null;
+            if (File.Exists(framePath))
+                using (var gz = new System.IO.Compression.GZipStream(File.OpenRead(framePath), System.IO.Compression.CompressionMode.Decompress))
+                using (var sr = new StreamReader(gz)) frame = JObject.Parse(sr.ReadToEnd());
+            JObject hostRow = frame?["parties"]?.OfType<JObject>().FirstOrDefault(p => (string)p["id"] == "p_host");
+            Check(hostRow != null && hostRow["route"] is JArray rr && rr.Count == 4 && (float)hostRow["final_speed"] == 2.4f && (float)hostRow["tx"] == 100,
+                  "the frame carries each party with its planned way, its speed now and where it walks to");
+            JObject realm = frame?["realms"]?["orcs"] as JObject;
+            Check(realm != null && realm["view"]?["seen"] is JArray seen && seen.Count == 40 && realm["cut"] is JArray cutIds && cutIds.Count == 6 && realm["in_sight"] is JArray sight && sight.Count == 46,
+                  "the realm's part holds the view its report was written from, and the 6 bands the report's list of 40 left out");
+            JObject hostSeen = (realm?["view"]?["seen"] as JArray)?.OfType<JObject>().FirstOrDefault(p => (string)p["id"] == "p_host");
+            Check(hostSeen != null && (string)hostSeen["toward"] == "castle_orc", "a seen party carries the holding it heads for (" + hostSeen?["toward"] + ")");
+            string viewFile = Path.Combine(root, "live", "smoketest", "view_orcs.json");
+            string viewText = File.Exists(viewFile) ? Read(viewFile) : "";
+            Check(viewText.Contains("\"p_ugluk\"") && viewText.Contains("\"pace\":3.6") && viewText.Contains("\"p_host\"") && !viewText.Contains("p_hidden") && frame != null && frame.ToString().Contains("p_hidden"),
+                  "the agent's view file for the way-finding tool holds its own lords with their pace and what it saw, never the party it did not see");
+            // the army out of sight, then 45 more bands seen later: SEEN EARLIER keeps the army though bands were seen since
+            var second = new List<PartyRow> { army };
+            for (int i = 45; i < 90; i++) second.Add(Band(i, 110 + i - 45));
+            Snapshot s2 = ToolWorld(6102, second.ToArray());
+            s2.WatchedSees.Remove("p_host");
+            Brain.OnHour(s2);
+            Snapshot s3 = ToolWorld(6104, army);
+            s3.WatchedSees.Clear();
+            Brain.OnHour(s3);
+            View v3 = Views.Build(s3, "orcs", s3.WatchedSees, s3.HostileToWatched, Brain.Get("orcs"));
+            Check(v3.LastSeen.Count >= 25 && v3.LastSeen[0].Id == "p_host", "SEEN EARLIER never cuts an enemy army, though 90 bands were seen since (" + v3.LastSeen.Count + " listed, first " + (v3.LastSeen.FirstOrDefault()?.Id ?? "none") + ")");
+            string loads = Path.Combine(dir, "loads.jsonl");
+            Check(File.Exists(loads) && Read(loads).Contains("\"offsets\"") && Read(loads).Contains("\"pokes_orcs.jsonl\""), "each load notes where each record file stood when it began (loads.jsonl)");
         }
 
         private sealed class TestScope : IScope

@@ -167,7 +167,8 @@ Each summary reports what the logging itself cost on the game's thread.
 `%LOCALAPPDATA%\BannerlordAgents\logs\`:
 - `bridge.log`: the readable story, across launches;
 - `sessions\(date-time)\`: one folder per game launch. The newest 30 are kept, 2 GB at most in all;
-- `warroom\`: the war room's calls ([WARROOM.md](WARROOM.md)).
+- `warroom\`: the war room's calls ([WARROOM.md](WARROOM.md)), and `routes.jsonl`, every question to the agent's "ask the way" tool (0.7);
+- `dashboard\`: the dashboard's own log, and `accuracy.jsonl`, our way-finder against the game's planned ways (0.7, [DASHBOARD.md](DASHBOARD.md), [ROUTES.md](ROUTES.md)).
 
 | File in a session folder | What it holds |
 |---|---|
@@ -192,6 +193,7 @@ The agent cannot read any of this: a war room call can read only the channel fol
 | `agents.hooks on` or `off`; `agents.hooks witness` or `reasons on` or `off` | the two game hooks |
 | `agents.alarms on` or `off` | red alarms on screen |
 | `agents.recruits` | why the watched realm's parties do or do not refill, as of now and for the last whole day |
+| `agents.map` or `agents.map again` | where the copy of the walking map stands, and the dashboard's frames this session; again: copy the map anew (0.7) |
 
 Outside the game, `scripts\probe.ps1` runs the probe on the running game, for example during a loading-screen hang before the mod is up.
 

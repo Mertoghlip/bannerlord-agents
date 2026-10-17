@@ -69,6 +69,7 @@ namespace BannerlordAgents.WarRoom
             Native.Self();
             string mode = args.Length > 0 && !args[0].StartsWith("--") ? args[0].ToLowerInvariant() : "run";
             if (mode == "selftest") return SelfTest.Run();   // its own scratch folder: the live agent folder is never read or written
+            if (mode == "toolcheck") return ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5");
             string dir = Arg(args, "--dir");
             Config c = Config.Load(dir);
             if ((mode == "once" || mode == "council") && LiveLock.Running(c))
@@ -109,6 +110,26 @@ namespace BannerlordAgents.WarRoom
                     Console.WriteLine("Usage: WarRoom [run|once|story|council|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]");
                     return 1;
             }
+        }
+
+        /// <summary>
+        /// "WarRoom toolcheck [--model m]": one real, short Claude Code call (a small model by default) on the self-test's made-up map,
+        /// asked to use the "ask the way" tool once: the whole path the agent's tool takes, in safe mode, outside the live folder.
+        /// </summary>
+        private static int ToolCheck(string model)
+        {
+            string root = Path.Combine(Path.GetTempPath(), "warroom-selftest");
+            string data = Path.Combine(root, "agents-data");
+            if (!File.Exists(Path.Combine(data, "live", "camp5", "view_orcs.json")) && SelfTest.Run() != 0) return 1;
+            string channel = Path.Combine(root, "warroom"), logs = Path.Combine(root, "logs");
+            string system = Path.Combine(root, "toolcheck-system.md");
+            File.WriteAllText(system, "You are checking a tool. Use the ask_the_way tool exactly once, as asked, then answer in one short line.\n");
+            var tool = new RouteTool(data, logs, "camp5", "orcs", 0, "check");
+            CallResult r = Claude.Run(Claude.Find(""), system, "Ask the way from lord_bolg to town_b with the ask_the_way tool, then say how many map units the shortest way is.",
+                                      model, "low", channel, true, 120, 1000, tools: tool);
+            bool ok = r.Ok && tool.Asked == 1 && (r.Text ?? "").Contains("60");
+            Console.WriteLine((ok ? "TOOL CHECK PASSED" : "TOOL CHECK FAILED") + ": asked " + tool.Asked + " time(s), " + r.Turns + " steps, " + Math.Round(r.Seconds, 1) + " s; answer: " + (r.Text ?? r.Error));
+            return ok ? 0 : 1;
         }
 
         /// <summary>The story so far, rewritten now from every chronicle line it does not cover yet (for a first story, or a test).</summary>

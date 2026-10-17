@@ -1,4 +1,4 @@
-# Record formats (install 1, with the logs of version 0.3, the tools of 0.4, the memory of 0.5 and the council of 0.6)
+# Record formats (install 1, with the logs of version 0.3, the tools of 0.4, the memory of 0.5, the council of 0.6 and the dashboard of 0.7)
 
 Everything the bridge writes is JSON, one object per line (JSON Lines). Names are snake_case, and empty fields are left out. `hours` is in-game hours since the calendar began. `date` is the game's own date text, and `wall` is the real clock.
 
@@ -12,8 +12,8 @@ The agents' answers are under [Agent channel](#agent-channel) below. Tool defini
 |---|---|---|
 | `logs\bridge.log` | human-readable log | carries across launches; past 8 MB the old one becomes `bridge_prev.log`; alarms start with `!!` |
 | `logs\sessions\<date-time>\` | game launch | the detailed logs (below, and [docs/LOGGING.md](../docs/LOGGING.md)); the newest 30 launches are kept, 2 GB at most in all |
-| `logs\warroom\` | war room call | `calls.jsonl` (one line per call: the poke, model, effort, thinking cap, seconds, tokens, orders, retries and denied reads), `calls\<date>\<time>-poke-N\` (the prompt, Claude Code's event stream and the answer), `warroom-<date>.log`, `system-<hash>.md` ([docs/WARROOM.md](../docs/WARROOM.md)) |
-| `settings.txt` | settings | `watch`, `bridge`, `record`, `perf`, `notify`, `agent`, `agent_lords`, `agent_dir`, `sighting_distance` (30: enemy lords further than this from all the realm's holdings poke only when heading for one or chasing its parties), `detail` (full or everyday), `witness`, `ai_reasons`, `screen_alarms`, `answer_alarm_minutes`, `freeze_probe`; the console commands change these |
+| `logs\warroom\` | war room call | `calls.jsonl` (one line per call: the poke, model, effort, thinking cap, seconds, tokens, orders, retries and denied reads, and `ways_asked`, the questions to the "ask the way" tool), `routes.jsonl` (0.7, one line per question to that tool: `at`, `campaign`, `realm`, `poke`, `call` (answer or council), `hours`, `from` and `from_id`, `to` and `to_id`, `also`, `lines` (the answer) or `error`, `ms`; [docs/ROUTES.md](../docs/ROUTES.md)), `calls\<date>\<time>-poke-N\` (the prompt, Claude Code's event stream and the answer), `warroom-<date>.log`, `system-<hash>.md` ([docs/WARROOM.md](../docs/WARROOM.md)) |
+| `settings.txt` | settings | `watch`, `bridge`, `record`, `perf`, `notify`, `agent`, `agent_lords`, `agent_dir`, `sighting_distance` (30: enemy lords further than this from all the realm's holdings poke only when heading for one or chasing its parties), `detail` (full or everyday), `witness`, `ai_reasons`, `screen_alarms`, `answer_alarm_minutes`, `freeze_probe`, `dashboard` (0.7: the walking map, the planned ways and the hourly frames), `keep_loads` (12: loads of a campaign whose frames are kept); the console commands change these |
 | `perf\perf_<yyyyMMdd>.csv` | second of campaign-map play | see the columns below |
 | `data\<campaign id>\pokes_<realm id>.jsonl` | poke of the watched realm | carries the full view and the report text |
 | `data\<campaign id>\reports\<realm id>_latest.txt` | the latest poke's report | overwritten each poke |
@@ -28,6 +28,13 @@ The agents' answers are under [Agent channel](#agent-channel) below. Tool defini
 | `data\<campaign id>\handbacks.jsonl` | save made while lords held our orders | `save`, `saved`, `lords` (hero ids handed back), `clean` (all checked free before the game wrote); every load checks these lords |
 | `data\<campaign id>\ids_shown.txt` | id shown to the agent | every id in brackets the agent has been shown in this campaign; an order naming any other id raises an alarm |
 | `data\<campaign id>\recruitment.jsonl` | day of the watched realm (0.6) | `type` "recruitment", `hours`, `date`, `realm`, `summary` (lords, average fill, below the party-gold bar, below the clan-gold bar, ranks full, starving, no wage room, recruiters, recruited, volunteers waiting, within the ruler's reach, places with volunteers, places), `hours_counted`, `hours_where_recruiting` (lord id: hours spent where it could recruit), `lords` (each: `lord`, `name`, `clan`, `leads_clan`, `men`, `limit`, `gold`, `gold_bar`, `clan_gold`, `clan_bar`, `wage`, `wage_limit`, `wage_room`, `starving`, `in_army`, `held`, `inside`, `may_recruit`, `recruited`, `recruited_at`), `places` (each town and village: `id`, `name`, `kind`, `culture`, `state`, `waiting`, `ruler_could_take`). Logs only ([docs/LOGGING.md](../docs/LOGGING.md#recruitment-since-06-oct-9-logs-only-never-shown-to-the-agent)). |
+
+| `data\<campaign id>\loads.jsonl` | load of the campaign (0.7) | `load_id`, `loaded_at` (the save's in-game hour), `realm`, `wall`, and `offsets`: the byte length of `pokes_<realm>.jsonl`, `orders.jsonl`, `notices.jsonl` and the war room's `calls.jsonl` and `routes.jsonl` when the load began, so one load's lines can be read alone (the dashboard's log) |
+| `live\current.json` | the newest hour (0.7) | `campaign`, `load_id` (the folder of its frames), `hours`, `date`, `dir`, `frame`, `map` (the walking map's checksum), `realms` (the realms in the frames), `agent`, `agent_on`, `written`, and `calendar` (`hours_in_day`, `days_in_season`, `seasons_in_year`, `season_names`) |
+| `live\<campaign id>\<load id>\frames\h<hour>.json.gz` | in-game hour (0.7) | the dashboard's frame, gzipped; see [Frame](#frame-07) below. Only the newest `keep_loads` loads keep theirs |
+| `live\<campaign id>\view_<realm id>.json` | the agent's realm, each hour (0.7) | its view alone, for the "ask the way" tool: `hours`, `map`, `own` (its lords: `id`, `lord`, `name`, `x`, `y`, `men`, `army_men`, `strength`, `pace` (base speed), `final_speed`, `doing`, `in_settlement`, `route`, `tx`, `ty`), and the view's own `seen`, `last_seen`, `trails` and `holdings`. Never anything the realm did not see |
+| `map\<checksum>\` | walking map (0.7) | `meta.json`, `ground.bin`, `height.bin`, `crossing_faces.json`, `places.json` from the bridge; `atlas.json`, `speed_factors.json` and `picture-v1.png` added beside them by the dashboard or the war room ([docs/ROUTES.md](../docs/ROUTES.md)) |
+| `logs\dashboard\` | the dashboard (0.7) | `dashboard-<date>.log`, and `accuracy.jsonl`: one line per lord checked, the game's planned length (`game`) and, for each guess (`shortest`, `forest counted twice`, `fords and bridges counted twice`), our `length`, `gap_pct`, `apart` (mean map units between the two ways) and `ms` |
 
 The campaign id is the game's own id for the campaign, so separate campaigns never mix.
 
@@ -72,12 +79,24 @@ Enemy lords further off are still listed in the report; the trace logs each one 
 | `holdings` | the realm's own settlements, as *view holdings*, each with the nearest enemy in view |
 | `seen` | lords and enemies in view: enemy armies, enemy lords, bandits, then allies and neutrals, each nearest to the realm's holdings first; at most 40, but every enemy army (0.6.3; `seen_not_listed` counts the rest) |
 | `others_in_view` | caravans, villagers and other small neutral parties in view (counted, not listed) |
-| `last_seen` | parties seen earlier and now out of sight, up to 72 hours back |
+| `last_seen` | parties seen earlier and now out of sight, up to 72 hours back; at most 25, cut in the same order as `seen` (bandits and neutrals first), never an enemy army (0.7) |
 | `trails` | each enemy army's trail (0.6.4), as the realm saw it: `id`, `lord`, `name`, `faction_name`, `army_men`, `army_parties`, `strength`, `in_view`, `last_seen_hours`, and `points` oldest first, each with `hours`, `x`, `y`, `near`, `near_distance`, `nearest_holding`, `holding_distance`, `doing`, and `after_gap` (hours out of sight just before it). A point is added when the army's course changes, after 10 map units, every 6 hours, or when it comes back into sight; points older than 48 hours go, 12 at most; only trails of 2 points or more are listed |
 | `frontier` | enemy castles and towns within 60 map units of the realm's holdings; the garrison is known only when in sight (`garrison` is -1 otherwise) |
 | `news` | notices from the last two days, as text |
 
-A **view party** has `id`, `name`, `faction`, `faction_name`, `relation` (own, enemy, ally, neutral), `kind` (lord, bandit, ...), `men`, `army_men` and `army_parties` (when it leads an army), `strength` (the game's own estimate), `x`, `y`, `near` and `near_distance` (the nearest settlement), `nearest_holding` and `holding_distance` (the realm's nearest holding), `doing`, `seen_by`, and `seen_hours`.
+A **view party** has `id`, `name`, `faction`, `faction_name`, `relation` (own, enemy, ally, neutral), `kind` (lord, bandit, ...), `men`, `army_men` and `army_parties` (when it leads an army), `strength` (the game's own estimate), `x`, `y`, `near` and `near_distance` (the nearest settlement), `nearest_holding` and `holding_distance` (the realm's nearest holding), `doing`, `seen_by`, `seen_hours`, and `toward` (0.7: the holding its `doing` names, when it names one).
+
+## Frame (0.7)
+
+One in-game hour for the dashboard ([docs/DASHBOARD.md](../docs/DASHBOARD.md)): written by the bridge's worker (`LiveMap`), gzipped JSON, snake_case. Empty, zero and false fields are left out, so a reader must take a missing field as 0 or false.
+
+| Field | Meaning |
+|---|---|
+| `v`, `campaign`, `load_id`, `hours`, `date`, `night`, `player`, `player_party`, `watched`, `map` | which frame, and the walking map it stands on |
+| `factions` | every faction seen: `id`, `name`, `color` (#rrggbb), `kingdom`, `at_war` and `allies` (kingdom ids), `ruler` |
+| `settlements` | every holding as the hourly copy has it (the settlement row: `garrison`, `militia`, `besieged_by`, `besieger`, `village_state`, and the watched realm's and allies' `garrison_strength`, `militia_strength`, `wall_level`) |
+| `parties` | every party as the hourly copy has it (the party row), with (0.7) `tx`, `ty` (where it walks to), `final_speed` (lords: speed with ground and night), `route` (lords and caravans on the march: the corners still ahead of the game's planned way, x, y pairs, at most 48), `straight` (walking straight there, no planned way) |
+| `realms` | by realm id, each followed realm (the agent's, and the player's from the game's own sight flags): `name`, `agent`, `player`, `view` (the very view its report was written from this hour), `in_sight` (party ids), `cut` (enemies and lords in sight that the report's list left out), `counted_only` (small parties in sight the report only counts), `remembered` (view parties remembered but left out of SEEN EARLIER), `orders` (the agent's realm: party id to its order in force, as the report words it) |
 
 A **view holding** has `id`, `name`, `kind` (town, castle, village), `faction`, `faction_name`, `garrison`, `militia`, `x`, `y`, `status` (under siege by ..., being raided, looted), and `threat`, `threat_men`, `threat_distance`. The realm's own castles and towns also have (0.6.3) `wall_level`, `defence` (garrison, militia and the lords inside, the realm's and its allies'), `lords_inside` (that part of it) and `holds_up_to` (the besiegers' strength it holds against: defence times what the walls are worth, `World.WallFactor`).
 

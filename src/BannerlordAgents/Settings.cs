@@ -52,6 +52,16 @@ namespace BannerlordAgents
         /// <summary>When the game's thread stops moving, run the outside probe that says where it is stuck.</summary>
         public static bool FreezeProbe = true;
 
+        // ---- the dashboard (0.7, docs/DASHBOARD.md) ----
+
+        /// <summary>
+        /// The live map: the walking map exported once per map, each lord's planned way in the hourly copy, and every hour a
+        /// picture of the world and of what each realm sees, for the dashboard and the agent's "ask the way" tool.
+        /// </summary>
+        public static bool Dashboard = true;
+        /// <summary>How many loads of a campaign keep their hourly pictures (for rewinding on the dashboard).</summary>
+        public static int KeepLoads = 12;
+
         /// <summary>Lines of settings.txt that were not understood, for the start-up self-check.</summary>
         public static readonly List<string> Unknown = new List<string>();
 
@@ -101,11 +111,16 @@ namespace BannerlordAgents
                             else Unknown.Add(line);
                             break;
                         case "freeze_probe": FreezeProbe = On(value, FreezeProbe); break;
+                        case "dashboard": Dashboard = On(value, Dashboard); break;
+                        case "keep_loads":
+                            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int kl) && kl >= 1) KeepLoads = kl;
+                            else Unknown.Add(line);
+                            break;
                         default: Unknown.Add(line); break;
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
-                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe" })
+                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -136,6 +151,9 @@ namespace BannerlordAgents
                 sb.AppendLine("screen_alarms = " + (ScreenAlarms ? "on" : "off"));
                 sb.AppendLine("answer_alarm_minutes = " + AnswerAlarmMinutes.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("freeze_probe = " + (FreezeProbe ? "on" : "off"));
+                sb.AppendLine("# the dashboard (docs/DASHBOARD.md): the walking map, planned ways and the hourly pictures; keep_loads = loads of a campaign kept for rewinding");
+                sb.AppendLine("dashboard = " + (Dashboard ? "on" : "off"));
+                sb.AppendLine("keep_loads = " + KeepLoads.ToString(CultureInfo.InvariantCulture));
                 File.WriteAllText(FilePath, sb.ToString());
             }
             catch (Exception e) { Log.Line("settings could not be saved: " + e.Message); }

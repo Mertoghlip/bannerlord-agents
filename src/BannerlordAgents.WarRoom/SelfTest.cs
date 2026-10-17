@@ -140,6 +140,8 @@ namespace BannerlordAgents.WarRoom
             Check(cl.Council && cl.CouncilGapHours == 6 && cl.CouncilAfter.Contains("is besieged by") && File.ReadAllText(cw.FilePath).Contains("council_thinking_cap = 12000"),
                   "the council's settings are written and read back");
 
+            RouteToolTests(root, c);
+
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
             Check(Program.Quiet(T("battle", "Battle: Galenor (Kingdom of Arnor and Gondor) against Villagers of Celebloth (Misty Mountain Orcs); Galenor won.")), "replay: a fight with villagers is kept quiet");
@@ -150,6 +152,56 @@ namespace BannerlordAgents.WarRoom
 
             Console.WriteLine(_failures == 0 ? "\nALL CHECKS PASSED" : "\n" + _failures + " CHECK(S) FAILED");
             return _failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Version 0.7, the "ask the way" tool on the made-up map (a river with one bridge): the protocol, a lord's way over the
+        /// bridge with how marching works told once, an enemy from where it was seen with its trail's pace and who gets there
+        /// first, a party the realm never saw refused, every question logged, and its section of the instructions only when offered.
+        /// </summary>
+        private static void RouteToolTests(string root, Config c)
+        {
+            string data = Path.Combine(root, "agents-data");
+            Routes.WalkMap m = Routes.Samples.SmallMap();
+            string mapDir = Path.Combine(data, "map", "test");
+            Directory.CreateDirectory(mapDir);
+            File.WriteAllBytes(Path.Combine(mapDir, "ground.bin"), m.Ground);
+            Routes.JsonText.Write(Path.Combine(mapDir, "places.json"), m.Places);
+            Routes.JsonText.Write(Path.Combine(mapDir, "meta.json"), m.Meta);
+            m.Dir = mapDir;
+            Routes.JsonText.Write(Routes.Atlas.PathIn(mapDir), Routes.Atlas.Build(m));
+            string live = Path.Combine(data, "live");
+            Directory.CreateDirectory(Path.Combine(live, "camp5"));
+            File.WriteAllText(Path.Combine(live, "current.json"), "{\"calendar\":{\"hours_in_day\":24,\"days_in_season\":21,\"seasons_in_year\":4,\"season_names\":[\"Spring\",\"Summer\",\"Autumn\",\"Winter\"]}}");
+            File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"),
+                "{\"hours\":1000,\"map\":\"test\",\"own\":[{\"id\":\"p_bolg\",\"lord\":\"lord_bolg\",\"name\":\"Bolg\",\"x\":20,\"y\":29,\"men\":300,\"pace\":4,\"doing\":\"holding position\"}],"
+                + "\"seen\":[{\"id\":\"p_ar\",\"lord\":\"lord_ar\",\"name\":\"Aragorn\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":900,\"army_men\":5000,\"x\":80,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":1000}],"
+                + "\"last_seen\":[],\"trails\":[{\"id\":\"p_ar\",\"points\":[{\"hours\":990,\"x\":90,\"y\":29},{\"hours\":1000,\"x\":80,\"y\":29}]}],\"holdings\":[]}");
+            string logs = Path.Combine(root, "logs");
+            var tool = new RouteTool(data, logs, "camp5", "orcs", 12, "answer");
+            Check(tool.Ready(out string why), "the tool is offered once the map and the realm's view are there (" + (why ?? "ready") + ")");
+            JsonNode init = tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}"));
+            JsonNode list = tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}"));
+            Check(init?["result"]?["capabilities"]?["tools"] != null && (string)list?["result"]?["tools"]?[0]?["name"] == "ask_the_way"
+                  && tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")) == null,
+                  "the tool answers Claude Code's handshake and lists itself; a notification gets no answer");
+            string Call(string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ask_the_way\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
+            string a1 = Call("{\"from\":\"lord_bolg\",\"to\":\"town_b\"}");
+            Check(a1 != null && a1.StartsWith("THE WAY FROM Bolg [lord_bolg] TO Bree [town_b]") && a1.Contains("bridge") && a1.Contains("no other way") && a1.Contains(", so about ")
+                  && a1.Contains("HOW MARCHING WORKS"), "a lord's way over the bridge, its time at its own pace, the bridge the only way, and how marching works: " + a1?.Replace("\n", " | "));
+            string a2 = Call("{\"from\":\"p_ar\",\"to\":\"Edoras\",\"also_from\":[\"p_bolg\"]}");
+            Check(a2 != null && a2.Contains("pace its trail shows") && a2.Contains("WHO GETS THERE FIRST") && !a2.Contains("HOW MARCHING WORKS"),
+                  "an enemy from where it was seen, at the pace its trail shows, against one of the realm's lords; the rules told once a call: " + a2?.Replace("\n", " | "));
+            string a3 = Call("{\"from\":\"p_hidden\",\"to\":\"town_b\"}");
+            Check(a3 != null && a3.Contains("knows no lord, army or holding called \"p_hidden\""), "a party the realm never saw is refused: " + a3);
+            string[] logged = File.Exists(Path.Combine(logs, "routes.jsonl")) ? File.ReadAllLines(Path.Combine(logs, "routes.jsonl")) : new string[0];
+            Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
+            File.AppendAllText(c.SystemTemplate, "\n## Asking the way\n\nAsk with ask_the_way.\n");
+            var room = new Room(c, logs);
+            string with = File.ReadAllText(room.SystemFile(true)), without = File.ReadAllText(room.SystemFile(false));
+            Check(with.Contains("ask_the_way") && !without.Contains("ask_the_way") && without.Contains("## Rules"), "the instructions speak of the tool only in a call that has it");
+            RouteTool.WriteRules(data, c.ChannelDir);
+            Check(File.Exists(Path.Combine(c.ChannelDir, "marching.txt")) && File.ReadAllText(Path.Combine(c.ChannelDir, "marching.txt")).StartsWith("HOW MARCHING WORKS"), "marching.txt is written for the agent to read");
         }
 
         private static Program.Trigger T(string kind, string text) => new Program.Trigger { Kind = kind, Text = text };

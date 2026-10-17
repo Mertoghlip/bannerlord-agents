@@ -41,6 +41,7 @@ namespace BannerlordAgents
             "  agents.chronicle [n]             the last lines of the watched realm's chronicle, its memory of the war\n" +
             "  agents.recruits                  why the watched realm's parties do or do not refill: gold, wages, volunteers, recruits today\n" +
             "  agents.vision_check              our sight rule against the game's own, for your party\n" +
+            "  agents.map [again]               the walking map the dashboard draws and the agent asks the way on; again: copy it anew\n" +
             "  agents.record [on|off|show [n]]  the recorder of your own decisions\n" +
             "  agents.perf [on|off]             performance summary; on/off for the once-a-second log\n" +
             "  agents.bridge on|off             all of the bridge's work, for the before/after comparison\n" +
@@ -146,6 +147,20 @@ namespace BannerlordAgents
             if (Bridge.Watched == null) return "No realm is under watch. Choose one with agents.watch.";
             Snapshot snap = Capture.Take(Bridge.Watched, true);
             return Background.Ask(() => Brain.ReportNow(snap), Wait, out string result) ? result : "The worker did not answer within 5 seconds; try again.";
+        });
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("map", "agents")]
+        public static string Map(List<string> args) => Cmd("map", args, () =>
+        {
+            if (Campaign.Current == null || !Bridge.Running) return "Load a campaign first.";
+            if (args != null && args.Count > 0 && args[0].Equals("again", StringComparison.OrdinalIgnoreCase))
+            {
+                MapExport.Start(true);
+                return "Copying the walking map anew: " + MapExport.Progress + ". It goes on in small slices while you play (faster while paused).";
+            }
+            return "Walking map: " + MapExport.Progress + (MapExport.Folder != null ? "\nFolder: " + MapExport.Folder : "")
+                   + "\nDashboard frames written this session: " + LiveMap.Frames + (LiveMap.Frames > 0 ? " (the last " + (LiveMap.LastBytes / 1024) + " KB in " + LiveMap.LastMs.ToString("0", Text.Inv) + " ms)" : "")
+                   + "\nThe dashboard: run scripts\\dashboard.ps1, then open http://localhost:7329/";
         });
 
         [CommandLineFunctionality.CommandLineArgumentFunction("pokes", "agents")]

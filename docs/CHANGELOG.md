@@ -466,3 +466,63 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room was stopped before the builds (idle, the game closed), and restarted at 16:56:02;
   - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (principle 15, the trails in the report's list) and rewrote `tools.txt`; the bridge's settings were unchanged.
 - **Not yet seen in a game:** a trail; the agent reading one. Proposed for the next run: Mert turns aside once or twice on the way to Western Moria, and we count how often the agent's plan changes.
+
+### 19:32 to 19:45 · Live session on 0.6.4 (standard save, Mert marching on Western Moria)
+- **The war room** was not running when the game started: the one started from an earlier Claude session had stopped with that session, and pokes #173 to #176 went unanswered. It was restarted at 19:32:41.
+- **Seen working:**
+  - 0.6.4 loaded; the self-check passed 10 of 10, and the hook that keeps held lords held attached;
+  - no "the game's AI switched back on" alarm and no order given again;
+  - the agent set `floor` 0 on Gashnar's defend;
+  - #189's siege of Hollin Gate, received while the clock was stopped, was carried out at 19:38:16 when it ran.
+- **The army seen:** a caravan saw Aragorn's army (5,532 men, strength 14,710) at Summer 13, 12:00, 63 from Western Moria and marching on it (#217).
+  - The answer to #220 sent no relief: "Aragorn (14,710) is marching on Western Moria, which can only hold against 5,964. Send no relief and keep the northern lords out of his way."
+  - The council of war (19:43:23 to 19:44:42, 7,462 tokens of thinking) gave one order, Grakmaw to hunt Ulf and then defend Hollin Gate, and a new plan.
+- **A gap found:** the army dropped out of the report's SEEN EARLIER list, cut by bands seen since (its cap of 25 kept the most recent). Fixed in 0.7.0.
+
+### 21:10 · Version 0.7.0: the dashboard, ways and crossings, and the agent's "ask the way" tool · commit (this commit; installed about 21:03)
+- **Why:** Mert: "I want to make diagnostics and monitoring by me a lot easier ... a dashboard with a live map of the game. I basically want to be able to see exactly what each agent sees, have everything they see be depicted by icons with a legend, switch between agents, and have a log depicting the moves of the agent I am following on the side. When I click on a given icon on the map, I should be able to see where it is moving." And on pathfinding: clicking an icon should show how the army would find its way, and the agent should know how pathfinding works, "only exposed to it after it specifically asks for it for a specific army". Mert approved the plan ("Perfect. Implement all now.") and all its recommendations: a real tool rather than ready-made pages, no doctrine principle on crossings for now, and the rewind built now.
+- **What:**
+  - **The dashboard** (`src/BannerlordAgents.Dashboard`, `scripts\dashboard.ps1`, http://localhost:7329/; [DASHBOARD.md](DASHBOARD.md)):
+    - the live map on the game's own walking map;
+    - "What it sees", built from the very view each realm's report was written from, with what the report cut or only counted marked, and "Everything";
+    - a switch between the agent's realm and the player's;
+    - icons with a legend;
+    - cards with each party's planned way (the game's own) or predicted way (ours), its crossings and its time, and "ask the way from here";
+    - the agent's moves on the side, from its pokes, answers, councils, receipts, ended orders, call-backs and questions, one load at a time, with names that select on the map;
+    - a rewind over every hour of the newest 12 loads;
+    - a Checks panel, and links that open a view.
+  - **The bridge:**
+    - the game's walking map copied once per map (`MapExport`), in slices: 0.8 ms a frame while the clock runs, 4 ms while stopped, never in battle;
+    - the hourly copy adds each marching lord's and caravan's planned corners, where every party walks to, and lords' speed with ground and night;
+    - the worker writes an hourly frame, `live\current.json` and the agent's own view file (`LiveMap`), and marks each load's place in the record files (`loads.jsonl`);
+    - the console command `agents.map`;
+    - two self-checks, "planned ways" and "walking map";
+    - the settings `dashboard` and `keep_loads`.
+  - **The way-finder** (`src/BannerlordAgents.Routes`; [ROUTES.md](ROUTES.md)):
+    - the shortest way over the walking map, as the game's pathfinder takes it, pulled into straight legs;
+    - march times with the game's slowing by ground and night;
+    - the crossing atlas: bridges, fords and passes on the ways between neighbouring holdings, each closed in turn to see what it costs, the critical ones marked;
+    - the words shared by the cards and the tool.
+  - **The agent's "ask the way" tool** (`RouteTool`): a real tool in each fast answer and each council, served by the war room inside the call (an in-process MCP server), which Claude Code's safe mode keeps.
+    - It reads only the realm's view file, so it knows no more than the realm saw.
+    - It answers with the way, the hours at the army's pace (an enemy's from its trail), the ground, the crossings with what closing each would cost, the narrowest place, and optionally who gets there first.
+    - Its first answer in a call says how marching works (also `marching.txt`).
+    - Every question is logged (`routes.jsonl`, and `ways_asked` in `calls.jsonl`).
+    - The instructions gained a short "Asking the way" section, removed whenever the tool is not offered. It describes the tool only, with nothing on what to do with crossings.
+  - **The accuracy check:** the dashboard compares our ways with the game's own planned ways for marching lords, under three guesses about the engine's unknown extra cost, and measures the slowing on each ground from the lords' speeds (`accuracy.jsonl`, `speed_factors.json`).
+  - **Fixed:** SEEN EARLIER now cuts in the same order as IN VIEW and never cuts an enemy army.
+- **Checks:**
+  - the smoke test passed in full (126 checks, 8 new);
+  - the war room's self-test passed (46 checks, 8 new: the tool's protocol, a lord over the made-up bridge, an enemy at its trail's pace and who first, an unseen party refused, the log, the instructions with and without the tool, `marching.txt`);
+  - the dashboard's self-test passed (23 checks: the way-finder, the bridge and pass found critical, timing, words, the picture, the log by load);
+  - `WarRoom toolcheck`, one real call with a small model through the whole path, passed: it asked the way once and answered with it, in 3 s;
+  - 382 game references, 0 missing, and the two private fields read by name are in the installed game;
+  - the page was looked at in a headless browser on the smoke test's frames and a made-up map, in both themes;
+  - the installed DLL has sha256 `4186496129CC33D9…`.
+- **Outside the repository:**
+  - the war room was stopped at about 20:47 (idle, the game closed) for the build;
+  - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (the "Asking the way" section) and rewrote `tools.txt` at 21:04;
+  - the war room started as 0.7.0 at 21:04:39 and added `route_tool = on` to `warroom.txt`;
+  - the dashboard was started at 21:04:39 on port 7329, both detached from Claude Code's session so they outlive it;
+  - the bridge writes its two new settings into `settings.txt` at its next load.
+- **Not yet seen in a game:** the map copy (its time, and whether north is up); the frames' real size; the accuracy check's numbers; the atlas on the real map; the agent asking the way.

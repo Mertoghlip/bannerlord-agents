@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The way-finder, outside the game (docs/ROUTES.md): the walking map the bridge exports once per map, the shortest way
+       across it as the game's own pathfinder takes it, the crossings that matter, and how long a march takes. Used by the
+       dashboard (the map you watch) and by the war room (the agent's "ask the way" tool). It never touches the game. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>BannerlordAgents.Routes</RootNamespace>
+    <AssemblyName>BannerlordAgents.Routes</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <Version>0.7.0</Version>
+  </PropertyGroup>
+
+</Project>

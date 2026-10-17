@@ -52,6 +52,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 | `urgent` | is besieged, laid siege, passed from, declared war, Enemy army in view, was taken prisoner, army has formed, fell, striking the besiegers | words in a poke's reasons that make it urgent |
 | `timeout_seconds` | 120 | the longest a call may take |
 | `lookups` | on | let the agent read its look-up files during a call |
+| `route_tool` | on | offer the agent the "ask the way" tool in its answers and councils (0.7), once the walking map is copied ([ROUTES.md](ROUTES.md)) |
 | `max_lessons` | 12 | lessons kept in the notes; past it, the chronicler merges them |
 | `memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit` | written, 12, 450, (the agent's), medium, 2000, 180000 | the realm's memory and its chronicler ([MEMORY.md](MEMORY.md#settings-warroomtxt)) |
 | `council` | on | the council of war ([below](#the-council-of-war)); written memory only |
@@ -71,7 +72,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
   - the full report.
 - **The call:**
   - `claude -p` with stream-json, the model and effort, and the system prompt file;
-  - the only tool is `--tools Read`;
+  - the only built-in tool is `--tools Read`; since 0.7, once the walking map is copied, the war room also serves the "ask the way" tool itself (`RouteTool`, an in-process "sdk" MCP server over the call's own stream: `--input-format stream-json`, `--mcp-config`, `--strict-mcp-config`, `--allowedTools mcp__routes__ask_the_way`), which safe mode leaves on; without it, the instructions' "## Asking the way" section is left out ([ROUTES.md](ROUTES.md#the-agents-tool-routetool-the-war-room));
   - safe mode, so no project instructions, skills or plugins load;
   - prompts are refused rather than asked, and no session is saved.
   - It runs in the channel folder, so the agent can read only the channel. Anything outside is refused.
@@ -123,12 +124,14 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - **`calls\<date>\<time>-poke-N\`**, **`<time>-council-N\`** and **`<time>-story\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer (or the story), for reading side by side.
 - **`warroom-<date>.log`:** the window's lines, memory included ("Memory: the story so far was rewritten ...", "Memory: an earlier save was loaded ...").
 - **`system-<hash>.md`**, **`chronicler-<hash>.md`:** each system prompt used.
+- **`routes.jsonl`** (0.7): every question to the "ask the way" tool, with its poke and the answer; `replaysoutes.jsonl` for replays. Each call's line in `calls.jsonl` gives `ways_asked` and `way_tool` (whether it was offered).
 
 ## Other commands
 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
 - `WarRoom council`: a council of war sits now (the game must be running, and no `WarRoom run` for the folder: that one holds its own councils).
-- `WarRoom selftest`: the memory and the council checked in a scratch folder, without any call (38 checks; `scripts\deploy.ps1` runs it before installing).
+- `WarRoom selftest`: the memory, the council and the "ask the way" tool checked in a scratch folder, without any call (46 checks; `scripts\deploy.ps1` runs it before installing).
+- `WarRoom toolcheck [--model m]`: one real, short call (a small model by default) on the self-test's made-up map, asked to use the "ask the way" tool once: the whole path the agent's tool takes. Oct 16: passed (1 question, 3 s).
 
 ## Replay
 

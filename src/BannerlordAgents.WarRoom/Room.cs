@@ -119,7 +119,8 @@ namespace BannerlordAgents.WarRoom
             string why = Section(pokeText, "WHY YOU ARE ASKED NOW");
             bool urgent = _c.Urgent.Any(u => why.IndexOf(u, StringComparison.OrdinalIgnoreCase) >= 0);
             effort ??= urgent ? _c.UrgentEffort : _c.Effort;
-            string system = SystemFile();
+            RouteTool routes = Routes(meta, number, "answer", write);
+            string system = SystemFile(routes != null);
             bool conversation = _c.Conversation;
             string sessionId = null;
             bool resume = false;
@@ -137,7 +138,7 @@ namespace BannerlordAgents.WarRoom
             int cap = thinkingCap ?? (urgent ? _c.UrgentThinkingCap : _c.ThinkingCap);
             Say("Poke #" + number + " (" + when + ")" + (urgent ? ", urgent" : "") + ": asking " + _c.Model + " at effort " + effort + ", thinking up to " + cap + " tokens"
                 + (conversation ? (resume ? ", in its conversation (" + _mem.SessionTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens so far)" : ", in a new conversation") : "") + "...");
-            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, _c.TimeoutSeconds, cap, sessionId, resume);
+            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, _c.TimeoutSeconds, cap, sessionId, resume, tools: routes);
             bool stallRetry = false;
             if (!r.Ok && (r.Stalled || r.Runaway))
             {
@@ -147,7 +148,7 @@ namespace BannerlordAgents.WarRoom
                 double lost = r.Seconds;
                 stallRetry = true;
                 if (conversation && !resume) sessionId = _mem.SessionId = Guid.NewGuid().ToString();   // the first call of a conversation is begun again under a new id
-                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, _c.TimeoutSeconds, cap, sessionId, resume);
+                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, _c.TimeoutSeconds, cap, sessionId, resume, tools: routes);
                 r.Seconds += lost;
             }
             if (conversation && r.Ok)
@@ -165,7 +166,7 @@ namespace BannerlordAgents.WarRoom
                 retried = true;
                 string fix = "Your answer to poke #" + number + " could not be read: " + problem + ".\nHere it is:\n" + r.Text
                              + "\n\nReply again with ONLY the JSON object, nothing before or after it.";
-                CallResult r2 = Claude.Run(_claude, system, fix, _c.Model, "low", _c.ChannelDir, false, _c.TimeoutSeconds, 1000);
+                CallResult r2 = Claude.Run(_claude, system, fix, _c.Model, "low", _c.ChannelDir, false, _c.TimeoutSeconds, 1000, tools: routes);
                 File.WriteAllText(Path.Combine(folder, "raw-retry.jsonl"), r2.Raw ?? "");
                 problem = r2.Ok ? Extract(r2.Text, number, out answer) : r2.Error;
                 r.Seconds += r2.Seconds;
@@ -201,12 +202,13 @@ namespace BannerlordAgents.WarRoom
                 tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
                 answer_began_ms = Math.Round(r.FirstTextMs), memory = _c.MemoryMode, context_tokens = context, story_words = storyWords, gap_lines = gapLines,
                 notes_chars = _mem.Notes.Length, notes_changed = changed, session = sessionId, campaign = _mem.Campaign,
-                orders, denied = r.Denied, folder, written = write && answer != null
+                orders, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null
             });
             if (answer != null)
                 Say("Poke #" + number + ": " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s ("
                     + r.OutTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens written, " + r.Thinking.ToString("N0", CultureInfo.InvariantCulture) + " of them thinking; "
                     + r.Turns + " step" + (r.Turns == 1 ? "" : "s") + ")" + (retried ? " after one retry" : "") + "."
+                    + (routes != null && routes.Asked > 0 ? " Asked the way " + routes.Asked + (routes.Asked == 1 ? " time." : " times.") : "")
                     + (changed.Length > 0 ? " Notes: " + changed + "." : ""));
             else Say("Poke #" + number + ": NO ANSWER (" + problem + ") after " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s.");
             _lastCallEnded = DateTime.Now;
@@ -563,7 +565,8 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
             Say("Council of war (after poke #" + number + ", " + meta.Date + "): " + why + ". Asking " + _c.Model + " at effort " + _c.CouncilEffort + ", thinking up to " + _c.CouncilThinkingCap + " tokens...");
-            CallResult r = Claude.Run(_claude, SystemFile(), prompt, _c.Model, _c.CouncilEffort, _c.ChannelDir, _c.Lookups, _c.CouncilTimeoutSeconds, _c.CouncilThinkingCap, cancel: cancel);
+            RouteTool routes = Routes(meta, number, "council", write);
+            CallResult r = Claude.Run(_claude, SystemFile(routes != null), prompt, _c.Model, _c.CouncilEffort, _c.ChannelDir, _c.Lookups, _c.CouncilTimeoutSeconds, _c.CouncilThinkingCap, cancel: cancel, tools: routes);
             File.WriteAllText(Path.Combine(folder, "raw.jsonl"), r.Raw ?? "");
             JsonObject answer = null;
             string problem = r.Ok ? Extract(r.Text, number, out answer) : r.Error;
@@ -604,7 +607,7 @@ namespace BannerlordAgents.WarRoom
                 thinking_cap = _c.CouncilThinkingCap, ok = answer != null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), api_ms = r.ApiMs, ttft_ms = r.TtftMs, turns = r.Turns,
                 tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
                 context_tokens = r.InTokens + r.CacheRead + r.CacheWrite, story_words = storyWords, gap_lines = gapLines, briefing_chars = briefing.Length, situation_chars = situation.Length,
-                orders, dropped, council_in = councilIn, notes_changed = changed, campaign = _mem.Campaign, denied = r.Denied, folder, written = write && answer != null
+                orders, dropped, council_in = councilIn, notes_changed = changed, campaign = _mem.Campaign, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null
             });
             if (answer != null)
                 Say("Council of war: " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s ("
@@ -766,14 +769,64 @@ namespace BannerlordAgents.WarRoom
         /// stays cached). The memory section says how this memory works (written or conversation); without reading, the
         /// look-ups section goes.
         /// </summary>
-        internal string SystemFile()
+        internal string SystemFile(bool routes = false)
         {
-            lock (_systemGate) return SystemFileLocked();   // the council's thread asks for it too
+            lock (_systemGate) return SystemFileLocked(routes);   // the council's thread asks for it too
         }
 
-        private string SystemFileLocked()
+        /// <summary>
+        /// The "ask the way" tool for one call (RouteTool), or null when it cannot be offered: switched off, no map copied yet, or
+        /// no view file for the realm. Without it, its section of the instructions goes too.
+        /// </summary>
+        internal RouteTool Routes(PokeMeta meta, int number, string call, bool live)
+        {
+            if (!_c.RouteTool || meta == null) return null;
+            string root = RouteTool.DefaultRoot();
+            var tool = new RouteTool(root, live ? _logDir : Path.Combine(_logDir, "replays"), meta.Campaign, meta.Realm, number, call);
+            if (!tool.Ready(out string why))
+            {
+                if (_routesWhy != why) { Say("The \"ask the way\" tool is not offered: " + why + "."); _routesWhy = why; }
+                return null;
+            }
+            if (_routesWhy != "ready") { Say("The \"ask the way\" tool is offered in every answer and council."); _routesWhy = "ready"; }
+            if ((DateTime.Now - _rulesWritten).TotalMinutes >= 10)
+            {
+                RouteTool.WriteRules(root, _c.ChannelDir);
+                _rulesWritten = DateTime.Now;
+            }
+            if (live) AtlasIfMissing(tool.MapDir);
+            return tool;
+        }
+
+        private string _routesWhy;
+        private DateTime _rulesWritten = DateTime.MinValue;
+        private Thread _atlas;
+
+        /// <summary>
+        /// The crossing atlas, worked out in the background when the map has none and the dashboard is not at it, so the tool can
+        /// say what closing a crossing would cost. Until then it says that is not worked out yet.
+        /// </summary>
+        private void AtlasIfMissing(string mapDir)
+        {
+            if (mapDir == null || File.Exists(BannerlordAgents.Routes.Atlas.PathIn(mapDir)) || (_atlas != null && _atlas.IsAlive)) return;
+            _atlas = new Thread(() =>
+            {
+                try
+                {
+                    Say("Working out the crossing atlas for the walking map (once per map, in the background)...");
+                    bool ok = BannerlordAgents.Routes.Atlas.BuildIfMissing(BannerlordAgents.Routes.WalkMap.Load(mapDir), null, out string said);
+                    Say(ok ? "Crossing atlas ready: " + said + "." : "Crossing atlas: " + said + ".");
+                }
+                catch (Exception e) { Say("The crossing atlas failed: " + e.Message); }
+            }) { IsBackground = true, Name = "atlas", Priority = ThreadPriority.Lowest };
+            _atlas.Start();
+        }
+
+        private string SystemFileLocked(bool routes)
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate) : "You command a realm in Mount & Blade II: Bannerlord. Answer each poke with one JSON object of orders.";
+            // never promise a tool the call does not have
+            if (!routes) template = ReplaceSection(template, "## Asking the way", null);
             if (_c.Conversation) template = ReplaceSection(template, "## Your memory", ConversationMemory);
             if (!_c.Lookups)
             {

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>War Map</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V5l5-2 6 2 5-2v15l-5 2-6-2-5 2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 3v15M15 5v15" stroke="currentColor" stroke-width="1.2"/></svg>
+    <span class="brand-name">War Map</span>
+  </div>
+  <label class="field">
+    <span class="field-label">Following</span>
+    <select id="realm" aria-label="Which realm to follow"></select>
+  </label>
+  <div class="seg" role="radiogroup" aria-label="What the map shows">
+    <button type="button" role="radio" data-mode="sees" aria-checked="true">What it sees</button>
+    <button type="button" role="radio" data-mode="truth" aria-checked="false">Everything</button>
+  </div>
+  <div class="when">
+    <span id="date" class="date">Waiting for the game</span>
+    <span id="live" class="chip chip-idle" title="Whether new hours are coming in">idle</span>
+  </div>
+  <div class="bar-end">
+    <div class="menu">
+      <button type="button" class="btn" id="layers-btn" aria-expanded="false" aria-controls="layers">Layers</button>
+      <div class="pop" id="layers" hidden>
+        <label><input type="checkbox" data-layer="picture" checked> Ground</label>
+        <label><input type="checkbox" data-layer="labels" checked> Names of holdings</label>
+        <label><input type="checkbox" data-layer="villages" checked> Villages</label>
+        <label><input type="checkbox" data-layer="small" checked> Caravans, villagers, bands</label>
+        <label><input type="checkbox" data-layer="trails" checked> Enemy armies' trails</label>
+        <label><input type="checkbox" data-layer="crossings" checked> Crossings that matter</label>
+        <label><input type="checkbox" data-layer="allways"> Every lord's planned way</label>
+        <label><input type="checkbox" data-layer="truth"> The truth under its picture</label>
+      </div>
+    </div>
+    <div class="menu">
+      <button type="button" class="btn" id="checks-btn" aria-expanded="false" aria-controls="checks">Checks</button>
+      <div class="pop pop-wide" id="checks" hidden></div>
+    </div>
+  </div>
+</header>
+
+<main class="stage">
+  <section class="map-wrap" aria-label="Map">
+    <canvas id="map" tabindex="0" aria-label="The campaign map. Drag to move, scroll to zoom, click an icon for its card."></canvas>
+    <div id="empty" class="empty" hidden></div>
+    <details class="legend" id="legend" open>
+      <summary>Legend</summary>
+      <div id="legend-body" class="legend-body"></div>
+    </details>
+    <div class="card" id="card" hidden></div>
+    <div class="pick-hint" id="pick-hint" hidden>Click where it should go: a holding, or any spot. <button type="button" class="link" id="pick-cancel">Cancel</button></div>
+    <div class="timeline" id="timeline">
+      <button type="button" class="btn btn-icon" id="play" aria-label="Play the hours">&#9654;</button>
+      <input type="range" id="slider" min="0" max="0" value="0" aria-label="Hour shown">
+      <span id="slider-label" class="slider-label"></span>
+      <select id="load" aria-label="Which load of the campaign"></select>
+      <button type="button" class="btn btn-live" id="golive">Live</button>
+    </div>
+  </section>
+
+  <aside class="log" aria-label="The followed realm's moves">
+    <div class="log-head">
+      <h2 id="log-title">Moves</h2>
+      <span id="log-count" class="muted"></span>
+    </div>
+    <div class="log-tools">
+      <div class="filters" id="filters"></div>
+      <label class="only"><input type="checkbox" id="only-selected"> Only the selected</label>
+    </div>
+    <ol class="log-list" id="log-list"></ol>
+  </aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

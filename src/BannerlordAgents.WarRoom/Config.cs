@@ -32,6 +32,8 @@ namespace BannerlordAgents.WarRoom
         public int MaxLessons = 15;
         /// <summary>Let the agent read its look-up files (lookups\&lt;id&gt;.txt) and its chronicle during a call.</summary>
         public bool Lookups = true;
+        /// <summary>Offer the agent the "ask the way" tool in its answers and councils (0.7, docs/ROUTES.md), once the walking map is copied.</summary>
+        public bool RouteTool = true;
         /// <summary>
         /// How the realm remembers (docs/MEMORY.md): "written", a fresh call each poke with the story so far, the notes and
         /// the chronicle; or "conversation", one long conversation resumed each poke, for comparison.
@@ -94,6 +96,7 @@ namespace BannerlordAgents.WarRoom
                     case "claude_path": c.ClaudePath = v; break;
                     case "max_lessons": if (int.TryParse(v, out int m) && m >= 0) c.MaxLessons = m; break;
                     case "lookups": c.Lookups = v == "on" || v == "true" || v == "yes"; break;
+                    case "route_tool": c.RouteTool = v == "on" || v == "true" || v == "yes"; break;
                     case "memory": if (v == "written" || v == "conversation") c.MemoryMode = v; break;
                     case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
                     case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
@@ -111,7 +114,7 @@ namespace BannerlordAgents.WarRoom
                 }
             }
             string text = File.ReadAllText(c.FilePath);
-            if (!text.Contains("memory =") || !text.Contains("council =")) c.Save();   // a settings file from before memory or the council: the new keys are added
+            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =")) c.Save();   // a settings file from before memory or the council: the new keys are added
             return c;
         }
 
@@ -135,6 +138,8 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("max_lessons = " + MaxLessons.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("# let the agent read its look-up files and its whole chronicle during a call");
             sb.AppendLine("lookups = " + (Lookups ? "on" : "off"));
+            sb.AppendLine("# offer the agent the \"ask the way\" tool (the way an army would march, its time and its crossings) once the walking map is copied");
+            sb.AppendLine("route_tool = " + (RouteTool ? "on" : "off"));
             sb.AppendLine("# memory: written (a fresh call each poke, with the story so far, the notes and the chronicle) or conversation (one long conversation, for comparison)");
             sb.AppendLine("memory = " + MemoryMode);
             sb.AppendLine("# the chronicler rewrites the story so far after this many new chronicle lines, in a quiet moment, in at most story_words words");

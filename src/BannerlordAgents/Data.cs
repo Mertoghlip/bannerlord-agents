@@ -46,6 +46,14 @@ namespace BannerlordAgents
         public bool SeenByPlayer;
         /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>
         public bool Spottable;
+        /// <summary>
+        /// For the dashboard (0.7): where the party is walking to (the game's MoveTargetPoint), its speed with the ground and the
+        /// night counted in (lords only), and, for lords and caravans on the march, the corners of the way the game planned
+        /// for it, still ahead, as x, y pairs (at most 48); Straight when it walks straight there with no planned way.
+        /// </summary>
+        public float Tx, Ty, FinalSpeed;
+        public float[] Route;
+        public bool Straight;
     }
 
     internal sealed class SettlementRow
@@ -92,6 +100,8 @@ namespace BannerlordAgents
         public string Id, Name, Ruler;
         public List<string> AtWar = new List<string>();
         public List<string> Allies = new List<string>();
+        /// <summary>The realm's colours as the game paints them (ARGB), for the dashboard.</summary>
+        public uint Color, Color2;
     }
 
     internal sealed class Sighting
@@ -157,12 +167,16 @@ namespace BannerlordAgents
         public string Date;
         public bool Night;
         public string PlayerFaction, PlayerParty, Watched;
+        /// <summary>The walking map's checksum (MapExport), so the dashboard knows which map the world stands on.</summary>
+        public string MapCrc;
         public List<PartyRow> Parties = new List<PartyRow>(4096);
         public Dictionary<string, PartyRow> PartyById = new Dictionary<string, PartyRow>(4096);
         public List<SettlementRow> Settlements = new List<SettlementRow>(1024);
         public Dictionary<string, SettlementRow> SettlementById = new Dictionary<string, SettlementRow>(1024);
         public Dictionary<string, FactionRow> Factions = new Dictionary<string, FactionRow>();
         public Dictionary<string, string> FactionNames = new Dictionary<string, string>();
+        /// <summary>Every faction's colour (realms, clans, bandits), ARGB, for the dashboard's map.</summary>
+        public Dictionary<string, uint> FactionColors = new Dictionary<string, uint>();
         public HashSet<string> HostileToWatched = new HashSet<string>();
         public HashSet<string> HostileToPlayer = new HashSet<string>();
         /// <summary>What the watched realm sees, by party id.</summary>

@@ -68,6 +68,13 @@ namespace BannerlordAgents
             Check("settings", () => Settings.Unknown.Count == 0 ? null : "lines not understood: " + string.Join(" | ", Settings.Unknown));
             Check("log folder", () => Diag.SessionDir == null ? "there is no session folder, so the detailed logs are off" : null);
             Check("freeze probe", () => !Settings.FreezeProbe || File.Exists(Probe.Exe) ? null : "the probe is not installed (" + Probe.Exe + ")");
+            Check("planned ways", () => Settings.Dashboard ? Capture.WayFieldsProblem : null);
+            Check("walking map", () =>
+            {
+                if (!Settings.Dashboard) return null;
+                string p = MapExport.Progress ?? "";
+                return p.StartsWith("failed", StringComparison.Ordinal) || p.StartsWith("no map", StringComparison.Ordinal) ? p : null;
+            });
 
             int failed = results.Count(r => r.Value != null);
             Log.Line("self-check (game's half): " + (results.Count - failed) + " of " + results.Count + " passed"

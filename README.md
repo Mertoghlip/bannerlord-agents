@@ -14,11 +14,13 @@ The study asks how much to leave to the model and how much to code. It also asks
 |---|---|
 | `src/BannerlordAgents/` | The bridge, the game module that runs inside the game. It is its own module, separate from TFAOMFixes. Its `Tools/` folder holds the tool engine and the order library ([docs/TOOLS.md](docs/TOOLS.md)). |
 | `src/BannerlordAgents.WarRoom/` | The war room, the program beside the game where the agent decides: one short Claude Code call per poke, and now and then a slower council of war over the whole realm ([docs/WARROOM.md](docs/WARROOM.md)), each carrying the realm's written memory of the war ([docs/MEMORY.md](docs/MEMORY.md)). |
+| `src/BannerlordAgents.Routes/` | The way-finder, outside the game: the walking map the module copies once per map, the shortest way across it as the game finds ways, how long a march takes, and the crossings that matter ([docs/ROUTES.md](docs/ROUTES.md)). The war room's "ask the way" tool and the dashboard both use it. |
+| `src/BannerlordAgents.Dashboard/` | The dashboard, a page in your browser on this laptop: the live map of the game, what each agent sees, the planned ways and crossings, the agent's moves beside it, and a rewind ([docs/DASHBOARD.md](docs/DASHBOARD.md)). It only reads files. |
 | `tests/SmokeTest/` | Runs the bridge's background half, the tools included, on a small made-up world outside the game. Mistakes surface there before they cost an in-game test. |
 | `protocol/` | Every file the module writes, and the fields in each record. |
 | `agent/` | Templates for the agent's own folder, which lives outside this repository so the agent cannot read the code. `scripts/setup-agent.ps1` installs them. |
 | `tools/FreezeProbe/` | A small program outside the game that says where the game is stuck when it freezes. The module starts it by itself; it is installed in the module's `probe` folder. |
-| `scripts/` | `deploy.ps1` builds everything, runs the smoke test, and installs the module into the game; it refuses while the game is open or if a check fails. `probe.ps1` runs the freeze probe by hand. `setup-agent.ps1` prepares the agent's folder, and `warroom.ps1` starts the war room. |
+| `scripts/` | `deploy.ps1` builds everything, runs the smoke test, and installs the module into the game; it refuses while the game is open or if a check fails. `probe.ps1` runs the freeze probe by hand. `setup-agent.ps1` prepares the agent's folder, `warroom.ps1` starts the war room, and `dashboard.ps1` the dashboard. |
 | `docs/` | The build plan, the first tests phase by phase, the tools, the war room, the memory, the logs ([LOGGING.md](docs/LOGGING.md)), the study of medieval military doctrine behind the agent's instructions ([DOCTRINE.md](docs/DOCTRINE.md)), every change with its notes ([CHANGELOG.md](docs/CHANGELOG.md)), the hours log, the session reports, and the proposal. |
 
 More arrives as the plan reaches it:
@@ -35,6 +37,7 @@ More arrives as the plan reaches it:
 6. With the game closed, install it: `powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1`
 7. In the launcher, tick **Bannerlord Agents** only in the experiment module list (decision 2 in the plan).
 8. For an agent: `powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Mode shadow` once, then `scripts\warroom.ps1` beside the game. It needs Claude Code signed in to your subscription ([docs/WARROOM.md](docs/WARROOM.md)).
+9. To watch: `powershell -ExecutionPolicy Bypass -File scripts\dashboard.ps1` opens the dashboard at http://localhost:7329/ ([docs/DASHBOARD.md](docs/DASHBOARD.md)).
 
 Nothing from the game itself is stored here. The build reads the game's own files from your install.
 

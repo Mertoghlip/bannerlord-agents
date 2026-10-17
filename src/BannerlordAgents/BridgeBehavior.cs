@@ -55,6 +55,7 @@ namespace BannerlordAgents
             Background.Post("new campaign", () => Brain.Reset(id, loadedAt, realm, history));
             AgentChannel.Start();
             GameHooks.Apply();
+            MapExport.Start();
             LordWatch.Refresh();
             Log.Line("session started: campaign " + id + ", " + Kingdom.All.Count + " kingdoms, " + MobileParty.All.Count + " parties, "
                      + Settlement.All.Count + " settlements; " + warmed + " names prepared in " + warmMs.ToString("0", Text.Inv) + " ms");

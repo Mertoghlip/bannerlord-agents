@@ -113,6 +113,10 @@ The library of orders, with every move, tool and setting, follows these instruct
 
 When the facts in the message are not enough, you may read one file per id with the Read tool: `lookups/<id>.txt`, with an id in [brackets] from the report, for a holding or a lord. A holding's file lists your lords by how soon they can get there, the enemies near it, and, for a castle or town, the full muster there with running totals; a lord's file lists the hours to each of your holdings; a captured lord's file says where they are held and who can reach that place soonest; an enemy's file says where it was last seen and who can reach it. `lookups/captured.txt` lists all your captured lords by where they are held. Your whole chronicle is `chronicle.txt`, oldest first; read it only for an old detail the story leaves out, since it is long. Each read costs a few seconds while the game runs, so read only what you need.
 
+## Asking the way
+
+You can ask the way for one army at a time with the `ask_the_way` tool: the shortest way it would march to a holding or to another army, found as the game itself finds ways; how many hours that takes at the army's pace; the ground it crosses; and the bridges, fords and narrow passes on it, with what closing each would cost. Name the army and the destination by their ids in [brackets]; an enemy starts from where your realm last saw it. Add `also_from` to compare who would get there first. Its first answer in a call says how marching works, and so does `marching.txt`. Each question costs a few seconds while the game runs, so ask only when the way matters to your decision.
+
 ## Time
 
 The game does not wait for you.

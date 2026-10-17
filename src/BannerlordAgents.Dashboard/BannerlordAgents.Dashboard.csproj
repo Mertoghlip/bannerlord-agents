@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The dashboard (docs/DASHBOARD.md): a page in the browser, served on this laptop only, with the live map of the game, what
+       each agent sees, the planned ways and the crossings, the agent's moves beside it, and a rewind. It only reads the files
+       the bridge and the war room write; the agent never sees it. Below-normal priority with efficiency mode, like the war room. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Dashboard</AssemblyName>
+    <RootNamespace>BannerlordAgents.Dashboard</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Version>0.7.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BannerlordAgents.Routes\BannerlordAgents.Routes.csproj" />
+    <EmbeddedResource Include="web\**\*" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

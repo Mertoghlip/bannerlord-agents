@@ -65,6 +65,13 @@ if (-not $NoBuild) {
         exit 1
     }
     Write-Host "War room self-test: all checks passed." -ForegroundColor Green
+    # the dashboard's way-finder, crossing atlas, map picture and log (docs/DASHBOARD.md, docs/ROUTES.md), on made-up data
+    & (Join-Path $repo 'src\BannerlordAgents.Dashboard\bin\Release\net8.0-windows\Dashboard.exe') selftest | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "The dashboard's self-test failed; nothing installed. Run Dashboard.exe selftest to see which check." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Dashboard self-test: all checks passed." -ForegroundColor Green
 }
 
 $stage = Join-Path $repo "build\Modules\$moduleId"

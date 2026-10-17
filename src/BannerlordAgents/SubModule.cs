@@ -86,6 +86,7 @@ namespace BannerlordAgents
             base.OnApplicationTick(dt);
             Watchdog.Frame();
             Background.DrainToUi();
+            MapExport.Frame();
         }
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)

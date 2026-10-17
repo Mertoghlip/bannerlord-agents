@@ -473,28 +473,40 @@ namespace BannerlordAgents.Tools
         {
             if (ById.Count == 0) return "- None. Every lord is led by the game's own AI.";
             var sb = new StringBuilder();
-            foreach (ToolInstance t in ById.Values.OrderBy(x => x.Order.LordName))
-            {
-                var scope = new Scope(t, w);
-                StateDef st = t.State != null && t.Def.States.TryGetValue(t.State, out StateDef s) ? s : null;
-                string doing = t.Shelter != null ? (t.Shelter == Away ? "falling back, away from " + w.Name(t.ShelterFrom) : (t.Running ? "falling back toward " : "sheltering in ") + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom)) + " (resumes once it has passed)"
-                             : t.SupplyAt != null ? "buying food at " + w.Name(t.SupplyAt) + " (resumes after)"
-                             : st?.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : (t.State ?? "starting");
-                var what = new StringBuilder(t.Def.Name);
-                if (t.Order.At != null) what.Append(" " + w.Name(t.Order.At) + " [" + t.Order.At + "]");
-                if (t.Order.Target != null) what.Append(" " + w.Name(t.Order.Target) + " [" + w.Tag(t.Order.Target) + "]");
-                if (t.Order.Lords.Count > 0) what.Append(" with " + string.Join(", ", t.Order.Lords.Select(p => w.Name(p) + " [" + w.Tag(p) + "]")));
-                List<string> changed = t.Settings.Where(kv => t.Def.Settings.TryGetValue(kv.Key, out SettingDef sd) && Math.Abs(sd.Default - kv.Value) > 1e-9)
-                                                 .Select(kv => kv.Key + " " + ToolDef.Num(kv.Value)).ToList();
-                PartyRow me = w.Party(t.Order.Party);
-                string army = me != null && me.ArmyLeader == me.Id
-                    ? "; leads an army of " + Text.N(World.MenOf(me)) + " men" + (scope.Get("army_coming") is double c && c > 0 ? " (" + c + " lords still coming)" : "")
-                    : "";
-                sb.AppendLine("- " + t.Order.LordName + " [" + t.Order.Lord + "]: " + what + ". Now " + doing + "; since " + Text.When(t.StateSince) + army
-                              + (changed.Count > 0 ? "; settings " + string.Join(", ", changed) : "")
-                              + (t.Order.Then != null ? "; then " + ThenText(t.Order.Then, w) : "") + ".");
-            }
+            foreach (ToolInstance t in ById.Values.OrderBy(x => x.Order.LordName)) sb.AppendLine("- " + Describe(t, w));
             return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>Each ordered party's order in force, as the report words it (for the dashboard).</summary>
+        public static Dictionary<string, string> ByParty(World w)
+        {
+            var d = new Dictionary<string, string>();
+            foreach (ToolInstance t in ById.Values)
+                if (t.Order.Party != null) d[t.Order.Party] = Describe(t, w);
+            return d;
+        }
+
+        /// <summary>One order in force: who, what, what it is doing now and since when, its settings and what comes after.</summary>
+        private static string Describe(ToolInstance t, World w)
+        {
+            var scope = new Scope(t, w);
+            StateDef st = t.State != null && t.Def.States.TryGetValue(t.State, out StateDef s) ? s : null;
+            string doing = t.Shelter != null ? (t.Shelter == Away ? "falling back, away from " + w.Name(t.ShelterFrom) : (t.Running ? "falling back toward " : "sheltering in ") + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom)) + " (resumes once it has passed)"
+                         : t.SupplyAt != null ? "buying food at " + w.Name(t.SupplyAt) + " (resumes after)"
+                         : st?.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : (t.State ?? "starting");
+            var what = new StringBuilder(t.Def.Name);
+            if (t.Order.At != null) what.Append(" " + w.Name(t.Order.At) + " [" + t.Order.At + "]");
+            if (t.Order.Target != null) what.Append(" " + w.Name(t.Order.Target) + " [" + w.Tag(t.Order.Target) + "]");
+            if (t.Order.Lords.Count > 0) what.Append(" with " + string.Join(", ", t.Order.Lords.Select(p => w.Name(p) + " [" + w.Tag(p) + "]")));
+            List<string> changed = t.Settings.Where(kv => t.Def.Settings.TryGetValue(kv.Key, out SettingDef sd) && Math.Abs(sd.Default - kv.Value) > 1e-9)
+                                             .Select(kv => kv.Key + " " + ToolDef.Num(kv.Value)).ToList();
+            PartyRow me = w.Party(t.Order.Party);
+            string army = me != null && me.ArmyLeader == me.Id
+                ? "; leads an army of " + Text.N(World.MenOf(me)) + " men" + (scope.Get("army_coming") is double c && c > 0 ? " (" + c + " lords still coming)" : "")
+                : "";
+            return t.Order.LordName + " [" + t.Order.Lord + "]: " + what + ". Now " + doing + "; since " + Text.When(t.StateSince) + army
+                   + (changed.Count > 0 ? "; settings " + string.Join(", ", changed) : "")
+                   + (t.Order.Then != null ? "; then " + ThenText(t.Order.Then, w) : "") + ".";
         }
 
         private static string ThenText(JObject then, World w)

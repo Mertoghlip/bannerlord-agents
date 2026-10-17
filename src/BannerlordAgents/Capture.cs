@@ -4,7 +4,9 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Settlements;
+using HarmonyLib;
 using TaleWorlds.Core;
+using TaleWorlds.Library;
 
 namespace BannerlordAgents
 {
@@ -32,14 +34,15 @@ namespace BannerlordAgents
                 Watched = watched?.StringId,
                 Wall = DateTime.UtcNow.Ticks,
                 LoadId = Bridge.LoadId,
-                LoadedAt = Bridge.LoadedAt
+                LoadedAt = Bridge.LoadedAt,
+                MapCrc = MapExport.Crc
             };
             var factions = new Dictionary<string, IFaction>();
 
             foreach (Kingdom k in Kingdom.All)
             {
                 if (k == null || k.IsEliminated) continue;
-                var row = new FactionRow { Id = k.StringId, Name = Names.Faction(k), Ruler = Names.Hero(k.Leader) };
+                var row = new FactionRow { Id = k.StringId, Name = Names.Faction(k), Ruler = Names.Hero(k.Leader), Color = k.Color, Color2 = k.Color2 };
                 foreach (Kingdom o in Kingdom.All)
                     if (o != null && o != k && !o.IsEliminated && k.IsAtWarWith(o)) row.AtWar.Add(o.StringId);
                 foreach (Kingdom a in k.AlliedKingdoms)
@@ -112,6 +115,7 @@ namespace BannerlordAgents
             foreach (KeyValuePair<string, IFaction> kv in factions)
             {
                 snap.FactionNames[kv.Key] = Names.Faction(kv.Value);
+                snap.FactionColors[kv.Key] = kv.Value.Color;
                 if (watched != null && kv.Value != watched && FactionManager.IsAtWarAgainstFaction(kv.Value, watched)) snap.HostileToWatched.Add(kv.Key);
                 if (player != null && kv.Value != player && FactionManager.IsAtWarAgainstFaction(kv.Value, player)) snap.HostileToPlayer.Add(kv.Key);
             }
@@ -228,7 +232,51 @@ namespace BannerlordAgents
             r.SeenByPlayer = p.IsVisible && !p.IsMainParty;
             r.Spottable = inside == null || leader?.ClanBanner != null
                           || (me != null && me.IsSiegeAssault && party.Side == BattleSideEnum.Attacker);
+            if (Settings.Dashboard) Way(p, r, inside == null && me == null && !r.Attached);
             return r;
+        }
+
+        // the game keeps whether a party is walking its planned way, and its speed with the ground counted, in fields of its own
+        private static readonly AccessTools.FieldRef<MobileParty, bool> PathModeField = Field<bool>("_pathMode");
+        private static readonly AccessTools.FieldRef<MobileParty, float> FinalSpeedField = Field<float>("_lastCalculatedSpeed");
+        public const int MostRoutePoints = 48;
+
+        private static AccessTools.FieldRef<MobileParty, T> Field<T>(string name)
+        {
+            try { return AccessTools.FieldRefAccess<MobileParty, T>(name); }
+            catch (Exception e) { Diag.Swallowed("finding MobileParty." + name, e); return null; }
+        }
+
+        /// <summary>Both of the game's fields the dashboard reads were found (the self-check).</summary>
+        public static string WayFieldsProblem => PathModeField == null || FinalSpeedField == null
+            ? "MobileParty." + (PathModeField == null ? "_pathMode" : "_lastCalculatedSpeed") + " was not found, so the dashboard shows no planned ways" : null;
+
+        /// <summary>
+        /// Where a party walks to, and, for a lord or caravan on the march, the corners still ahead of the way the game planned
+        /// for it (MobileParty.Path from PathBegin, which it walks corner by corner while _pathMode is on). Plain copies only.
+        /// </summary>
+        private static void Way(MobileParty p, PartyRow r, bool marching)
+        {
+            CampaignVec2 to = p.MoveTargetPoint;
+            r.Tx = Text.R1(to.X);
+            r.Ty = Text.R1(to.Y);
+            if (p.IsLordParty && FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 2);
+            if (!marching || !(p.IsLordParty || p.IsCaravan)) return;
+            float dx = to.X - p.Position.X, dy = to.Y - p.Position.Y;
+            if (dx * dx + dy * dy < 0.25f) return;
+            NavigationPath path = p.Path;
+            int begin = p.PathBegin;
+            bool walking = PathModeField != null ? PathModeField(p) : path != null && path.Size > begin;
+            if (!walking || path == null || path.Size <= begin || path.PathPoints == null) { r.Straight = true; return; }
+            int n = Math.Min(path.Size - begin, MostRoutePoints);
+            var pts = new float[n * 2];
+            for (int k = 0; k < n; k++)
+            {
+                Vec2 v = path.PathPoints[begin + k];
+                pts[2 * k] = Text.R1(v.x);
+                pts[2 * k + 1] = Text.R1(v.y);
+            }
+            r.Route = pts;
         }
 
         public static string DateText()

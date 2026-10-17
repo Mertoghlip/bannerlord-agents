@@ -46,6 +46,8 @@ namespace BannerlordAgents
     internal sealed class ViewParty
     {
         public string Id, Lord, Name, Faction, FactionName, Relation, Kind, Doing, Near, SeenBy, NearestHolding;
+        /// <summary>The holding its doing names (going to, besieging, raiding, defending, patrolling around), when it names one: for the dashboard and the "ask the way" tool.</summary>
+        public string Toward;
         public int Men, ArmyMen, ArmyParties;
         public float Strength, X, Y, NearDistance, HoldingDistance;
         public double SeenHours;
@@ -156,12 +158,12 @@ namespace BannerlordAgents
 
             if (mem != null)
             {
-                foreach (ViewParty last in mem.LastSeen.Values.OrderBy(x => s.Hours - x.SeenHours))
-                {
-                    if (sees.ContainsKey(last.Id) || s.Hours - last.SeenHours < 1) continue;
-                    v.LastSeen.Add(last);
-                    if (v.LastSeen.Count >= 25) break;
-                }
+                // the cap of 25 cuts by the same order as IN VIEW: an enemy army is never cut, then enemy lords, then bandits and
+                // others, the most recently seen first within each (Oct 16: bandits seen later pushed Aragorn's army of 5,532 out)
+                List<ViewParty> earlier = mem.LastSeen.Values.Where(last => !sees.ContainsKey(last.Id) && s.Hours - last.SeenHours >= 1)
+                                                             .OrderBy(SeenRank).ThenBy(x => s.Hours - x.SeenHours).ToList();
+                int keepEarlier = Math.Max(25, earlier.Count(x => SeenRank(x) == 0));
+                v.LastSeen = earlier.Take(keepEarlier).ToList();
                 // a trail of one point says no more than the lists above
                 v.Trails = mem.Trails.Values.Where(t => t.Points.Count >= 2).OrderByDescending(t => t.Strength).ToList();
                 if (fid == Chronicle.Realm)
@@ -413,6 +415,7 @@ namespace BannerlordAgents
                 Kind = r.Kind, Men = r.Men, ArmyMen = r.ArmyMen, ArmyParties = r.ArmyParties, Strength = r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength,
                 X = r.X, Y = r.Y, Doing = Doing(s, r), SeenBy = seen?.By, SeenHours = s.Hours
             };
+            vp.Toward = Toward(r);
             SettlementRow near = NearestSettlement(s, r.X, r.Y, out float nd);
             if (near != null) { vp.Near = near.Name; vp.NearDistance = Text.R1(nd); }
             if (own != null && own.Count > 0 && relation != "own")
@@ -458,6 +461,21 @@ namespace BannerlordAgents
             if (h.VillageState == "BeingRaided") return "being raided";
             if (h.VillageState == "Looted") return "looted";
             return null;
+        }
+
+        /// <summary>The holding Doing names, if any (the same order of checks).</summary>
+        public static string Toward(PartyRow r)
+        {
+            if (r.Raiding != null) return r.Raiding;
+            if (r.InBattle) return null;
+            if (r.Besieging != null) return r.Besieging;
+            if (r.InSettlement != null) return null;
+            switch (r.Doing)
+            {
+                case "GoToSettlement": case "BesiegeSettlement": case "AssaultSettlement": case "RaidSettlement": case "DefendSettlement": case "PatrolAroundPoint":
+                    return r.TargetSettlement;
+                default: return null;
+            }
         }
 
         public static string Doing(Snapshot s, PartyRow r)
