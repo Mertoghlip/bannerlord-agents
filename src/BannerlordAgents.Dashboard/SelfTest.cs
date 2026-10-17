@@ -40,6 +40,19 @@ namespace BannerlordAgents.Dashboard
             RouteResult dear = f.Find(20, 10, 40, 10, Costs.ForestDear);
             Check(dear.Ok && dear.OnGround.GetValueOrDefault(Ground.Forest) < inWood, "counting forest twice, the way goes round the wood");
 
+            // a bridge the copy missed: rebuilt from its face's centre, or learned from a way the game planned over it
+            WalkMap noBridge = Samples.SmallMap();
+            for (int y = 30; y <= 31; y++) for (int x = 48; x <= 51; x++) { noBridge.Ground[y * noBridge.W + x] = Ground.River; noBridge.Walk[y * noBridge.W + x] = false; }
+            Check(!new Finder(noBridge).Find(20, 29, 80, 29).Ok, "without its bridge the river cannot be crossed");
+            noBridge.CrossingFaces.Add(new CrossingFace { X = 49.6f, Y = 30.4f, T = Ground.Bridge });
+            noBridge.StampCrossingFaces();
+            RouteResult over = new Finder(noBridge).Find(20, 29, 80, 29);
+            Check(over.Ok && over.Crossings.Count == 1 && noBridge.Rebuilt >= 3, "a bridge known only by its face's centre is rebuilt bank to bank (" + noBridge.Rebuilt + " cells; " + (over.Why ?? "crossed") + ")");
+            WalkMap unlearned = Samples.SmallMap();
+            for (int y = 30; y <= 31; y++) for (int x = 48; x <= 51; x++) { unlearned.Ground[y * unlearned.W + x] = Ground.River; unlearned.Walk[y * unlearned.W + x] = false; }
+            bool learnt = unlearned.Learn(new List<float[]> { new[] { 40f, 30.5f }, new[] { 60f, 30.5f } });
+            Check(learnt && new Finder(unlearned).Find(20, 29, 80, 29).Ok && unlearned.Learned >= 4, "a way the game planned across it opens it (" + unlearned.Learned + " cells learned)");
+
             // the time
             SpeedFactors sf = SpeedFactors.Default();
             double hOpen = Marching.Hours(f.Find(5, 30, 45, 30), m, 4f, 6, sf, out _);

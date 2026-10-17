@@ -53,6 +53,8 @@ namespace BannerlordAgents.Routes
         public int Places { get; set; }
         public int WaysFound { get; set; }
         public int Candidates { get; set; }
+        /// <summary>How many cells the map had learned from the game's own ways when this atlas was worked out (it is worked out again after many more).</summary>
+        public int Learned { get; set; }
         public List<AtlasCrossing> Crossings { get; set; } = new List<AtlasCrossing>();
 
         public const float PassWidth = 12f;
@@ -67,18 +69,18 @@ namespace BannerlordAgents.Routes
         /// by the dashboard and the war room). True when the atlas is there afterwards. Slow (minutes on a big map): call it
         /// from a background thread.
         /// </summary>
-        public static bool BuildIfMissing(WalkMap m, Action<string> progress, out string said)
+        public static bool BuildIfMissing(WalkMap m, Action<string> progress, out string said, bool again = false)
         {
             said = null;
             if (m?.Dir == null) { said = "no map"; return false; }
-            if (File.Exists(PathIn(m.Dir))) { said = "ready"; return true; }
+            if (!again && File.Exists(PathIn(m.Dir))) { said = "ready"; return true; }
             using var gate = new Mutex(false, @"Local\BannerlordAgents.Atlas." + m.Meta.Crc);
             bool mine;
             try { mine = gate.WaitOne(0); } catch (AbandonedMutexException) { mine = true; }
             if (!mine) { said = "being worked out by another program"; return false; }
             try
             {
-                if (File.Exists(PathIn(m.Dir))) { said = "ready"; return true; }
+                if (!again && File.Exists(PathIn(m.Dir))) { said = "ready"; return true; }
                 Atlas a = Build(m, progress);
                 JsonText.Write(PathIn(m.Dir), a);
                 said = a.Crossings.Count + " crossings that matter (" + a.Crossings.Count(c => c.Critical) + " critical) from " + a.WaysFound + " ways, in " + a.Seconds + " s";
@@ -125,7 +127,7 @@ namespace BannerlordAgents.Routes
             var finder = new Finder(m) { MaxExpand = 3_000_000 };
             List<Place> places = m.Places.Where(p => p.Kind == "town" || p.Kind == "castle").ToList();
             if (places.Count < 8) places = m.Places.Where(p => p.Kind != "hideout").ToList();
-            var atlas = new Atlas { Crc = m.Meta.Crc, Places = places.Count };
+            var atlas = new Atlas { Crc = m.Meta.Crc, Places = places.Count, Learned = m.Learned };
 
             // 1. the ways between each holding and its nearest neighbours
             var pairs = new HashSet<(int, int)>();

@@ -60,6 +60,7 @@ namespace BannerlordAgents.Dashboard
                         Console.WriteLine("  " + c.Id + " " + c.Name + (c.Critical ? " [critical]" : "") + ": " + (c.CutsOff ? "no other way" : "+" + Routes.Words.N(c.Detour)) + "; " + Routes.Explain.Closing(c));
                     return 0;
                 }
+                case "learncheck": return LearnCheck(store);
                 case "route":
                 {
                     string dir = Routes.WalkMap.FindDir(root);
@@ -76,6 +77,62 @@ namespace BannerlordAgents.Dashboard
                     Console.WriteLine("Dashboard.exe [run] [--port 7329] [--open] | atlas | route x1,y1 x2,y2 | selftest");
                     return 1;
             }
+        }
+
+        /// <summary>
+        /// "Dashboard learncheck": how well our ways match the game's own planned ways in the newest load's frames, held out: the
+        /// old map, the map with its bridges and fords rebuilt, and that map after learning from the even hours' ways, each
+        /// measured on the odd hours' ways only.
+        /// </summary>
+        private static int LearnCheck(Store store)
+        {
+            System.Text.Json.Nodes.JsonObject cur = store.Current();
+            string campaign = (string)cur?["campaign"], load = (string)cur?["load_id"];
+            string dir = Routes.WalkMap.FindDir(store.Root, (string)cur?["map"]);
+            if (campaign == null || dir == null) { Console.WriteLine("No frames or no walking map yet."); return 1; }
+            var train = new List<List<float[]>>();
+            var test = new List<(float x, float y, float[] end, float game)>();
+            foreach (long h in store.FrameHours(campaign, load))
+            {
+                System.Text.Json.Nodes.JsonObject f = store.ReadFrame(store.FramePath(campaign, load, h));
+                if (f?["parties"] is not System.Text.Json.Nodes.JsonArray parties) continue;
+                foreach (System.Text.Json.Nodes.JsonNode n in parties)
+                {
+                    if (n is not System.Text.Json.Nodes.JsonObject p || p["route"] is not System.Text.Json.Nodes.JsonArray r || r.Count < 2) continue;
+                    var pts = new List<float[]> { new[] { (float)(double)p["x"], (float)(double)p["y"] } };
+                    for (int i = 0; i + 1 < r.Count; i += 2) pts.Add(new[] { (float)(double)r[i], (float)(double)r[i + 1] });
+                    if (h % 2 == 0) { train.Add(pts); continue; }
+                    float len = 0;
+                    for (int i = 1; i < pts.Count; i++) len += Routes.WalkMap.Dist(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+                    if (len >= 15 && (string)p["kind"] == "lord") test.Add((pts[0][0], pts[0][1], pts[pts.Count - 1], len));
+                }
+            }
+            var sample = test.Where((_, i) => i % Math.Max(1, test.Count / 300) == 0).ToList();
+            Console.WriteLine(train.Count + " ways to learn from (even hours), " + sample.Count + " lords' ways to test on (odd hours).");
+            void Measure(string name, Routes.WalkMap m)
+            {
+                var f = new Routes.Finder(m);
+                var gaps = new List<float>();
+                int none = 0;
+                foreach ((float x, float y, float[] end, float game) in sample)
+                {
+                    float ours = f.Distance(x, y, end[0], end[1]);
+                    if (float.IsNaN(ours)) { none++; continue; }
+                    gaps.Add((ours - game) / game * 100f);
+                }
+                gaps.Sort();
+                float med = gaps.Count == 0 ? 0 : gaps.Select(Math.Abs).OrderBy(v => v).ElementAt(gaps.Count / 2);
+                Console.WriteLine("  " + name + ": median gap " + med.ToString("0.0") + "%, over 5% longer: " + gaps.Count(g => g > 5) + ", over 20% longer: " + gaps.Count(g => g > 20)
+                                  + ", no way at all: " + none + " (of " + sample.Count + "); rebuilt " + m.Rebuilt + " cells, learned " + m.Learned);
+            }
+            Routes.WalkMap.RebuildCrossings = false;
+            Measure("the map as copied", Routes.WalkMap.Load(dir, false));
+            Routes.WalkMap.RebuildCrossings = true;
+            Routes.WalkMap rebuilt = Routes.WalkMap.Load(dir, false);
+            Measure("bridges and fords rebuilt", rebuilt);
+            foreach (List<float[]> way in train) rebuilt.Learn(way);
+            Measure("rebuilt, and learned from the other hours", rebuilt);
+            return 0;
         }
 
         public static string DefaultRoot()

@@ -526,3 +526,30 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the dashboard was started at 21:04:39 on port 7329, both detached from Claude Code's session so they outlive it;
   - the bridge writes its two new settings into `settings.txt` at its next load.
 - **Not yet seen in a game:** the map copy (its time, and whether north is up); the frames' real size; the accuracy check's numbers; the atlas on the real map; the agent asking the way.
+
+### 21:15 to 21:45 · First session on 0.7.0, and two fixes (war room 0.7.0 rebuilt; the game module unchanged)
+- **Seen working:**
+  - the walking map copied in 4 s (272 ms of the game's thread over 68 frames): 1,638 x 1,550 cells, 147 bridge and ford faces;
+  - the self-check passed 12 of 12;
+  - the dashboard showed the live map; Mert: "Working phenomenally."
+- **Found 1, the war room froze** on every call with the new tool (a council at 21:18:16 and poke #222 at 21:18:47; pokes #222 to #250 went unanswered for about 15 minutes, the first answer after the load, #221, having come before the tool was offered).
+  - The cause: the war room wrote the message on standard input while Claude Code was busy with the tool's handshake. A message of a real poke's size (35 to 48 KB) filled the pipe, the tool's answer queued behind it, and both sides waited for good. The call's own time limit never came into play, as the write came before it.
+  - The 3 s check on Oct 16 had used a short message. `WarRoom toolcheck --big` (a 50 KB message) reproduced it.
+  - Fixed: standard input has a writer thread of its own fed from a queue, and the message goes only after Claude Code has answered the handshake. `toolcheck --big` now passes in about 4 s, and a plain call (the chronicler's kind) also passes.
+  - The stuck calls and the war room were stopped at about 21:31; it was restarted at 21:33:28, and again at 21:41:07 with the fix below.
+- **Found 2, our copy of the map had false walls.** On the first real map, about one in four of the game's own planned ways came out much longer on ours, some with no way at all: bridges thinner than a cell fell between the samples.
+  - Fixed: each bridge and ford is rebuilt bank to bank from its face's centre, over water only, and the map learns from the game's own planned ways in every frame (`learned.bin`). The war room's tool reads the map again when it learns, and the atlas is worked out again once it has learned 300 cells more.
+  - Measured held out (`Dashboard learncheck`: learn from the even hours, test on the odd), on 306 lords' ways:
+    - as copied: 39 over 20% too long, 56 with no way;
+    - bridges rebuilt: 32 and 8;
+    - rebuilt and learned: none over 5%, median gap 0.4%.
+  - At 21:40:53 the dashboard learned 2,143 cells from the 68 hours kept, and the atlas was worked out again (233 crossings, from 523 ways where the first copy found 368).
+- **Mert's question, checked against the night's frames:**
+  - The agent set Gashnar to "screen Western Moria" to "find Aragorn's army after Hollin Gate".
+  - The game's own way from Hollin Gate to Western Moria runs about 260 map units north round the mountains, past Caradhras, although the two are 53 apart as the crow flies. Aragorn's army took it.
+  - Gashnar's screen never went more than about 15 from the town, because the ground within its radius is mostly mountain.
+  - The agent has no order to post a lord on a road or to shadow an army, and its report gives distances as the crow flies.
+- **Checks:**
+  - the dashboard's self-test passed (26 checks, 3 new: a river closed without its bridge, a bridge rebuilt from its centre, a way learned across it);
+  - the war room's self-test passed (46);
+  - `toolcheck --big` passed.

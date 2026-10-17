@@ -131,7 +131,7 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
 - `WarRoom council`: a council of war sits now (the game must be running, and no `WarRoom run` for the folder: that one holds its own councils).
 - `WarRoom selftest`: the memory, the council and the "ask the way" tool checked in a scratch folder, without any call (46 checks; `scripts\deploy.ps1` runs it before installing).
-- `WarRoom toolcheck [--model m]`: one real, short call (a small model by default) on the self-test's made-up map, asked to use the "ask the way" tool once: the whole path the agent's tool takes. Oct 16: passed (1 question, 3 s).
+- `WarRoom toolcheck [--model m] [--big]`: one real, short call (a small model by default) on the self-test's made-up map, asked to use the "ask the way" tool once, then a plain call: the whole path the agent's tool takes. `--big` sends a message as long as a real poke: on Oct 16 that froze both sides (the message filled the pipe while Claude Code was busy with the tool's handshake, and the tool's answer queued behind it), so standard input now has a writer thread of its own and the message goes only after the handshake. Passed after the fix in about 4 s.
 
 ## Replay
 

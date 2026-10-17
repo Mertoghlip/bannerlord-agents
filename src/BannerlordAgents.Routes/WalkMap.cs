@@ -174,7 +174,7 @@ namespace BannerlordAgents.Routes
                 .FirstOrDefault();
         }
 
-        public static WalkMap Load(string dir)
+        public static WalkMap Load(string dir, bool learned = true)
         {
             MapMeta meta = JsonText.Read<MapMeta>(Path.Combine(dir, "meta.json"));
             if (meta == null) throw new FileNotFoundException("no meta.json in " + dir);
@@ -194,24 +194,113 @@ namespace BannerlordAgents.Routes
                 }
             }
             m.StampCrossingFaces();
+            if (learned) m.LoadLearned();
             return m;
         }
 
         /// <summary>
-        /// A bridge or ford narrower than a cell can fall between cell centres, and the river then looks closed. Every bridge
-        /// and ford face's centre is walkable in the game, so its cell is made walkable with that ground.
+        /// A bridge or ford narrower than a cell falls between cell centres, and the river then looks closed (Oct 16: about one
+        /// in four of the game's own planned ways was much longer on our map, many for want of a bridge). Each bridge and ford
+        /// face's centre is walkable in the game, so its deck is rebuilt: the shortest line through the centre that reaches dry
+        /// land on both banks, at most 16 units, over water only, is opened with the face's ground.
         /// </summary>
-        private void StampCrossingFaces()
+        public void StampCrossingFaces()
         {
             foreach (CrossingFace f in CrossingFaces)
             {
-                int i = Index(f.X, f.Y);
-                if (i < 0) continue;
-                if (!Walk[i])
+                int c = Index(f.X, f.Y);
+                if (c < 0) continue;
+                byte t = (byte)f.T;
+                if (!Walk[c]) { Walk[c] = true; Ground[c] = t; }
+                if (!RebuildCrossings) continue;
+                float best = float.MaxValue, bdx = 0, bdy = 0, b1 = 0, b2 = 0;
+                for (int a = 0; a < 180; a += 10)
                 {
-                    Walk[i] = true;
-                    Ground[i] = (byte)f.T;
+                    double r = a * Math.PI / 180;
+                    float dx = (float)Math.Cos(r), dy = (float)Math.Sin(r);
+                    float d1 = Shore(f.X, f.Y, dx, dy), d2 = Shore(f.X, f.Y, -dx, -dy);
+                    if (d1 < 0 || d2 < 0 || d1 + d2 > 16f || d1 + d2 >= best) continue;
+                    best = d1 + d2; bdx = dx; bdy = dy; b1 = d1; b2 = d2;
                 }
+                if (best == float.MaxValue) continue;
+                for (float d = -b2; d <= b1; d += 0.25f)
+                {
+                    int i = Index(f.X + bdx * d, f.Y + bdy * d);
+                    if (i >= 0 && !Walk[i]) { Walk[i] = true; Ground[i] = t; Rebuilt++; }
+                }
+            }
+        }
+
+        /// <summary>How far along a direction the first dry walkable land lies, crossing only water; -1 when it meets anything else first, or none within 16.</summary>
+        private float Shore(float x, float y, float dx, float dy)
+        {
+            for (float d = 0.25f; d <= 16f; d += 0.25f)
+            {
+                int i = Index(x + dx * d, y + dy * d);
+                if (i < 0) return -1;
+                byte g = Ground[i];
+                if (Walk[i] && !Routes.Ground.IsCrossing(g)) return d;
+                if (!Walk[i] && !IsWater(g)) return -1;
+            }
+            return -1;
+        }
+
+        private static bool IsWater(byte g) => g == Routes.Ground.River || g == Routes.Ground.Water || g == Routes.Ground.Lake || g == Routes.Ground.NonNavigableRiver
+                                               || g == Routes.Ground.UnderBridge || g == Routes.Ground.CoastalSea || g == Routes.Ground.Bridge || g == Routes.Ground.Fording;
+
+        /// <summary>For measuring only: load maps without the rebuilt bridges and fords (the way they were before Oct 16, evening).</summary>
+        public static bool RebuildCrossings = true;
+
+        /// <summary>Cells opened by rebuilding bridges and fords, and by learning from the game's own ways.</summary>
+        public int Rebuilt, Learned;
+        private readonly HashSet<int> _learned = new HashSet<int>();
+
+        /// <summary>
+        /// A way the game itself planned (a party's corners) is walkable all along: every cell it crosses that our copy calls
+        /// closed is opened. True when anything new was learned. learned.bin beside the map keeps them (SaveLearned).
+        /// </summary>
+        public bool Learn(IList<float[]> pts)
+        {
+            bool any = false;
+            for (int k = 1; k < pts.Count; k++)
+            {
+                float[] a = pts[k - 1], b = pts[k];
+                float dx = b[0] - a[0], dy = b[1] - a[1], len = (float)Math.Sqrt(dx * dx + dy * dy);
+                if (len > 400) continue;   // not a leg of a way: a party set down elsewhere
+                for (float d = 0; d <= len; d += 0.25f)
+                {
+                    float t = len <= 0 ? 0 : d / len;
+                    int i = Index(a[0] + dx * t, a[1] + dy * t);
+                    if (i < 0 || Walk[i]) continue;
+                    Walk[i] = true;
+                    if (_learned.Add(i)) { Learned++; any = true; }
+                }
+            }
+            return any;
+        }
+
+        public void SaveLearned()
+        {
+            if (Dir == null) return;
+            var raw = new byte[_learned.Count * 4];
+            int o = 0;
+            foreach (int i in _learned) { BitConverter.GetBytes(i).CopyTo(raw, o); o += 4; }
+            string path = Path.Combine(Dir, "learned.bin"), tmp = path + ".part";
+            File.WriteAllBytes(tmp, raw);
+            File.Move(tmp, path, true);
+        }
+
+        private void LoadLearned()
+        {
+            string path = Path.Combine(Dir, "learned.bin");
+            if (!File.Exists(path)) return;
+            byte[] raw = File.ReadAllBytes(path);
+            for (int o = 0; o + 3 < raw.Length; o += 4)
+            {
+                int i = BitConverter.ToInt32(raw, o);
+                if (i < 0 || i >= Walk.Length) continue;
+                if (!Walk[i]) Walk[i] = true;
+                if (_learned.Add(i)) Learned++;
             }
         }
 

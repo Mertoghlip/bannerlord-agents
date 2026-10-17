@@ -69,7 +69,7 @@ namespace BannerlordAgents.WarRoom
             Native.Self();
             string mode = args.Length > 0 && !args[0].StartsWith("--") ? args[0].ToLowerInvariant() : "run";
             if (mode == "selftest") return SelfTest.Run();   // its own scratch folder: the live agent folder is never read or written
-            if (mode == "toolcheck") return ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5");
+            if (mode == "toolcheck") return ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5", args.Contains("--big"));
             string dir = Arg(args, "--dir");
             Config c = Config.Load(dir);
             if ((mode == "once" || mode == "council") && LiveLock.Running(c))
@@ -116,7 +116,7 @@ namespace BannerlordAgents.WarRoom
         /// "WarRoom toolcheck [--model m]": one real, short Claude Code call (a small model by default) on the self-test's made-up map,
         /// asked to use the "ask the way" tool once: the whole path the agent's tool takes, in safe mode, outside the live folder.
         /// </summary>
-        private static int ToolCheck(string model)
+        private static int ToolCheck(string model, bool big)
         {
             string root = Path.Combine(Path.GetTempPath(), "warroom-selftest");
             string data = Path.Combine(root, "agents-data");
@@ -125,9 +125,17 @@ namespace BannerlordAgents.WarRoom
             string system = Path.Combine(root, "toolcheck-system.md");
             File.WriteAllText(system, "You are checking a tool. Use the ask_the_way tool exactly once, as asked, then answer in one short line.\n");
             var tool = new RouteTool(data, logs, "camp5", "orcs", 0, "check");
-            CallResult r = Claude.Run(Claude.Find(""), system, "Ask the way from lord_bolg to town_b with the ask_the_way tool, then say how many map units the shortest way is.",
+            // --big: a message as long as a real poke (about 50 KB), as the agent's calls are
+            string ask = "Ask the way from lord_bolg to town_b with the ask_the_way tool, then say how many map units the shortest way is.";
+            if (big) ask = "BACKGROUND (ignore it)\n" + string.Concat(Enumerable.Repeat("The orcs keep their watch on the mountain roads while the men of the west march on. ", 600)) + "\n\n" + ask;
+            CallResult r = Claude.Run(Claude.Find(""), system, ask,
                                       model, "low", channel, true, 120, 1000, tools: tool);
-            bool ok = r.Ok && tool.Asked == 1 && (r.Text ?? "").Contains("60");
+            // and a call without the tool (the chronicler's kind), through the same writer of standard input
+            string plainSystem = Path.Combine(root, "toolcheck-plain-system.md");
+            File.WriteAllText(plainSystem, "You are checking a call. Reply in one word.\n");
+            CallResult plain = Claude.Run(Claude.Find(""), plainSystem, "Reply with the single word ready.", model, "low", channel, false, 120, 1000);
+            Console.WriteLine("Plain call: " + (plain.Ok ? "answered \"" + plain.Text?.Trim() + "\" in " + Math.Round(plain.Seconds, 1) + " s" : "FAILED: " + plain.Error));
+            bool ok = r.Ok && tool.Asked == 1 && (r.Text ?? "").Contains("60") && plain.Ok;
             Console.WriteLine((ok ? "TOOL CHECK PASSED" : "TOOL CHECK FAILED") + ": asked " + tool.Asked + " time(s), " + r.Turns + " steps, " + Math.Round(r.Seconds, 1) + " s; answer: " + (r.Text ?? r.Error));
             return ok ? 0 : 1;
         }

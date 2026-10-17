@@ -85,15 +85,21 @@ namespace BannerlordAgents.WarRoom
         {
             lock (Gate)
             {
-                if (_map != null && _mapCrc == crc) return _map;
+                // read again when the dashboard has taught the map more (learned.bin, from the game's own planned ways)
+                DateTime learned = _map?.Dir != null && File.Exists(Path.Combine(_map.Dir, "learned.bin")) ? File.GetLastWriteTimeUtc(Path.Combine(_map.Dir, "learned.bin")) : DateTime.MinValue;
+                if (_map != null && _mapCrc == crc && learned == _learnedAt) return _map;
                 string dir = WalkMap.FindDir(root, crc);
                 if (dir == null) return null;
                 _map = WalkMap.Load(dir);
                 _finder = new Finder(_map);
                 _mapCrc = crc;
+                string lp = Path.Combine(dir, "learned.bin");
+                _learnedAt = File.Exists(lp) ? File.GetLastWriteTimeUtc(lp) : DateTime.MinValue;
                 return _map;
             }
         }
+
+        private static DateTime _learnedAt = DateTime.MinValue;
 
         // ---------- the protocol ----------
 

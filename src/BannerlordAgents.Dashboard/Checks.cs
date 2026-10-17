@@ -52,9 +52,10 @@ namespace BannerlordAgents.Dashboard
             string crc = (string)cur["map"];
             WalkMap m = _store.Map(crc);
             if (m == null) return;
-            EnsureAtlas(m);
             string campaign = (string)cur["campaign"], load = (string)cur["load_id"];
             if (campaign == null || load == null) return;
+            if (!_learnedPast) LearnPast(m, campaign);
+            EnsureAtlas(m);
             List<long> hours = _store.FrameHours(campaign, load);
             if (hours.Count == 0) return;
             string frame = _store.FramePath(campaign, load, hours[hours.Count - 1]);
@@ -65,22 +66,81 @@ namespace BannerlordAgents.Dashboard
             catch (Exception e) when (e is IOException || e is JsonException || e is InvalidDataException) { return; }
             if (f == null) return;
             _framesChecked++;
-            Accuracy(m, f);
+            Accuracy(m, f);   // first, so the check measures the map as it stood before this hour's ways
             Speeds(m, f);
+            if (Learn(m, f) && ++_unsaved >= 5) Save(m);
+        }
+
+        // ---------- learning from the game's own ways ----------
+
+        private bool _learnedPast;
+        private int _unsaved;
+
+        /// <summary>
+        /// Every way the game planned is walkable all along, so each frame's planned ways open what our copy of the map wrongly
+        /// closed (WalkMap.Learn): bridges and narrow passes that fall between the copy's cell centres. Measured Oct 16, held out:
+        /// the copy as made had 95 of 306 lords' ways much longer or with no way at all; rebuilt bridges and these lessons, none.
+        /// </summary>
+        private bool Learn(WalkMap m, JsonObject f)
+        {
+            if (f["parties"] is not JsonArray parties) return false;
+            return _store.WithFinder(m, _ =>
+            {
+                bool any = false;
+                foreach (JsonNode n in parties)
+                {
+                    if (n is not JsonObject p || p["route"] is not JsonArray r || r.Count < 2) continue;
+                    var pts = new List<float[]> { new[] { F(p["x"]), F(p["y"]) } };
+                    for (int i = 0; i + 1 < r.Count; i += 2) pts.Add(new[] { F(r[i]), F(r[i + 1]) });
+                    any |= m.Learn(pts);
+                }
+                return any;
+            });
+        }
+
+        /// <summary>Once, when the dashboard starts: the ways in every frame kept for this campaign.</summary>
+        private void LearnPast(WalkMap m, string campaign)
+        {
+            _learnedPast = true;
+            int before = m.Learned, frames = 0;
+            foreach (LoadInfo li in _store.Loads(campaign))
+                foreach (long h in li.Hours)
+                {
+                    try
+                    {
+                        JsonObject f = _store.ReadFrame(_store.FramePath(campaign, li.LoadId, h));
+                        if (f != null) { Learn(m, f); frames++; }
+                    }
+                    catch (Exception e) when (e is IOException || e is JsonException || e is InvalidDataException) { }
+                }
+            if (m.Learned > before) Save(m);
+            Log.Say("Learned from the game's own ways in " + frames + " hours kept: " + (m.Learned - before) + " cells of the walking map opened (" + m.Learned + " in all; " + m.Rebuilt + " opened by rebuilding bridges and fords).");
+        }
+
+        private void Save(WalkMap m)
+        {
+            _unsaved = 0;
+            try { _store.WithFinder(m, _ => { m.SaveLearned(); return 0; }); }
+            catch (IOException e) { Log.Say("What the map learned could not be saved: " + e.Message); }
         }
 
         // ---------- the atlas ----------
 
+        /// <summary>The atlas, worked out when missing, and again once the map has learned 300 cells more than it knew then (a false wall makes a false "only way").</summary>
         private void EnsureAtlas(WalkMap m)
         {
-            if (File.Exists(Atlas.PathIn(m.Dir))) { AtlasProgress = "ready"; return; }
+            Atlas have = _store.Atlas(m);
+            bool stale = have != null && m.Learned - have.Learned > 300;
+            if (have != null && !stale) { AtlasProgress = "ready"; return; }
             if (_atlasThread != null && _atlasThread.IsAlive) return;
             _atlasThread = new Thread(() =>
             {
                 try
                 {
-                    AtlasProgress = "starting";
-                    bool ok = Atlas.BuildIfMissing(m, s => AtlasProgress = s, out string said);
+                    AtlasProgress = stale ? "working it out again with what the map has learned" : "starting";
+                    if (stale) Save(m);
+                    WalkMap copy = WalkMap.Load(m.Dir);   // its own copy, as the checks keep teaching the shared one
+                    bool ok = Atlas.BuildIfMissing(copy, s => AtlasProgress = s, out string said, stale);
                     AtlasProgress = ok ? "ready" : said;
                     if (ok && said != "ready") Log.Say("Crossing atlas for map " + m.Meta.Crc + " ready: " + said + ".");
                 }

@@ -9,6 +9,8 @@ namespace BannerlordAgents.WarRoom
     internal sealed class CallResult
     {
         public bool Ok, Stalled, Runaway;
+        /// <summary>With the war room's own tools: Claude Code did not answer the handshake within 30 s (the message went anyway).</summary>
+        public bool HandshakeLate;
         public string Text, Raw, Error;
         public double Seconds, ApiMs, TtftMs, Cost, FirstTextMs = -1;
         public int Turns;
@@ -129,18 +131,32 @@ namespace BannerlordAgents.WarRoom
                 double firstText = -1;
                 long lastEvent = sw.ElapsedMilliseconds;
                 var got = new ManualResetEventSlim(false);
-                var inGate = new object();
+                var handshake = new ManualResetEventSlim(false);
                 StreamWriter stdin = new StreamWriter(p.StandardInput.BaseStream, new UTF8Encoding(false));
-                bool stdinOpen = true;
+                // Standard input is written by one thread of its own, from a queue, so reading Claude Code's output never waits on
+                // a write. (Oct 16: with the message written from the caller while Claude Code was busy with the tools' handshake,
+                // a message of a real poke's size filled the pipe, the tools' answer queued behind it, and both sides waited for good.)
+                var outbox = new System.Collections.Concurrent.BlockingCollection<string>();
+                var writer = new Thread(() =>
+                {
+                    try
+                    {
+                        foreach (string line in outbox.GetConsumingEnumerable())
+                        {
+                            stdin.Write(line);
+                            if (tools != null) stdin.Write("\n");
+                            stdin.Flush();
+                        }
+                    }
+                    catch (IOException) { }
+                    catch (ObjectDisposedException) { }
+                    finally { try { stdin.Dispose(); } catch (IOException) { } catch (ObjectDisposedException) { } }
+                }) { IsBackground = true, Name = "claude stdin" };
+                writer.Start();
                 void Send(string line)
                 {
-                    lock (inGate)
-                    {
-                        if (!stdinOpen) return;
-                        try { stdin.Write(line + "\n"); stdin.Flush(); }
-                        catch (IOException) { stdinOpen = false; }
-                        catch (ObjectDisposedException) { stdinOpen = false; }
-                    }
+                    try { outbox.Add(line); }
+                    catch (InvalidOperationException) { /* closed: the call is over */ }
                 }
                 p.OutputDataReceived += (s, e) =>
                 {
@@ -148,6 +164,7 @@ namespace BannerlordAgents.WarRoom
                     if (e.Data.Length == 0) return;
                     Interlocked.Exchange(ref lastEvent, sw.ElapsedMilliseconds);
                     if (tools != null && e.Data.Contains("\"control_request\"")) Control(e.Data, tools, Send);
+                    if (tools != null && e.Data.Contains("\"control_response\"") && e.Data.Contains("warroom-init")) handshake.Set();
                     lock (events)
                     {
                         // keys come in any order, so look for the type, then make sure
@@ -166,12 +183,15 @@ namespace BannerlordAgents.WarRoom
                 p.BeginErrorReadLine();
                 if (tools == null)
                 {
-                    lock (inGate) { stdin.Write(prompt); stdin.Dispose(); stdinOpen = false; }
+                    Send(prompt);
+                    outbox.CompleteAdding();
                 }
                 else
                 {
-                    // the host's handshake names the tools it serves, then the message; standard input stays open for the tools' answers
+                    // the host's handshake names the tools it serves; the message goes only once Claude Code has answered it, so the
+                    // tools' own handshake is never stuck behind it. Standard input stays open for the tools' answers.
                     Send(JsonSerializer.Serialize(new { type = "control_request", request_id = "warroom-init", request = new { subtype = "initialize", sdkMcpServers = new[] { tools.Server } } }));
+                    if (!handshake.Wait(TimeSpan.FromSeconds(30), cancel) && !got.IsSet) r.HandshakeLate = true;
                     Send(JsonSerializer.Serialize(new { type = "user", message = new { role = "user", content = prompt } }));
                 }
                 // the answer ends the call, not the program's exit: Claude Code sometimes lingers after answering
@@ -193,12 +213,9 @@ namespace BannerlordAgents.WarRoom
                         }
                     }
                 }
-                lock (inGate)
-                {
-                    if (stdinOpen) { try { stdin.Dispose(); } catch (IOException) { } }
-                    stdinOpen = false;
-                }
+                outbox.CompleteAdding();
                 if (!p.WaitForExit(2000)) { try { p.Kill(true); } catch { } }
+                writer.Join(2000);
                 r.Seconds = sw.Elapsed.TotalSeconds;
                 lock (events) r.Raw = events.ToString() + (resultLine == null && written.Length > 0 ? "\n--- the text written before it was stopped ---\n" + written : "");
                 if (resultLine == null)
