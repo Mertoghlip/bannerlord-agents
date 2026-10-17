@@ -619,7 +619,8 @@ function placeCard(card, s) {
   if (s.kind !== 'village') {
     const g = vh ? vh.garrison : (S.mode === 'truth' ? s.garrison : null);
     add('Garrison', g == null ? 'not in sight' : g < 0 ? 'not in sight' : N(g));
-    add('Militia', N(vh ? vh.militia : s.militia));
+    const m = vh ? vh.militia : (S.mode === 'truth' ? s.militia : null);
+    add('Militia', m == null || m < 0 ? 'not in sight' : N(m));
   }
   if (vh && vh.wall_level) {
     add('Walls', 'level ' + vh.wall_level);

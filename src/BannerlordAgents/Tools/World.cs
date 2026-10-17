@@ -224,6 +224,63 @@ namespace BannerlordAgents.Tools
             return sum;
         }
 
+        /// <summary>One enemy lord or army counted as coming to a place's relief.</summary>
+        internal sealed class Comer
+        {
+            public string Id, Name, Doing;
+            public double Strength, Distance, Road = double.NaN, SeenAgo;
+            public bool Heading;
+        }
+
+        /// <summary>
+        /// The enemy coming to a place's relief, as the realm can judge it: hostile lords and armies in view within r of it,
+        /// or heading for it from anywhere (going to it, defending it, besieging it), and those seen so within the last
+        /// RecentHours, where they were last seen. Each counted once, an army as a whole; nearest first. Lords are counted
+        /// one by one, not only armies: the game sends a besieged holding's realm's lords to it one at a time (Oct 16,
+        /// Hollin Gate: about 50 of Arnor's lords turned toward it within six hours of the siege, none in an army, so a
+        /// relief alarm that waited for an army never rang). A party known gone is not counted.
+        /// </summary>
+        public List<Comer> ReliefComing(string place, double r)
+        {
+            var list = new List<Comer>();
+            if (!Where(place, out float px, out float py)) return list;
+            double Dist(float x, float y) => Math.Sqrt((x - px) * (x - px) + (y - py) * (y - py));
+            foreach (PartyRow e in _enemies)
+            {
+                double d = Dist(e.X, e.Y);
+                bool heading = Views.Toward(e) == place;
+                if (d > r && !heading) continue;
+                list.Add(new Comer { Id = e.Id, Name = e.Name ?? e.Id, Doing = Views.Doing(S, e), Strength = StrengthOf(e), Distance = d, Heading = heading });
+            }
+            foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
+            {
+                ViewParty v = kv.Value;
+                if (v.Relation != "enemy" || v.Kind != "lord" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                PartyRow now = Party(kv.Key);
+                if (now != null && now.Attached) continue;
+                double d = Dist(v.X, v.Y);
+                bool heading = v.Toward == place;
+                if (d > r && !heading) continue;
+                list.Add(new Comer { Id = kv.Key, Name = v.Name ?? kv.Key, Doing = v.Doing, Strength = v.Strength, Distance = d, Heading = heading, SeenAgo = Hours - v.SeenHours });
+            }
+            foreach (Comer c in list) c.Road = RoadDistance(c.Id, place);
+            return list.OrderBy(c => double.IsNaN(c.Road) ? c.Distance : c.Road).ToList();
+        }
+
+        /// <summary>The coming relief in words, nearest first: "Daeron, strength 855, 3.5 (4.3 by road) away, defending Hollin Gate; ... and 12 more (strength 4,100)".</summary>
+        public string ReliefText(string place, double r, int most = 6)
+        {
+            List<Comer> list = ReliefComing(place, r);
+            if (list.Count == 0) return "none in sight";
+            IEnumerable<string> lines = list.Take(most).Select(c => c.Name + ", strength " + Text.N((int)Math.Round(c.Strength)) + ", "
+                + Roads.Both((float)c.Distance, (float)c.Road) + " away, " + (c.Doing ?? "doing what is not known")
+                + (c.SeenAgo > 0 ? " (seen " + Math.Round(c.SeenAgo) + " hours ago)" : ""));
+            string text = string.Join("; ", lines);
+            if (list.Count > most)
+                text += "; and " + (list.Count - most) + " more (strength " + Text.N((int)Math.Round(list.Skip(most).Sum(c => c.Strength))) + ")";
+            return text;
+        }
+
         public bool Besieged(SettlementRow h) => h != null && h.BesiegedBy != null;
 
         // ---------- would a place hold? ----------

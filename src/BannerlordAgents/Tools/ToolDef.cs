@@ -87,7 +87,8 @@ namespace BannerlordAgents.Tools
             ["strength_of"] = 1, ["men_of"] = 1, ["in_view"] = 1, ["seen_ago"] = 1, ["gone"] = 1,
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
             ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1,
-            ["doing_of"] = 1, ["toward_of"] = 1, ["where_of"] = 1
+            ["doing_of"] = 1, ["toward_of"] = 1, ["where_of"] = 1,
+            ["relief_coming"] = 2, ["relief_count"] = 2, ["relief_of"] = 2
         };
 
         public bool Valid => Problems.Count == 0;

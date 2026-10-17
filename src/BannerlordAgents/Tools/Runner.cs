@@ -666,6 +666,10 @@ namespace BannerlordAgents.Tools
                     case "weakest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;
                     case "army_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
+                    // enemy lords and armies near a place or heading for it, counted together (0.7.2): their strength, and who they are
+                    case "relief_coming": return _w.ReliefComing(Id(a[0]), Expr.Number(a[1])).Sum(c => c.Strength);
+                    case "relief_count": return (double)_w.ReliefComing(Id(a[0]), Expr.Number(a[1])).Count;
+                    case "relief_of": return _w.ReliefText(Id(a[0]), Expr.Number(a[1]));
                     case "strength_of": return _w.KnownStrength(Id(a[0]));
                     case "men_of": { int? n = _w.KnownMen(Id(a[0])); return n.HasValue ? (object)(double)n.Value : null; }
                     case "in_view": return _w.InView(Id(a[0]));

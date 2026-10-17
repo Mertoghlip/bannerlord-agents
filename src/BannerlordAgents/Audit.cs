@@ -39,7 +39,10 @@ namespace BannerlordAgents
                 if (p.SeenHours > v.Hours) problems.Add("seen earlier at a time still to come: " + p.Name);
             }
             foreach (ViewHolding h in v.Frontier)
+            {
                 if (h.Garrison >= 0 && (inspected == null || !inspected.Contains(h.Id))) problems.Add("a garrison shown for a holding out of sight: " + h.Name);
+                if (h.Militia >= 0 && (inspected == null || !inspected.Contains(h.Id))) problems.Add("a militia shown for a holding out of sight: " + h.Name);
+            }
             foreach (ViewParty f in v.Forces)
                 if (f.Faction != v.Faction) problems.Add("a party of another realm among its own lords: " + f.Name);
             foreach (ViewHolding h in v.Holdings)

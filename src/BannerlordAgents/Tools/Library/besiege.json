@@ -2,15 +2,15 @@
   "tool": "besiege",
   "kind": "tool",
   "about": "Marches on an enemy castle or town, waits near it for the named lords if you give any, then besieges it. The game assaults once the siege engines are ready.",
-  "calls_back": "a relief army comes near, the siege is won, or it is broken",
+  "calls_back": "enemy lords and armies near it or heading for it, counted together, are strong enough to matter (and again each time they grow by half its strength), the siege is won, or it is broken",
   "at": "enemy_fort",
   "lords": true,
   "settings": {
     "wait_hours": [24, 0, 96, "how long to wait near it for the named lords"],
-    "relief_ratio": [1.0, 0.2, 5, "call back when an enemy army this many times its strength comes near"],
-    "relief_radius": [15, 3, 50, "how near counts for that, in map units"]
+    "relief_ratio": [1.0, 0.2, 5, "call back when the enemy lords and armies within relief_radius of it or heading for it from anywhere, all counted together, reach this many times its strength"],
+    "relief_radius": [15, 3, 50, "how near counts for that, in map units (those seen heading for it count wherever they are)"]
   },
-  "init": { "reported": "none" },
+  "init": { "relief_told": "0" },
   "start": "march",
   "states": {
     "march": { "about": "marching on {at}", "do": "near at",
@@ -27,7 +27,8 @@
         { "if": "ours(at)", "go": "over", "poke": "{at} is taken." },
         { "if": "not hostile(at)", "go": "over", "poke": "{at} is no longer an enemy holding." },
         { "if": "hours_in_state > 6 and not besieging and not within(at, 3)", "go": "over", "poke": "The siege of {at} was broken." },
-        { "if": "army_near(at, relief_radius) != none and army_near(at, relief_radius) != reported and strength_of(army_near(at, relief_radius)) >= strength * relief_ratio", "go": "siege", "set": { "reported": "army_near(at, relief_radius)" }, "poke": "A relief army is coming to {at}: {army_near(at, relief_radius)}, strength {strength_of(army_near(at, relief_radius))} against {me}'s {strength}." } ] },
+        { "if": "relief_coming(at, relief_radius) >= pick(relief_told > 0, relief_told + strength * 0.5, strength * relief_ratio)", "go": "siege", "set": { "relief_told": "relief_coming(at, relief_radius)" },
+          "poke": "A relief is coming to {at}: {relief_count(at, relief_radius)} enemy lords and armies within {relief_radius} of it or heading for it, strength {relief_coming(at, relief_radius)} together, against {me}'s {strength}. Nearest first: {relief_of(at, relief_radius)}." } ] },
     "over": { "about": "done", "end": "free" }
   }
 }

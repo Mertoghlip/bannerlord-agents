@@ -379,6 +379,7 @@ namespace SmokeTest
             RefillAndReportTests(moves);
             TrailTests();
             WatchShadowTests(dir, moves, released);
+            SiegeReliefTests(dir);
             RoadTests();
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
@@ -838,6 +839,70 @@ namespace SmokeTest
             }
             Check(released.Contains(951) && Notices().Contains("Lurtz lost track of Imrahil and stopped shadowing it"), "and gives up after lose_hours");
             Runner.Reset();
+        }
+
+        /// <summary>
+        /// Version 0.7.2 (Mert, Oct 17, after the siege of Hollin Gate, where about 50 of Arnor's lords came to its relief one
+        /// by one and the alarm, waiting for an army, never rang): besiege's relief alarm counts every enemy lord and army near
+        /// the holding or heading for it, together, and calls again each time they grow by half the besieger's strength. And
+        /// the report gives an enemy castle's militia beside its garrison, only where the realm's eyes reach.
+        /// </summary>
+        private static void SiegeReliefTests(string dir)
+        {
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            int Calls() => System.Text.RegularExpressions.Regex.Matches(Notices(), "A relief is coming to Fornost").Count;
+            var nag = new PartyRow { Id = "p_nag", Leader = "lord_nag", Name = "Naglur", Faction = "orcs", Kind = "lord", Men = 600, SizeLimit = 700, Strength = 900,
+                                     ArmyLeader = "p_nag", ArmyMen = 2000, ArmyParties = 10, ArmyStrength = 3400, Speed = 1.6f, FoodDays = 40, X = 166, Y = 101, Doing = "Hold", Spottable = true };
+            PartyRow Lord(string id, string name, float x, float y, float strength, string doing) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "player_k", Kind = "lord", Men = (int)(strength * 0.6f), Strength = strength, Speed = 3.5f,
+                X = x, Y = y, Doing = doing, TargetSettlement = doing == "Hold" ? null : "castle_men", Spottable = true
+            };
+            Snapshot Sieged(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                s.SettlementById["castle_men"].BesiegedBy = "orcs";
+                s.SettlementById["castle_men"].Besieger = "p_nag";
+                return s;
+            }
+            Brain.OnHour(ToolWorld(7200, nag));
+            var siege = new ToolOrder { Tool = "besiege", Lord = "lord_nag", LordName = "Naglur", Party = "p_nag", At = "castle_men" };
+            siege.Settings["relief_ratio"] = 0.8;   // as the agent gave it at Hollin Gate
+            Runner.Start(960, siege);
+            nag.Besieging = "castle_men";
+            nag.Doing = "BesiegeSettlement";
+            for (int h = 7201; h <= 7203; h++) Brain.OnHour(Sieged(h, nag));
+            var near = Lord("imr", "Imrahil", 174, 100, 900, "Hold");
+            var faramir = Lord("far3", "Faramir", 230, 100, 900, "DefendSettlement");
+            var idle = Lord("eom2", "Eomer", 250, 160, 900, "Hold");
+            Brain.OnHour(Sieged(7204, nag, near, faramir, idle));
+            Check(Calls() == 0, "two lords coming to the relief, strength 1,800, under 0.8 of the besieger's 3,400: no call yet (a lord far off and not heading there is not counted)");
+            var beregond = Lord("ber2", "Beregond", 200, 100, 1000, "GoToSettlement");
+            Brain.OnHour(Sieged(7205, nag, near, faramir, idle, beregond));
+            Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against Naglur's 3,400"),
+                  "a third lord makes 2,800, above 0.8 of its strength: besiege calls back, counting lords, not only armies");
+            Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && Notices().Contains("Faramir, strength 900, 60.0 away, defending Fornost"),
+                  "and names them nearest first, with what each is doing (those heading for it count from any distance)");
+            Brain.OnHour(Sieged(7206, nag, near, faramir, idle, beregond));
+            Check(Calls() == 1, "the same relief is not called again");
+            var elrohir = Lord("elr2", "Elrohir", 210, 104, 1800, "DefendSettlement");
+            Brain.OnHour(Sieged(7207, nag, near, faramir, idle, beregond, elrohir));
+            Check(Calls() == 2 && Notices().Contains("strength 4,600 together"), "it calls again once the relief has grown by half the besieger's strength (4,600, above 2,800 + 1,700)");
+            Runner.Reset();
+
+            // militia beside the garrison, only where the realm's eyes reach
+            Snapshot seen = ToolWorld(7210);
+            seen.InspectedByWatched.Add("castle_men");
+            View vs = Views.Build(seen, "orcs", seen.WatchedSees, seen.HostileToWatched, Brain.Get("orcs"));
+            string rs = Views.Report(vs, null);
+            Check(rs.Contains("Fornost [castle_men] (castle, Kingdom of Arnor and Gondor): garrison 600, militia 200") && Audit.Fog(vs, rs, seen.WatchedSees, seen.InspectedByWatched).Count == 0,
+                  "an enemy castle in sight shows its militia beside its garrison");
+            Snapshot unseen = ToolWorld(7211);
+            View vu = Views.Build(unseen, "orcs", unseen.WatchedSees, unseen.HostileToWatched, Brain.Get("orcs"));
+            string ru = Views.Report(vu, null);
+            ViewHolding fu = vu.Frontier.FirstOrDefault(h => h.Id == "castle_men");
+            Check(ru.Contains("Fornost [castle_men] (castle, Kingdom of Arnor and Gondor): garrison not in sight") && fu != null && fu.Militia == -1 && Audit.Fog(vu, ru, unseen.WatchedSees, unseen.InspectedByWatched).Count == 0,
+                  "out of sight, neither its garrison nor its militia is shown, nor kept in the view");
         }
 
         /// <summary>

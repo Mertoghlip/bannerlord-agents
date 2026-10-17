@@ -1,6 +1,6 @@
 # Doctrine: the study behind the agent's instructions
 
-Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 15 principles (14 since Oct 9, the 15th since Oct 16), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
+Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 17 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
 
 ## Why, and the rule
 
@@ -61,7 +61,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 **The doctrine's answer** (principle 3) is the research's working rule: the side that time works against (far from home, its allies about to leave, weaker in the long run) must seek battle, on ground it chooses. The side that time favours can refuse it. Either way, fight only with an edge, or when forced, and strike at once when the edge is yours.
 
-## The 15 principles, and what each rests on
+## The 17 principles, and what each rests on
 
 | # | Principle (as the agent reads it, shortened) | What it rests on | What it means in this game |
 |---|---|---|---|
@@ -80,6 +80,8 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 | 13 | After a defeat, rally fast; then think long. | Vegetius III.25 ("human minds are carried away by success"); Kekaumenos WJ 15 (gather even a quarter of your men and strike that day); Basil II; Charles V; Jean de Bueil ("who endures, wins"). | Recruiting is slow; the council resets the realm's course after a loss. |
 | 14 | Initiative with judgment. | Kekaumenos WJ 10 ("let most of your actions be daring"); the taunts of cowardice after 1183 and the gamble of 1187 (Gillingham; Kedar); Philip VI mocked by his own nobles in 1339. | The agent is asked what it can do to the enemy, not only what the enemy can do. |
 | 15 | Read the enemy's aim from its road, not its errands; beware the feint. (Oct 16) | Edward III's letter of 1339 ("we held ever our road forward, our people burning and destroying commonly to the breadth of twelve or fourteen leagues"); *On Skirmishing* 8 (watch the dust and smoke to "form an estimate of their route of march") and 9 (keep watching the main body, "if it sets out on the road"); *Strategikon* IX.3 (some gather supplies "and others should follow along in regular formation"); Philip VI at Poissy, 1346. See [below](#principle-15-oct-16-reading-an-armys-aim). | Each enemy army's trail in the report (0.6.4): the agent sees the road, not only the hour's errand. |
+| 16 | A besieger keeps eyes on the roads: warned in time, lift the siege, close the ways, or meet the relief on your ground. (Oct 17) | Kekaumenos xxvi ("You can't find out about the enemy except by having many scouts"); *Strategikon* VIII.1.34 (a besieging army "should keep sending out patrols"); Mountsorrel 1217 (siege raised on the scouts' word); Calais 1347 (the dunes and the bridge of Nieulay held); Antioch 1098 (foot kept the lines, the knights met the relief); against: Lincoln 1217 (the warning laughed at), Nicopolis 1396 (the bringers of the news flogged and cropped). See [below](#principles-16-and-17-oct-17-the-besiegers-eyes-and-the-weaker-sides-one-blow). | The siege order's alarm counts every enemy lord near or heading for the place (0.7.2); watch and shadow (0.7.1) put a lord on a road or on an army. |
+| 17 | The weaker side's one blow: when time is on the enemy's side, pass the lesser prize by, mass on the one blow that decides, strike before his parts join; when time is on yours, wait. (Oct 17) | Edward IV 1471 (Coventry passed by, London, Barnet, the march of "xxx myle and more" to Tewkesbury, *Arrivall*); Lincoln 1217 (every castellan's knights gathered against the larger force; Wendover); *Strategikon* IX.1; Kekaumenos lxvi; Vegetius III.26 for the other side. | Big armies walk slowly and sieges take days (TOOLS.md, "What a siege costs in hours"); every detour is hours the enemy uses. |
 
 ## Principle 15 (Oct 16): reading an army's aim
 
@@ -102,6 +104,31 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
   - Vegetius III.6 is about keeping one's own march safe and secret, not reading the enemy's route; its closing line (learn the enemy's "present and future plans", catch them "seeking fodder and food") and III.10 (attack "those who loiter at a distance from their people for fodder or plunder") belong with principles 4 and 6, not here.
   - "Comes nearer a new prize than the old", from the first draft, has no source, and was left out.
   - Gaunt's 1373 raid and Normandy 1054 were not checked for this principle.
+
+## Principles 16 and 17 (Oct 17): the besieger's eyes, and the weaker side's one blow
+
+**Mert, Oct 17,** after the siege of Hollin Gate (Naglur's army stormed into the castle's defence while about 50 of Arnor's lords came to its relief one by one, [CHANGELOG.md](CHANGELOG.md)): "The rest is more of a siege doctrine question. It should (1) post scouts around the army to figure out if a relieving force is coming during the siege so it can call it off and (2) understand that when the enemy is stronger, it is important to strike hard and quick, sometimes forgoing smaller targets in favor of guaranteeing a more important hit." The two lines are general, with their history; neither names this war, a place, a lord or an order. Principle 2's last sentence ("when you besiege, watch the roads, and leave before a stronger relief arrives") now points to principle 16, which carries Nicopolis.
+
+**The research** (one pass, Oct 17; the texts opened and quoted, unless marked):
+- **Principle 16:**
+  - Kekaumenos xxvi (WJ 9.29–30): "You can't find out about the enemy except by having many scouts"; xxiv: "Without scouts it's impossible to get any work done."
+  - *Strategikon* VIII.1.34 (Dennis, p. 82): "An army, no matter how strong, besieging a city must never leave its own camp unguarded, nor should it think that fortifications are sufficient to assure its safety, but it should keep sending out patrols." IX.5 (p. 104): patrols "in more than one direction ... so that if the enemy ... manages to elude one of the patrols, they will run into others." *Campaign Organization* 24 (Dennis, *Three Treatises*, p. 313): when the enemy attack from outside, "the siege operations may be slowed down, making sure, however, to keep the camp and the artillery securely guarded by a large enough force."
+  - Antioch, 9 February 1098: Bohemond, "we are not so great that we can fight on two sides ... let a portion of the foot soldiers remain together to guard the pavilions ... Let the other portion, however, consisting of knights, go with us to meet our enemy" (*Gesta Francorum*); Raymond of Aguilers: "it was decided that the foot soldiers should guard the camp and the knights should go out." In May 1098 "messengers began to come very frequently, saying that aid was coming to the enemy" (Raymond), and the city was taken on 3 June, just before Kerbogha came.
+  - Mountsorrel, May 1217: the besiegers, "being informed of this by their scouts, raised the siege, and retreated to the castle of Nottingham, where they determined to watch the progress of their approaching enemies" (Roger of Wendover II, p. 391).
+  - Calais 1347: Edward guarded the dunes and "one bridge, called the bridge of Nieullet"; Philip's marshals, "after they had well examined all the passes", told him there was no way through "but with infinite loss of men" (Froissart, tr. Johnes, I.144). Philip withdrew on the night of 1 August; Calais surrendered on the 3rd (encyclopedia, after Sumption).
+  - Lincoln, 20 May 1217, against: the besiegers, "when their messengers told them of the approach of their adversaries ... only laughed at them, and continued to hurl missiles from their mangonells" (Wendover II, pp. 393–94).
+  - Nicopolis 1396, against: the crusaders were "ignorant ... of their approach" (Froissart, tr. Johnes, IV.81); the Religieux de Saint-Denys (II, XVII.25) has the marshal Boucicaut, told repeatedly by foragers who had met the Turks, have "some flogged and some of their ears cut off" ("quosdam affligi fecerat, quosdam exauriculari") as men who would "terrify the army with your empty words". Modern retellings (Tuchman) soften it to a threat.
+- **Principle 17:**
+  - Edward IV, 1471 (*Historie of the Arrivall*, ed. Bruce): he landed with "vc well chosen men", and Warwick "had assembled greatar nombar than the Kynge"; at Coventry, where Warwick's party "dayly grew and encreasyd", it was not "behoffoll to assayll, ne to tary for the asseginge therof ... it was thowght more expedient ... to draw towards London"; against Margaret "his entent was to encountar them as sonne as he myght ... that they shuld assemble no myght owt of eny contrye but where they then were", and on 3 May he marched "xxx myle and more" on a "right-an-hot day ... havynge allway good espialls upon them". Barnet was 14 April, Tewkesbury 4 May.
+  - Lincoln 1217: the Marshal "convoked all the castellans belonging to the king, and the knights who were in charge of castles in different parts of the kingdom", about 400 knights and 250 crossbowmen, against a force Wendover puts at 600 knights and "more than twenty thousand" (II, pp. 389–92).
+  - *Strategikon* IX.1 (p. 93): attacks "carefully planned and swiftly carried out" work against "vastly superior" forces; "strike at the enemy before they can get themselves ready, especially if ... their forces are stronger than ours" (it still prefers surprises and tricks to a pitched battle). Kekaumenos lxvi (WJ 23.23ff): delay "when a reinforcement ... is coming to support you"; with none coming and supplies short, "don't delay at all".
+  - **The writers disagree,** so the principle says when it holds: Vegetius III.26 (tr. Clarke): "It is much better to overcome the enemy by famine, surprise or terror than by general actions"; III.9, delay when the enemy's army will waste away; *Strategikon* VIII.2.4, "never be enticed into a pitched battle". The common ground is principle 3's question: whose side is time on?
+- **Caveats:**
+  - Neither Antioch source names Ridwan of Aleppo (the historians' identification); the warning came as reports, and Bohemond sent scouts once out.
+  - Calais is about holding the roads more than scouting; Froissart's 200,000 French is fantasy.
+  - Wendover's numbers for Lincoln are suspect; that Louis was away at the siege of Dover is from scholarship (encyclopedia), not Wendover; the sea fight of August 1217 also came before the peace.
+  - Kerbogha's three weeks at Edessa letting Antioch fall first (Runciman) is scholarship only, and disputed (Brosset 2024); left out.
+  - The *Strategikon* and *Three Treatises* wording was checked against a scanned copy (print editions; no free authorised text). Acre 1189–91 and Neuss 1474–75 were not checked; Vegetius Book IV was not read (the free translation stops at Book III); no free text of the *History of William Marshal*.
 
 ## The persona's eight lines, and their grounding
 
@@ -139,6 +166,8 @@ These are signs to watch for in Mert's standard test: load the Summer 9, 1087 sa
 - It masses before it strikes, or refuses battle and harasses, and it strikes when the enemy divides or wears out.
 - After a win, it follows up at once.
 - When Mert's army turns aside for a few hours (a village, a weak lord) and comes back to its road, the agent's plan holds; when the army takes a new road, the plan changes (principle 15).
+- When it besieges, it keeps lords out on the roads a relief must come by, and lifts the siege, or meets the relief, when a stronger one is reported (principle 16).
+- When the enemy is stronger overall, it does not spend its main army's days on small prizes on the way to the blow that matters (principle 17).
 - Its plan and lessons say why, in its own words.
 
 ## Sources
@@ -159,6 +188,12 @@ These are signs to watch for in Mert's standard test: load the Summer 9, 1087 sa
 - Adam Murimuth and Robert of Avesbury, *Continuatio chronicarum* and *De gestis mirabilibus regis Edwardi Tertii*, ed. E. M. Thompson (Rolls Series, 1889), with Northburgh's and Wynkeley's letters of 1346 and Thompson's introduction: https://archive.org/details/admurimuthconti00robegoog
 - Froissart, *Chroniques*, ed. S. Luce, vol. III (1872), with Luce's summary of chapter LIX: https://www.gutenberg.org/ebooks/72385
 - Hattin chronicle extracts (*De Expugnatione*, Ernoul, Imad ad-Din, Baha ad-Din), Fordham sourcebook translations: https://sourcebooks.fordham.edu/source/1187ernoul.asp
+- *Gesta Francorum*, tr. A. C. Krey (1921): https://sourcebooks.fordham.edu/source/gesta-cde.asp ; Raymond of Aguilers, tr. A. C. Krey (1921): https://sourcebooks.fordham.edu/source/raymond-cde.asp
+- Froissart, *Chronicles*, tr. T. Johnes (1848), 2 vols: https://archive.org/details/chroniclesofenglandjohnes1 , https://archive.org/details/chroniclesofenglandjohnes2
+- *Chronique du Religieux de Saint-Denys*, ed. and tr. L. Bellaguet, vol. 2 (1840): https://archive.org/details/chroniquedureli02bellgoog
+- *Historie of the Arrivall of Edward IV*, ed. J. Bruce (Camden Society, 1838): https://archive.org/details/historieofarriva01brucuoft
+- G. T. Dennis, *Three Byzantine Military Treatises* (Dumbarton Oaks, 1985), *Campaign Organization*: https://www.doaks.org/resources/publications/books/three-byzantine-military-treatises
+- Vegetius, tr. J. Clarke (1767), Brevik etext: https://archive.org/details/flavius-vegetius-renatus-flavius-vegetius-renatus-the-military-institutions-of-t
 
 **Scholarship**
 - Gillingham, J., "Richard I and the Science of War in the Middle Ages" (1984): https://deremilitari.org/wp-content/uploads/2013/08/gillingham2.pdf ; "William the Bastard at War" (1989): https://deremilitari.org/wp-content/uploads/2014/04/gillingham3.pdf ; "Surrender in Medieval Europe" (2012): https://www.medievalists.net/2015/01/surrender-medieval-europe-indirect-approach/ ; "Coeur de Lion in Captivity" (2013): https://www.medievalists.net/2014/08/coeur-de-lion-captivity/
@@ -174,10 +209,11 @@ These are signs to watch for in Mert's standard test: load the Summer 9, 1087 sa
 - Pow, S., "Deep Ditches and Well-Built Walls" (MA thesis, Calgary, 2012): https://ucalgary.scholaris.ca/server/api/core/bitstreams/f409356a-4e0d-4fa2-afa7-7add6193f94b/content ; Laszlovszky, J., et al., "Contextualizing the Mongol Invasion of Hungary in 1241–42" (2018): https://hunghist.org/83-articles/515-2018-2-laszlovszky ; Pinke, Z., et al., "Climate of doubt" (2017): https://pmc.ncbi.nlm.nih.gov/articles/PMC5629221/
 - Amitai-Preiss, R., *Mongols and Mamluks* (1995), chapter summaries: https://www.cambridge.org/core/books/abs/mongols-and-mamluks/the-battle-of-ayn-jlut/28AF2C512086301FC77D6DC25EAAF02D ; Fuess, A., "Rotting Ships and Razed Harbors", *Mamlūk Studies Review* 5 (2001): https://knowledge.uchicago.edu/record/1019
 - McMahon, L., "De Velitatione Bellica and Byzantine Guerrilla Warfare" (2016): https://ams.ceu.edu/2016/McMahon.pdf
+- Brosset, T., in *Al-Masāq* 36 (2024), on Kerbogha at Edessa: https://doi.org/10.1080/09503110.2024.2342205
 - Gumm, I., "The Battle of Crécy" (In the Footsteps, battlefield guide): https://www.inthefootsteps.com/battle-of-crecy.pdf ; Madden, M. M., *The Black Prince at War* (PhD thesis, Minnesota, 2014), read for the 1355 raid's width and spies, not cited in the principle: https://hdl.handle.net/11299/171443
 - Torres, O., "Los consejos de al-Harawi sobre estratagemas de guerra" (2017): https://dialnet.unirioja.es/descarga/articulo/6429172.pdf ; Rech, W., "Christine de Pizan on the laws of war" (2024): https://academic.oup.com/lril/article/12/1/47/7682371
 - Ambühl, R., *Prisoners of War in the Hundred Years War* (summary and review): https://www.medievalists.net/2010/04/prisoners-of-war-in-the-hundred-years-war-the-golden-age-of-private-ransoms/ , https://scholarworks.iu.edu/journals/index.php/tmr/article/download/18561/24674
 - Georgopoulou, M., review of Kennedy, *Crusader Castles* (1997): https://scholarworks.iu.edu/journals/index.php/tmr/article/view/14466/20584
 - Latham, A., and Brown, R. L., "'War, Cruel and Sharp': England's Grand Strategy during the Hundred Years' War" (2020): https://www.medievalists.net/2020/04/england-grand-strategy-hundred-years-war/
 
-**Encyclopedia articles** (dates and figures only; most summarise Sumption and Curry): the battles of al-Fule, Hattin, Arsuf, Jaffa (1192), Poitiers, Pontvallain, Kleidion, Bouvines, Nicopolis, the Kalka and Evesham; the sieges of Tyre (1187), Acre (1189–91), Calais (1346–47), Harfleur, Rouen (1418–19), Orléans and Tournai (1340); the Black Prince's raid of 1355 and John of Gaunt's of 1373; the Treaty of Brétigny; knight service; on en.wikipedia.org, read in October 2026.
+**Encyclopedia articles** (dates and figures only; most summarise Sumption and Curry): the battles of al-Fule, Hattin, Arsuf, Jaffa (1192), Poitiers, Pontvallain, Kleidion, Bouvines, Nicopolis, the Kalka and Evesham; the sieges of Tyre (1187), Acre (1189–91), Calais (1346–47), Harfleur, Rouen (1418–19), Orléans, Tournai (1340) and Dover (1216–17); Kerbogha; the Black Prince's raid of 1355 and John of Gaunt's of 1373; the Treaty of Brétigny; knight service; on en.wikipedia.org, read in October 2026.

@@ -373,7 +373,8 @@ namespace BannerlordAgents
             {
                 sb.AppendLine().AppendLine("ENEMY HOLDINGS NEAR YOUR LANDS (" + v.Frontier.Count + ")");
                 foreach (ViewHolding h in v.Frontier)
-                    sb.AppendLine("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ", " + h.FactionName + "): " + (h.Garrison >= 0 ? "garrison " + Text.N(h.Garrison) : "garrison not in sight")
+                    sb.AppendLine("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ", " + h.FactionName + "): "
+                        + (h.Garrison >= 0 ? "garrison " + Text.N(h.Garrison) + (h.Militia >= 0 ? ", militia " + Text.N(h.Militia) : "") : "garrison not in sight")
                         + (string.IsNullOrEmpty(h.Status) ? "" : "; " + h.Status) + ".");
             }
 
@@ -451,7 +452,8 @@ namespace BannerlordAgents
             var vh = new ViewHolding
             {
                 Id = h.Id, Name = h.Name, Kind = h.Kind, Faction = h.Faction, FactionName = FactionName(s, h.Faction),
-                Garrison = counted ? h.Garrison : -1, Militia = h.Militia, X = h.X, Y = h.Y, Status = Status(s, h)
+                // garrison and militia alike only where the realm's eyes reach (an enemy's out of sight: -1, not known)
+                Garrison = counted ? h.Garrison : -1, Militia = counted ? h.Militia : -1, X = h.X, Y = h.Y, Status = Status(s, h)
             };
             if (counted && Tools.World.IsFort(h))
             {
