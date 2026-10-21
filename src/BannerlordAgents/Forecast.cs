@@ -101,6 +101,8 @@ namespace BannerlordAgents
             public bool Reached;
             /// <summary>The holding it heads for, if one (else it walks to a point: a camp, a party it follows).</summary>
             public string To;
+            /// <summary>Along the game's planned way (true), or by road at its pace (ToHolding, when the walk ends elsewhere).</summary>
+            public bool Way = true;
         }
 
         /// <summary>
@@ -123,12 +125,45 @@ namespace BannerlordAgents
             return new Arrival { Hours = hours, At = at, Reached = reached, Length = GamePace.Length(way), To = Views.Toward(lead) };
         }
 
-        /// <summary>"there in about 14 hours (Summer 19, 14:00)", or "more than 20 days away".</summary>
+        /// <summary>Does the party's walk end at the holding (its gate, or within 5 of it: the gate, a siege camp)?</summary>
+        public static bool EndsAt(PartyRow lead, SettlementRow h)
+        {
+            if (lead == null || h == null || (lead.Tx == 0 && lead.Ty == 0)) return false;
+            bool Near(float x, float y) => (lead.Tx - x) * (lead.Tx - x) + (lead.Ty - y) * (lead.Ty - y) <= 25f;
+            return Near(h.X, h.Y) || ((h.Gx != 0 || h.Gy != 0) && Near(h.Gx, h.Gy));
+        }
+
+        /// <summary>
+        /// When a party gets to a holding (0.7.4 after Hollin Gate, where two lords walking to a waypoint 8.6 ahead were counted
+        /// as there in 3 hours, 96.5 away by road): along the game's planned way when that way ends at the holding; else, a
+        /// party walking elsewhere first or standing still, by road (the game's table, else as the crow flies) at its pace over
+        /// a day. Way says which. Null with no pace.
+        /// </summary>
+        public static Arrival ToHolding(Snapshot s, PartyRow r, SettlementRow h, double maxHours = 24 * 20)
+        {
+            PartyRow lead = Lead(s, r);
+            if (lead == null || h == null) return null;
+            if (lead.InSettlement == h.Id) return new Arrival { Hours = 0, At = s.Hours, Reached = true, To = h.Id, Way = true };
+            if (Marching(lead) && EndsAt(lead, h))
+            {
+                Arrival a = ArrivalOf(s, r, maxHours);
+                if (a != null) { a.Way = true; a.To = h.Id; return a; }
+            }
+            float per = DayPerHour(s, lead);
+            if (per <= 0.05f) return null;
+            float road = Roads.To(s, lead, h);
+            double d = !float.IsNaN(road) ? road : Math.Sqrt((h.X - lead.X) * (h.X - lead.X) + (h.Y - lead.Y) * (h.Y - lead.Y));
+            double hours = d / per;
+            return new Arrival { Hours = hours, At = s.Hours + hours, Reached = hours <= maxHours, Length = d, To = h.Id, Way = false };
+        }
+
+        /// <summary>"there in about 14 hours (Summer 19, 14:00), 38 to go on its way", or "more than 20 days away".</summary>
         public static string ArrivalText(Arrival a)
         {
             if (a == null) return null;
             if (!a.Reached) return "more than " + Math.Round(a.Hours / 24) + " days away at its pace";
-            return "there in about " + HoursText(a.Hours) + " (" + Text.When(a.At) + ")";
+            string left = a.Length > 0.5 ? ", " + Text.D((float)a.Length) + (a.Way ? " to go on its way" : " to go by road") : "";
+            return "there in about " + HoursText(a.Hours) + " (" + Text.When(a.At) + ")" + (a.Way ? "" : " by road at its pace") + left;
         }
 
         public static string HoursText(double h) => h < 1.5 ? "an hour" : h < 72 ? Math.Round(h) + " hours" : Math.Round(h / 24, 1).ToString("0.#", Text.Inv) + " days";
@@ -365,6 +400,41 @@ namespace BannerlordAgents
             public double AttackerLossPerHour, DefenderLossPerHour;
             public int AttackersLeft, DefendersLeft;
             public bool Storm;
+            /// <summary>Run ahead at the rates measured in the battle so far (Measured), over this many hours of it.</summary>
+            public bool Measured;
+            public double MeasuredHours;
+        }
+
+        /// <summary>
+        /// A battle under way run ahead at the rates measured in it so far (0.7.4, after Hollin Gate: by the rules' expectation the
+        /// orcs would lose 16 men an hour and break in 3.4 days; over the first 22 hours they lost about 7 an hour, kept their
+        /// morale and wore the defenders from 197 down to 65). The battle is run by the rules from its start for the hours it has
+        /// lasted; each side's blows are scaled by what it actually knocked down against what the rules expected (0.2 to 5 times);
+        /// the rest is run ahead with those blows. The other side's morale, which the realm cannot see, is taken as middling in
+        /// both runs, so the measure carries it. Null before two rounds or with too few men fallen to measure.
+        /// </summary>
+        public static BattleClock Measured(BattleRow b, double now, bool? ownAttackers, IEnumerable<Tuple<bool, int, double>> joiners = null, double horizon = 24 * 5)
+        {
+            if (b?.Attackers == null || b.Defenders == null) return null;
+            double ran = now - b.StartHours;
+            int perHour = b.Kind == "siege" ? 1 : 2;
+            if (ran * perHour < 2 || b.Attackers.StartHealthy <= 0 || b.Defenders.StartHealthy <= 0 || b.Attackers.Healthy <= 0 || b.Defenders.Healthy <= 0) return null;
+            float? mA = ownAttackers == true ? (float?)null : 50f, mD = ownAttackers == false ? (float?)null : 50f;
+            BattleSide a0 = SideOf(b.Attackers, mA, false), d0 = SideOf(b.Defenders, mD, b.Defenders.SettlementLed);
+            a0.Men = b.Attackers.StartHealthy;
+            d0.Men = b.Defenders.StartHealthy;
+            BattleOutcome past = GameBattle.Run(b.Kind, b.Town, b.SettlementAdvantage, a0, d0, null, ran);
+            double expA = b.Attackers.StartHealthy - past.AttackersLeft, expD = b.Defenders.StartHealthy - past.DefendersLeft;
+            double obsA = b.Attackers.Casualties, obsD = b.Defenders.Casualties;
+            if (expA < 2 || expD < 2 || obsA + obsD < 5) return null;
+            double Clamp(double k) => Math.Max(0.2, Math.Min(5, k));
+            BattleSide a = SideOf(b.Attackers, mA, false), d = SideOf(b.Defenders, mD, b.Defenders.SettlementLed);
+            a.Hit = Clamp(obsD / expD);   // the attackers' blows are what knock the defenders down
+            d.Hit = Clamp(obsA / expA);
+            BattleOutcome o = GameBattle.Run(b.Kind, b.Town, b.SettlementAdvantage, a, d, Joiners(joiners, now), horizon);
+            var c = new BattleClock { Now = now, Storm = b.Kind == "siege", Measured = true, MeasuredHours = ran };
+            Fill(c, o, now);
+            return c;
         }
 
         /// <summary>
@@ -457,6 +527,31 @@ namespace BannerlordAgents
             if (first != null) parts.Add(first);
             if (soonest.Count > 1) { string all = One(soonest); if (all != null) parts.Add(all); }
             return parts.Count == 0 ? null : "If they fought in the field, by the game's battle rules (two rounds an hour; nobody leaves a battle once in it): " + string.Join("; ", parts) + ".";
+        }
+
+        // a village's health at the last two hours it was looked at, to measure a raid's pace (worker only)
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, double[]> RaidSeen = new System.Collections.Concurrent.ConcurrentDictionary<string, double[]>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// A raid whose defenders are down (0.7.4: the battle clock had it "won in about an hour" every hour). The game loots the
+        /// village when its health runs out (RaidEventComponent: each hour the raiders take (the square root of their number + 5)
+        /// / 900 of it, DefaultRaidModel, TAOM adding some peoples' and lords' gifts). The pace is measured from the health's fall
+        /// between the last two hours seen when it can be, else the base rule. Returns the hours until it is looted.
+        /// </summary>
+        public static double RaidHoursLeft(SettlementRow v, double now, double raiders, out double perHour, out bool measured)
+        {
+            perHour = (Math.Sqrt(Math.Max(0, raiders)) + 5) / 900.0;
+            measured = false;
+            if (v == null) return double.NaN;
+            double[] h = RaidSeen.GetOrAdd(v.Id, _ => new[] { double.NaN, 0, double.NaN, 0 });   // previous hour, its health, last hour, its health
+            lock (h)
+            {
+                if (double.IsNaN(h[2]) || now < h[2] - 0.01) { h[0] = double.NaN; h[2] = now; h[3] = v.HitPoints; }
+                else if (now - h[2] >= 0.5) { h[0] = h[2]; h[1] = h[3]; h[2] = now; h[3] = v.HitPoints; }
+                double gap = h[2] - h[0];
+                if (!double.IsNaN(h[0]) && gap >= 0.5 && gap <= 6 && h[1] > h[3] + 1e-4) { perHour = (h[1] - h[3]) / gap; measured = true; }
+            }
+            return v.HitPoints / Math.Max(1e-4, perHour);
         }
 
         public static string KindText(string kind)

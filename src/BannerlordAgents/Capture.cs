@@ -100,6 +100,7 @@ namespace BannerlordAgents
                 if (s.Village != null)
                 {
                     r.VillageState = s.Village.VillageState.ToString();
+                    r.HitPoints = s.SettlementHitPoints;   // a raid loots the village when this runs out (RaidEventComponent)
                     r.Bound = s.Village.Bound?.StringId;
                 }
                 snap.Settlements.Add(r);
@@ -119,8 +120,10 @@ namespace BannerlordAgents
                 IFaction f = p.MapFaction;
                 if (f != null && !factions.ContainsKey(f.StringId)) factions[f.StringId] = f;
             }
+            long t2a = Perf.Now();
             MarchRules(snap);
             Sieges(snap, besieged);
+            long t2b = Perf.Now();
             Battles(snap);
             long t3 = Perf.Now();
 
@@ -147,7 +150,8 @@ namespace BannerlordAgents
                     r.Name = Names.Party(live[i]);
             }
             long t6 = Perf.Now();
-            snap.PartsMs = new[] { Ms(t0, t1), Ms(t1, t2), Ms(t2, t3), Ms(t3, t4), Ms(t4, t5), Ms(t5, t6) };
+            // kingdoms, settlements, parties (the rows, then the march rules and sieges, then the battles: split in 0.7.4), the realm, sight, names
+            snap.PartsMs = new[] { Ms(t0, t1), Ms(t1, t2), Ms(t2, t3), Ms(t3, t4), Ms(t4, t5), Ms(t5, t6), Ms(t2, t2a), Ms(t2a, t2b), Ms(t2b, t3) };
             return snap;
         }
 
@@ -342,9 +346,13 @@ namespace BannerlordAgents
                     r.SpeedBase = (float)Math.Round(e.BaseNumber, 4);
                     r.SpeedFactors = (float)Math.Round(e.SumOfFactors, 4);
                 }
+                if (FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 4);
+                r.Culture = (leader?.Culture ?? p.MapFaction?.Culture ?? p.Owner?.Culture)?.StringId;
+                // the ground, the scout's perks and the weather matter only on the march (0.7.4: a cost trim; the weather call carries
+                // TAOM's own prefix)
+                if (r.InSettlement != null) return;
                 PathFaceRecord face = p.CurrentNavigationFace;
                 if (face.IsValid()) r.Terrain = (int)Campaign.Current.MapSceneWrapper.GetFaceTerrainType(face);
-                r.Culture = (leader?.Culture ?? p.MapFaction?.Culture ?? p.Owner?.Culture)?.StringId;
                 Hero scout = p.EffectiveScout;
                 if (scout != null)
                 {
@@ -363,7 +371,6 @@ namespace BannerlordAgents
                 }
                 MapWeatherModel.WeatherEvent w = Campaign.Current.Models.MapWeatherModel.GetWeatherEventInPosition(p.Position.ToVec2());
                 r.Snowing = w == MapWeatherModel.WeatherEvent.Snowy || w == MapWeatherModel.WeatherEvent.Blizzard;
-                if (FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 4);
             }
             catch (Exception e) { Diag.Swallowed("a lord's speed parts", e); }
         }
@@ -538,6 +545,8 @@ namespace BannerlordAgents
             MBReadOnlyList<MapEvent> all = Campaign.Current.MapEventManager?.MapEvents;
             if (all == null) return;
             CombatSimulationModel cm = Campaign.Current.Models.CombatSimulationModel;
+            // a troop's power for a side and a battle's context, asked of the model once an hour (0.7.4: a cost trim; parties share troop types)
+            var power = new Dictionary<(CharacterObject, BattleSideEnum, int, float), float>();
             foreach (MapEvent me in all)
             {
                 try
@@ -555,15 +564,15 @@ namespace BannerlordAgents
                     b.Key = (me.AttackerSide.LeaderParty?.Id ?? "?") + "@" + b.StartHours.ToString("0.00", Text.Inv);
                     if (at != null && at.IsFortification) b.SettlementAdvantage = (float)Math.Round(cm.GetSettlementAdvantage(at), 4);
                     cm.GetBattleAdvantage(me, out ExplainedNumber defAdv, out ExplainedNumber attAdv);
-                    Side(me, me.AttackerSide, BattleSideEnum.Attacker, b.Attackers, attAdv.ResultNumber);
-                    Side(me, me.DefenderSide, BattleSideEnum.Defender, b.Defenders, defAdv.ResultNumber);
+                    Side(me, me.AttackerSide, BattleSideEnum.Attacker, b.Attackers, attAdv.ResultNumber, power);
+                    Side(me, me.DefenderSide, BattleSideEnum.Defender, b.Defenders, defAdv.ResultNumber, power);
                     snap.Battles.Add(b);
                 }
                 catch (Exception e) { Diag.Swallowed("copying a battle's clock", e); }
             }
         }
 
-        private static void Side(MapEvent me, MapEventSide side, BattleSideEnum which, BattleSideRow row, float advantage)
+        private static void Side(MapEvent me, MapEventSide side, BattleSideEnum which, BattleSideRow row, float advantage, Dictionary<(CharacterObject, BattleSideEnum, int, float), float> cache)
         {
             MilitaryPowerModel pm = Campaign.Current.Models.MilitaryPowerModel;
             PartyBase leader = side.LeaderParty;
@@ -586,7 +595,9 @@ namespace BannerlordAgents
                 {
                     int n = el.Number - el.WoundedNumber;
                     if (n <= 0 || el.Character == null) continue;
-                    power += n * pm.GetTroopPower(el.Character, which, me.SimulationContext, modifier);
+                    var key = (el.Character, which, (int)me.SimulationContext, modifier);
+                    if (!cache.TryGetValue(key, out float tp)) cache[key] = tp = pm.GetTroopPower(el.Character, which, me.SimulationContext, modifier);
+                    power += n * tp;
                     partyHealthy += n;
                     wounded += el.WoundedNumber;
                 }

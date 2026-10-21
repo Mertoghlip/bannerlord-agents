@@ -34,6 +34,16 @@
 
 Each install is one restart of the game.
 
+## The fairer test save (agents.rebalance, since 0.7.5)
+
+Mert, Oct 20: "I want a fairer, longer term test save where the misty mountain orcs are of more even strength to my kingdom ... I own all the land from Rivendell to Mount Gram to Mount Gundabad, and the Misty Mountain Orcs take back the rest of the land that I own in the mountains. The new fiefs they get should be distributed reasonably amongst them. Further, all of the prisoner Misty Mountain commanders should be returned to their realm." The line he chose: only the old orc fortresses (Sirannon, Nanduhirion, Caradhras, Hollin Gate, Eastern Moria); Fennas Drúnin stays his; their garrisons become orc troops.
+
+1. Load the save, open the console (Alt + ~) and type `agents.rebalance`. It lists, without changing anything: the orc lords held prisoner (45 on Oct 20) by who holds them, and each fortress with the orc clan it goes to, its garrison and the parties to be moved out. It refuses while a battle is fought at one of them or their villages, or with your party inside one.
+2. `agents.rebalance apply` does it: every orc lord held prisoner is released (the game brings each back with a party in time); each fortress, with its villages, passes to an orc clan as a treaty would pass it (towns first; the clan with the fewest castles and towns, then the higher tier, then the greater renown; mercenary bands hold no land); a siege of it is ended; the parties inside at war with the orcs leave; its garrison becomes orc troops man for man, tier for tier and by kind (foot, archers, horse) where the orcs have them; orc soldiers in its prison join the garrison.
+3. Save under a new name. After it, the orcs hold 15 castles and towns to your 18; on Oct 20 they had about 59 lords leading parties plus the 45 freed, against your realm's 203.
+- Other places can be named: `agents.rebalance apply castle_MM7 town_MM3` hands over only those.
+- The agent hears of the changes as notices, like any change of owner.
+
 ## Testing versions 0.4 and 0.5: Opus commands the orcs, with tools and memory
 
 **Set up already (Oct 8, 21:14; memory Oct 9, 11:01):**

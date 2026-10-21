@@ -36,7 +36,7 @@ Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' a
 - Loading another save: proof that nothing from the old one carried over.
 
 ### What the orcs see
-- **Every in-game hour:** how many parties they see, from how many eyes, which holdings they look over, and how the hourly copy's time split between its parts.
+- **Every in-game hour:** how many parties they see, from how many eyes, which holdings they look over, and how the hourly copy's time split between its parts. (`hour` events, `parts_ms`: kingdoms, holdings, parties with sieges and battles, the realm, sight, names; since 0.7.5 three more at the end splitting the parties part: the rows, the march rules and sieges, the battles.)
 - **The sight check, every 3 in-game hours:** our sight rule against the game's own view for your party, with the numbers behind every disagreement.
 - **The fog check, on every report:**
   - every enemy listed in view really is in sight;

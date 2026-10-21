@@ -187,6 +187,12 @@ namespace BannerlordAgents
             {
                 Kingdom realm = Bridge.Watched;
                 reason = realm == null ? "no realm is under watch" : Issue(a, realm, "agent", false, ref status);
+                if (status == "applied" && reason != null && realm != null)
+                {
+                    // the game takes a move given in a battle, but the party moves only once the battle ends (0.7.4, Naglur in the storm of Hollin Gate)
+                    MobileParty p = FindLord(realm, a.Lord, out _)?.PartyBelongedTo;
+                    if (p != null && p.MapEvent != null) reason += " (" + Names.Party(p) + " is in a battle now: no order moves it until the battle ends)";
+                }
             }
             catch (Exception e)
             {

@@ -266,8 +266,10 @@ namespace BannerlordAgents
         public static List<string> Clocks(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> allies)
         {
             var lines = new List<string>();
-            bool Friend(string f) => f != null && (f == fid || allies.Contains(f));
+            // the realm's own (0.7.4: its allies' sieges and battles far off are not in its sight, and leaked; the fog check caught them)
+            bool Friend(string f) => f != null && f == fid;
             bool Sees(string party) => party != null && sees != null && sees.ContainsKey(party);
+            bool Mine(string party) => party != null && s.PartyById.TryGetValue(party, out PartyRow pr) && pr.Faction == fid;
             string PartyName(string id) => id != null && s.PartyById.TryGetValue(id, out PartyRow p) ? p.Name ?? id : id != null && s.SettlementById.TryGetValue(id, out SettlementRow h) ? h.Name : "?";
             string LordTag(string id) => id != null && s.PartyById.TryGetValue(id, out PartyRow p) && p.Faction == fid && p.Leader != null ? " [" + p.Leader + "]" : "";
             foreach (SiegeRow g in s.Sieges)
@@ -290,28 +292,43 @@ namespace BannerlordAgents
                 bool att = Friend(b.Attackers.Faction), def = Friend(b.Defenders.Faction);
                 SettlementRow at = b.Settlement != null && s.SettlementById.TryGetValue(b.Settlement, out SettlementRow hh) ? hh : null;
                 bool seen = b.Attackers.Parties.Concat(b.Defenders.Parties).Any(Sees);
-                if (!att && !def && !(at != null && at.Faction == fid) && !seen) continue;
+                bool mineIn = b.Attackers.Parties.Concat(b.Defenders.Parties).Any(Mine);
+                if (!att && !def && !mineIn && !(at != null && at.Faction == fid) && !seen) continue;
                 List<Tuple<bool, int, double>> joiners = at != null ? Joiners(s, fid, sees, at.Id, b.Attackers.Faction, b.Defenders.Faction) : new List<Tuple<bool, int, double>>();
-                // the morale the realm can see is its own side's; the other side's is run low, middling and high
-                Forecast.BattleClock c;
+                var sb = new StringBuilder();
+                sb.Append(at != null ? "At " + at.Name + " [" + at.Id + "]" : "In the field near " + Near(s, b.X, b.Y)).Append(": ").Append(Forecast.KindText(b.Kind))
+                  .Append(" since ").Append(Text.When(b.StartHours)).Append(" (").Append(Math.Round(s.Hours - b.StartHours)).Append(" hours). ");
+                sb.Append("Attackers: ").Append(SideText(s, fid, b.Attackers, PartyName, LordTag)).Append("; defenders: ").Append(SideText(s, fid, b.Defenders, PartyName, LordTag)).Append(". ");
+                if (b.Kind == "raid" && b.Defenders.Healthy <= 0 && at != null)
+                {
+                    // the looting: no battle is left to run ahead, the village's health runs down (0.7.4)
+                    double left = Forecast.RaidHoursLeft(at, s.Hours, b.Attackers.Healthy, out double perHour, out bool measured);
+                    sb.Append("Nobody is left to defend it: the village is looted when its health runs out (each hour the raiders take the square root of their number + 5, over 900, of it; some peoples' and lords' gifts take more). ")
+                      .Append("It has ").Append(Math.Round(at.HitPoints * 100)).Append("% left, falling about ").Append((perHour * 100).ToString("0.#", Text.Inv)).Append("% an hour")
+                      .Append(measured ? " (measured over the last hour)" : " (by the rule)").Append(", so it is looted in about ").Append(Forecast.HoursText(left)).Append(" (").Append(Text.When(s.Hours + left)).Append(") unless the raiders are driven off.");
+                    lines.Add(sb.ToString());
+                    continue;
+                }
+                // a battle under way two rounds or more: at the rates measured in it (0.7.4); else by the rules, the morale the realm
+                // can see being its own side's and the other side's run low, middling and high
+                Forecast.BattleClock c = Forecast.Measured(b, s.Hours, att ? true : def ? false : (bool?)null, joiners);
                 string hours;
-                if (att || def) c = Forecast.BattleByMorale(b, s.Hours, def, joiners, out hours);
+                if (c != null) hours = double.IsNaN(c.EndsAt) ? "not within 5 days" : "about " + Forecast.HoursText(c.EndsAt - s.Hours);
+                else if (att || def) c = Forecast.BattleByMorale(b, s.Hours, def, joiners, out hours);
                 else
                 {
                     c = Forecast.Battle(b, s.Hours, joiners, 50f, 50f);
                     hours = double.IsNaN(c.EndsAt) ? "not within 5 days" : "about " + Forecast.HoursText(c.EndsAt - s.Hours);
                 }
-                var sb = new StringBuilder();
-                sb.Append(at != null ? "At " + at.Name + " [" + at.Id + "]" : "In the field near " + Near(s, b.X, b.Y)).Append(": ").Append(Forecast.KindText(b.Kind))
-                  .Append(" since ").Append(Text.When(b.StartHours)).Append(" (").Append(Math.Round(s.Hours - b.StartHours)).Append(" hours). ");
-                sb.Append("Attackers: ").Append(SideText(s, fid, b.Attackers, PartyName, LordTag)).Append("; defenders: ").Append(SideText(s, fid, b.Defenders, PartyName, LordTag)).Append(". ");
-                sb.Append("At the game's rates now the attackers lose about ").Append(Math.Round(c.AttackerLossPerHour)).Append(" men an hour, the defenders about ").Append(Math.Round(c.DefenderLossPerHour)).Append(". ");
+                sb.Append(c.Measured ? "At the rates measured over its " + Forecast.HoursText(c.MeasuredHours) + " so far, the attackers lose about " : "At the game's rates now the attackers lose about ")
+                  .Append(Math.Round(c.AttackerLossPerHour)).Append(" men an hour, the defenders about ").Append(Math.Round(c.DefenderLossPerHour)).Append(". ");
+                string runAhead = c.Measured ? "Run ahead at those rates" : "Run ahead";
                 if (!double.IsNaN(c.EndsAt))
-                    sb.Append("Run ahead, the ").Append(c.Winner).Append(" win")
+                    sb.Append(runAhead).Append(", the ").Append(c.Winner).Append(" win")
                       .Append(c.How == "rout" ? " when the other side's morale breaks" : c.How == "retreat" ? " when the other side retreats (nothing is captured then)" : " when the other side is all down")
-                      .Append(", in ").Append(hours).Append(" (").Append(Text.When(c.EndsAt)).Append(" at middling morale), ")
+                      .Append(", in ").Append(hours).Append(" (").Append(Text.When(c.EndsAt)).Append(c.Measured ? "), " : " at middling morale), ")
                       .Append(Text.N(c.Winner == "attackers" ? c.AttackersLeft : c.DefendersLeft)).Append(" of them still standing.");
-                else sb.Append("Run ahead five days, it has not ended (").Append(Text.N(c.AttackersLeft)).Append(" attackers, ").Append(Text.N(c.DefendersLeft)).Append(" defenders left).");
+                else sb.Append(runAhead).Append(" five days, it has not ended (").Append(Text.N(c.AttackersLeft)).Append(" attackers, ").Append(Text.N(c.DefendersLeft)).Append(" defenders left).");
                 if (joiners.Count > 0)
                 {
                     int toA = joiners.Where(j => j.Item1).Sum(j => j.Item2), toD = joiners.Where(j => !j.Item1).Sum(j => j.Item2);
@@ -322,7 +339,8 @@ namespace BannerlordAgents
                 if (att || def)
                 {
                     BattleSideRow mine = att ? b.Attackers : b.Defenders;
-                    sb.Append(" Your side's morale ").Append(Math.Round(mine.Morale)).Append(mine.SettlementLed ? " (behind walls: it never breaks)" : "").Append("; the other side's you cannot see.");
+                    sb.Append(" Your side's morale ").Append(Math.Round(mine.Morale))
+                      .Append(!mine.SettlementLed ? "" : at != null && at.Kind == "village" ? " (led by the village: it never breaks)" : " (behind walls: it never breaks)").Append("; the other side's you cannot see.");
                 }
                 lines.Add(sb.ToString());
             }
@@ -344,9 +362,12 @@ namespace BannerlordAgents
                 if (r.Faction != fid && (sees == null || !sees.ContainsKey(r.Id))) continue;
                 bool toAttackers = Side(attackerFaction, r.Faction), toDefenders = Side(defenderFaction, r.Faction);
                 if (toAttackers == toDefenders) continue;
+                // only a lord walking there now, by a way that ends there (0.7.4: Asta, "defending" Hollin Gate from 5.5 away, stood
+                // still through the whole storm, but was counted as joining within the hour)
+                if (!Forecast.Marching(r) || !s.SettlementById.TryGetValue(place, out SettlementRow h) || !Forecast.EndsAt(r, h)) continue;
                 Forecast.Arrival a = Forecast.ArrivalOf(s, r, 72);
-                double when = a != null && a.Reached ? a.At : s.Hours + 1;
-                joiners.Add(Tuple.Create(toAttackers, r.ArmyMen > 0 ? r.ArmyMen : r.Men, when));
+                if (a == null || !a.Reached) continue;
+                joiners.Add(Tuple.Create(toAttackers, r.ArmyMen > 0 ? r.ArmyMen : r.Men, a.At));
             }
             return joiners;
         }
@@ -614,7 +635,9 @@ namespace BannerlordAgents
                 bool toHolding = MarchesTo(r) && r.TargetSettlement != null;
                 if (toHolding || (relation == "own" && r.Doing == "GoToPoint"))
                 {
-                    Forecast.Arrival a = Forecast.ArrivalOf(s, r);
+                    // to a holding: along its way only when that way ends there, else by road at its pace (0.7.4: Latif walking to a
+                    // point 7 ahead was "going to Starkmoore, there in about 3 hours", 364 away)
+                    Forecast.Arrival a = toHolding && s.SettlementById.TryGetValue(r.TargetSettlement, out SettlementRow th) ? Forecast.ToHolding(s, r, th) : Forecast.ArrivalOf(s, r);
                     if (a != null && (toHolding || a.Length > 3))
                     {
                         vp.Arrives = Forecast.ArrivalText(a);

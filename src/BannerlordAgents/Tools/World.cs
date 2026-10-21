@@ -266,8 +266,12 @@ namespace BannerlordAgents.Tools
                 bool heading = Views.Toward(e) == place;
                 if (d > r && !heading) continue;
                 var c = new Comer { Id = e.Id, Name = e.Name ?? e.Id, Doing = Views.Doing(S, e), Strength = StrengthOf(e), Distance = d, Heading = heading };
-                Forecast.Arrival arr = heading ? Forecast.ArrivalOf(S, e, 24 * 10) : null;
-                c.Eta = arr != null && arr.Reached ? arr.Hours : d / Math.Max(0.3, PerHour(e));
+                // when it gets there (0.7.4): along its way only when that way ends at the place, else by road at its pace (two lords
+                // walking to a waypoint 8.6 ahead were counted "due in about 3 hours" at Hollin Gate, 96.5 away by road, and set
+                // off the withdrawal bar)
+                SettlementRow at = Holding(place);
+                Forecast.Arrival arr = at != null ? Forecast.ToHolding(S, e, at, 24 * 10) : null;
+                c.Eta = arr != null ? (arr.Reached ? arr.Hours : double.PositiveInfinity) : d / Math.Max(0.3, PerHour(e));
                 list.Add(c);
             }
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
@@ -279,10 +283,11 @@ namespace BannerlordAgents.Tools
                 double d = Dist(v.X, v.Y);
                 bool heading = v.Toward == place;
                 if (d > r && !heading) continue;
-                // seen earlier: from where it was then, at its pace then, less the hours since
+                // seen earlier: from where it was then (by road where the game's table knows the way), at its pace then, less the hours since
                 double perHour = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
+                double road = RoadDistance(kv.Key, place);
                 list.Add(new Comer { Id = kv.Key, Name = v.Name ?? kv.Key, Doing = v.Doing, Strength = v.Strength, Distance = d, Heading = heading, SeenAgo = Hours - v.SeenHours,
-                                     Eta = Math.Max(0, d / Math.Max(0.3, perHour) - (Hours - v.SeenHours)) });
+                                     Eta = Math.Max(0, (double.IsNaN(road) ? d : road) / Math.Max(0.3, perHour) - (Hours - v.SeenHours)) });
             }
             foreach (Comer c in list) c.Road = RoadDistance(c.Id, place);
             return list.OrderBy(c => double.IsNaN(c.Road) ? c.Distance : c.Road).ToList();
@@ -294,7 +299,7 @@ namespace BannerlordAgents.Tools
             List<Comer> list = ReliefComing(place, r);
             if (list.Count == 0) return "none in sight";
             IEnumerable<string> lines = list.Take(most).Select(c => c.Name + ", strength " + Text.N((int)Math.Round(c.Strength)) + ", "
-                + Roads.Both((float)c.Distance, (float)c.Road) + " away" + (double.IsNaN(c.Eta) ? "" : " (due in about " + Forecast.HoursText(c.Eta) + ")") + ", " + (c.Doing ?? "doing what is not known")
+                + Roads.Both((float)c.Distance, (float)c.Road) + " away" + (double.IsNaN(c.Eta) ? "" : double.IsInfinity(c.Eta) ? " (more than 10 days off at its pace)" : " (due in about " + Forecast.HoursText(c.Eta) + ")") + ", " + (c.Doing ?? "doing what is not known")
                 + (c.SeenAgo > 0 ? " (seen " + Math.Round(c.SeenAgo) + " hours ago)" : ""));
             string text = string.Join("; ", lines);
             if (list.Count > most)
@@ -327,6 +332,7 @@ namespace BannerlordAgents.Tools
         {
             double h = PrepHours(place);
             if (double.IsNaN(h)) return "No siege of it is known.";
+            if (Siege(place)?.Storming == true) return "A storm of it is being fought now: nobody leaves it until it ends.";
             return h <= 0.05 ? "The camp may storm now." : "The camp's preparations are done in about " + Forecast.HoursText(h) + " (" + Text.When(Hours + h) + "); it cannot storm before.";
         }
 

@@ -657,6 +657,7 @@ namespace BannerlordAgents.Tools
                     case "army_joining": return (double)ById.Values.Count(x => x.Def.Name == "join" && x.Order.Target == _t.Order.Party);
                     case "in_settlement": return me?.InSettlement != null;
                     case "besieging": return me?.Besieging != null;
+                    case "in_battle": return me != null && me.InBattle;
                     case "lords": return (double)_t.Order.Lords.Count;
                     case "now": return _w.Hours;
                 }

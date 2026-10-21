@@ -125,6 +125,8 @@ namespace BannerlordAgents
         public int WallLevel;
         public int Militia;
         public string VillageState;
+        /// <summary>A village's health, 0 to 1 (0.7.4): a raid takes it down hour by hour and loots the village at 0.</summary>
+        public float HitPoints = 1f;
         public string Bound;
     }
 

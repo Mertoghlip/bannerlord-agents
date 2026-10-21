@@ -11,6 +11,8 @@ namespace BannerlordAgents.Common
         public float Power = 1f, Advantage = 1f, Morale = 50f;
         /// <summary>Led by a holding (a storm's or a sally's defenders): its men never rout, their morale counts at least 30.</summary>
         public bool Walls;
+        /// <summary>How hard its blows land against the rules' expectation, measured in a battle under way (1: as the rules expect; Forecast.Measured).</summary>
+        public double Hit = 1;
     }
 
     /// <summary>Men who reach a battle under way and join a side, at an hour counted from the battle's start.</summary>
@@ -105,8 +107,8 @@ namespace BannerlordAgents.Common
                 if (retreating == "attackers") sA = 0;
                 if (retreating == "defenders") sD = 0;
                 double mDeff = defenders.Walls ? Math.Max(30, mD) : mD;
-                double lossD = Math.Min(D, sA * HitChance((float)pA, (float)pD, attackers.Advantage, mA, mDeff));
-                double lossA = Math.Min(A, sD * HitChance((float)pD, (float)pA, defenders.Advantage, mDeff, mA));
+                double lossD = Math.Min(D, sA * Math.Min(1, HitChance((float)pA, (float)pD, attackers.Advantage, mA, mDeff) * attackers.Hit));
+                double lossA = Math.Min(A, sD * Math.Min(1, HitChance((float)pD, (float)pA, defenders.Advantage, mDeff, mA) * defenders.Hit));
                 if (first) { o.AttackerLossPerHour = lossA * perHour; o.DefenderLossPerHour = lossD * perHour; first = false; }
                 bool aLost = lossA > 1.3 * lossD && lossA > lossD + 1 && lossA > 0.02 * A;
                 bool dLost = lossD > 1.3 * lossA && lossD > lossA + 1 && lossD > 0.02 * D;
@@ -158,7 +160,7 @@ namespace BannerlordAgents.Common
             return runs;
         }
 
-        private static BattleSide Copy(BattleSide s) => new BattleSide { Men = s.Men, Power = s.Power, Advantage = s.Advantage, Morale = s.Morale, Walls = s.Walls };
+        private static BattleSide Copy(BattleSide s) => new BattleSide { Men = s.Men, Power = s.Power, Advantage = s.Advantage, Morale = s.Morale, Walls = s.Walls, Hit = s.Hit };
 
         /// <summary>"about 45 hours (32 to 60 as their unseen morale is low or high)"; "more than 5 days" when it does not end.</summary>
         public static string HoursRange(BattleOutcome[] runs)

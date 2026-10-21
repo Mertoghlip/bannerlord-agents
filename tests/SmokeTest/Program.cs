@@ -382,6 +382,7 @@ namespace SmokeTest
             WatchShadowTests(dir, moves, released);
             SiegeReliefTests(dir);
             SiegeControlTests(dir, moves, released, thens);
+            FieldLessonsTests(dir, moves);
             GameClockTests(dir);
             RoadTests();
 
@@ -998,6 +999,105 @@ namespace SmokeTest
             string facts = Facts.ForPoke(Runner.WorldFor(s4), new List<Trigger> { new Trigger { Kind = "enemy_in_view", Party = "p_foe", Text = "Halbarad in view" } });
             Check(facts.Contains("If they fought in the field, by the game's battle rules") && facts.Contains("Ugluk alone (500 men) would beat it"),
                   "the facts give a fight with the enemy by the game's battle rules: " + facts.Replace("\n", " | "));
+        }
+
+        /// <summary>
+        /// Version 0.7.5, what the first evening on 0.7.4 taught (Oct 20, the save besieging Western Moria): a relief lord walking
+        /// to a waypoint is not "due in 3 hours" at the castle; the withdrawal bar waits while the lord is in a storm (Naglur was
+        /// told the siege was lifted six hours into one); a lord standing off is not a joiner; a storm under way is run ahead at
+        /// the rates measured in it (Hollin Gate: the rules alone had the orcs breaking, they were winning); a raid with nobody
+        /// left to defend runs down the village's health; an ally's siege far off is not in the realm's sight.
+        /// </summary>
+        private static void FieldLessonsTests(string dir, List<KeyValuePair<int, Move>> moves)
+        {
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            // a relief lord walking to a waypoint 8 ahead, 60 from the castle
+            var waypoint = new PartyRow { Id = "p_sved", Leader = "lord_sved", Name = "Svedorn", Faction = "player_k", Kind = "lord", Men = 300, Strength = 484, Speed = 3.2f,
+                                          X = 170, Y = 160, Tx = 170, Ty = 152, Doing = "DefendSettlement", TargetSettlement = "castle_men", Spottable = true };
+            var walking = new PartyRow { Id = "p_nath", Leader = "lord_nath", Name = "Nath", Faction = "player_k", Kind = "lord", Men = 500, Strength = 774, Speed = 3.2f,
+                                         X = 170, Y = 130, Tx = 170, Ty = 100, Doing = "DefendSettlement", TargetSettlement = "castle_men", Spottable = true };
+            Snapshot sw = ToolWorld(8000, waypoint, walking);
+            List<World.Comer> comers = Runner.WorldFor(sw).ReliefComing("castle_men", 15);
+            World.Comer cw = comers.FirstOrDefault(c => c.Id == "p_sved"), cn = comers.FirstOrDefault(c => c.Id == "p_nath");
+            Check(cw != null && cw.Eta > 15 && cn != null && cn.Eta > 8 && cn.Eta < 16,
+                  "a relief lord walking to a waypoint 8 ahead is due at the castle by road at its pace (" + (cw == null ? "none" : cw.Eta.ToString("0.0")) + " hours for 60), one walking there along its way by its way ("
+                  + (cn == null ? "none" : cn.Eta.ToString("0.0")) + " for 30)");
+            Forecast.Arrival ta = Forecast.ToHolding(sw, walking, sw.SettlementById["castle_men"]);
+            Forecast.Arrival tw = Forecast.ToHolding(sw, waypoint, sw.SettlementById["castle_men"]);
+            Check(ta != null && ta.Way && Forecast.ArrivalText(ta).Contains("to go on its way") && tw != null && !tw.Way && Forecast.ArrivalText(tw).Contains("by road at its pace"),
+                  "the arrival says how it is reckoned and what is left to go: " + Forecast.ArrivalText(ta) + " | " + Forecast.ArrivalText(tw));
+
+            // the withdrawal bar waits while the lord is in a storm, and acts once it is over
+            var nag = new PartyRow { Id = "p_nag3", Leader = "lord_nag3", Name = "Naglur", Faction = "orcs", Kind = "lord", Men = 600, SizeLimit = 700, Strength = 900, Morale = 100,
+                                     ArmyLeader = "p_nag3", ArmyMen = 2000, ArmyParties = 10, ArmyStrength = 3400, Speed = 1.6f, FoodDays = 40, X = 166, Y = 101, Doing = "Hold", Spottable = true };
+            PartyRow Coming(string id, float x, float strength) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = id, Faction = "player_k", Kind = "lord", Men = (int)(strength * 0.6f), Strength = strength, Speed = 3.5f,
+                X = x, Y = 100, Tx = 170, Ty = 100, Doing = "DefendSettlement", TargetSettlement = "castle_men", Spottable = true
+            };
+            Snapshot Sieged(double h, bool storming, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                s.SettlementById["castle_men"].BesiegedBy = "orcs";
+                s.SettlementById["castle_men"].Besieger = "p_nag3";
+                s.Sieges.Add(new SiegeRow { Settlement = "castle_men", Besieger = "p_nag3", BesiegerFaction = "orcs", Strategy = "siege_strategy_prepare_assault", StartHours = 8000, WallLevel = 1,
+                                            Prep = 1, PrepRate = 0.04f, Advantage = 5f, Defenders = 300, Attackers = 3400, AttackerMen = 2000, DefenderMen = 190, Storming = storming });
+                return s;
+            }
+            Brain.OnHour(ToolWorld(8000, nag));
+            var order = new ToolOrder { Tool = "besiege", Lord = "lord_nag3", LordName = "Naglur", Party = "p_nag3", At = "castle_men", Then = JObject.Parse("{\"do\":\"besiege\",\"at\":\"castle_two\"}") };
+            order.Settings["storm"] = 2; order.Settings["withdraw_on_relief"] = 1.2; order.Settings["relief_hours"] = 24;
+            Runner.Start(980, order);
+            nag.Besieging = "castle_men"; nag.Doing = "BesiegeSettlement"; nag.InBattle = true;
+            for (int h = 8001; h <= 8003; h++) Brain.OnHour(Sieged(h, true, nag, Coming("hirgon", 185, 2500), Coming("beregond", 190, 2500)));
+            Check(!moves.Any(m => m.Key == 980 && m.Value.Verb == "enter") && !Notices().Contains("Naglur lifts the siege of Fornost") && Notices().Contains("A storm of it is being fought now: nobody leaves it until it ends"),
+                  "in a storm, the withdrawal bar waits (a relief of 5,000 against 3,400 does not lift the siege), and the alarm says the storm is being fought");
+            nag.InBattle = false;
+            Brain.OnHour(Sieged(8004, false, nag, Coming("hirgon", 184, 2500), Coming("beregond", 189, 2500)));
+            Check(moves.Any(m => m.Key == 980 && m.Value.Verb == "enter" && m.Value.Place == "castle_two") && Notices().Contains("Naglur lifts the siege of Fornost by your bar"),
+                  "once the storm is over, the bar acts: it lifts the siege and marches into Orc Keep");
+            Runner.Reset();
+
+            // a lord standing off is not a joiner of the storm; one walking in is
+            var asta = new PartyRow { Id = "p_asta", Leader = "lord_asta", Name = "Asta", Faction = "player_k", Kind = "lord", Men = 300, Strength = 495, Speed = 3.2f,
+                                      X = 164, Y = 100, Tx = 164, Ty = 100, Doing = "DefendSettlement", TargetSettlement = "castle_men", Spottable = true };
+            Snapshot sj = ToolWorld(8100, asta, walking);
+            List<Tuple<bool, int, double>> js = Views.Joiners(sj, "orcs", sj.WatchedSees, "castle_men", "orcs", "player_k");
+            Check(js.Count == 1 && js[0].Item2 == 500 && !js[0].Item1, "a lord standing 6 from the walls is not counted as joining the storm; the one walking in is (" + js.Count + ")");
+
+            // a storm under way run ahead at its own measured rates: Hollin Gate 8 hours in, 2,080 against 197 at the start
+            var hg = new BattleRow { Kind = "siege", Settlement = "castle_men", StartHours = 9000, SettlementAdvantage = 6.48f };
+            hg.Attackers = new BattleSideRow { Faction = "orcs", Healthy = 2019, Casualties = 61, StartHealthy = 2080, Power = 1.5744f, Advantage = 1.23f, Morale = 100 };
+            hg.Defenders = new BattleSideRow { Faction = "player_k", Healthy = 149, Casualties = 49, StartHealthy = 197, Power = 1.9294f, Advantage = 1f, Morale = 20, SettlementLed = true };
+            Forecast.BattleClock byRules = Forecast.BattleByMorale(hg, 9008.2, false, null, out string ruleHours);
+            Forecast.BattleClock measured = Forecast.Measured(hg, 9008.2, true);
+            Check(measured != null && measured.Measured && measured.Winner == "attackers" && measured.AttackerLossPerHour < 11 && measured.DefenderLossPerHour > 4
+                  && !double.IsNaN(measured.EndsAt) && measured.EndsAt - 9008.2 < 40,
+                  "a storm 8 hours in, run ahead at its measured rates: the orcs take it in about " + (measured == null || double.IsNaN(measured.EndsAt) ? "?" : Math.Round(measured.EndsAt - 9008.2).ToString())
+                  + " hours, losing " + (measured == null ? "?" : Math.Round(measured.AttackerLossPerHour).ToString()) + " an hour (the rules alone: the " + byRules.Winner + " win, " + ruleHours + "; in the game, 65 defenders were left 22 hours in, the orcs losing about 7 an hour)");
+
+            // a raid with nobody left to defend: the village's health runs down
+            var raid = new BattleRow { Kind = "raid", Settlement = "village_men", StartHours = 9100 };
+            raid.Attackers = new BattleSideRow { Leader = "p_rd", Faction = "orcs", Healthy = 166, StartHealthy = 166 };
+            raid.Attackers.Parties.Add("p_rd");
+            raid.Defenders = new BattleSideRow { Leader = "village_men", Faction = "player_k", Healthy = 0, StartHealthy = 20, Casualties = 20, SettlementLed = true };
+            var raider = new PartyRow { Id = "p_rd", Leader = "lord_rd", Name = "Galuvir", Faction = "orcs", Kind = "lord", Men = 166, Strength = 200, X = 160, Y = 110, InBattle = true, Spottable = true };
+            Snapshot r1 = ToolWorld(9110, raider); r1.SettlementById["village_men"].HitPoints = 0.40f; r1.Battles.Add(raid);
+            Views.Clocks(r1, "orcs", r1.WatchedSees, new HashSet<string>());
+            Snapshot r2 = ToolWorld(9111, raider); r2.SettlementById["village_men"].HitPoints = 0.38f; r2.Battles.Add(raid);
+            string rl = Views.Clocks(r2, "orcs", r2.WatchedSees, new HashSet<string>()).FirstOrDefault(l => l.StartsWith("At Bree", StringComparison.Ordinal)) ?? "";
+            Check(rl.Contains("It has 38% left, falling about 2% an hour (measured over the last hour), so it is looted in about 19 hours") && !rl.Contains("Run ahead"),
+                  "a raid with its defenders down: the looting, by the village's health: " + rl);
+
+            // an ally's siege far off is not in the realm's sight; its own is
+            Snapshot sa = ToolWorld(9200);
+            sa.Factions["orcs"].Allies.Add("isengard");
+            sa.Factions["isengard"] = new FactionRow { Id = "isengard", Name = "Isengard", Ruler = "Saruman", AtWar = { "player_k" }, Allies = { "orcs" } };
+            sa.FactionNames["isengard"] = "Isengard";
+            sa.SettlementById["castle_men"].BesiegedBy = "isengard";
+            sa.Sieges.Add(new SiegeRow { Settlement = "castle_men", Besieger = "p_far_ally", BesiegerFaction = "isengard", Strategy = "siege_strategy_prepare_assault", StartHours = 9190, WallLevel = 1, Prep = 0.2f, PrepRate = 0.04f, Advantage = 5f, Defenders = 300, Attackers = 3000 });
+            List<string> cl = Views.Clocks(sa, "orcs", sa.WatchedSees, new HashSet<string> { "isengard" });
+            Check(!cl.Any(l => l.Contains("castle_men")), "an ally's siege no lord of the realm can see is not in its report (" + cl.Count + " lines)");
         }
 
         /// <summary>
