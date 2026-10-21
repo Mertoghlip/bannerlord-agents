@@ -50,7 +50,7 @@ namespace BannerlordAgents
             "  agents.order <lord> <order> <place or lord> [setting=value] [lords=a,b]  the agent's orders and tools, by hand\n" +
             "  agents.tools [name]              every order and tool the agent can give, with its settings\n" +
             "  agents.vassal <lord> <verb> <target> an order for one of your own lords, recorded as your decision\n" +
-            "  agents.rebalance [apply]         the fairer test save: the old orc fortresses back to the orcs, their lords freed (shows first)\n" +
+            "  agents.rebalance [apply]         the fairer test save: the old orc fortresses (Western Moria too) back to the orcs, their lords freed (shows first)\n" +
             "  agents.orders, agents.release <lord>|all\n" +
             "  agents.agent [off|shadow|live [lords]|dir <folder>]  the agent channel (the agent chat's orders)\n" +
             "  agents.detail [full|everyday]    how much the logs record\n" +

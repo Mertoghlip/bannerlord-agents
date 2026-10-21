@@ -30,8 +30,8 @@ namespace BannerlordAgents
     internal static class TestSetup
     {
         public const string OrcRealm = "mistymountainorcs";
-        /// <summary>Sirannon, Nanduhirion, Caradhras, Hollin Gate, Eastern Moria: the old orc fortresses south of Rivendell.</summary>
-        public static readonly string[] OrcFortresses = { "castle_MM7", "town_MM3", "castle_MM1", "castle_MM6", "town_MM1" };
+        /// <summary>Sirannon, Nanduhirion, Caradhras, Hollin Gate, Eastern Moria, Western Moria (added Oct 20, late): the old orc fortresses south of Rivendell.</summary>
+        public static readonly string[] OrcFortresses = { "castle_MM7", "town_MM3", "castle_MM1", "castle_MM6", "town_MM1", "town_MM2" };
 
         public static string Rebalance(List<string> args)
         {
@@ -86,8 +86,9 @@ namespace BannerlordAgents
                 MobileParty garrison = s.Town?.GarrisonParty;
                 int men = garrison?.MemberRoster.TotalManCount ?? 0;
                 int inside = s.Parties.Count(p => Leaves(p, orcs));
+                int guests = Guests(s, orcs).Count;
                 sb.AppendLine("- " + s.Name + " (" + (s.IsTown ? "town" : "castle") + ", " + s.BoundVillages.Count + " villages) to " + kv.Value.Name + " (" + kv.Value.Leader.Name
-                              + "; it holds " + kv.Value.Fiefs.Count + " now): garrison of " + men + " to orc troops" + (inside > 0 ? "; " + inside + " parties inside to be moved out" : "")
+                              + "; it holds " + kv.Value.Fiefs.Count + " now): garrison of " + men + " to orc troops" + (inside > 0 ? "; " + inside + " parties inside to be moved out" : "") + (guests > 0 ? "; " + guests + " of your realm's heroes staying there without a party moved to your nearest castle or town" : "")
                               + (s.IsUnderSiege ? "; its siege ended" : "") + ".");
             }
             if (problems.Count > 0) return sb.Append("Cannot run now: ").Append(string.Join("; ", problems)).Append('.').ToString();
@@ -101,6 +102,8 @@ namespace BannerlordAgents
                 catch (Exception e) { Diag.Swallowed("releasing " + h.Name, e); }
             }
             int swapped = 0;
+            int moved = 0;
+            var targets = new HashSet<string>(plan.Select(kv => kv.Key.StringId), StringComparer.Ordinal);
             foreach (var kv in plan)
             {
                 Settlement s = kv.Key;
@@ -108,14 +111,46 @@ namespace BannerlordAgents
                 {
                     s.SiegeEvent?.FinalizeSiegeEvent();
                     foreach (MobileParty p in s.Parties.Where(p => Leaves(p, orcs)).ToList()) LeaveSettlementAction.ApplyForParty(p);
+                    moved += MoveGuests(s, orcs, targets);
                     ChangeOwnerOfSettlementAction.ApplyByDefault(kv.Value.Leader, s);
                     swapped += Garrison(s, tree, culture);
                     Log.Line("rebalance: " + s.Name + " to " + kv.Value.Name);
                 }
                 catch (Exception e) { Diag.Error("handing over " + s.Name, e); sb.AppendLine("  " + s.Name + " failed: " + e.Message); }
             }
-            Diag.Event("command", "rebalance", new { freed, places = plan.Select(kv => kv.Key.StringId + ">" + kv.Value.StringId).ToList(), garrison_men = swapped });
-            return sb.Append("Done: ").Append(freed).Append(" lords released, ").Append(plan.Count).Append(" places handed over, ").Append(swapped).Append(" garrison men now orc troops. Save the game now.").ToString();
+            Diag.Event("command", "rebalance", new { freed, places = plan.Select(kv => kv.Key.StringId + ">" + kv.Value.StringId).ToList(), garrison_men = swapped, heroes_moved = moved });
+            return sb.Append("Done: ").Append(freed).Append(" lords released, ").Append(plan.Count).Append(" places handed over, ").Append(swapped).Append(" garrison men now orc troops, ").Append(moved).Append(" of your heroes moved out first. Save the game now.").ToString();
+        }
+
+        /// <summary>
+        /// Heroes staying in the place without a party whom the game takes prisoner when it changes owner (Oct 20, the first run:
+        /// 11 of the player's realm's heroes "taken prisoner by Nanduhirion", Caradhras and Sirannon): the same test as the game's
+        /// (PrisonerCaptureCampaignBehavior.HandleSettlementHeroes on OnSettlementOwnerChanged: not the player, a wanderer or a
+        /// notable, not a prisoner or dead, and at war with the place's new owner).
+        /// </summary>
+        private static List<Hero> Guests(Settlement s, Kingdom orcs) =>
+            s.HeroesWithoutParty.Where(h => h != null && h != Hero.MainHero && !h.IsWanderer && !h.IsNotable && h.HeroState != Hero.CharacterStates.Prisoner
+                                            && h.HeroState != Hero.CharacterStates.Dead && h.MapFaction != null && h.MapFaction.IsAtWarWith(orcs)).ToList();
+
+        /// <summary>Moves those heroes, before the handover, to the nearest castle or town of their own realm not under siege and not being handed over.</summary>
+        private static int MoveGuests(Settlement s, Kingdom orcs, HashSet<string> handedOver)
+        {
+            int moved = 0;
+            foreach (Hero h in Guests(s, orcs))
+            {
+                Settlement to = Settlement.All.Where(x => x.IsFortification && x.MapFaction == h.MapFaction && !x.IsUnderSiege && !handedOver.Contains(x.StringId))
+                                              .OrderBy(x => x.Position.ToVec2().Distance(s.Position.ToVec2())).FirstOrDefault();
+                if (to == null) { Log.Line("rebalance: " + h.Name + " has no castle or town of their realm to go to, and stays in " + s.Name); continue; }
+                try
+                {
+                    if (h.GovernorOf != null) ChangeGovernorAction.RemoveGovernorOf(h);
+                    TeleportHeroAction.ApplyImmediateTeleportToSettlement(h, to);
+                    moved++;
+                    Log.Line("rebalance: " + h.Name + " moved from " + s.Name + " to " + to.Name);
+                }
+                catch (Exception e) { Diag.Swallowed("moving " + h.Name + " out of " + s.Name, e); }
+            }
+            return moved;
         }
 
         /// <summary>A party inside that must leave when the place becomes the orcs': at war with them, and not the place's own.</summary>
