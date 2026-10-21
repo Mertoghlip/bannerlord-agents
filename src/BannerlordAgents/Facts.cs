@@ -189,6 +189,10 @@ namespace BannerlordAgents
                     sb.AppendLine("- " + w.Name(p.Id) + " [" + w.Tag(p.Id) + "] (" + where + ", strength " + (str.HasValue ? Text.N((int)str.Value) : "?")
                                   + (home != null ? ", " + Far(w, p.Id, home.Id) + " from your " + home.Name : "") + "): your lords who can reach it soonest "
                                   + (near.Count > 0 ? string.Join("; ", near) : "none") + ".");
+                    // a fight with it, by the game's battle rules (0.7.4): the nearest lord alone, and the nearest three together
+                    List<PartyRow> soonest = lords.Where(l => !double.IsNaN(Hours(w, l.Row, p.Id))).OrderBy(l => Hours(w, l.Row, p.Id)).Take(3).Select(l => l.Row).ToList();
+                    string odds = Forecast.FieldOddsText(w, soonest, p);
+                    if (odds != null) sb.AppendLine("  " + odds);
                 }
             }
             List<Lord> free = lords.Where(l => l.Order == "free").ToList();

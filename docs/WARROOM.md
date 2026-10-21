@@ -52,7 +52,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 | `urgent` | is besieged, laid siege, passed from, declared war, Enemy army in view, was taken prisoner, army has formed, fell, striking the besiegers | words in a poke's reasons that make it urgent |
 | `timeout_seconds` | 120 | the longest a call may take |
 | `lookups` | on | let the agent read its look-up files during a call |
-| `route_tool` | on | offer the agent the "ask the way" tool in its answers and councils (0.7), once the walking map is copied ([ROUTES.md](ROUTES.md)) |
+| `route_tool` | on | offer the agent the "ask the way" tool in its answers and councils (0.7), and since 0.7.4 the "battle odds" and "roads in" questions beside it, once the walking map is copied ([ROUTES.md](ROUTES.md), [TOOLS.md](TOOLS.md#siege-control-the-storm-rule-the-relief-bars-and-battles-run-ahead-before-they-begin-since-074)) |
 | `max_lessons` | 12 | lessons kept in the notes; past it, the chronicler merges them |
 | `memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit` | written, 12, 450, (the agent's), medium, 2000, 180000 | the realm's memory and its chronicler ([MEMORY.md](MEMORY.md#settings-warroomtxt)) |
 | `council` | on | the council of war ([below](#the-council-of-war)); written memory only |
@@ -124,13 +124,13 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - **`calls\<date>\<time>-poke-N\`**, **`<time>-council-N\`** and **`<time>-story\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer (or the story), for reading side by side.
 - **`warroom-<date>.log`:** the window's lines, memory included ("Memory: the story so far was rewritten ...", "Memory: an earlier save was loaded ...").
 - **`system-<hash>.md`**, **`chronicler-<hash>.md`:** each system prompt used.
-- **`routes.jsonl`** (0.7): every question to the "ask the way" tool, with its poke and the answer; `replaysoutes.jsonl` for replays. Each call's line in `calls.jsonl` gives `ways_asked` and `way_tool` (whether it was offered).
+- **`routes.jsonl`** (0.7): every question to the "ask the way" tool (and since 0.7.4 to "battle odds" and "roads in", with `tool`), with its poke and the answer; `replaysoutes.jsonl` for replays. Each call's line in `calls.jsonl` gives `ways_asked` and `way_tool` (whether it was offered).
 
 ## Other commands
 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
 - `WarRoom council`: a council of war sits now (the game must be running, and no `WarRoom run` for the folder: that one holds its own councils).
-- `WarRoom selftest`: the memory, the council and the "ask the way" tool checked in a scratch folder, without any call (46 checks; `scripts\deploy.ps1` runs it before installing).
+- `WarRoom selftest`: the memory, the council and the "ask the way", "battle odds" and "roads in" tools checked in a scratch folder, without any call (50 checks in 0.7.4; `scripts\deploy.ps1` runs it before installing).
 - `WarRoom toolcheck [--model m] [--big]`: one real, short call (a small model by default) on the self-test's made-up map, asked to use the "ask the way" tool once, then a plain call: the whole path the agent's tool takes. `--big` sends a message as long as a real poke: on Oct 16 that froze both sides (the message filled the pipe while Claude Code was busy with the tool's handshake, and the tool's answer queued behind it), so standard input now has a writer thread of its own and the message goes only after the handshake. Passed after the fix in about 4 s.
 
 ## Replay

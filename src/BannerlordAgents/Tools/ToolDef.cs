@@ -88,7 +88,7 @@ namespace BannerlordAgents.Tools
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
             ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1,
             ["doing_of"] = 1, ["toward_of"] = 1, ["where_of"] = 1,
-            ["relief_coming"] = 2, ["relief_count"] = 2, ["relief_of"] = 2
+            ["relief_coming"] = 2, ["relief_count"] = 2, ["relief_of"] = 2, ["relief_within"] = 3, ["prep_hours"] = 1, ["storm_text"] = 1
         };
 
         public bool Valid => Problems.Count == 0;
@@ -209,7 +209,7 @@ namespace BannerlordAgents.Tools
             foreach (StateDef st in States.Values)
             {
                 string where = "state " + st.Name;
-                if (st.End != null && st.End != "free" && st.End != "hold" && st.End != "fail") Problems.Add(where + ": end must be free, hold or fail");
+                if (st.End != null && st.End != "free" && st.End != "hold" && st.End != "fail" && st.End != "stop") Problems.Add(where + ": end must be free, hold, fail or stop");
                 if (st.Do == null && st.End == null) Problems.Add(where + ": a state needs a move (do) unless it ends the tool");
                 if (st.Do != null)
                 {

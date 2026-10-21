@@ -119,6 +119,8 @@ When the facts in the message are not enough, you may read one file per id with 
 
 You can ask the way for one army at a time with the `ask_the_way` tool: the shortest way it would march to a holding or to another army, found as the game itself finds ways; how many hours that takes at the army's pace; the ground it crosses; and the bridges, fords and narrow passes on it, with what closing each would cost. Name the army and the destination by their ids in [brackets]; an enemy starts from where your realm last saw it. Add `also_from` to compare who would get there first. Each answer names spots on the way in [brackets], pX_Y (its crossings, and points along it): a lord can keep watch on one (the watch order). Its first answer in a call says how marching works, and so does `marching.txt`. Each question costs a few seconds while the game runs, so ask only when the way matters to your decision.
 
+Two more questions work the same way. `battle_odds`: how a battle would go and how long it would last, by the game's own battle rules, between lords of yours (`ours`) and enemies your report shows (`theirs`), in the open, or storming a castle or town (`at`), with how long the siege camp's preparations would take first; the enemy's morale you cannot see, so it is run low, middling and high. `roads_in`: the roads into a holding from the castles and towns of the realms at war with you, where they come together, and a spot on each where a watch would see a relief some hours before it reaches the walls.
+
 ## Time
 
 The game does not wait for you.

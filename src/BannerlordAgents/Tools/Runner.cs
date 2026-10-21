@@ -73,6 +73,8 @@ namespace BannerlordAgents.Tools
         public static Action<int, Move> MoveSink = (id, m) => Background.ToMain.Enqueue(() => Orders.ToolMove(id, m));
         public static Action<int, string> ReleaseSink = (id, why) => Background.ToMain.Enqueue(() => Orders.ToolRelease(id, why));
         public static Action<int, JObject> ThenSink = (id, then) => Background.ToMain.Enqueue(() => Orders.ToolThen(id, then));
+        /// <summary>The storm rules for the game's storm hook (StormGate is safe to write from the worker); a null party clears them all.</summary>
+        public static Action<string, StormRule> StormSink = StormGate.Set;
 
         public static int Count => ById.Count;
 
@@ -81,6 +83,7 @@ namespace BannerlordAgents.Tools
             if (ById.Count > 0) Diag.Event("tool", "cleared", new { count = ById.Count });
             ById.Clear();
             NamesSeen.Clear();
+            StormSink(null, null);
         }
 
         /// <summary>The names of the parties tools act on, kept for the call-back once a party is gone and the world no longer knows it.</summary>
@@ -110,6 +113,7 @@ namespace BannerlordAgents.Tools
             foreach (ToolInstance old in ById.Values.Where(t => t.Order.Party == o.Party && t.Id != id).ToList())
             {
                 ById.Remove(old.Id);
+                StormSink(old.Order.Party, null);
                 Diag.Event("tool", "replaced", new { id = old.Id, by = id, lord = o.Lord, tool = old.Def.Name });
             }
             var t = new ToolInstance { Id = id, Order = o, Def = def, Started = Diag.Hours };
@@ -131,6 +135,7 @@ namespace BannerlordAgents.Tools
         {
             if (!ById.TryGetValue(id, out ToolInstance t)) return;
             ById.Remove(id);
+            StormSink(t.Order.Party, null);
             Diag.Count("tool:ended");
             Diag.Event("tool", "ended", new { id, tool = t.Def.Name, lord = t.Order.Lord, why, state = t.State, steps = t.Steps, hours = Math.Round(Diag.Hours - t.Started, 1) });
         }
@@ -209,6 +214,26 @@ namespace BannerlordAgents.Tools
                 }
             }
             Issue(t, w);
+            if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t));
+        }
+
+        /// <summary>
+        /// A besieging tool's storm rule this hour (0.7.4): only while it besieges (its state's move is besiege), from its storm
+        /// settings, and storm at once when its relief bar has been met (storm_now). Null otherwise, which clears it.
+        /// </summary>
+        /// <summary>The storm rule of the besiege order a party holds now (null: none, or the game decides).</summary>
+        public static StormRule StormRuleFor(string party)
+        {
+            ToolInstance t = ForParty(party);
+            return t != null && t.Settings.ContainsKey("storm") ? StormRuleOf(t) : null;
+        }
+
+        private static StormRule StormRuleOf(ToolInstance t)
+        {
+            if (t.Finished || t.Shelter != null || t.State == null || !t.Def.States.TryGetValue(t.State, out StateDef st) || st.Do?.Verb != "besiege") return null;
+            double Num(string k) => t.Settings.TryGetValue(k, out double v) ? v : 0;
+            bool now = t.Memory.TryGetValue("storm_now", out object sn) && Expr.Truthy(sn) && Expr.Number(sn) > 0;
+            return new StormRule { Mode = (int)Math.Round(Num("storm")), Engines = (int)Math.Round(Num("storm_engines")), Ratio = (float)Num("storm_ratio"), Now = now };
         }
 
         private static void Rules(ToolInstance t, Scope scope, World w)
@@ -311,6 +336,16 @@ namespace BannerlordAgents.Tools
         private static void Finish(ToolInstance t, string end, World w)
         {
             t.Finished = true;
+            if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, null);
+            if (end == "stop")
+            {
+                // stopped short of its aim (a siege lifted by its relief bar): the lord holds where it is, and its next order, which
+                // assumed the aim was won, does not start
+                if (t.Order.Then != null) Diag.Event("tool", "then skipped", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, next = t.Order.Then.ToString(Newtonsoft.Json.Formatting.None) });
+                t.Pending = new Move { Verb = "hold" };
+                t.HasPending = true;
+                return;
+            }
             if (end == "fail")
             {
                 // a tool that failed (an army that broke up) does not lead to its next order: that order assumed it worked
@@ -670,6 +705,10 @@ namespace BannerlordAgents.Tools
                     case "relief_coming": return _w.ReliefComing(Id(a[0]), Expr.Number(a[1])).Sum(c => c.Strength);
                     case "relief_count": return (double)_w.ReliefComing(Id(a[0]), Expr.Number(a[1])).Count;
                     case "relief_of": return _w.ReliefText(Id(a[0]), Expr.Number(a[1]));
+                    // the relief due within so many hours (by the game's marching rules), the hours until a camp may storm, and that in words (0.7.4)
+                    case "relief_within": return _w.ReliefWithin(Id(a[0]), Expr.Number(a[1]), Expr.Number(a[2]));
+                    case "prep_hours": return Nan(_w.PrepHours(Id(a[0])));
+                    case "storm_text": return _w.StormText(Id(a[0]));
                     case "strength_of": return _w.KnownStrength(Id(a[0]));
                     case "men_of": { int? n = _w.KnownMen(Id(a[0])); return n.HasValue ? (object)(double)n.Value : null; }
                     case "in_view": return _w.InView(Id(a[0]));

@@ -174,9 +174,11 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(Path.Combine(live, "camp5"));
             File.WriteAllText(Path.Combine(live, "current.json"), "{\"calendar\":{\"hours_in_day\":24,\"days_in_season\":21,\"seasons_in_year\":4,\"season_names\":[\"Spring\",\"Summer\",\"Autumn\",\"Winter\"]}}");
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"),
-                "{\"hours\":1000,\"map\":\"test\",\"own\":[{\"id\":\"p_bolg\",\"lord\":\"lord_bolg\",\"name\":\"Bolg\",\"x\":20,\"y\":29,\"men\":300,\"pace\":4,\"doing\":\"holding position\"}],"
-                + "\"seen\":[{\"id\":\"p_ar\",\"lord\":\"lord_ar\",\"name\":\"Aragorn\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":900,\"army_men\":5000,\"x\":80,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":1000}],"
-                + "\"last_seen\":[],\"trails\":[{\"id\":\"p_ar\",\"points\":[{\"hours\":990,\"x\":90,\"y\":29},{\"hours\":1000,\"x\":80,\"y\":29}]}],\"holdings\":[]}");
+                "{\"hours\":1000,\"map\":\"test\",\"own\":[{\"id\":\"p_bolg\",\"lord\":\"lord_bolg\",\"name\":\"Bolg\",\"x\":20,\"y\":29,\"men\":300,\"strength\":400,\"morale\":60,\"tactics\":50,\"pace\":4,\"doing\":\"holding position\"}],"
+                + "\"seen\":[{\"id\":\"p_ar\",\"lord\":\"lord_ar\",\"name\":\"Aragorn\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":900,\"army_men\":5000,\"strength\":12000,\"x\":80,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":1000}],"
+                + "\"last_seen\":[],\"trails\":[{\"id\":\"p_ar\",\"points\":[{\"hours\":990,\"x\":90,\"y\":29},{\"hours\":1000,\"x\":80,\"y\":29}]}],\"holdings\":[],"
+                + "\"frontier\":[{\"id\":\"castle_e\",\"name\":\"Edoras\",\"kind\":\"castle\",\"garrison\":100,\"militia\":50,\"defence\":260,\"wall_level\":1}],"
+                + "\"enemy_holdings\":{\"Arnor\":[\"town_b\",\"castle_d\"]}}");
             string logs = Path.Combine(root, "logs");
             var tool = new RouteTool(data, logs, "camp5", "orcs", 12, "answer");
             Check(tool.Ready(out string why), "the tool is offered once the map and the realm's view are there (" + (why ?? "ready") + ")");
@@ -196,6 +198,20 @@ namespace BannerlordAgents.WarRoom
             Check(a3 != null && a3.Contains("knows no lord, army or holding called \"p_hidden\""), "a party the realm never saw is refused: " + a3);
             string[] logged = File.Exists(Path.Combine(logs, "routes.jsonl")) ? File.ReadAllLines(Path.Combine(logs, "routes.jsonl")) : new string[0];
             Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
+            // 0.7.4: the battle odds and the roads in, served beside the way
+            string Ask(string name, string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
+            Check((list?["result"]?["tools"] as JsonArray)?.Count == 3 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in",
+                  "the server lists the battle odds and the roads in beside the way");
+            string o1 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"theirs\":[\"lord_ar\"]}");
+            Check(o1 != null && o1.StartsWith("BATTLE ODDS: Bolg [lord_bolg] against Aragorn [lord_ar], in the open") && o1.Contains("they win") && o1.Contains("two rounds an hour"),
+                  "a field battle by the game's rules: Bolg's 300 against Aragorn's army of 5,000 loses: " + o1?.Replace("\n", " | "));
+            string o2 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"at\":\"castle_e\"}");
+            Check(o2 != null && o2.StartsWith("BATTLE ODDS: Bolg [lord_bolg] storming Edoras [castle_e]") && System.Text.RegularExpressions.Regex.IsMatch(o2, @"preparations, about \d+ hours for 300 men")
+                  && o2.Contains("grow only with the defenders' number") && o2.Contains("Run ahead:"),
+                  "a storm by the game's rules, with the camp's preparation time first: " + o2?.Replace("\n", " | "));
+            string r1 = Ask("roads_in", "{\"to\":\"town_a\",\"hours_out\":3}");
+            Check(r1 != null && r1.StartsWith("THE ROADS INTO Aldburg [town_a]") && r1.Contains("Bree (Arnor") && System.Text.RegularExpressions.Regex.IsMatch(r1, @"\[p\d+_\d+\]") && r1.Contains("hours before it reaches the walls"),
+                  "the roads into a holding from the enemy's places, with a watch spot and its warning: " + r1?.Replace("\n", " | "));
             File.AppendAllText(c.SystemTemplate, "\n## Asking the way\n\nAsk with ask_the_way.\n");
             var room = new Room(c, logs);
             string with = File.ReadAllText(room.SystemFile(true)), without = File.ReadAllText(room.SystemFile(false));

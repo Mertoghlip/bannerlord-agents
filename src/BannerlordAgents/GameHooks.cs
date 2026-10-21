@@ -29,6 +29,9 @@ namespace BannerlordAgents
     ///   (Hold) with the game's AI switched off, switches the AI back on: it takes a lord we hold for a stuck one. The
     ///   game then changed the lord's plan within the hour (Oct 16: 40 times in a few game days). Right after that
     ///   look, a lord one of our orders holds is held again.
+    /// - The storm rule (always on since 0.7.4; the second hook that changes what happens). For a siege led by a lord
+    ///   holding the agent's besiege order with a storm rule, the game's storm test answers by the agent's rule instead
+    ///   of the game's roll (StormGate); every other siege is untouched.
     /// Harmony 2.4.2 comes from TAOM.Dependencies. Only InstallCore touches it, so a missing Harmony disables these
     /// pieces and nothing else.
     /// </summary>
@@ -37,8 +40,8 @@ namespace BannerlordAgents
         private const string Owner = "bannerlordagents.logs";
         private static readonly Dictionary<string, string> Parts = new Dictionary<string, string>();
         public static string Status => Parts.Count == 0 ? "not attached" : string.Join("; ", Parts.Values);
-        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled;
-        private static bool _keepHeldTried;
+        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled;
+        private static bool _keepHeldTried, _stormTried;
         private static object _harmony;
 
         /// <summary>Game's thread: at start-up and whenever the settings change. Attaches what is wanted and not yet attached.</summary>
@@ -47,9 +50,10 @@ namespace BannerlordAgents
             bool wantWitness = Settings.Witness && Settings.Full;
             bool wantReasons = Settings.AiReasons;
             bool wantKeep = !KeepHeldInstalled && !_keepHeldTried;
-            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep)
+            bool wantStorm = !StormInstalled && !_stormTried;
+            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep || wantStorm)
             {
-                try { InstallCore(wantWitness, wantReasons, wantKeep); }
+                try { InstallCore(wantWitness, wantReasons, wantKeep, wantStorm); }
                 catch (Exception e)
                 {
                     Parts["error"] = "could not attach (" + e.GetType().Name + ": " + e.Message + ")";
@@ -63,7 +67,7 @@ namespace BannerlordAgents
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void InstallCore(bool witness, bool reasons, bool keep)
+        private static void InstallCore(bool witness, bool reasons, bool keep, bool storm)
         {
             var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
             Parts.Remove("error");
@@ -107,8 +111,20 @@ namespace BannerlordAgents
                     Parts["keep"] = "held lords kept from Party AI Controls' hourly look: " + (KeepHeldInstalled ? "attached" : "did not attach") + Others(target);
                 }
             }
+            if (storm && !StormInstalled)
+            {
+                _stormTried = true;
+                MethodInfo target = typeof(TaleWorlds.CampaignSystem.Siege.BesiegerCamp).GetMethod("StartingAssaultOnBesiegedSettlementIsLogical", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (target == null) Parts["storm"] = "the storm rule: the game's storm test was not found, so the game's own commander decides every storm";
+                else
+                {
+                    h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(StormPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    StormInstalled = Ours(target);
+                    Parts["storm"] = "the storm rule " + (StormInstalled ? "attached" : "did not attach") + Others(target);
+                }
+            }
             Log.Line("game hooks: " + Status);
-            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, status = Status });
+            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, storm_rule = StormInstalled, status = Status });
         }
 
         /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>
@@ -126,6 +142,24 @@ namespace BannerlordAgents
             HarmonyLib.Patches info = HarmonyLib.Harmony.GetPatchInfo(m);
             List<string> others = info?.Owners.Where(o => o != Owner).Distinct().ToList();
             return others != null && others.Count > 0 ? " (also patched by: " + string.Join(", ", others) + ")" : "";
+        }
+    }
+
+    /// <summary>
+    /// The storm rule (0.7.4): in front of the game's storm test (BesiegerCamp.StartingAssaultOnBesiegedSettlementIsLogical, asked only
+    /// once the camp's preparations are done), a siege led by a lord holding the agent's besiege order with a storm rule gets the
+    /// agent's answer instead of the game's roll (StormGate). Every other siege runs the game's own test. A large method, not inlined.
+    /// </summary>
+    internal static class StormPatch
+    {
+        private static bool Prefix(TaleWorlds.CampaignSystem.Siege.BesiegerCamp __instance, ref bool __result)
+        {
+            bool? d;
+            try { d = StormGate.Decide(__instance); }
+            catch (Exception e) { Diag.Swallowed("the storm rule", e); return true; }
+            if (d == null) return true;
+            __result = d.Value;
+            return false;
         }
     }
 

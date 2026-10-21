@@ -242,6 +242,8 @@ namespace BannerlordAgents.Tools
             public string Id, Name, Doing;
             public double Strength, Distance, Road = double.NaN, SeenAgo;
             public bool Heading;
+            /// <summary>Hours until it gets there by the game's marching rules (0.7.4): along its planned way when heading for it, else its distance at its pace over a day.</summary>
+            public double Eta = double.NaN;
         }
 
         /// <summary>
@@ -259,10 +261,14 @@ namespace BannerlordAgents.Tools
             double Dist(float x, float y) => Math.Sqrt((x - px) * (x - px) + (y - py) * (y - py));
             foreach (PartyRow e in _enemies)
             {
+                if (e.InSettlement == place) continue;   // inside the place itself: part of its defence, which the storm test counts already
                 double d = Dist(e.X, e.Y);
                 bool heading = Views.Toward(e) == place;
                 if (d > r && !heading) continue;
-                list.Add(new Comer { Id = e.Id, Name = e.Name ?? e.Id, Doing = Views.Doing(S, e), Strength = StrengthOf(e), Distance = d, Heading = heading });
+                var c = new Comer { Id = e.Id, Name = e.Name ?? e.Id, Doing = Views.Doing(S, e), Strength = StrengthOf(e), Distance = d, Heading = heading };
+                Forecast.Arrival arr = heading ? Forecast.ArrivalOf(S, e, 24 * 10) : null;
+                c.Eta = arr != null && arr.Reached ? arr.Hours : d / Math.Max(0.3, PerHour(e));
+                list.Add(c);
             }
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
@@ -273,7 +279,10 @@ namespace BannerlordAgents.Tools
                 double d = Dist(v.X, v.Y);
                 bool heading = v.Toward == place;
                 if (d > r && !heading) continue;
-                list.Add(new Comer { Id = kv.Key, Name = v.Name ?? kv.Key, Doing = v.Doing, Strength = v.Strength, Distance = d, Heading = heading, SeenAgo = Hours - v.SeenHours });
+                // seen earlier: from where it was then, at its pace then, less the hours since
+                double perHour = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
+                list.Add(new Comer { Id = kv.Key, Name = v.Name ?? kv.Key, Doing = v.Doing, Strength = v.Strength, Distance = d, Heading = heading, SeenAgo = Hours - v.SeenHours,
+                                     Eta = Math.Max(0, d / Math.Max(0.3, perHour) - (Hours - v.SeenHours)) });
             }
             foreach (Comer c in list) c.Road = RoadDistance(c.Id, place);
             return list.OrderBy(c => double.IsNaN(c.Road) ? c.Distance : c.Road).ToList();
@@ -285,12 +294,40 @@ namespace BannerlordAgents.Tools
             List<Comer> list = ReliefComing(place, r);
             if (list.Count == 0) return "none in sight";
             IEnumerable<string> lines = list.Take(most).Select(c => c.Name + ", strength " + Text.N((int)Math.Round(c.Strength)) + ", "
-                + Roads.Both((float)c.Distance, (float)c.Road) + " away, " + (c.Doing ?? "doing what is not known")
+                + Roads.Both((float)c.Distance, (float)c.Road) + " away" + (double.IsNaN(c.Eta) ? "" : " (due in about " + Forecast.HoursText(c.Eta) + ")") + ", " + (c.Doing ?? "doing what is not known")
                 + (c.SeenAgo > 0 ? " (seen " + Math.Round(c.SeenAgo) + " hours ago)" : ""));
             string text = string.Join("; ", lines);
             if (list.Count > most)
                 text += "; and " + (list.Count - most) + " more (strength " + Text.N((int)Math.Round(list.Skip(most).Sum(c => c.Strength))) + ")";
             return text;
+        }
+
+        /// <summary>The strength of the relief (ReliefComing) due within so many hours.</summary>
+        public double ReliefWithin(string place, double hours, double r) => ReliefComing(place, r).Where(c => !double.IsNaN(c.Eta) && c.Eta <= hours).Sum(c => c.Strength);
+
+        /// <summary>The siege of a place as the hourly copy has it (a siege the realm can know of: its own holding, or by its own or an ally's lords, or the camp in sight), or null.</summary>
+        public SiegeRow Siege(string place)
+        {
+            SiegeRow g = S.Sieges?.FirstOrDefault(x => x.Settlement == place);
+            if (g == null) return null;
+            SettlementRow h = Holding(place);
+            return h?.Faction == Realm || g.BesiegerFaction == Realm || Ally(g.BesiegerFaction) || Ally(h?.Faction) || InView(g.Besieger) ? g : null;
+        }
+
+        /// <summary>Hours until the camp besieging a place has its preparations done (0: done), by the rate the model in force builds them; NaN if no siege known.</summary>
+        public double PrepHours(string place)
+        {
+            SiegeRow g = Siege(place);
+            if (g == null) return double.NaN;
+            return g.Prep >= 1 ? 0 : g.PrepRate > 0 ? (1 - g.Prep) / g.PrepRate : double.NaN;
+        }
+
+        /// <summary>"The camp may storm now." or "The camp's preparations are done in about 12 hours (Summer 19, 16:00); it cannot storm before."</summary>
+        public string StormText(string place)
+        {
+            double h = PrepHours(place);
+            if (double.IsNaN(h)) return "No siege of it is known.";
+            return h <= 0.05 ? "The camp may storm now." : "The camp's preparations are done in about " + Forecast.HoursText(h) + " (" + Text.When(Hours + h) + "); it cannot storm before.";
         }
 
         public bool Besieged(SettlementRow h) => h != null && h.BesiegedBy != null;

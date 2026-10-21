@@ -48,7 +48,7 @@ namespace BannerlordAgents
             foreach (Kingdom k in Kingdom.All)
             {
                 if (k == null || k.IsEliminated) continue;
-                var row = new FactionRow { Id = k.StringId, Name = Names.Faction(k), Ruler = Names.Hero(k.Leader), Color = k.Color, Color2 = k.Color2 };
+                var row = new FactionRow { Id = k.StringId, Name = Names.Faction(k), Ruler = Names.Hero(k.Leader), Color = k.Color, Color2 = k.Color2, Lords = k.AliveLords.Count };
                 foreach (Kingdom o in Kingdom.All)
                     if (o != null && o != k && !o.IsEliminated && k.IsAtWarWith(o)) row.AtWar.Add(o.StringId);
                 foreach (Kingdom a in k.AlliedKingdoms)
@@ -90,13 +90,12 @@ namespace BannerlordAgents
                     r.Garrison = g?.NumberOfHealthyMembers ?? 0;
                     // the game keeps these estimates until the party changes; only the watched realm's tools weigh them, for its
                     // own and its allies' castles and towns (whether a place would hold an assault)
-                    if (watched != null && (f == watched || (f is Kingdom fk && allies.Contains(fk))))
-                    {
-                        if (g != null) r.GarrisonStrength = (float)Math.Round(g.EstimatedStrength);
-                        MobileParty militia = s.MilitiaPartyComponent?.MobileParty;
-                        if (militia != null && militia.IsActive) r.MilitiaStrength = (float)Math.Round(militia.Party.EstimatedStrength);
-                        r.WallLevel = s.Town.GetWallLevel();
-                    }
+                    // since 0.7.4 for every castle and town (the game keeps these estimates; the view shows an enemy's only where the realm's eyes reach),
+                    // for storms run ahead by the "battle odds" question
+                    if (g != null) r.GarrisonStrength = (float)Math.Round(g.EstimatedStrength);
+                    MobileParty militia = s.MilitiaPartyComponent?.MobileParty;
+                    if (militia != null && militia.IsActive) r.MilitiaStrength = (float)Math.Round(militia.Party.EstimatedStrength);
+                    r.WallLevel = s.Town.GetWallLevel();
                 }
                 if (s.Village != null)
                 {
@@ -314,6 +313,11 @@ namespace BannerlordAgents
             // the way and the speed's parts: lords always (their arrival times, 0.7.3), caravans for the dashboard
             if (p.IsLordParty || Settings.Dashboard) Way(p, r, inside == null && me == null && !r.Attached);
             if (p.IsLordParty && !r.Attached) Pace(p, r, leader);
+            if (p.IsLordParty)
+            {
+                r.Morale = (float)Math.Round(p.Morale, 1);
+                if (leader != null) r.Tactics = leader.GetSkillValue(DefaultSkills.Tactics);
+            }
             return r;
         }
 
@@ -484,10 +488,23 @@ namespace BannerlordAgents
                     // the storm test's defenders: the parties inside it counts (lords not shy of a fight, the militia, the garrison)
                     bool playerInside = MobileParty.MainParty?.CurrentSettlement == s;
                     float d = 0, a = 0;
+                    int dMen = 0, aMen = 0;
+                    double aMorale = 0;
                     foreach (PartyBase x in s.GetInvolvedPartiesForEventType())
                         if (x.IsMobile && x.MobileParty.CurrentSettlement == s && (x.MobileParty.Aggressiveness > 0.01f || x.MobileParty.IsMilitia || x.MobileParty.IsGarrison))
+                        {
                             d += (playerInside ? 0.5f : 1f) * x.CalculateCurrentStrength();
-                    foreach (PartyBase x in camp.GetInvolvedPartiesForEventType()) a += x.CalculateCurrentStrength();
+                            dMen += x.NumberOfHealthyMembers;
+                        }
+                    foreach (PartyBase x in camp.GetInvolvedPartiesForEventType())
+                    {
+                        a += x.CalculateCurrentStrength();
+                        aMen += x.NumberOfHealthyMembers;
+                        if (x.IsMobile) aMorale += x.MobileParty.Morale * x.NumberOfHealthyMembers;
+                    }
+                    g.AttackerMen = aMen;
+                    g.DefenderMen = dMen;
+                    g.AttackerMorale = aMen > 0 ? (float)Math.Round(aMorale / aMen, 1) : 50f;
                     g.Defenders = (float)Math.Round(d, 1);
                     g.Attackers = (float)Math.Round(a, 1);
                     g.PlayerInside = playerInside;

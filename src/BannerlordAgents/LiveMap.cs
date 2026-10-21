@@ -139,15 +139,29 @@ namespace BannerlordAgents
             var own = s.Parties.Where(r => r.Faction == fid && r.Kind == "lord" && !r.Attached).Select(r => new
             {
                 r.Id, Lord = r.Leader, Name = r.Name ?? r.Id, r.X, r.Y, r.Men, r.ArmyMen, Strength = r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength,
-                Pace = r.Speed, r.FinalSpeed, March = MarchOf(s, r), Doing = Views.Doing(s, r), r.InSettlement, r.Route, r.Tx, r.Ty
+                Pace = r.Speed, r.FinalSpeed, March = MarchOf(s, r), Doing = Views.Doing(s, r), r.InSettlement, r.Route, r.Tx, r.Ty,
+                // for the "battle odds" question (0.7.4): its morale and its leader's Tactics, and an army's whole strength
+                r.Morale, r.Tactics, r.ArmyStrength, r.Wounded
             }).ToList();
             Files.Overwrite(Path.Combine(Root, Safe(s.Campaign), "view_" + Safe(fid) + ".json"), Json.Line(new
             {
                 s.Campaign, s.LoadId, Realm = fid, RealmName = v.FactionName, s.Hours, s.Date, Map = s.MapCrc, Own = own,
-                v.Seen, v.LastSeen, v.Trails, v.Holdings,
+                v.Seen, v.LastSeen, v.Trails, v.Holdings, v.Frontier,
+                // the castles and towns of each realm at war with it, as the map shows any player (0.7.4, for the "roads in" question)
+                EnemyHoldings = EnemyHoldings(s, fid),
                 // the marching rules in force, for the "ask the way" tool (GamePace, 0.7.3): the speed model, each people's bonuses, the scout perks' values
                 s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.PerkValues
             }));
+        }
+
+        /// <summary>The castles and towns of each realm at war with this one, by realm name: who owns which place the map shows anyone.</summary>
+        private static Dictionary<string, List<string>> EnemyHoldings(Snapshot s, string fid)
+        {
+            var map = new Dictionary<string, List<string>>();
+            if (!s.Factions.TryGetValue(fid ?? "", out FactionRow me)) return map;
+            foreach (string e in me.AtWar)
+                map[Views.FactionName(s, e)] = s.Settlements.Where(h => h.Faction == e && (h.Kind == "castle" || h.Kind == "town")).Select(h => h.Id).ToList();
+            return map;
         }
 
         /// <summary>A lord's march for the view file: the parts of its speed sum (its perk values go once, at the top).</summary>

@@ -28,7 +28,7 @@ namespace BannerlordAgents.WarRoom
     /// So it can never tell the agent more than its realm saw. Each question and answer goes to logs\warroom\routes.jsonl, which
     /// the dashboard shows beside the agent's moves. How marching works comes with the first answer in a call.
     /// </summary>
-    internal sealed class RouteTool : IToolHost
+    internal sealed partial class RouteTool : IToolHost
     {
         public const string ToolName = "ask_the_way";
         private static readonly object Gate = new object();
@@ -42,7 +42,7 @@ namespace BannerlordAgents.WarRoom
         public int Asked;
 
         public string Server => "routes";
-        public IEnumerable<string> Tools => new[] { ToolName };
+        public IEnumerable<string> Tools => new[] { ToolName, OddsName, RoadsName };
 
         public RouteTool(string root, string logDir, string campaign, string realm, int poke, string call)
         {
@@ -122,13 +122,13 @@ namespace BannerlordAgents.WarRoom
                     };
                     break;
                 case "tools/list":
-                    result = new JsonObject { ["tools"] = new JsonArray(Definition()) };
+                    result = new JsonObject { ["tools"] = new JsonArray(Definition(), OddsDefinition(), RoadsDefinition()) };
                     break;
                 case "tools/call":
                 {
                     string name = (string)msg["params"]?["name"];
                     JsonObject args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
-                    string text = name == ToolName ? Ask(args) : "There is no tool called " + name + ".";
+                    string text = name == ToolName ? Ask(args) : name == OddsName ? Safe(() => Odds(args)) : name == RoadsName ? Safe(() => RoadsIn(args)) : "There is no tool called " + name + ".";
                     result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
                     break;
                 }

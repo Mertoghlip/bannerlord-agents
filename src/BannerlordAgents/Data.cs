@@ -54,6 +54,9 @@ namespace BannerlordAgents
         public int ScoutPerks;
         public float FootShare = 1f;
         public bool Snowing;
+        /// <summary>Lords: the party's morale and its leader's Tactics skill (a battle's advantage is 1 + 0.001 a point), for battles run ahead (0.7.4); only the realm's own reach the agent.</summary>
+        public float Morale = -1f;
+        public int Tactics;
         /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts, and the lord's clan.</summary>
         public int SizeLimit, FoodDays = -1;
         public string Clan;
@@ -149,6 +152,9 @@ namespace BannerlordAgents
         public int Built;
         /// <summary>The storm test's strengths: the defenders it counts (halved with the player inside) and the besiegers; the garrison's part of the defenders.</summary>
         public float Defenders, Attackers, GarrisonPower;
+        /// <summary>The two sides' healthy men (the storm test's parties), and the besiegers' morale weighted by men: for a storm's clock run ahead (0.7.4).</summary>
+        public int AttackerMen, DefenderMen;
+        public float AttackerMorale = 50f;
         public bool PlayerInside;
         /// <summary>The place's food, its change a day, its store's limit; the garrison's regulars and wounded; starving now.</summary>
         public float Food, FoodChange;
@@ -219,6 +225,8 @@ namespace BannerlordAgents
     internal sealed class FactionRow
     {
         public string Id, Name, Ruler;
+        /// <summary>Its living lords, as the encyclopedia lists them (0.7.4).</summary>
+        public int Lords;
         public List<string> AtWar = new List<string>();
         public List<string> Allies = new List<string>();
         /// <summary>The realm's colours as the game paints them (ARGB), for the dashboard.</summary>

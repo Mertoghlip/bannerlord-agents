@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.7.3</Version>
+    <Version>0.7.4</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -26,6 +26,7 @@
   <ItemGroup>
     <!-- the game's marching rule, one file shared with the way-finder (src/Common, docs/ROUTES.md) -->
     <Compile Include="..\Common\GamePace.cs" Link="Common\GamePace.cs" />
+    <Compile Include="..\Common\GameBattle.cs" Link="Common\GameBattle.cs" />
   </ItemGroup>
 
   <ItemGroup>

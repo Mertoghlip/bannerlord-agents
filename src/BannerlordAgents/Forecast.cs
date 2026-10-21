@@ -160,6 +160,9 @@ namespace BannerlordAgents
             public double RatioNow;
             public List<KeyValuePair<string, double>> Engines = new List<KeyValuePair<string, double>>();
             public bool NeverByStrength;
+            /// <summary>The agent's storm rule the clock followed (null: the game's own commander), and the hour it would storm by that rule (NaN: not within 10 days).</summary>
+            public StormRule Rule;
+            public double RuleStormAt = double.NaN;
         }
 
         private static bool Counts(string type) => type == "ram" || type == "improved_ram" || type == "siege_tower_level1" || type == "ballista" || type == "onager" || type == "trebuchet"
@@ -190,9 +193,9 @@ namespace BannerlordAgents
         /// of its men each day once the food is gone (militia do not eat; nobody surrenders). The besiegers' strength is held
         /// as it is now, and no relief is counted.
         /// </summary>
-        public static SiegeClock Siege(SiegeRow g, double now)
+        public static SiegeClock Siege(SiegeRow g, double now, StormRule rule = null)
         {
-            var c = new SiegeClock { Now = now };
+            var c = new SiegeClock { Now = now, Rule = rule != null && (rule.Mode != 0 || rule.Now) ? rule : null };
             if (g == null) return c;
             string[] order = g.Strategy != null && BuildOrder.TryGetValue(g.Strategy, out string[] o) ? o : BuildOrder["siege_strategy_prepare_assault"];
             var built = g.Engines.Where(e => e.Progress >= 1f).Select(e => e.Type).ToList();
@@ -247,7 +250,15 @@ namespace BannerlordAgents
                 }
                 int b = built.Count(Counts);
                 double p;
-                if (d <= 0) p = 1;
+                if (c.Rule != null)
+                {
+                    // the agent's rule in place of the game's roll (StormGate): storm at the first check it is met, or never
+                    bool met = c.Rule.Now || (c.Rule.Mode == 1 && b >= c.Rule.Engines && (c.Rule.Ratio <= 0 || d <= 0 || attackers / d >= c.Rule.Ratio));
+                    p = met ? 1 : 0;
+                    if (met && double.IsNaN(c.RuleStormAt)) c.RuleStormAt = t;
+                    if (d > 0 && t <= now + Step) c.RatioNow = attackers / (d * Math.Pow(adv, e));
+                }
+                else if (d <= 0) p = 1;
                 else
                 {
                     double ratio = attackers / (d * Math.Pow(adv, e));
@@ -263,7 +274,7 @@ namespace BannerlordAgents
                 }
                 if (p <= 0) continue;
                 if (double.IsNaN(c.FirstChanceAt)) c.FirstChanceAt = t;
-                survive *= Math.Pow(1 - Math.Min(1, p), RollsPerHour * Step);
+                survive = p >= 1 ? 0 : survive * Math.Pow(1 - Math.Min(1, p), RollsPerHour * Step);
                 double stormed = 1 - survive;
                 if (t - now <= 24) c.Within24 = stormed;
                 if (t - now <= 48) c.Within48 = stormed;
@@ -274,8 +285,8 @@ namespace BannerlordAgents
             return c;
         }
 
-        /// <summary>The siege's clock in words, for the report.</summary>
-        public static string SiegeText(Snapshot s, SiegeRow g, SiegeClock c, bool ours)
+        /// <summary>The siege's clock in words, for the report: the camp's building, when a storm could come (by the agent's own rule when it set one), a storm begun now, the food.</summary>
+        public static string SiegeText(Snapshot s, SiegeRow g, SiegeClock c, bool ours, string stormNow = null)
         {
             var sb = new StringBuilder();
             sb.Append(g.Prep >= 1 ? "preparations done" : double.IsNaN(c.PrepDoneAt) ? "preparations not done within 10 days" : "preparations done in about " + HoursText(c.PrepDoneAt - c.Now) + " (" + Text.When(c.PrepDoneAt) + ")");
@@ -283,7 +294,9 @@ namespace BannerlordAgents
             if (built.Count > 0) sb.Append("; built: " + string.Join(", ", built));
             if (c.Engines.Count > 0) sb.Append("; next: " + string.Join(", ", c.Engines.Take(3).Select(e => EngineName(e.Key) + " in about " + HoursText(e.Value - c.Now))));
             sb.Append(". ");
-            if (c.Within240 <= 0)
+            if (c.Rule != null)
+                sb.Append("Your storm rule: " + c.Rule + "; by it the camp storms " + (double.IsNaN(c.RuleStormAt) ? "not within 10 days" : c.RuleStormAt <= c.Now + 0.2 ? "now" : "about " + Text.When(c.RuleStormAt)));
+            else if (c.Within240 <= 0)
                 sb.Append(c.NeverByStrength ? "At this strength the besiegers would not storm within 10 days" : "No storm is likely within 10 days");
             else
             {
@@ -291,12 +304,39 @@ namespace BannerlordAgents
                           + ", two days " + Pct(c.Within48) + ", three " + Pct(c.Within72));
                 if (!double.IsNaN(c.MedianAt)) sb.Append("; by " + Text.When(c.MedianAt) + " more likely than not");
             }
-            sb.Append(" (besiegers " + Text.N((int)Math.Round(g.Attackers)) + " against defenders " + Text.N((int)Math.Round(g.Defenders)) + " times the walls' worth " + g.Advantage.ToString("0.0", Text.Inv) + ")");
+            sb.Append(" (besiegers " + Text.N((int)Math.Round(g.Attackers)) + " against defenders " + Text.N((int)Math.Round(g.Defenders)) + " times the walls' worth " + g.Advantage.ToString("0.0", Text.Inv) + "). ");
+            if (stormNow != null) sb.Append(stormNow).Append(' ');
             if (!double.IsNaN(c.FoodOutAt))
-                sb.Append(c.FoodOutAt <= c.Now + 0.5 ? "; the place has no food: a tenth of its garrison falls wounded each day" : "; food lasts about " + HoursText(c.FoodOutAt - c.Now) + " (" + Text.When(c.FoodOutAt) + "), then a tenth of the garrison falls wounded each day");
-            else sb.Append("; food holds");
+                sb.Append(c.FoodOutAt <= c.Now + 0.5 ? "The place has no food: a tenth of its garrison falls wounded each day" : "Food lasts about " + HoursText(c.FoodOutAt - c.Now) + " (" + Text.When(c.FoodOutAt) + "), then a tenth of the garrison falls wounded each day");
+            else sb.Append("Food holds");
             if (!double.IsNaN(c.CohesionOutAt)) sb.Append("; the besieging army holds together about " + HoursText(c.CohesionOutAt - c.Now) + " more");
             return sb.Append('.').ToString();
+        }
+
+        /// <summary>
+        /// A storm begun now, run ahead by the game's battle rules (GameBattle: one round an hour, the attackers' blows growing only
+        /// with the defenders' number, the walls' worth now), with the lords seen marching to it joining as they arrive: who
+        /// would win, how, in how long, and with how many left. The besiegers' or the defenders' morale, when the realm cannot
+        /// see it, is run low, middling and high.
+        /// </summary>
+        public static string StormNow(Snapshot s, SiegeRow g, bool attackersOurs, IList<Tuple<bool, int, double>> joiners)
+        {
+            if (g == null || g.AttackerMen <= 0) return null;
+            bool town = s.SettlementById.TryGetValue(g.Settlement, out SettlementRow h) && h.Kind == "town";
+            float tactics = attackersOurs && g.Besieger != null && s.PartyById.TryGetValue(g.Besieger, out PartyRow lead) ? lead.Tactics * 0.001f : 0f;
+            var att = new BattleSide { Men = g.AttackerMen, Power = g.Attackers / Math.Max(1, g.AttackerMen), Advantage = 0.9f + tactics, Morale = g.AttackerMorale };
+            var def = new BattleSide { Men = g.DefenderMen, Power = g.DefenderMen > 0 ? g.Defenders / g.DefenderMen : 1f, Advantage = 1f, Morale = 50, Walls = true };
+            var js = (joiners ?? new List<Tuple<bool, int, double>>()).Select(j => new BattleJoiner { Attackers = j.Item1, Men = j.Item2, At = Math.Max(0, j.Item3 - s.Hours) }).ToList();
+            if (g.DefenderMen <= 0) return "A storm begun now would take it at once: nobody holds the walls.";
+            BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, g.Advantage, att, def, !attackersOurs, js);
+            BattleOutcome o = runs[1];
+            string coming = js.Count == 0 ? "" : ", counting the " + js.Count + (js.Count == 1 ? " lord" : " lords") + " seen marching to it (" + Text.N((int)js.Sum(j => j.Men)) + " men) as they arrive";
+            if (o.Winner == null) return "A storm begun now would not end within 5 days" + coming + ".";
+            string how = o.Winner == "attackers"
+                ? "the besiegers would take it with about " + Text.N(o.AttackersLeft) + " of their " + Text.N(g.AttackerMen) + " men left"
+                : "the defenders would hold: the besiegers " + (o.How == "rout" ? "break" : "fall") + ", " + Text.N(o.DefendersLeft) + " defenders still standing";
+            return "A storm begun now would last " + GameBattle.HoursRange(runs) + ": " + how + coming + " (the attackers losing about " + Math.Round(o.AttackerLossPerHour)
+                   + " men an hour at first, the defenders about " + Math.Round(o.DefenderLossPerHour) + ").";
         }
 
         private static string Pct(double p) => p >= 0.995 ? "almost certain" : p < 0.005 ? "almost none" : Math.Round(p * 100) + "%";
@@ -328,74 +368,95 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// One battle run ahead round by round with the game's expected numbers (DefaultCombatSimulationModel, MapEvent, 1.4.8 with
-        /// TAOM's power model): strikes per round from each side's healthy men (a storm: the attackers' strikes depend on the
-        /// defenders' number only), each strike knocking a man down with chance about 0.295 x (power ratio)^0.7 x advantage x
-        /// the morale term; a side that loses a round (losses above 1.3 times the other's, above its plus one, and above 2% of
-        /// its own men) has its parties' morale fall 3; a side led by a party routs at morale 0 (siege defenders never do).
-        /// Joiners: (side, men, the hour they arrive), with their side's mean power.
+        /// One battle run ahead with the game's own rules (Common.GameBattle: its rounds, strikes, hit chance, lost rounds,
+        /// routs and retreats). Joiners: (side, men, the hour they arrive), with their side's mean power.
         /// </summary>
         public static BattleClock Battle(BattleRow b, double now, IEnumerable<Tuple<bool, int, double>> joiners = null, float? attackerMorale = null, float? defenderMorale = null, double horizon = 24 * 5)
         {
             var c = new BattleClock { Now = now, Storm = b.Kind == "siege" };
-            double A = b.Attackers.Healthy, D = b.Defenders.Healthy;
-            double mA = attackerMorale ?? b.Attackers.Morale, mD = defenderMorale ?? b.Defenders.Morale;
-            var pending = (joiners ?? Enumerable.Empty<Tuple<bool, int, double>>()).OrderBy(j => j.Item3).ToList();
-            bool town = b.Town;
-            int perHour = c.Storm ? 1 : 2;
-            double t = now;
-            bool first = true;
-            while (t < now + horizon)
-            {
-                t += 1.0 / perHour;
-                while (pending.Count > 0 && pending[0].Item3 <= t) { if (pending[0].Item1) A += pending[0].Item2; else D += pending[0].Item2; pending.RemoveAt(0); }
-                StrikesPerRound(c.Storm, town, b.SettlementAdvantage, A, D, out double sA, out double sD);
-                double mDeff = b.Defenders.SettlementLed ? Math.Max(30, mD) : mD;
-                double pA = HitChance(b.Attackers.Power, b.Defenders.Power, b.Attackers.Advantage, mA, mDeff);
-                double pD = HitChance(b.Defenders.Power, b.Attackers.Power, b.Defenders.Advantage, mDeff, mA);
-                double lossD = Math.Min(D, sA * pA), lossA = Math.Min(A, sD * pD);
-                if (first) { c.AttackerLossPerHour = lossA * perHour; c.DefenderLossPerHour = lossD * perHour; first = false; }
-                if (lossA > 1.3 * lossD && lossA > lossD + 1 && lossA > 0.02 * A) mA -= 3;
-                if (lossD > 1.3 * lossA && lossD > lossA + 1 && lossD > 0.02 * D) mD -= 3;
-                A -= lossA;
-                D -= lossD;
-                if (A < 0.5) { c.EndsAt = t; c.Winner = "defenders"; c.How = "all down"; break; }
-                if (D < 0.5) { c.EndsAt = t; c.Winner = "attackers"; c.How = "all down"; break; }
-                if (mA <= 0) { c.EndsAt = t; c.Winner = "defenders"; c.How = "rout"; break; }
-                if (mD <= 0 && !b.Defenders.SettlementLed) { c.EndsAt = t; c.Winner = "attackers"; c.How = "rout"; break; }
-            }
-            c.AttackersLeft = (int)Math.Round(Math.Max(0, A));
-            c.DefendersLeft = (int)Math.Round(Math.Max(0, D));
+            BattleOutcome o = GameBattle.Run(b.Kind, b.Town, b.SettlementAdvantage, SideOf(b.Attackers, attackerMorale, false), SideOf(b.Defenders, defenderMorale, b.Defenders.SettlementLed),
+                                             Joiners(joiners, now), horizon);
+            Fill(c, o, now);
             return c;
         }
 
-        /// <summary>The game's strikes per round for each side (DefaultCombatSimulationModel.GetSimulationTicksForBattleRound).</summary>
-        public static void StrikesPerRound(bool storm, bool town, float advantage, double attackers, double defenders, out double byAttackers, out double byDefenders)
+        /// <summary>The same with the other side's unseen morale low, middling and high (its middling run, and the three's hours in words).</summary>
+        public static BattleClock BattleByMorale(BattleRow b, double now, bool attackersUnseen, IEnumerable<Tuple<bool, int, double>> joiners, out string hours, double horizon = 24 * 5)
         {
-            double A = Math.Max(0, attackers), D = Math.Max(0, defenders);
-            if (storm && D > (town ? 100 : 30))
-            {
-                byAttackers = 2 * Math.Round(1.5 + Math.Pow(D, 0.3), MidpointRounding.ToEven);
-                byDefenders = 2 * Math.Round(0.5 + Math.Max(1 + 0.7 * advantage * Math.Pow(D, 0.3), Math.Floor((D + 1) / (A + 1))), MidpointRounding.ToEven);
-            }
-            else if (D <= 10)
-            {
-                byDefenders = Math.Max(1, Math.Round(Math.Min(3 * A, 0.3 * D), MidpointRounding.ToEven));
-                byAttackers = Math.Max(1, Math.Round(Math.Min(3 * D, 0.3 * A), MidpointRounding.ToEven));
-            }
-            else
-            {
-                byDefenders = Math.Round(Math.Min(2 * A, Math.Pow(D, 0.6)), MidpointRounding.ToEven);
-                byAttackers = Math.Round(Math.Min(2 * D, Math.Pow(A, 0.6)), MidpointRounding.ToEven);
-            }
+            BattleOutcome[] runs = GameBattle.ByUnseenMorale(b.Kind, b.Town, b.SettlementAdvantage, SideOf(b.Attackers, null, false), SideOf(b.Defenders, null, b.Defenders.SettlementLed),
+                                                              attackersUnseen, Joiners(joiners, now), horizon);
+            var c = new BattleClock { Now = now, Storm = b.Kind == "siege" };
+            Fill(c, runs[1], now);
+            hours = GameBattle.HoursRange(runs);
+            return c;
         }
 
-        /// <summary>The chance one strike knocks a man down: E[damage] / 100 hit points, the damage (0.5 + 0.5u) x 40 x (power ratio)^0.7 x advantage x the morale term.</summary>
-        public static double HitChance(float strikerPower, float targetPower, float advantage, double strikerMorale, double targetMorale)
+        private static BattleSide SideOf(BattleSideRow r, float? morale, bool walls) =>
+            new BattleSide { Men = r.Healthy, Power = r.Power, Advantage = r.Advantage, Morale = morale ?? r.Morale, Walls = walls };
+
+        private static List<BattleJoiner> Joiners(IEnumerable<Tuple<bool, int, double>> joiners, double now) =>
+            (joiners ?? Enumerable.Empty<Tuple<bool, int, double>>()).Select(j => new BattleJoiner { Attackers = j.Item1, Men = j.Item2, At = Math.Max(0, j.Item3 - now) }).ToList();
+
+        private static void Fill(BattleClock c, BattleOutcome o, double now)
         {
-            double ratio = targetPower > 0 ? strikerPower / targetPower : 1;
-            double morale = 1 + 0.005 * (Math.Min(strikerMorale - 50, 0) - Math.Max(targetMorale - 50, 0));
-            return Math.Max(0, Math.Min(1, 0.295 * Math.Pow(ratio, 0.7) * Math.Max(0.1, advantage) * morale));
+            c.EndsAt = double.IsNaN(o.Hours) ? double.NaN : now + o.Hours;
+            c.Winner = o.Winner;
+            c.How = o.How;
+            c.AttackerLossPerHour = o.AttackerLossPerHour;
+            c.DefenderLossPerHour = o.DefenderLossPerHour;
+            c.AttackersLeft = o.AttackersLeft;
+            c.DefendersLeft = o.DefendersLeft;
+        }
+
+        /// <summary>The game's strikes per round for each side (GameBattle).</summary>
+        public static void StrikesPerRound(bool storm, bool town, float advantage, double attackers, double defenders, out double byAttackers, out double byDefenders)
+            => GameBattle.StrikesPerRound(storm, town, advantage, attackers, defenders, out byAttackers, out byDefenders);
+
+        /// <summary>
+        /// A field battle between some of the realm's lords and an enemy, by the game's battle rules (GameBattle), from what the realm
+        /// knows: its own parties' men, strength (their mean troop power), morale and leader's Tactics; the enemy's men and strength
+        /// as seen (or last seen), its morale run low, middling and high, its leader's skill not known (no advantage). The lords
+        /// are counted as one side joined at the start.
+        /// </summary>
+        public static BattleOutcome[] FieldOdds(IList<PartyRow> ours, double enemyMen, double enemyStrength, out BattleSide mine)
+        {
+            mine = null;
+            if (ours == null || ours.Count == 0 || enemyMen <= 0) return null;
+            double men = ours.Sum(r => (double)(r.ArmyMen > 0 ? r.ArmyMen : r.Men)), strength = ours.Sum(r => (double)(r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength));
+            if (men <= 0) return null;
+            double morale = ours.Sum(r => (r.Morale >= 0 ? r.Morale : 50) * (r.ArmyMen > 0 ? r.ArmyMen : r.Men)) / men;
+            PartyRow lead = ours.OrderByDescending(r => r.ArmyMen > 0 ? r.ArmyMen : r.Men).First();
+            mine = new BattleSide { Men = men, Power = (float)(strength / men), Advantage = 1f + 0.001f * lead.Tactics, Morale = (float)morale };
+            var theirs = new BattleSide { Men = enemyMen, Power = (float)(enemyStrength / enemyMen), Advantage = 1f, Morale = 50 };
+            return GameBattle.ByUnseenMorale("field", false, 1f, mine, theirs, false);
+        }
+
+        /// <summary>"In the field, by the game's battle rules: Bolg alone (139 men) would lose to it in about 3 hours (...); Bolg, Othrod and Ufza together ..."</summary>
+        public static string FieldOddsText(Tools.World w, IList<PartyRow> soonest, PartyRow enemy)
+        {
+            if (soonest == null || soonest.Count == 0 || enemy == null) return null;
+            int men = w.KnownMen(enemy.Id) ?? 0;
+            double strength = w.KnownStrength(enemy.Id) ?? 0;
+            if (men <= 0 || strength <= 0) return null;
+            string One(IList<PartyRow> side)
+            {
+                BattleOutcome[] runs = FieldOdds(side, men, strength, out BattleSide mine);
+                if (runs == null) return null;
+                BattleOutcome o = runs[1];
+                List<string> names = side.Select(r => w.Name(r.Id)).ToList();
+                string who = names.Count == 1 ? names[0] + " alone" : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[names.Count - 1] + " together";
+                string head = who + " (" + Text.N((int)mine.Men) + " men)";
+                if (o.Winner == null) return head + " would still be fighting after 5 days";
+                bool win = o.Winner == "attackers";
+                string how = o.How == "rout" ? (win ? ", its morale breaking" : ", yours breaking") : o.How == "retreat" ? (win ? ", it retreating" : ", yours retreating") : "";
+                return head + (win ? " would beat it" : " would lose to it") + how + " in " + GameBattle.HoursRange(runs) + ", " + Text.N(win ? o.AttackersLeft : o.DefendersLeft)
+                       + (win ? " of yours" : " of its men") + " still standing";
+            }
+            var parts = new List<string>();
+            string first = One(soonest.Take(1).ToList());
+            if (first != null) parts.Add(first);
+            if (soonest.Count > 1) { string all = One(soonest); if (all != null) parts.Add(all); }
+            return parts.Count == 0 ? null : "If they fought in the field, by the game's battle rules (two rounds an hour; nobody leaves a battle once in it): " + string.Join("; ", parts) + ".";
         }
 
         public static string KindText(string kind)

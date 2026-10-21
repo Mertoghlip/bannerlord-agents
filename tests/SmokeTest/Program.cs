@@ -381,6 +381,7 @@ namespace SmokeTest
             TrailTests();
             WatchShadowTests(dir, moves, released);
             SiegeReliefTests(dir);
+            SiegeControlTests(dir, moves, released, thens);
             GameClockTests(dir);
             RoadTests();
 
@@ -883,7 +884,7 @@ namespace SmokeTest
             Brain.OnHour(Sieged(7205, nag, near, faramir, idle, beregond));
             Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against Naglur's 3,400"),
                   "a third lord makes 2,800, above 0.8 of its strength: besiege calls back, counting lords, not only armies");
-            Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && Notices().Contains("Faramir, strength 900, 60.0 away, defending Fornost"),
+            Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Faramir, strength 900, 60\.0 away \(due in about \d+ hours\), defending Fornost"),
                   "and names them nearest first, with what each is doing (those heading for it count from any distance)");
             Brain.OnHour(Sieged(7206, nag, near, faramir, idle, beregond));
             Check(Calls() == 1, "the same relief is not called again");
@@ -905,6 +906,98 @@ namespace SmokeTest
             ViewHolding fu = vu.Frontier.FirstOrDefault(h => h.Id == "castle_men");
             Check(ru.Contains("Fornost [castle_men] (castle, Kingdom of Arnor and Gondor): garrison not in sight") && fu != null && fu.Militia == -1 && Audit.Fog(vu, ru, unseen.WatchedSees, unseen.InspectedByWatched).Count == 0,
                   "out of sight, neither its garrison nor its militia is shown, nor kept in the view");
+        }
+
+        /// <summary>
+        /// Version 0.7.4, the agent's siege control (Mert, Oct 20: "a tool to dictate siege decisions, starting with the storm time",
+        /// and "the agent should set the bar here - what relief force strength level forces a withdrawal, what relief force level
+        /// forces an immediate storm ... as it begins the siege ... the logic should run as part of its siege tool"): the storm rule
+        /// sent while besieging, the relief bars acted on the hour they are met (storm as soon as the camp may; withdraw into the
+        /// nearest castle, stopping without the next order), the siege clock by the rule, a storm begun now, the enemy realms as
+        /// their encyclopedia pages show them, and a field battle's odds in the facts.
+        /// </summary>
+        private static void SiegeControlTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released, List<KeyValuePair<int, JObject>> thens)
+        {
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            var rules = new Dictionary<string, StormRule>();
+            Action<string, StormRule> realSink = Runner.StormSink;
+            Runner.StormSink = (party, r) => { if (party == null) rules.Clear(); else if (r == null) rules.Remove(party); else rules[party] = r; };
+            var nag = new PartyRow { Id = "p_nag2", Leader = "lord_nag2", Name = "Grishnakh", Faction = "orcs", Kind = "lord", Men = 600, SizeLimit = 700, Strength = 900, Morale = 70, Tactics = 80,
+                                     ArmyLeader = "p_nag2", ArmyMen = 2000, ArmyParties = 10, ArmyStrength = 3400, Speed = 1.6f, FoodDays = 40, X = 166, Y = 101, Doing = "Hold", Spottable = true };
+            SiegeRow Camp() => new SiegeRow { Settlement = "castle_men", Besieger = "p_nag2", BesiegerFaction = "orcs", Strategy = "siege_strategy_prepare_assault", StartHours = 7300, WallLevel = 1,
+                                               Prep = 0.5f, PrepRate = 0.04f, Advantage = 5f, Defenders = 600, Attackers = 3400, AttackerMen = 2000, DefenderMen = 450, AttackerMorale = 70, GarrisonPower = 400 };
+            PartyRow Relief(string id, string name, float x, float strength) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "player_k", Kind = "lord", Men = (int)(strength * 0.6f), Strength = strength, Speed = 3.5f,
+                X = x, Y = 100, Doing = "DefendSettlement", TargetSettlement = "castle_men", Spottable = true
+            };
+            Snapshot Sieged(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                s.SettlementById["castle_men"].BesiegedBy = "orcs";
+                s.SettlementById["castle_men"].Besieger = "p_nag2";
+                s.Sieges.Add(Camp());
+                return s;
+            }
+            Brain.OnHour(ToolWorld(7300, nag));
+            var order = new ToolOrder { Tool = "besiege", Lord = "lord_nag2", LordName = "Grishnakh", Party = "p_nag2", At = "castle_men", Then = JObject.Parse("{\"do\":\"besiege\",\"at\":\"castle_two\"}") };
+            order.Settings["storm"] = 1; order.Settings["storm_engines"] = 2; order.Settings["storm_on_relief"] = 0.5; order.Settings["withdraw_on_relief"] = 1.2; order.Settings["relief_hours"] = 24;
+            Runner.Start(970, order);
+            nag.Besieging = "castle_men";
+            nag.Doing = "BesiegeSettlement";
+            for (int h = 7301; h <= 7303; h++) Brain.OnHour(Sieged(h, nag));
+            Check(rules.TryGetValue("p_nag2", out StormRule r0) && r0.Mode == 1 && r0.Engines == 2 && !r0.Now, "while it besieges, the order's storm rule goes to the game's storm hook: storm once ready with 2 engines built");
+            // a relief of 2,000 due within the day: half its strength, the storm bar: storm as soon as the camp may
+            Brain.OnHour(Sieged(7304, nag, Relief("rel1", "Hirgon", 200, 2000)));
+            Check(rules.TryGetValue("p_nag2", out StormRule r1) && r1.Now && Notices().Contains("Grishnakh storms Fornost as soon as the camp may, by your bar")
+                  && Notices().Contains("The camp's preparations are done in about 12 hours"),
+                  "a relief due within the day at half its strength meets the storm bar: it storms as soon as the camp may, and says when that is");
+            // a relief of 5,000: over 1.2 times its strength, the withdrawal bar: it lifts the siege and marches into the nearest castle of its own
+            Brain.OnHour(Sieged(7305, nag, Relief("rel1", "Hirgon", 195, 2000), Relief("rel2", "Beregond", 205, 3000)));
+            Check(!rules.ContainsKey("p_nag2") && moves.Any(m => m.Key == 970 && m.Value.Verb == "enter" && m.Value.Place == "castle_two") && Notices().Contains("Grishnakh lifts the siege of Fornost by your bar"),
+                  "a relief over 1.2 times its strength meets the withdrawal bar: the storm rule is cleared and it marches into Orc Keep");
+            nag.Besieging = null; nag.Doing = "GoToSettlement"; nag.InSettlement = "castle_two"; nag.X = 140; nag.Y = 100;
+            Brain.OnHour(ToolWorld(7306, nag));
+            Check(Notices().Contains("Grishnakh is inside Orc Keep, out of the relief's way. Its next order does not start") && !released.Contains(970) && !thens.Any(t => t.Key == 970),
+                  "inside, the order stops: the lord is held there, and its next order (another siege) does not start");
+            Runner.Reset();
+            Runner.StormSink = realSink;
+
+            // the siege clock by the agent's own rule: storm once the first engine is built, or never
+            double k = Math.Sqrt(2000) / 24.0;
+            var g = new SiegeRow { Settlement = "castle_orc", Strategy = "siege_strategy_prepare_assault", StartHours = 24 * 400, WallLevel = 1, Prep = 0, PrepRate = (float)(k / 48), Advantage = 5f, Defenders = 450, Attackers = 2600 };
+            g.Rates["ram"] = (float)(k / 12); g.Rates["siege_tower_level1"] = (float)(k / 16); g.Rates["ballista"] = (float)(k / 8); g.Rates["onager"] = (float)(k / 20);
+            Forecast.SiegeClock c1 = Forecast.Siege(g, g.StartHours, new StormRule { Mode = 1, Engines = 1 });
+            Forecast.SiegeClock c2 = Forecast.Siege(g, g.StartHours, new StormRule { Mode = 2 });
+            Check(Math.Abs(c1.RuleStormAt - g.StartHours - 32.2) < 0.5 && double.IsNaN(c2.RuleStormAt) && c2.Within240 == 0,
+                  "by the rule \"storm once one engine is built\" the camp storms when its ram is done (" + (c1.RuleStormAt - g.StartHours).ToString("0.0") + " hours); by \"do not storm\", never");
+            Snapshot s3 = ToolWorld(7310);
+            string t2 = Forecast.SiegeText(s3, g, c2, false);
+            Check(t2.Contains("Your storm rule: do not storm; by it the camp storms not within 10 days"), "the siege line says the rule and what it means: " + t2);
+
+            // a storm begun now: 2,000 besiegers against 194 defenders, as at Hollin Gate, takes days by the game's rules
+            var hg = new SiegeRow { Settlement = "castle_orc", StartHours = 7300, WallLevel = 1, Prep = 1, Advantage = 3.55f, Defenders = 310, Attackers = 3456, AttackerMen = 2086, DefenderMen = 194, AttackerMorale = 60 };
+            string now = Forecast.StormNow(s3, hg, true, new List<Tuple<bool, int, double>>());
+            string relieved = Forecast.StormNow(s3, hg, true, new List<Tuple<bool, int, double>> { Tuple.Create(false, 2000, 7310.0 + 6), Tuple.Create(false, 2000, 7310.0 + 12) });
+            Check(now != null && now.StartsWith("A storm begun now would last about") && now.Contains("the besiegers would take it") && relieved != null && relieved.Contains("the defenders would hold") && relieved.Contains("counting the 2 lords seen marching to it"),
+                  "a storm begun now: 2,086 against 194 takes days, and with relief marching in the defenders hold: " + now + " | " + relieved);
+
+            // the enemy realms, as their encyclopedia pages show them, beside what is in sight
+            var foe = new PartyRow { Id = "p_foe", Leader = "lord_foe", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 300, Strength = 450, X = 150, Y = 100, Doing = "Hold", Spottable = true };
+            var hidden = new PartyRow { Id = "p_far9", Leader = "lord_far9", Name = "Imrahil", Faction = "player_k", Kind = "lord", Men = 900, Strength = 1500, X = 380, Y = 300, Doing = "Hold", Spottable = true };
+            var mine2 = new PartyRow { Id = "p_ug2", Leader = "lord_ug2", Name = "Ugluk", Faction = "orcs", Kind = "lord", Men = 500, Strength = 650, Morale = 60, Speed = 3.5f, X = 140, Y = 102, Doing = "Hold", Spottable = true };
+            Snapshot s4 = ToolWorld(7320, foe, hidden, mine2);
+            s4.WatchedSees.Remove("p_far9");
+            s4.Factions["player_k"].Lords = 2;
+            View v4 = Views.Build(s4, "orcs", s4.WatchedSees, s4.HostileToWatched, Brain.Get("orcs"));
+            string r4 = Views.Report(v4, null);
+            Check(r4.Contains("ENEMY REALMS, AS THEIR ENCYCLOPEDIA PAGES SHOW ANY RULER") && r4.Contains("Kingdom of Arnor and Gondor: 2 lords; their parties' strength 1,950 in all; in your sight now 1 party, strength 450"),
+                  "the enemy realm's strength as its encyclopedia page shows it, beside the part of it in sight");
+            Check(Audit.Fog(v4, r4, s4.WatchedSees, s4.InspectedByWatched).Count == 0, "and the report passes the fog check");
+            // a field battle's odds in the facts, for an enemy the poke is about
+            string facts = Facts.ForPoke(Runner.WorldFor(s4), new List<Trigger> { new Trigger { Kind = "enemy_in_view", Party = "p_foe", Text = "Halbarad in view" } });
+            Check(facts.Contains("If they fought in the field, by the game's battle rules") && facts.Contains("Ugluk alone (500 men) would beat it"),
+                  "the facts give a fight with the enemy by the game's battle rules: " + facts.Replace("\n", " | "));
         }
 
         /// <summary>
@@ -985,12 +1078,14 @@ namespace SmokeTest
             ss.SettlementById["castle_orc"].BesiegedBy = "player_k";
             ss.SettlementById["castle_orc"].Besieger = "p_sieger2";
             g.Prep = 0.39f;
+            g.AttackerMen = 1500; g.DefenderMen = 450; g.AttackerMorale = 60;
             ss.Sieges.Add(g);
             View vs = Views.Build(ss, "orcs", ss.WatchedSees, ss.HostileToWatched, Brain.Get("orcs"));
             string rs = Views.Report(vs, null);
             Check(rs.Contains("SIEGES AND BATTLES (1)") && rs.Contains("Orc Castle [castle_orc] (castle, Misty Mountain Orcs), besieged by Elessar (Kingdom of Arnor and Gondor)")
-                  && rs.Contains("preparations done in about 16 hours") && rs.Contains("A storm could come from") && rs.Contains("food lasts about"),
-                  "the report runs the siege of the realm's own castle ahead: preparations, engines, the storm's chance, the food");
+                  && rs.Contains("preparations done in about 16 hours") && rs.Contains("A storm could come from") && rs.Contains("A storm begun now would last") && rs.Contains("Food lasts about"),
+                  "the report runs the siege of the realm's own castle ahead: preparations, engines, the storm's chance, a storm begun now, the food: "
+                  + string.Join(" | ", rs.Split('\n').Where(l => l.StartsWith("- Orc Castle [castle_orc] (castle, Misty", StringComparison.Ordinal))));
             Check(Audit.Fog(vs, rs, ss.WatchedSees, ss.InspectedByWatched).Count == 0, "and passes the fog check");
             string viewFile = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(dir)) ?? dir, "live", "smoketest", "view_orcs.json");
             Brain.OnHour(sw);
