@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
+using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
@@ -25,7 +26,11 @@ namespace BannerlordAgents
     ///   the greater renown, no clan given two while another has fewer (mercenary bands cannot hold land); its garrison becomes
     ///   orc troops, man for man, tier for tier (by kind: foot, archers, horse, where the orcs have them); orc soldiers in its
     ///   prison join the garrison.
-    /// - It will not run while a battle is being fought at one of the places or their villages, or with the player's party inside one.
+    /// - A battle at one of the places or their villages fought by the orcs' side (a storm, a raid; 0.7.7) is broken off first, as
+    ///   peace breaks one off (MapEvent.DiplomaticallyFinished: no winner, no loot, no prisoners), so the place need not wait for
+    ///   it. It will not run while the player is in a battle there, while a garrison is sallying out from one, or with the player's
+    ///   party inside one. A run that cannot go ahead says so on its first line (before 0.7.7 that line read "CARRIED OUT"
+    ///   whatever happened, and the log keeps only first lines).
     /// </summary>
     internal static class TestSetup
     {
@@ -44,7 +49,7 @@ namespace BannerlordAgents
             if (orcs == null || orcs.IsEliminated) return "The Misty Mountain Orcs are not in this campaign.";
             if (mine == null) return "Your clan is in no kingdom.";
 
-            var sb = new StringBuilder(apply ? "REBALANCE, CARRIED OUT\n" : "REBALANCE, WHAT IT WOULD DO (\"agents.rebalance apply\" does it; save afterwards)\n");
+            var sb = new StringBuilder();   // the details; the first line, which the log keeps, is written once the outcome is known
             var problems = new List<string>();
 
             // the places
@@ -54,8 +59,13 @@ namespace BannerlordAgents
                 Settlement s = Settlement.Find(id);
                 if (s == null || !s.IsFortification) { problems.Add(id + " is no castle or town"); continue; }
                 if (s.MapFaction != mine) { sb.AppendLine("- " + s.Name + " is not your realm's (" + s.MapFaction?.Name + "); left as it is."); continue; }
-                foreach (Settlement x in new[] { s }.Concat(s.BoundVillages.Select(v => v.Settlement)))
-                    if (x.Party?.MapEvent != null) problems.Add("a battle is being fought at " + x.Name + "; wait until it ends");
+                foreach (Settlement x in Around(s))
+                {
+                    MapEvent e = x.Party?.MapEvent;
+                    if (e == null) continue;
+                    if (e.IsPlayerMapEvent) problems.Add("you are in a battle at " + x.Name + "; finish it first");
+                    else if (e.IsSallyOut || e.IsBlockadeSallyOut) problems.Add("the garrison of " + x.Name + " is sallying out; wait until that fight ends");
+                }
                 if (MobileParty.MainParty.CurrentSettlement == s) problems.Add("your party is inside " + s.Name + "; leave it first");
                 places.Add(s);
             }
@@ -89,10 +99,10 @@ namespace BannerlordAgents
                 int guests = Guests(s, orcs).Count;
                 sb.AppendLine("- " + s.Name + " (" + (s.IsTown ? "town" : "castle") + ", " + s.BoundVillages.Count + " villages) to " + kv.Value.Name + " (" + kv.Value.Leader.Name
                               + "; it holds " + kv.Value.Fiefs.Count + " now): garrison of " + men + " to orc troops" + (inside > 0 ? "; " + inside + " parties inside to be moved out" : "") + (guests > 0 ? "; " + guests + " of your realm's heroes staying there without a party moved to your nearest castle or town" : "")
-                              + (s.IsUnderSiege ? "; its siege ended" : "") + ".");
+                              + (SiegeEnds(s, orcs) ? "; its siege ended" : "") + Called(Ending(s, orcs)) + ".");
             }
-            if (problems.Count > 0) return sb.Append("Cannot run now: ").Append(string.Join("; ", problems)).Append('.').ToString();
-            if (!apply) return sb.ToString();
+            if (problems.Count > 0) return Said("REBALANCE NOT RUN, nothing was changed: " + string.Join("; ", problems) + ".\nWhat it would do once it can:\n" + sb);
+            if (!apply) return Said("REBALANCE, WHAT IT WOULD DO (\"agents.rebalance apply\" does it; save afterwards)\n" + sb);
 
             // carry it out: the prisoners first (some are held in these very places)
             int freed = 0;
@@ -103,13 +113,17 @@ namespace BannerlordAgents
             }
             int swapped = 0;
             int moved = 0;
+            int ended = 0;
             var targets = new HashSet<string>(plan.Select(kv => kv.Key.StringId), StringComparer.Ordinal);
             foreach (var kv in plan)
             {
                 Settlement s = kv.Key;
                 try
                 {
-                    s.SiegeEvent?.FinalizeSiegeEvent();
+                    // the orcs' own storms and raids here are broken off as peace breaks them off: the storm closes with the siege,
+                    // the raids at the game's next look (MapEvent.Update ends a battle so marked)
+                    foreach (MapEvent e in Ending(s, orcs)) { e.DiplomaticallyFinished = true; ended++; }
+                    if (SiegeEnds(s, orcs)) s.SiegeEvent.FinalizeSiegeEvent();
                     foreach (MobileParty p in s.Parties.Where(p => Leaves(p, orcs)).ToList()) LeaveSettlementAction.ApplyForParty(p);
                     moved += MoveGuests(s, orcs, targets);
                     ChangeOwnerOfSettlementAction.ApplyByDefault(kv.Value.Leader, s);
@@ -118,9 +132,52 @@ namespace BannerlordAgents
                 }
                 catch (Exception e) { Diag.Error("handing over " + s.Name, e); sb.AppendLine("  " + s.Name + " failed: " + e.Message); }
             }
-            Diag.Event("command", "rebalance", new { freed, places = plan.Select(kv => kv.Key.StringId + ">" + kv.Value.StringId).ToList(), garrison_men = swapped, heroes_moved = moved });
-            return sb.Append("Done: ").Append(freed).Append(" lords released, ").Append(plan.Count).Append(" places handed over, ").Append(swapped).Append(" garrison men now orc troops, ").Append(moved).Append(" of your heroes moved out first. Save the game now.").ToString();
+            Diag.Event("command", "rebalance", new { freed, places = plan.Select(kv => kv.Key.StringId + ">" + kv.Value.StringId).ToList(), garrison_men = swapped, heroes_moved = moved, battles_ended = ended });
+            return Said("REBALANCE, CARRIED OUT: " + plan.Count(kv => kv.Key.MapFaction == orcs) + " of " + plan.Count + " places handed over, " + freed + " lords released, "
+                        + swapped + " garrison men now orc troops, " + moved + " of your heroes moved out first, " + ended + " battles there broken off. Save the game now.\n" + sb);
         }
+
+        /// <summary>The whole answer goes to the log too: the command log keeps only first lines.</summary>
+        private static string Said(string answer)
+        {
+            foreach (string line in answer.TrimEnd().Split('\n').Skip(1)) Log.Line("rebalance:   " + line.TrimEnd());
+            return answer;
+        }
+
+        /// <summary>The place and its villages.</summary>
+        private static IEnumerable<Settlement> Around(Settlement s) => new[] { s }.Concat(s.BoundVillages.Select(v => v.Settlement));
+
+        /// <summary>The side of a battle there that is not the player's realm (the attackers of a storm or raid).</summary>
+        private static MapEventSide Outside(MapEvent e, Kingdom mine) =>
+            e.AttackerSide?.LeaderParty?.MapFaction == mine ? e.DefenderSide : e.AttackerSide;
+
+        /// <summary>Battles at the place or its villages that the handover ends: fought against the player's realm by a side not
+        /// at war with the orcs, the player not in them, and no sally-out (those wait).</summary>
+        private static List<MapEvent> Ending(Settlement s, Kingdom orcs)
+        {
+            Kingdom mine = Clan.PlayerClan?.Kingdom;
+            var list = new List<MapEvent>();
+            foreach (Settlement x in Around(s))
+            {
+                MapEvent e = x.Party?.MapEvent;
+                if (e == null || e.IsPlayerMapEvent || e.IsSallyOut || e.IsBlockadeSallyOut || list.Contains(e)) continue;
+                IFaction them = Outside(e, mine)?.LeaderParty?.MapFaction;
+                if (them != null && them != mine && !them.IsAtWarWith(orcs)) list.Add(e);
+            }
+            return list;
+        }
+
+        /// <summary>A siege of the place ends with the handover when the besiegers are not at war with the orcs; one by an enemy of
+        /// theirs goes on against the new owner.</summary>
+        private static bool SiegeEnds(Settlement s, Kingdom orcs)
+        {
+            IFaction by = s.SiegeEvent?.BesiegerCamp?.LeaderParty?.MapFaction;
+            return s.SiegeEvent != null && (by == null || !by.IsAtWarWith(orcs));
+        }
+
+        private static string Called(List<MapEvent> battles) =>
+            battles.Count == 0 ? "" : "; " + string.Join(", ", battles.Select(e => (e.IsRaid ? "the raid of " : e.IsSiegeAssault ? "the storm of " : "the fight at ") + e.MapEventSettlement?.Name))
+                                     + " broken off, no winner";
 
         /// <summary>
         /// Heroes staying in the place without a party whom the game takes prisoner when it changes owner (Oct 20, the first run:
