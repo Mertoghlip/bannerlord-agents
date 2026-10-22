@@ -709,7 +709,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** built clean (sha256 `434511229FDC618B…`), 543 game references, 0 missing; it still holds the other session's CrowdAi, CrushWatch and FastCores (that session agreed to the build). The game was open; it was installed at 14:15, ten seconds after the game closed (sha256 `434511229FDC618B…`; the build before it kept at `C:BannerlordArchiveTFAOMFixes.dll.148-before-ownarmies-20261022-1415`).
 - **Not yet seen in a game.**
 
-### 14:39 · Version 0.8.0: a second agent, for Dol Guldur · commit (follow-up below) (installed 14:37)
+### 14:39 · Version 0.8.0: a second agent, for Dol Guldur · commit 74c9c5e (installed 14:37)
 - **Why:** Mert: "I now want to give dol guldur an agent as well in the next launch, to see how well I can do against a more evenly matched enemy." Dol Guldur (`dolguldur`, ruled by Khamûl, the Easterling) holds 21 castles and towns, Caras Galadhon and Cerin Amroth among them, and is at war with Gondor, Rohan and the player's realm. Until now the bridge watched one realm only.
 - **What:**
   - `watch` takes a list (`mistymountainorcs, dolguldur`). Each realm after the first has its own channel folder, `agent_dir.<realm id>`. The first keeps `agent_dir`, and nothing of the orcs' channel changes.
