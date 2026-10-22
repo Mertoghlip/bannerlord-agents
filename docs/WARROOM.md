@@ -42,6 +42,17 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 - **One-time setup:** `scripts\setup-agent.ps1 -Mode live` (or `shadow`). It makes the agent's folder, installs the instructions and the order library, and points the bridge at the channel.
 - **The old agent chat:** close it. It watched the old channel folder, which the bridge no longer writes.
 
+### A second agent, for another realm (since 0.8)
+
+Each watched realm can have its own agent. The bridge's `watch` takes a list (`watch = mistymountainorcs, dolguldur`). Each realm after the first has its own channel folder (`agent_dir.<realm id>`), so it is poked about what its own eyes saw, numbers its own pokes, keeps its own chronicle, and an answer in its folder can order only its own lords. One war room runs per agent, each with `--dir` its own workspace and its own `log_dir`.
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Mode live -Realm dolguldur -Workspace C:\Users\karab\Projects\dolguldur-war-council -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamûl, the Easterling" -Theatre Rhovanion
+WarRoom.exe run --dir C:\Users\karab\Projects\dolguldur-war-council
+```
+
+The script copies the same instructions and rewrites only the three lines that name the realm: the title, the opening line and the goal's first line. It starts the second agent's `warroom.txt` from the first's, so both think alike, with `log_dir = %LOCALAPPDATA%\BannerlordAgents\logs\warroom-<realm>`. Both realms are set up at a load: change `watch` with the game closed. The console's `agents.view [realm]` and `agents.chronicle [n] [realm]` show either realm. The dashboard's log reads a second realm's war room logs from its own folder.
+
 ## Settings (`warroom.txt` in the agent's folder)
 
 | Key | Default | What it does |
@@ -60,6 +71,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 | `council_after` | First look since the campaign was loaded, passed from, declared war on, made peace, is besieged by, army has formed | words in a poke's reasons (or in what changed since the last answer) that call a council |
 | `council_effort`, `council_thinking_cap`, `council_timeout_seconds` | high, 12000, 420 | the council's call: room to think about the whole realm |
 | `claude_path` | (empty) | the newest Claude Code in VS Code's extension folder, else claude on the path |
+| `log_dir` | (empty) | where its logs go; empty is `%LOCALAPPDATA%\BannerlordAgents\logs\warroom`. A second agent's war room keeps its own (since 0.8) |
 
 ## One call
 

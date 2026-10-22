@@ -41,7 +41,6 @@ namespace BannerlordAgents
         /// <summary>Hourly, and whenever orders change: who to watch.</summary>
         public static void Refresh()
         {
-            Kingdom w = Bridge.Watched;
             Dictionary<MobileParty, Watched> old = Lords.Where(x => x.Party != null).GroupBy(x => x.Party).ToDictionary(g => g.Key, g => g.First());
             Lords.Clear();
             HashSet<MobileParty> ordered = Orders.HeldParties();
@@ -49,7 +48,7 @@ namespace BannerlordAgents
             {
                 if (p == null || !p.IsActive || p.LeaderHero == null) continue;
                 bool isOrdered = ordered.Contains(p);
-                if ((w == null || p.MapFaction != w) && !isOrdered) continue;
+                if (!Bridge.IsSeat(p.MapFaction) && !isOrdered) continue;
                 if (!old.TryGetValue(p, out Watched x)) x = new Watched { Party = p, Lord = p.LeaderHero.StringId, Name = Names.Hero(p.LeaderHero) };
                 x.Ordered = isOrdered;
                 Lords.Add(x);

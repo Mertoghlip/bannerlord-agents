@@ -24,9 +24,14 @@ namespace BannerlordAgents
     {
         private static readonly string[] Behaviours = Enum.GetNames(typeof(AiBehavior));
 
-        public static Snapshot Take(Kingdom watched, bool withVision)
+        public static Snapshot Take(Kingdom watched, bool withVision) => Take(watched != null ? new List<Kingdom> { watched } : new List<Kingdom>(), withVision);
+
+        /// <summary>The hour for every watched realm (since 0.8): one copy of the world, each realm's own part in Snapshot.Seats, the first's also in the fields.</summary>
+        public static Snapshot Take(List<Kingdom> seats, bool withVision)
         {
             long t0 = Perf.Now();
+            Kingdom watched = seats.Count > 0 ? seats[0] : null;
+            var seatIds = new HashSet<IFaction>(seats);
             Campaign c = Campaign.Current;
             IFaction player = Clan.PlayerClan?.MapFaction;
             var snap = new Snapshot
@@ -113,7 +118,7 @@ namespace BannerlordAgents
             foreach (MobileParty p in MobileParty.All)
             {
                 if (p == null || !p.IsActive) continue;
-                PartyRow r = Row(p, watched != null && p.MapFaction == watched);
+                PartyRow r = Row(p, p.MapFaction != null && seatIds.Contains(p.MapFaction));
                 live.Add(p);
                 snap.Parties.Add(r);
                 snap.PartyById[r.Id] = r;
@@ -127,26 +132,46 @@ namespace BannerlordAgents
             Battles(snap);
             long t3 = Perf.Now();
 
+            foreach (Kingdom k in seats) snap.Seats.Add(new SeatSight { Realm = k.StringId });
             foreach (KeyValuePair<string, IFaction> kv in factions)
             {
                 snap.FactionNames[kv.Key] = Names.Faction(kv.Value);
                 snap.FactionColors[kv.Key] = kv.Value.Color;
-                if (watched != null && kv.Value != watched && FactionManager.IsAtWarAgainstFaction(kv.Value, watched)) snap.HostileToWatched.Add(kv.Key);
+                for (int i = 0; i < seats.Count; i++)
+                    if (kv.Value != seats[i] && FactionManager.IsAtWarAgainstFaction(kv.Value, seats[i])) snap.Seats[i].Hostile.Add(kv.Key);
                 if (player != null && kv.Value != player && FactionManager.IsAtWarAgainstFaction(kv.Value, player)) snap.HostileToPlayer.Add(kv.Key);
             }
 
-            if (watched != null) Realm(watched, snap);
-            snap.Roads = RoadsFor(watched, player);
+            for (int i = 0; i < seats.Count; i++) Realm(seats[i], snap.Seats[i], snap);
+            snap.Roads = RoadsFor(seats.Cast<IFaction>().ToList(), player);
             long t4 = Perf.Now();
-            if (withVision && watched != null) Vision.FactionSees(watched, live, snap);
+            if (withVision)
+                for (int i = 0; i < seats.Count; i++)
+                {
+                    // the sight rule writes into a copy's fields; each realm's goes into its own part
+                    Snapshot into = snap.For(snap.Seats[i]);
+                    Vision.FactionSees(seats[i], live, into);
+                    snap.Seats[i].Sees = into.WatchedSees;
+                    snap.Seats[i].Inspected = into.InspectedByWatched;
+                    snap.Seats[i].Vision = into.Vision;
+                }
+            if (snap.Seats.Count > 0)
+            {
+                SeatSight first = snap.Seats[0];
+                snap.WatchedSees = first.Sees;
+                snap.InspectedByWatched = first.Inspected;
+                snap.HostileToWatched = first.Hostile;
+                snap.Captives = first.Captives;
+                snap.Clans = first.Clans;
+                snap.Vision = first.Vision;
+            }
             long t5 = Perf.Now();
 
-            // Names only where someone may read them: lords, the two realms' own parties, and anything seen.
+            // Names only where someone may read them: lords, the watched realms' and the player's own parties, and anything seen.
             for (int i = 0; i < live.Count; i++)
             {
                 PartyRow r = snap.Parties[i];
-                if (r.Kind == "lord" || r.SeenByPlayer || r.Faction == snap.Watched || r.Faction == snap.PlayerFaction
-                    || (snap.WatchedSees != null && snap.WatchedSees.ContainsKey(r.Id)))
+                if (r.Kind == "lord" || r.SeenByPlayer || r.Faction == snap.PlayerFaction || snap.Seats.Any(x => x.Realm == r.Faction || (x.Sees != null && x.Sees.ContainsKey(r.Id))))
                     r.Name = Names.Party(live[i]);
             }
             long t6 = Perf.Now();
@@ -171,7 +196,10 @@ namespace BannerlordAgents
         /// player's to every holding, and each holding to its 12 nearest. The first copy is made at load; a holding a realm
         /// gains later gets its row in the next hour's copy. A new book replaces the old, so the worker's copy never changes.
         /// </summary>
-        public static RoadBook RoadsFor(IFaction watched, IFaction player)
+        public static RoadBook RoadsFor(IFaction watched, IFaction player) => RoadsFor(watched != null ? new List<IFaction> { watched } : new List<IFaction>(), player);
+
+        /// <summary>The same, for every watched realm (since 0.8).</summary>
+        public static RoadBook RoadsFor(List<IFaction> watched, IFaction player)
         {
             try
             {
@@ -179,7 +207,7 @@ namespace BannerlordAgents
                 List<Settlement> all = Settlement.All.Where(x => x != null && !x.IsHideout).ToList();
                 var need = new List<Settlement>();
                 foreach (Settlement s in all)
-                    if ((watched != null && s.MapFaction == watched) || (player != null && s.MapFaction == player))
+                    if ((s.MapFaction != null && watched.Contains(s.MapFaction)) || (player != null && s.MapFaction == player))
                         if (_roads == null || !_roads.HasRow(s.StringId)) need.Add(s);
                 if (_roads != null && need.Count == 0) return _roads;
                 var book = new RoadBook();
@@ -225,7 +253,7 @@ namespace BannerlordAgents
         /// The watched realm's own records: its lords held prisoner (where, by whom, since when), its clans' influence and
         /// the ruler's clan's gold, and the game's range for calling lords into an army.
         /// </summary>
-        private static void Realm(Kingdom watched, Snapshot snap)
+        private static void Realm(Kingdom watched, SeatSight seat, Snapshot snap)
         {
             snap.CallRange = Campaign.Current.Models.ArmyManagementCalculationModel.MaximumDistanceToCallToArmy;
             foreach (Hero h in watched.AliveLords)
@@ -253,13 +281,13 @@ namespace BannerlordAgents
                 }
                 double since = h.CaptivityStartTime.ToHours;
                 if (since > 0 && since <= snap.Hours + 1) c.Since = since;
-                snap.Captives.Add(c);
+                seat.Captives.Add(c);
             }
             foreach (Clan cl in watched.Clans)
             {
                 if (cl == null || cl.IsEliminated) continue;
                 bool ruler = cl == watched.RulingClan;
-                snap.Clans.Add(new ClanRow
+                seat.Clans.Add(new ClanRow
                 {
                     Id = cl.StringId, Name = Names.Faction(cl), Leader = cl.Leader?.StringId, Influence = (float)Math.Round(cl.Influence),
                     Gold = ruler ? cl.Gold : -1, Ruler = ruler

@@ -72,9 +72,10 @@ namespace BannerlordAgents
                 lines.Add("  recorder: " + (Settings.Record ? "on" : "OFF") + "; this session " + Recorder.Committed + " decisions from "
                           + Recorder.Clicks + " changes of course (" + Recorder.Corrections + " quick corrections merged); written " + Brain.DecisionsWritten);
                 lines.Add("  vassal orders: " + PacReader.Status);
-                lines.Add("  pokes this session: " + Brain.PokesWatched + " for the watched realm, " + Brain.PokesPlayer + " for you");
+                lines.Add("  pokes this session: " + Brain.PokesWatched + " for the watched realm" + (Bridge.Seats.Count > 1 ? "s" : "") + ", " + Brain.PokesPlayer + " for you");
                 lines.Add("  orders active (hand, agent and yours): " + Orders.Count);
-                lines.Add("  agent channel: " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolder + ". This session: "
+                foreach (Channel ch in AgentChannel.All) lines.Add("  agent channel" + (ch.Realm != null ? " for " + ch.Realm : "") + ": folder " + ch.Dir + "; " + ch.StatusLine());
+                lines.Add("  agent channel: " + AgentChannel.ModeText() + " This session, all realms: "
                           + AgentChannel.AnswerFiles + " answer files, " + AgentChannel.OrdersReceived + " orders (" + AgentChannel.Applied + " applied, "
                           + AgentChannel.Checked + " checked only, " + AgentChannel.Refused + " refused)");
                 lines.Add("  hourly copy on the game's thread: last " + Perf.CaptureLastMs.ToString("0.00", Text.Inv) + " ms, average "
@@ -146,8 +147,11 @@ namespace BannerlordAgents
         {
             if (Campaign.Current == null || !Bridge.Running) return "Load a campaign first.";
             if (Bridge.Watched == null) return "No realm is under watch. Choose one with agents.watch.";
-            Snapshot snap = Capture.Take(Bridge.Watched, true);
-            return Background.Ask(() => Brain.ReportNow(snap), Wait, out string result) ? result : "The worker did not answer within 5 seconds; try again.";
+            // agents.view [realm]: the first watched realm's report, or the one named
+            Kingdom which = args != null && args.Count > 0 ? Bridge.SeatOf(Bridge.Resolve(string.Join(" ", args))?.StringId) : Bridge.Watched;
+            if (which == null) return "No watched realm matches '" + string.Join(" ", args) + "'. Watched: " + string.Join(", ", Bridge.Seats.Select(k => Names.Faction(k) + " (" + k.StringId + ")"));
+            Snapshot snap = Capture.Take(Bridge.Seats, true);
+            return Background.Ask(() => Brain.ReportNow(snap, which.StringId), Wait, out string result) ? result : "The worker did not answer within 5 seconds; try again.";
         });
 
         [CommandLineFunctionality.CommandLineArgumentFunction("map", "agents")]
@@ -174,8 +178,11 @@ namespace BannerlordAgents
         [CommandLineFunctionality.CommandLineArgumentFunction("chronicle", "agents")]
         public static string ChronicleLines(List<string> args) => Cmd("chronicle", args, () =>
         {
+            // agents.chronicle [n] [realm]
             int n = args != null && args.Count > 0 && int.TryParse(args[0], out int x) ? x : 15;
-            return Background.Ask(() => Chronicle.Last(n), Wait, out string result) ? result : "The worker did not answer within 5 seconds.";
+            List<string> rest = (args ?? new List<string>()).Where(a => !int.TryParse(a, out _)).ToList();
+            string realm = rest.Count > 0 ? Bridge.Resolve(string.Join(" ", rest))?.StringId : null;
+            return Background.Ask(() => Chronicle.For(realm).Last(n), Wait, out string result) ? result : "The worker did not answer within 5 seconds.";
         });
 
         [CommandLineFunctionality.CommandLineArgumentFunction("recruits", "agents")]
@@ -248,10 +255,13 @@ namespace BannerlordAgents
             if (args == null || args.Count == 0) return "Watching: " + (Bridge.Running ? Bridge.WatchedSummary() : Settings.Watch);
             string want = string.Join(" ", args);
             if (Campaign.Current == null) { Settings.Watch = want; Settings.Save(); return "Will watch '" + want + "' once a campaign is loaded."; }
+            // more than one realm (each with its own agent and channel) is set up at a load: saved now, in force at the next
+            if (want.IndexOf(',') >= 0) { Settings.Watch = want; Settings.Save(); return "Saved: will watch " + want + " from the next time a campaign is loaded (each realm needs its channel folder: agent_dir for the first, agent_dir.<realm id> for the others)."; }
             Kingdom k = Bridge.Resolve(want);
             if (k == null) return "No realm matches '" + want + "'. Realms: " + string.Join(", ", Kingdom.All.Where(x => !x.IsEliminated).Select(x => Names.Faction(x)));
             if (Orders.Count > 0) Orders.Release(new List<string> { "all" });
             Bridge.Watched = k;
+            Bridge.Seats = new List<Kingdom> { k };
             Settings.Watch = k.StringId;
             Settings.Save();
             LordWatch.Refresh();

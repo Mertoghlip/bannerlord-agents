@@ -26,25 +26,115 @@ namespace BannerlordAgents
     internal static class Chronicle
     {
         private static readonly object Gate = new object();
-        private static readonly List<ChronicleEntry> Entries = new List<ChronicleEntry>();
-        /// <summary>Notices and lines that came before the realm was known (its first hourly copy).</summary>
-        private static readonly List<Notice> WaitingNotices = new List<Notice>();
-        private static readonly List<ChronicleEntry> WaitingLines = new List<ChronicleEntry>();
-        private static string _dir, _realm, _realmName, _file, _seedRealm;
+        private static List<ChronicleBook> _books = new List<ChronicleBook>();
+        private static ChronicleBook _lone;
+        private static string _dataDir;
         private static double _loadedAt = double.NaN;
-        private static List<ChronicleEntry> _fromGame;
 
-        public static string Realm => _realm;
-        public static int Count { get { lock (Gate) return Entries.Count; } }
+        private static ChronicleBook Lone() => _lone ?? (_lone = new ChronicleBook(null));
 
-        private static string ChannelText => Path.Combine(AgentChannel.Dir, "chronicle.txt");
-        private static string ChannelData => Path.Combine(AgentChannel.Dir, "chronicle.jsonl");
+        /// <summary>A realm's chronicle (the first realm's for null or a realm without one).</summary>
+        public static ChronicleBook For(string realm)
+        {
+            lock (Gate)
+            {
+                if (_books.Count == 0) return Lone();
+                return (realm == null ? null : _books.FirstOrDefault(b => b.Realm == realm)) ?? _books[0];
+            }
+        }
+
+        /// <summary>The first realm's chronicle.</summary>
+        public static ChronicleBook Primary => For(null);
+
+        /// <summary>Does this realm keep a chronicle that has been read (the report's RECENT HISTORY comes from it)?</summary>
+        public static bool Holds(string realm)
+        {
+            if (realm == null) return false;
+            lock (Gate) return (_books.Count == 0 ? new List<ChronicleBook> { Lone() } : _books).Any(b => b.Open && b.Realm == realm);
+        }
+
+        /// <summary>
+        /// A campaign was loaded (worker): one chronicle per watched realm, each read at its realm's first hourly copy (Ensure).
+        /// loadedAt is the in-game hour of the save; fromGame, the game's own history lines about each realm (GameHistory, game's thread).
+        /// </summary>
+        public static void Reset(string dataDir, double loadedAt, List<string> realms, Dictionary<string, List<ChronicleEntry>> fromGame)
+        {
+            var fresh = new List<ChronicleBook>();
+            if (realms == null || realms.Count == 0) fresh.Add(new ChronicleBook(null));
+            else foreach (string r in realms) fresh.Add(new ChronicleBook(r));
+            List<ChronicleBook> old;
+            lock (Gate) { old = _books; _books = fresh; _lone = null; _dataDir = dataDir; _loadedAt = loadedAt; }
+            foreach (ChronicleBook b in old) b.Close();
+            foreach (ChronicleBook b in fresh)
+                b.Reset(dataDir, loadedAt, b.Realm, fromGame != null && b.Realm != null && fromGame.TryGetValue(b.Realm, out List<ChronicleEntry> h) ? h : null);
+        }
+
+        /// <summary>The realm is known (each hourly copy): its chronicle is read the first time.</summary>
+        public static void Ensure(string realm, string realmName, double now)
+        {
+            if (string.IsNullOrEmpty(realm)) return;
+            ChronicleBook book;
+            lock (Gate)
+            {
+                book = _books.FirstOrDefault(b => b.Realm == realm);
+                if (book == null)
+                {
+                    // a realm no chronicle was planned for (the smoke test's first copy): the planless one takes it, else a new one
+                    book = _books.FirstOrDefault(b => b.Realm == null && !b.Open);
+                    if (book == null) { book = new ChronicleBook(realm); book.Reset(_dataDir, _loadedAt, realm, null); _books.Add(book); }
+                }
+            }
+            book.Ensure(realm, realmName, now);
+        }
+
+        /// <summary>A notice (worker): into the chronicle of every realm it reached, unless it is kept quiet.</summary>
+        public static void FromNotice(Notice n)
+        {
+            List<ChronicleBook> books;
+            lock (Gate) books = _books.Count == 0 ? new List<ChronicleBook> { Lone() } : _books.ToList();
+            foreach (ChronicleBook b in books) b.FromNotice(n);
+        }
+
+        // the first realm's, for the console and the smoke test
+        public static string Realm => Primary.Realm;
+        public static int Count => Primary.Count;
+        public static void Line(double hours, string kind, string text, string place = null, string party = null) => Primary.Line(hours, kind, text, place, party);
+        public static List<string> Recent(double now, double withinHours, int max) => Primary.Recent(now, withinHours, max);
+        public static string Last(int n) => Primary.Last(n);
+    }
+
+    /// <summary>One watched realm's chronicle (Chronicle).</summary>
+    internal sealed class ChronicleBook
+    {
+        private readonly object Gate = new object();
+        private readonly List<ChronicleEntry> Entries = new List<ChronicleEntry>();
+        /// <summary>Notices and lines that came before the realm was known (its first hourly copy).</summary>
+        private readonly List<Notice> WaitingNotices = new List<Notice>();
+        private readonly List<ChronicleEntry> WaitingLines = new List<ChronicleEntry>();
+        private string _dir, _realm, _realmName, _file, _seedRealm;
+        private double _loadedAt = double.NaN;
+        private List<ChronicleEntry> _fromGame;
+        private bool _open;
+
+        public ChronicleBook(string realm) { _realm = realm; }
+
+        /// <summary>The realm whose chronicle this is (null until a planless one is read).</summary>
+        public string Realm => _realm;
+        /// <summary>Read from its file (the realm's first hourly copy came).</summary>
+        public bool Open => _open;
+        public int Count { get { lock (Gate) return Entries.Count; } }
+
+        private string ChannelText => Path.Combine(AgentChannel.For(_realm).Dir, "chronicle.txt");
+        private string ChannelData => Path.Combine(AgentChannel.For(_realm).Dir, "chronicle.jsonl");
+
+        /// <summary>Replaced by a new campaign's: its file is let go.</summary>
+        public void Close() { lock (Gate) if (_file != null) Files.Close(_file); }
 
         /// <summary>
         /// A campaign was loaded (worker): the realm's lines are read at its first hourly copy (Ensure). loadedAt is the
         /// in-game hour of the save; fromGame, the game's own history lines about seedRealm (GameHistory, game's thread).
         /// </summary>
-        public static void Reset(string dataDir, double loadedAt, string seedRealm, List<ChronicleEntry> fromGame)
+        public void Reset(string dataDir, double loadedAt, string seedRealm, List<ChronicleEntry> fromGame)
         {
             lock (Gate)
             {
@@ -53,7 +143,9 @@ namespace BannerlordAgents
                 WaitingNotices.Clear();
                 WaitingLines.Clear();
                 _dir = dataDir;
-                _realm = _realmName = _file = null;
+                if (seedRealm != null) _realm = seedRealm;
+                _realmName = _file = null;
+                _open = false;
                 _loadedAt = loadedAt;
                 _seedRealm = seedRealm;
                 _fromGame = fromGame;
@@ -64,9 +156,9 @@ namespace BannerlordAgents
         /// The realm is known (each hourly copy; only a new realm does anything): its lines are read, cut back to the
         /// save's date, completed from the game's own log for the time before them, and mirrored into the channel.
         /// </summary>
-        public static void Ensure(string realm, string realmName, double now)
+        public void Ensure(string realm, string realmName, double now)
         {
-            if (string.IsNullOrEmpty(realm) || realm == _realm) return;
+            if (string.IsNullOrEmpty(realm) || (_open && realm == _realm)) return;
             int cut, seeded;
             double cutoff;
             lock (Gate)
@@ -74,6 +166,7 @@ namespace BannerlordAgents
                 if (_file != null) Files.Close(_file);
                 Entries.Clear();
                 _realm = realm;
+                _open = true;
                 _realmName = realmName;
                 _file = Path.Combine(_dir ?? Paths.Data("unknown"), "chronicle_" + realm + ".jsonl");
                 Entries.AddRange(Read(_file));
@@ -113,24 +206,24 @@ namespace BannerlordAgents
         }
 
         /// <summary>A notice (worker): into the chronicle of the realm it reached, unless it is kept quiet.</summary>
-        public static void FromNotice(Notice n)
+        public void FromNotice(Notice n)
         {
             if (n == null || n.Quiet != null || string.IsNullOrEmpty(n.Text)) return;
-            if (_realm == null) { WaitingNotices.Add(n); return; }
+            if (!_open) { WaitingNotices.Add(n); return; }
             if (!n.Factions.Contains(_realm)) return;
             Add(new ChronicleEntry { Hours = n.Hours, Kind = n.Kind, Text = n.Text, Place = n.Place, Party = n.Party });
         }
 
         /// <summary>A line of our own (worker): an enemy army sighted, an order given or refused.</summary>
-        public static void Line(double hours, string kind, string text, string place = null, string party = null)
+        public void Line(double hours, string kind, string text, string place = null, string party = null)
         {
             if (string.IsNullOrEmpty(text)) return;
             var e = new ChronicleEntry { Hours = hours, Kind = kind, Text = text, Place = place, Party = party };
-            if (_realm == null) { WaitingLines.Add(e); return; }
+            if (!_open) { WaitingLines.Add(e); return; }
             Add(e);
         }
 
-        private static void Add(ChronicleEntry e)
+        private void Add(ChronicleEntry e)
         {
             // a line whose hour is not known yet (the game's clock not read) takes the latest hour copied
             if (double.IsNaN(e.Hours) || e.Hours < 0) e.Hours = Brain.Latest?.Hours ?? 0;
@@ -149,7 +242,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>The lines of the last hours (the report's RECENT HISTORY), newest last, at most max.</summary>
-        public static List<string> Recent(double now, double withinHours, int max)
+        public List<string> Recent(double now, double withinHours, int max)
         {
             lock (Gate)
             {
@@ -159,11 +252,11 @@ namespace BannerlordAgents
         }
 
         /// <summary>For the console: the last lines, and where the whole chronicle is.</summary>
-        public static string Last(int n)
+        public string Last(int n)
         {
             lock (Gate)
             {
-                if (_realm == null) return "No chronicle yet: it starts at the first in-game hour after a campaign is loaded.";
+                if (!_open) return "No chronicle yet: it starts at the first in-game hour after a campaign is loaded.";
                 if (Entries.Count == 0) return "The chronicle of " + _realmName + " is empty so far. It is kept in " + _file;
                 IEnumerable<string> lines = Entries.Skip(Math.Max(0, Entries.Count - n)).Select(Show);
                 return string.Join("\n", lines) + "\n(" + Entries.Count + " lines in all, " + Entries.Count(e => e.From == "game") + " of them from the game's own history log; kept in " + _file
@@ -174,7 +267,7 @@ namespace BannerlordAgents
         private static string Show(ChronicleEntry e) => (e.Date ?? Text.When(e.Hours)) + " · " + e.Text + (e.From == "game" ? " (from the game's records)" : "");
 
         /// <summary>The whole chronicle into the agent channel: chronicle.txt to read, chronicle.jsonl for the war room.</summary>
-        private static void WriteChannel()
+        private void WriteChannel()
         {
             if (!AgentChannel.On) return;
             var text = new StringBuilder(64 * 1024);

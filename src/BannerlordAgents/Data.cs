@@ -341,6 +341,47 @@ namespace BannerlordAgents
         public VisionStats Vision;
         /// <summary>Every few in-game hours: our sight rule against the game's own, for the player's party.</summary>
         public SightAudit Sight;
+
+        /// <summary>
+        /// Since 0.8, every watched realm's own part of the hour (its sight, its enemies, its captives and clans), the first
+        /// realm's also in the fields above. Empty in a copy made by hand (the smoke test): then the fields above are the one realm.
+        /// </summary>
+        public List<SeatSight> Seats = new List<SeatSight>();
+
+        /// <summary>The hour as one watched realm has it: the same world, with that realm's own part in the fields above.</summary>
+        public Snapshot For(SeatSight seat)
+        {
+            var v = (Snapshot)MemberwiseClone();
+            v.Watched = seat.Realm;
+            v.WatchedSees = seat.Sees;
+            v.InspectedByWatched = seat.Inspected;
+            v.HostileToWatched = seat.Hostile;
+            v.Captives = seat.Captives;
+            v.Clans = seat.Clans;
+            v.Vision = seat.Vision;
+            return v;
+        }
+
+        /// <summary>Each watched realm's hour, the first realm's first (just this copy when it was made by hand).</summary>
+        public List<Snapshot> SeatViews()
+        {
+            if (Seats == null || Seats.Count == 0) return new List<Snapshot> { this };
+            var list = new List<Snapshot>(Seats.Count);
+            for (int i = 0; i < Seats.Count; i++) list.Add(i == 0 && Seats[i].Realm == Watched ? this : For(Seats[i]));
+            return list;
+        }
+    }
+
+    /// <summary>One watched realm's own part of an hourly copy (Snapshot.Seats).</summary>
+    internal sealed class SeatSight
+    {
+        public string Realm;
+        public Dictionary<string, Sighting> Sees;
+        public HashSet<string> Inspected;
+        public HashSet<string> Hostile = new HashSet<string>();
+        public List<CaptiveRow> Captives = new List<CaptiveRow>();
+        public List<ClanRow> Clans = new List<ClanRow>();
+        public VisionStats Vision;
     }
 
     internal sealed class VisionStats

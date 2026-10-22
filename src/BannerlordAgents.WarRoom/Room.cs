@@ -69,7 +69,7 @@ namespace BannerlordAgents.WarRoom
         {
             _c = c;
             _claude = Claude.Find(c.ClaudePath);
-            _logDir = logDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BannerlordAgents", "logs", "warroom");
+            _logDir = logDir ?? (!string.IsNullOrWhiteSpace(c.LogDir) ? c.LogDir.Trim() : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BannerlordAgents", "logs", "warroom"));
             Directory.CreateDirectory(_logDir);
         }
 

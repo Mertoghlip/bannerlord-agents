@@ -14,7 +14,14 @@ namespace BannerlordAgents
     /// <summary>The bridge's state for the campaign that is running.</summary>
     internal static class Bridge
     {
+        /// <summary>The first watched realm (the console's views, the sight check).</summary>
         public static Kingdom Watched;
+        /// <summary>
+        /// Every watched realm, the first first (since 0.8: each with its own agent and channel). Made on first use, never in a
+        /// static initialiser: the smoke test runs the worker without the game's assemblies.
+        /// </summary>
+        public static List<Kingdom> Seats { get => _seats ?? (_seats = new List<Kingdom>()); set => _seats = value; }
+        private static List<Kingdom> _seats;
         public static bool Running;
         public static string CampaignId = "unknown";
         /// <summary>This load of the campaign (a new one each time a save is loaded), and the in-game hour of the save: the war room tells a reload by them.</summary>
@@ -43,21 +50,27 @@ namespace BannerlordAgents
             long t = Perf.Now();
             int warmed = Names.WarmUp();
             double warmMs = Perf.Ms(t);
-            Watched = Resolve(Settings.Watch);
+            Seats = Settings.WatchList().Select(Resolve).Where(k => k != null).Distinct().ToList();
+            Watched = Seats.FirstOrDefault();
             // the game's road distances, copied at load (a loading screen) rather than in the first hour's copy
             Capture.ResetRoads();
             long tr = Perf.Now();
-            RoadBook roads = Capture.RoadsFor(Watched, Clan.PlayerClan?.MapFaction);
+            RoadBook roads = Capture.RoadsFor(Seats.Cast<IFaction>().ToList(), Clan.PlayerClan?.MapFaction);
             Log.Line("roads: the game's road distances copied: " + (roads?.Rows.Count ?? 0) + " holdings, " + (roads?.Pairs ?? 0) + " pairs, in " + Perf.Ms(tr).ToString("0", Text.Inv) + " ms");
             string id = CampaignId;
             // the game's own history of the watched realm starts its chronicle (only for the time before our own lines)
             long th = Perf.Now();
-            List<ChronicleEntry> history = GameHistory.Collect(Watched, out int scanned, out int unread);
-            Diag.Event("chronicle", "game history read", new { realm = Watched?.StringId, entries = scanned, about_the_realm = history.Count, unread, ms = Math.Round(Perf.Ms(th), 1) });
-            string realm = Watched?.StringId;
+            var histories = new Dictionary<string, List<ChronicleEntry>>();
+            foreach (Kingdom k in Seats)
+            {
+                List<ChronicleEntry> history = GameHistory.Collect(k, out int scanned, out int unread);
+                histories[k.StringId] = history;
+                Diag.Event("chronicle", "game history read", new { realm = k.StringId, entries = scanned, about_the_realm = history.Count, unread, ms = Math.Round(Perf.Ms(th), 1) });
+            }
+            List<string> realms = Seats.Select(k => k.StringId).ToList();
             double loadedAt = LoadedAt;
             Background.Start();
-            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, realm, history));
+            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, realms, histories));
             AgentChannel.Start();
             GameHooks.Apply();
             MapExport.Start();
@@ -67,8 +80,8 @@ namespace BannerlordAgents
             Log.Line("watching: " + WatchedSummary());
             Log.Line("at load: " + Orders.FrozenAtLoad());
             Log.Line("files for this campaign: " + Paths.Data(id));
-            Log.Line("agent channel: " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolder);
-            Diag.Event("session", "campaign started", new { campaign = id, watched = Watched?.StringId, agent = Settings.Agent, detail = Settings.Detail });
+            for (int i = 0; i < Seats.Count; i++) Log.Line("agent channel for " + Names.Faction(Seats[i]) + ": " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolderFor(Seats[i].StringId, i == 0));
+            Diag.Event("session", "campaign started", new { campaign = id, watched = Watched?.StringId, seats = realms, agent = Settings.Agent, detail = Settings.Detail });
             SelfCheck.Run();
         }
 
@@ -77,6 +90,7 @@ namespace BannerlordAgents
             Running = false;
             Live.CampaignRunning = false;
             Watched = null;
+            Seats = new List<Kingdom>();
             Diag.Event("session", "campaign ended");
             Background.Post("flush", Files.FlushAll);
             Background.Post("summary", () => Diag.Summary(false));
@@ -92,9 +106,20 @@ namespace BannerlordAgents
             return all.FirstOrDefault(k => Text.Plain(Names.Faction(k)) == q) ?? all.FirstOrDefault(k => Text.Plain(Names.Faction(k)).Contains(q));
         }
 
+        /// <summary>Is this one of the watched realms?</summary>
+        public static bool IsSeat(IFaction f) => f != null && Seats.Contains(f as Kingdom);
+        public static bool IsSeat(string id) => id != null && Seats.Any(k => k.StringId == id);
+        /// <summary>The watched realm with this id (null: none).</summary>
+        public static Kingdom SeatOf(string id) => id == null ? null : Seats.FirstOrDefault(k => k.StringId == id);
+
         public static string WatchedSummary()
         {
-            Kingdom k = Watched;
+            if (Seats.Count == 0) return Summary(null);
+            return string.Join("; and ", Seats.Select(Summary));
+        }
+
+        private static string Summary(Kingdom k)
+        {
             if (k == null) return "nothing: no realm matches '" + Settings.Watch + "'. Realms: " + string.Join(", ", Kingdom.All.Where(x => !x.IsEliminated).Select(x => Names.Faction(x) + " (" + x.StringId + ")"));
             int lords = MobileParty.AllLordParties.Count(p => p != null && p.IsActive && p.MapFaction == k);
             int parties = MobileParty.All.Count(p => p != null && p.IsActive && p.MapFaction == k);
@@ -195,7 +220,7 @@ namespace BannerlordAgents
             {
                 double hours = CampaignTime.Now.ToHours;
                 Watchdog.HourlyBeat(hours);
-                Snapshot snap = Capture.Take(Bridge.Watched, true);
+                Snapshot snap = Capture.Take(Bridge.Seats, true);
                 if (_lastSightCheck < 0 || hours - _lastSightCheck >= 3)
                 {
                     _lastSightCheck = hours;

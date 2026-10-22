@@ -130,8 +130,7 @@ namespace BannerlordAgents
         public static string Give(List<string> args)
         {
             if (Campaign.Current == null) return "Load a campaign first.";
-            Kingdom realm = Bridge.Watched;
-            if (realm == null) return "No realm is under watch, so there is no one to order. Choose one with agents.watch.";
+            if (Bridge.Watched == null) return "No realm is under watch, so there is no one to order. Choose one with agents.watch.";
             if (args == null || args.Count < 2) return Usage;
             int vi = args.FindIndex(x => Library.Get(x) != null || Plain.Contains(x.ToLowerInvariant()));
             if (vi <= 0) return Usage;
@@ -150,6 +149,9 @@ namespace BannerlordAgents
                 else target.Add(w);
             }
             a.Target = target.Count > 0 ? string.Join(" ", target) : null;
+            // the watched realm the named lord serves (the first realm's if none of them has him: its refusal says so)
+            Kingdom realm = Bridge.Seats.FirstOrDefault(k => FindLord(k, a.Lord, out _) != null) ?? Bridge.Watched;
+            a.Realm = realm.StringId;
             string status = "refused";
             string reason = Issue(a, realm, "hand", true, ref status);
             if (status == "posted") return "Sent to the tool runner; the answer appears in the agent's receipts and the log.";
@@ -185,8 +187,9 @@ namespace BannerlordAgents
             string status = "refused", reason;
             try
             {
-                Kingdom realm = Bridge.Watched;
-                reason = realm == null ? "no realm is under watch" : Issue(a, realm, "agent", false, ref status);
+                // an answer orders only the lords of the realm whose channel it came by
+                Kingdom realm = a.Realm != null ? Bridge.SeatOf(a.Realm) : Bridge.Watched;
+                reason = realm == null ? (a.Realm != null ? a.Realm + " is no longer under watch" : "no realm is under watch") : Issue(a, realm, "agent", false, ref status);
                 if (status == "applied" && reason != null && realm != null)
                 {
                     // the game takes a move given in a battle, but the party moves only once the battle ends (0.7.4, Naglur in the storm of Hollin Gate)
@@ -447,6 +450,7 @@ namespace BannerlordAgents
         /// <summary>Holds the lord for a tool and hands the tool to the runner, which makes the first move.</summary>
         private static void StartTool(Hero lord, MobileParty party, ToolDef def, ToolOrder o, Kingdom realm, string words)
         {
+            if (realm != null) o.Realm = realm.StringId;
             int id = Runner.NewId();
             var h = new HandOrder
             {
@@ -529,6 +533,7 @@ namespace BannerlordAgents
             if (o == null || o.Lord == null) return;
             Kingdom realm = o.Realm ?? Bridge.Watched;
             var a = AgentChannel.OrderFrom(then, o.Lord.StringId, o.Poke, "then");
+            a.Realm = realm?.StringId;
             string status = "refused";
             string reason;
             try { reason = realm == null ? "no realm is under watch" : Issue(a, realm, o.Source, true, ref status); }
@@ -1235,7 +1240,7 @@ namespace BannerlordAgents
         public static void DailySweep()
         {
             HashSet<MobileParty> ours = HeldParties();
-            Kingdom watched = Bridge.Watched;
+            List<Kingdom> watched = Bridge.Seats.ToList();
             var other = new List<string>();
             var pac = new List<string>();
             foreach (MobileParty p in MobileParty.AllLordParties)
@@ -1245,7 +1250,7 @@ namespace BannerlordAgents
                 else other.Add(Names.Hero(p.LeaderHero) + " (" + Names.Faction(p.MapFaction) + ")");
             }
             Diag.Event("sweep", "daily", new { held_by_party_ai_controls = pac, held_by_something_else = other });
-            List<string> orcs = other.Where(x => watched != null && x.EndsWith("(" + Names.Faction(watched) + ")", StringComparison.Ordinal)).ToList();
+            List<string> orcs = other.Where(x => watched.Any(k => x.EndsWith("(" + Names.Faction(k) + ")", StringComparison.Ordinal))).ToList();
             if (orcs.Count > 0)
                 Diag.Alarm("held_by_other", "Something other than us has switched off the game's AI for " + orcs.Count + " lords of the watched realm: " + string.Join(", ", orcs) + ".");
         }
@@ -1652,11 +1657,12 @@ namespace BannerlordAgents
             if (o.Source == "agent" && what != "issued")
             {
                 string line = "order " + what + ": " + (what == "ended" ? Names.Hero(o.Lord) + "'s " + (o.Tool ?? "order") + " ended: " + text : text) + (what == "reissued" ? "" : ".");
-                Background.Post("agent receipt", () => AgentChannel.Event(line));
+                string realmId = o.Realm?.StringId;
+                Background.Post("agent receipt", () => AgentChannel.Event(realmId, line));
             }
             // the watched realm hears when one of its orders finishes or fails, as a poke trigger
-            if (o.Realm != null && o.Realm == Bridge.Watched && (what == "arrived" || what == "ended"))
-                Notices.Order(what == "arrived" ? "order_arrived" : "order_ended",
+            if (o.Realm != null && Bridge.IsSeat(o.Realm) && (what == "arrived" || what == "ended"))
+                Notices.Order(o.Realm, what == "arrived" ? "order_arrived" : "order_ended",
                               what == "arrived" ? text + " as ordered." : "The order \"" + (o.ToolText ?? Describe(o)) + "\" ended: " + text + ".", o.Party?.StringId, recordOnly);
         }
 

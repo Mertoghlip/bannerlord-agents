@@ -41,6 +41,8 @@ namespace BannerlordAgents.Dashboard
 
         public string LiveDir => Path.Combine(Root, "live");
         public string WarRoomLogs => Path.Combine(Root, "logs", "warroom");
+        /// <summary>A second agent's war room logs (log_dir in its warroom.txt, set up by scriptssetup-agent.ps1).</summary>
+        public string WarRoomLogsOf(string realm) => Path.Combine(Root, "logs", "warroom-" + realm);
         public string DataDir(string campaign) => Path.Combine(Root, "data", campaign ?? "unknown");
 
         public JsonObject Current()

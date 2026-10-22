@@ -30,13 +30,21 @@ namespace BannerlordAgents
                 results.Add(new KeyValuePair<string, string>(name, problem));
             }
 
-            Check("realm under watch", () => Bridge.Watched == null ? "no realm matches '" + Settings.Watch + "'"
-                : MobileParty.AllLordParties.Any(p => p != null && p.IsActive && p.MapFaction == Bridge.Watched) ? null : "it has no lords leading parties");
+            Check("realm under watch", () =>
+            {
+                if (Bridge.Watched == null) return "no realm matches '" + Settings.Watch + "'";
+                var bad = new List<string>();
+                foreach (string w in Settings.WatchList()) if (Bridge.Resolve(w) == null) bad.Add("no realm matches '" + w + "'");
+                foreach (Kingdom k in Bridge.Seats)
+                    if (!MobileParty.AllLordParties.Any(p => p != null && p.IsActive && p.MapFaction == k)) bad.Add(Names.Faction(k) + " has no lords leading parties");
+                return bad.Count > 0 ? string.Join("; ", bad) : null;
+            });
             Check("at war with you", () =>
             {
                 IFaction mine = Clan.PlayerClan?.MapFaction;
-                if (Bridge.Watched == null || mine == null) return null;
-                return FactionManager.IsAtWarAgainstFaction(Bridge.Watched, mine) ? null : Names.Faction(Bridge.Watched) + " is not at war with you, which the first tests assume";
+                if (mine == null) return null;
+                List<string> peace = Bridge.Seats.Where(k => !FactionManager.IsAtWarAgainstFaction(k, mine)).Select(Names.Faction).ToList();
+                return peace.Count == 0 ? null : string.Join(", ", peace) + (peace.Count == 1 ? " is" : " are") + " not at war with you, which the first tests assume";
             });
             Check("calendar", () =>
             {
@@ -84,15 +92,16 @@ namespace BannerlordAgents
             foreach (KeyValuePair<string, string> r in results.Where(r => r.Value != null))
                 Diag.Alarm("self_check", "Self-check: " + r.Key + ": " + r.Value + ".", r.Key == "realm under watch" || r.Key == "log folder");
 
-            string agentDir = AgentChannel.On ? Settings.AgentFolder : null;
-            Background.Post("self-check (helper's half)", () => HelperHalf(agentDir));
+            // every watched realm's channel folder (since 0.8)
+            List<string> agentDirs = AgentChannel.On ? Bridge.Seats.Select((k, i) => Settings.AgentFolderFor(k.StringId, i == 0)).DefaultIfEmpty(Settings.AgentFolder).ToList() : null;
+            Background.Post("self-check (helper's half)", () => HelperHalf(agentDirs));
         }
 
-        private static void HelperHalf(string agentDir)
+        private static void HelperHalf(List<string> agentDirs)
         {
             var problems = new List<string>();
             var notes = new List<string>();
-            if (agentDir != null)
+            foreach (string agentDir in agentDirs ?? new List<string>())
             {
                 try
                 {
@@ -106,7 +115,7 @@ namespace BannerlordAgents
                 }
                 catch (Exception e) { problems.Add("the agent's folder cannot be written (" + agentDir + "): " + e.Message); }
             }
-            else notes.Add("the agent channel is off");
+            if (agentDirs == null) notes.Add("the agent channel is off");
             if (Cpu.Hybrid && Background.Placement.IndexOf("kept to the", StringComparison.Ordinal) < 0)
                 problems.Add("the background helper is not kept to the efficiency cores (" + Background.Placement + ")");
             else notes.Add("the background helper runs " + Background.Placement);

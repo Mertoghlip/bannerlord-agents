@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace BannerlordAgents
@@ -12,8 +13,29 @@ namespace BannerlordAgents
     /// </summary>
     internal static class Settings
     {
-        /// <summary>The realm under watch: a kingdom id or name.</summary>
+        /// <summary>
+        /// The realms under watch: kingdom ids or names, comma-separated (since 0.8: more than one realm can have its own agent,
+        /// each with its own channel folder). The first is the main one: the console's views and the sight check are its.
+        /// </summary>
         public static string Watch = "mistymountainorcs";
+        /// <summary>Channel folders for the realms after the first ("agent_dir.&lt;realm id&gt; = path"); the first uses agent_dir.</summary>
+        public static readonly Dictionary<string, string> AgentDirs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The watched realms as written, in order.</summary>
+        public static List<string> WatchList()
+        {
+            var list = new List<string>();
+            foreach (string w in (Watch ?? "").Split(','))
+                if (w.Trim().Length > 0 && !list.Contains(w.Trim(), StringComparer.OrdinalIgnoreCase)) list.Add(w.Trim());
+            return list;
+        }
+
+        /// <summary>A realm's channel folder: agent_dir for the first realm, agent_dir.&lt;realm&gt; (or agent_&lt;realm&gt; beside the settings) for the others.</summary>
+        public static string AgentFolderFor(string realm, bool first)
+        {
+            if (first || string.IsNullOrEmpty(realm)) return AgentFolder;
+            return AgentDirs.TryGetValue(realm, out string d) && !string.IsNullOrWhiteSpace(d) ? d.Trim() : Path.Combine(Paths.Root, "agent_" + realm);
+        }
         /// <summary>All of the bridge's work: views, pokes, the recorder and the order checks.</summary>
         public static bool Bridge = true;
         /// <summary>The recorder of the player's own decisions.</summary>
@@ -88,6 +110,7 @@ namespace BannerlordAgents
                     string key = line.Substring(0, eq).Trim().ToLowerInvariant();
                     string value = line.Substring(eq + 1).Trim();
                     seen.Add(key);
+                    if (key.StartsWith("agent_dir.", StringComparison.Ordinal) && key.Length > 10) { AgentDirs[key.Substring(10)] = value; continue; }
                     switch (key)
                     {
                         case "watch": if (value.Length > 0) Watch = value; break;
@@ -142,6 +165,7 @@ namespace BannerlordAgents
                 sb.AppendLine("agent = " + Agent);
                 sb.AppendLine("agent_lords = " + AgentLords);
                 sb.AppendLine("agent_dir = " + AgentDir);
+                foreach (KeyValuePair<string, string> kv in AgentDirs) sb.AppendLine("agent_dir." + kv.Key + " = " + kv.Value);
                 sb.AppendLine("# pokes: enemy lords further than this from all the realm's holdings poke only when heading for one or chasing its parties");
                 sb.AppendLine("sighting_distance = " + SightingDistance.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("# logs (docs/LOGGING.md): detail = full or everyday; witness and ai_reasons are the two game hooks");

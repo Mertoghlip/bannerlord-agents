@@ -55,7 +55,10 @@ namespace BannerlordAgents
         private static readonly List<string> RecentPokes = new List<string>();
         private static string _dir;
 
+        /// <summary>The latest hour, as the first watched realm has it.</summary>
         public static Snapshot Latest;
+        /// <summary>The latest hour as each watched realm has it (since 0.8).</summary>
+        private static Dictionary<string, Snapshot> LatestBy = new Dictionary<string, Snapshot>();
         public static int DecisionsWritten, PokesWatched, PokesPlayer;
 
         public static string Dir => _dir ?? (_dir = Paths.Data("unknown"));
@@ -65,18 +68,24 @@ namespace BannerlordAgents
         /// history, the game's own lines about the watched realm (GameHistory), to start its chronicle.
         /// </summary>
         public static void Reset(string campaign, double loadedAt = double.NaN, string realm = null, List<ChronicleEntry> history = null)
+            => Reset(campaign, loadedAt, realm != null ? new List<string> { realm } : new List<string>(),
+                     realm != null && history != null ? new Dictionary<string, List<ChronicleEntry>> { [realm] = history } : null);
+
+        /// <summary>A campaign was loaded, with every watched realm (the first first) and the game's own history of each.</summary>
+        public static void Reset(string campaign, double loadedAt, List<string> realms, Dictionary<string, List<ChronicleEntry>> histories)
         {
             Files.FlushAll();
             Mem.Clear();
             RecentDecisions.Clear();
             RecentPokes.Clear();
             Latest = null;
+            LatestBy = new Dictionary<string, Snapshot>();
             DecisionsWritten = PokesWatched = PokesPlayer = 0;
             _dir = Paths.Data(campaign);
-            MarkLoad(loadedAt, realm);
-            Chronicle.Reset(_dir, loadedAt, realm, history);
+            MarkLoad(loadedAt, realms);
+            Chronicle.Reset(_dir, loadedAt, realms, histories);
             Tools.Runner.Reset();
-            AgentChannel.Reset(_dir);
+            AgentChannel.Reset(_dir, realms);
             AgentChannel.WriteLibrary();
             Audit.Reset();
             LiveMap.Reset();
@@ -86,7 +95,7 @@ namespace BannerlordAgents
         /// Where each record file stood when this load began (loads.jsonl in the campaign's folder), so the dashboard's log can show
         /// one load's pokes, answers and receipts alone: a campaign reloaded from the same save repeats its hours.
         /// </summary>
-        private static void MarkLoad(double loadedAt, string realm)
+        private static void MarkLoad(double loadedAt, List<string> realms)
         {
             try
             {
@@ -97,10 +106,17 @@ namespace BannerlordAgents
                     ["orders.jsonl"] = Size(_dir, "orders.jsonl"), ["notices.jsonl"] = Size(_dir, "notices.jsonl"),
                     ["calls.jsonl"] = Size(warroom, "calls.jsonl"), ["routes.jsonl"] = Size(warroom, "routes.jsonl")
                 };
-                if (realm != null) offsets["pokes_" + realm + ".jsonl"] = Size(_dir, "pokes_" + realm + ".jsonl");
+                foreach (string r in realms) offsets["pokes_" + r + ".jsonl"] = Size(_dir, "pokes_" + r + ".jsonl");
+                // a second agent's war room keeps its own logs (logs\warroom-<realm>)
+                foreach (string r in realms.Skip(1))
+                {
+                    string own = Path.Combine(Paths.Root, "logs", "warroom-" + r);
+                    offsets["warroom-" + r + "/calls.jsonl"] = Size(own, "calls.jsonl");
+                    offsets["warroom-" + r + "/routes.jsonl"] = Size(own, "routes.jsonl");
+                }
                 Files.Append(Path.Combine(_dir, "loads.jsonl"), Json.Line(new
                 {
-                    LoadId = Bridge.LoadId, LoadedAt = double.IsNaN(loadedAt) ? (double?)null : loadedAt, Realm = realm,
+                    LoadId = Bridge.LoadId, LoadedAt = double.IsNaN(loadedAt) ? (double?)null : loadedAt, Realm = realms.FirstOrDefault(), Realms = realms,
                     Wall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), Offsets = offsets
                 }));
                 Files.FlushAll();
@@ -108,10 +124,14 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("marking the load in loads.jsonl", e); }
         }
 
-        /// <summary>A tool's call-back (worker): a notice for the watched realm, so it reaches the agent with this hour's poke.</summary>
-        public static void ToolNotice(string text, string party, double hours, string place = null)
+        /// <summary>The latest hour as this watched realm has it (the first realm's for null).</summary>
+        public static Snapshot LatestFor(string realm)
+            => realm != null && LatestBy.TryGetValue(realm, out Snapshot s) ? s : Latest;
+
+        /// <summary>A tool's call-back (worker): a notice for its realm, so it reaches the agent with this hour's poke.</summary>
+        public static void ToolNotice(string text, string party, double hours, string place = null, string realm = null)
         {
-            string fid = Latest?.Watched;
+            string fid = realm ?? Latest?.Watched;
             if (fid == null) return;
             OnNotice(new Notice { Id = NoticeIds.Next(), Hours = hours, Kind = "tool", Text = text, Factions = { fid }, Party = party, Place = place });
         }
@@ -174,60 +194,73 @@ namespace BannerlordAgents
             Audit.Sight(s);
             Forecast.Calibrate(s);
             if (s.Sight != null) Audit.PlayerSight(s.Sight, s.Hours);
-            if (s.Watched != null) Chronicle.Ensure(s.Watched, Views.FactionName(s, s.Watched), s.Hours);
-            // the tools first: their call-backs of this hour go out with this hour's poke
-            if (s.Watched != null && s.WatchedSees != null) Tools.Runner.OnHour(s);
-            if (s.Watched != null && s.WatchedSees != null)
-                Process(s, s.Watched, s.WatchedSees, s.HostileToWatched, false);
-            if (s.PlayerFaction != null)
-                Process(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true);
-            DropOrphanNotices(s);
-            View watchedView = null;
-            if ((AgentChannel.On || Settings.Dashboard) && s.Watched != null && s.WatchedSees != null)
+            // each watched realm's own hour (since 0.8 there may be more than one, each with its own agent)
+            List<Snapshot> seats = s.SeatViews().Where(v => v.Watched != null).ToList();
+            foreach (Snapshot v in seats) LatestBy[v.Watched] = v;
+            for (int i = 0; i < seats.Count; i++)
             {
+                Snapshot v = seats[i];
+                Chronicle.Ensure(v.Watched, Views.FactionName(v, v.Watched), v.Hours);
+                // the tools first: their call-backs of this hour go out with this hour's poke
+                if (v.WatchedSees != null) Tools.Runner.OnHour(v, i == 0);
+                if (v.WatchedSees != null)
+                    Process(v, v.Watched, v.WatchedSees, v.HostileToWatched, false);
+            }
+            if (s.PlayerFaction != null && !seats.Any(v => v.Watched == s.PlayerFaction))
+                Process(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true);
+            DropOrphanNotices(s, seats);
+            var views = new List<KeyValuePair<Snapshot, View>>();
+            foreach (Snapshot v in seats)
+            {
+                if ((!AgentChannel.On && !Settings.Dashboard) || v.WatchedSees == null) continue;
                 // one view of the hour: the agent's hourly report is written from it, and the dashboard shows the same one
-                Memory m = Get(s.Watched);
-                watchedView = Views.Build(s, s.Watched, s.WatchedSees, s.HostileToWatched, m);
+                Memory m = Get(v.Watched);
+                View watchedView = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
+                views.Add(new KeyValuePair<Snapshot, View>(v, watchedView));
                 if (AgentChannel.On)
                 {
-                    Tools.World w = Tools.Runner.WorldFor(s);
+                    Channel ch = AgentChannel.For(v.Watched);
+                    Tools.World w = Tools.Runner.WorldFor(v);
                     string report = Views.Report(watchedView, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true });
-                    Audit.CheckReport(watchedView, report, s.WatchedSees, s.InspectedByWatched, "hourly report", Known(s, s.WatchedSees, m, w));
-                    AgentChannel.OnHour(s.Hours, report);
-                    try { AgentChannel.WriteCouncil(Facts.Council(w)); }
+                    Audit.CheckReport(watchedView, report, v.WatchedSees, v.InspectedByWatched, "hourly report", Known(v, v.WatchedSees, m, w));
+                    ch.OnHour(v.Hours, report);
+                    try { ch.WriteCouncil(Facts.Council(w)); }
                     catch (Exception e) { Diag.Error("writing the council briefing", e); }
                 }
             }
             if (Settings.Dashboard)
             {
-                try { DashboardHour(s, watchedView); }
+                try { DashboardHour(s, views); }
                 catch (Exception e) { Diag.Error("writing the dashboard's hourly picture", e); }
             }
-            if (s.Watched != null) Recruitment.OnHour(s);
+            foreach (Snapshot v in seats) Recruitment.OnHour(v);
         }
 
-        /// <summary>The dashboard's frame of this hour (LiveMap): the watched realm's view, the player's, and the agent's view file for the "ask the way" tool.</summary>
-        private static void DashboardHour(Snapshot s, View watchedView)
+        /// <summary>The dashboard's frame of this hour (LiveMap): each watched realm's view, the player's, and each agent's view file for the "ask the way" tool.</summary>
+        private static void DashboardHour(Snapshot s, List<KeyValuePair<Snapshot, View>> views)
         {
             var realms = new Dictionary<string, RealmFrame>();
-            if (watchedView != null)
-                realms[s.Watched] = LiveMap.Realm(s, s.Watched, watchedView, s.WatchedSees, s.HostileToWatched, Get(s.Watched), AgentChannel.On, false);
-            if (s.PlayerFaction != null && s.PlayerFaction != s.Watched)
+            foreach (KeyValuePair<Snapshot, View> kv in views)
+            {
+                Snapshot v = kv.Key;
+                realms[v.Watched] = LiveMap.Realm(v, v.Watched, kv.Value, v.WatchedSees, v.HostileToWatched, Get(v.Watched), AgentChannel.On, false);
+            }
+            if (s.PlayerFaction != null && !realms.ContainsKey(s.PlayerFaction))
             {
                 Dictionary<string, Sighting> mine = PlayerSees(s);
                 View pv = Views.Build(s, s.PlayerFaction, mine, s.HostileToPlayer, Get(s.PlayerFaction));
                 realms[s.PlayerFaction] = LiveMap.Realm(s, s.PlayerFaction, pv, mine, s.HostileToPlayer, Get(s.PlayerFaction), false, true);
             }
             LiveMap.Write(s, realms);
-            if (watchedView != null) LiveMap.WriteView(s, watchedView, s.Watched);
+            foreach (KeyValuePair<Snapshot, View> kv in views) LiveMap.WriteView(kv.Key, kv.Value, kv.Key.Watched);
         }
 
         /// <summary>Notices for realms no longer followed (the watched realm changed): dropped, and said so.</summary>
-        private static void DropOrphanNotices(Snapshot s)
+        private static void DropOrphanNotices(Snapshot s, List<Snapshot> seats)
         {
             foreach (KeyValuePair<string, Memory> kv in Mem)
             {
-                if (kv.Key == s.Watched || kv.Key == s.PlayerFaction || kv.Value.Pending.Count == 0) continue;
+                if (seats.Any(v => v.Watched == kv.Key) || kv.Key == s.PlayerFaction || kv.Value.Pending.Count == 0) continue;
                 Diag.Event("notice", "dropped", new { faction = kv.Key, ids = kv.Value.Pending.Select(n => n.Id).ToList(), why = "the realm is no longer followed" });
                 Diag.Count("notice:dropped", kv.Value.Pending.Count);
                 kv.Value.Pending.Clear();
@@ -293,7 +326,7 @@ namespace BannerlordAgents
                 triggers.Add(sighting);
                 if (!isPlayer) Sighted(m, s, r, vp);
                 // an enemy army coming into view is history; a lord passing by is not
-                if (!isPlayer && r.ArmyMen > 0) Chronicle.Line(s.Hours, "sighting", sighting.Text, party: r.Id);
+                if (!isPlayer && r.ArmyMen > 0) Chronicle.For(fid).Line(s.Hours, "sighting", sighting.Text, party: r.Id);
             }
             foreach (string id in close) m.LastClose[id] = s.Hours;
             foreach (string id in m.LastClose.Where(x => s.Hours - x.Value > ForgetHours).Select(x => x.Key).ToList()) m.LastClose.Remove(id);
@@ -339,12 +372,13 @@ namespace BannerlordAgents
             }
 
             PokesWatched++;
-            int number = AgentChannel.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
+            Channel ch = AgentChannel.For(fid);
+            int number = ch.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
             View v = Views.Build(s, fid, sees, hostile, m);
             Tools.World w = Tools.Runner.WorldFor(s);
             var extras = new ReportExtras
             {
-                Since = AgentChannel.On ? AgentChannel.SinceLastAnswer(number) : null, LastAnswered = AgentChannel.LastAnswered,
+                Since = AgentChannel.On ? ch.SinceLastAnswer(number) : null, LastAnswered = ch.LastAnswered,
                 InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = AgentChannel.On
             };
             string report = Views.Report(v, triggers, extras);
@@ -352,18 +386,18 @@ namespace BannerlordAgents
             if (AgentChannel.On)
             {
                 // the look-ups go out before the poke, so they are there when the agent wakes
-                try { AgentChannel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
+                try { ch.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
                 catch (Exception e) { Diag.Error("writing the look-up files", e); }
             }
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
                 Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
             if (AgentChannel.On)
-                AgentChannel.OnPoke(number, s.Hours, triggers, report, new
+                ch.OnPoke(number, s.Hours, triggers, report, new
                 {
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
-                    LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.Count
+                    LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count
                 });
 
             Dictionary<string, int> sizes = Audit.Sizes(report, out int tokens);
@@ -481,9 +515,11 @@ namespace BannerlordAgents
         }
 
         /// <summary>For the console: the watched realm's report as of now, without counting as a poke.</summary>
-        public static string ReportNow(Snapshot s)
+        public static string ReportNow(Snapshot all, string realm = null)
         {
-            Latest = s;
+            Latest = all;
+            Snapshot s = realm == null ? all : all.SeatViews().FirstOrDefault(x => x.Watched == realm);
+            if (s == null) return "No watched realm has the id '" + realm + "'.";
             if (s.Watched == null || s.WatchedSees == null) return "No realm is under watch.";
             View v = Views.Build(s, s.Watched, s.WatchedSees, s.HostileToWatched, Get(s.Watched));
             string report = Views.Report(v, null);

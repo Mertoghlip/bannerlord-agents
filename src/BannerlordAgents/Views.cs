@@ -186,10 +186,10 @@ namespace BannerlordAgents
                 v.LastSeen = earlier.Take(keepEarlier).ToList();
                 // a trail of one point says no more than the lists above
                 v.Trails = mem.Trails.Values.Where(t => t.Points.Count >= 2).OrderByDescending(t => t.Strength).ToList();
-                if (fid == Chronicle.Realm)
+                if (Chronicle.Holds(fid))
                 {
                     // the chronicle's last two days: the notices, and also the enemy armies sighted and the orders given
-                    v.News = Chronicle.Recent(s.Hours, 48, 25);
+                    v.News = Chronicle.For(fid).Recent(s.Hours, 48, 25);
                     v.NewsFromChronicle = true;
                 }
                 else

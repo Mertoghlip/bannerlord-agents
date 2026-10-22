@@ -56,7 +56,10 @@ namespace BannerlordAgents.Dashboard
         {
             lock (_gate)
             {
-                string data = _store.DataDir(campaign), war = _store.WarRoomLogs;
+                // a realm after the first has a war room of its own, with its own logs (logswarroom-<realm>, since 0.8)
+                bool own = realm != null && load?.Realm != null && realm != load.Realm && Directory.Exists(_store.WarRoomLogsOf(realm));
+                string data = _store.DataDir(campaign), war = own ? _store.WarRoomLogsOf(realm) : _store.WarRoomLogs;
+                string keyOf(string f) => own ? "warroom-" + realm + "/" + f : f;
                 DateTime since = DateTime.MinValue;
                 if (load?.Wall != null) DateTime.TryParse(load.Wall, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out since);
                 var all = new List<LogEntry>();
@@ -67,14 +70,14 @@ namespace BannerlordAgents.Dashboard
                         all.Add(e);
                         if (e.Poke >= 0) pokeHours[e.Poke] = e.Hours;
                     }
-                foreach (LogEntry e in Take(Path.Combine(war, "calls.jsonl"), load, l => Call(l, campaign, since)))
+                foreach (LogEntry e in Take(Path.Combine(war, "calls.jsonl"), load, l => Call(l, campaign, since), keyOf("calls.jsonl")))
                 {
                     if (pokeHours.TryGetValue(e.Poke, out double h)) e.Hours = h + 0.01;
                     if (!double.IsNaN(e.Hours) || e.Poke < 0) all.Add(e);
                 }
                 all.AddRange(Take(Path.Combine(data, "orders.jsonl"), load, l => Order(l, realm)));
                 all.AddRange(Take(Path.Combine(data, "notices.jsonl"), load, l => Notice(l, realm)));
-                foreach (LogEntry e in Take(Path.Combine(war, "routes.jsonl"), load, l => Route(l, campaign, since)))
+                foreach (LogEntry e in Take(Path.Combine(war, "routes.jsonl"), load, l => Route(l, campaign, since), keyOf("routes.jsonl")))
                 {
                     if (double.IsNaN(e.Hours) && pokeHours.TryGetValue(e.Poke, out double h)) e.Hours = h + 0.005;
                     if (!double.IsNaN(e.Hours)) all.Add(e);
@@ -86,9 +89,9 @@ namespace BannerlordAgents.Dashboard
         private static int Rank(string kind) => kind == "woke" ? 0 : kind == "asked" ? 1 : kind == "answer" || kind == "council" || kind == "no_answer" ? 2 : 3;
 
         /// <summary>A file's lines from where this load began to where the next began, read on from where they were left.</summary>
-        private List<LogEntry> Take(string path, LoadInfo load, Func<string, LogEntry> parse)
+        private List<LogEntry> Take(string path, LoadInfo load, Func<string, LogEntry> parse, string offsetKey = null)
         {
-            string name = Path.GetFileName(path);
+            string name = offsetKey ?? Path.GetFileName(path);
             long from = load != null && load.Offsets.TryGetValue(name, out long a) ? a : 0;
             long to = load != null && load.Ends.TryGetValue(name, out long b) ? b : long.MaxValue;
             string key = path + "|" + from;
@@ -175,6 +178,7 @@ namespace BannerlordAgents.Dashboard
             string type = Str(o["type"]);
             if (type == "agent_receipt")
             {
+                if (realm != null && Str(o["realm"]) is string rr && rr != realm) return null;
                 string status = Str(o["status"]);
                 string kind = status == "applied" ? "carried" : status == "refused" ? "refused" : status == "checked" ? "checked" : null;
                 if (kind == null) return null;

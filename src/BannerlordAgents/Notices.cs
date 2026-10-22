@@ -50,12 +50,12 @@ namespace BannerlordAgents
         private static List<string> Involved(params IFaction[] factions)
         {
             var list = new List<string>(2);
-            string watched = Bridge.Watched?.StringId;
             string player = Clan.PlayerClan?.MapFaction?.StringId;
             foreach (IFaction f in factions)
             {
                 if (f == null) continue;
-                if (f.StringId == watched && !list.Contains(watched)) list.Add(watched);
+                // every watched realm (since 0.8 there may be more than one)
+                if (Bridge.IsSeat(f.StringId) && !list.Contains(f.StringId)) list.Add(f.StringId);
                 if (f.StringId == player && !list.Contains(player)) list.Add(player);
             }
             return list;
@@ -170,7 +170,7 @@ namespace BannerlordAgents
         /// <summary>An army formed by one of the watched realm's lords (the agent's or the game's own): in its chronicle, without a poke.</summary>
         public static void OnArmyCreated(Army army)
         {
-            if (army?.LeaderParty == null || Bridge.Watched == null || army.Kingdom != Bridge.Watched) return;
+            if (army?.LeaderParty == null || !Bridge.IsSeat(army.Kingdom)) return;
             // an army an order forms meets where the order says; the game fires this before that place is set
             Settlement at = Orders.FormingAt ?? army.AiBehaviorObject as Settlement;
             string where = at != null ? " at " + Names.Settlement(at) : "";
@@ -330,8 +330,8 @@ namespace BannerlordAgents
         }
 
         /// <summary>One of the watched realm's orders finished or failed: a poke trigger, as the plan has it.</summary>
-        public static void Order(string kind, string text, string party, bool recordOnly = false)
-            => Send(kind, text, Involved(Bridge.Watched), party, recordOnly: recordOnly);
+        public static void Order(IFaction realm, string kind, string text, string party, bool recordOnly = false)
+            => Send(kind, text, Involved(realm ?? Bridge.Watched), party, recordOnly: recordOnly);
 
         public static void OnPeaceOfferedToPlayer(IFaction from, int amount, int days)
         {

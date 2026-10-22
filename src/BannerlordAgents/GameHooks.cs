@@ -307,8 +307,7 @@ namespace BannerlordAgents
             if (!Active || p == null) return default(Before);
             try
             {
-                Kingdom w = Bridge.Watched;
-                if (w == null || p.LeaderHero == null || !p.IsLordParty || p.MapFaction != w) return default(Before);
+                if (p.LeaderHero == null || !p.IsLordParty || !Bridge.IsSeat(p.MapFaction)) return default(Before);
                 return new Before { On = true, Behavior = p.DefaultBehavior, Settlement = p.TargetSettlement, Party = p.TargetParty, HadArmy = p.Army != null };
             }
             catch (Exception e)

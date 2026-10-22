@@ -34,6 +34,7 @@ namespace BannerlordAgents
         // worker: the day's hours each lord spent where it could recruit, and the hours counted
         private static readonly Dictionary<string, int> HoursAt = new Dictionary<string, int>();
         private static int _hoursCounted;
+        private static double _lastHour = double.NaN;
         /// <summary>The last day's sentence, for the console (any thread may read it).</summary>
         public static volatile string LastSummary = "No day measured yet.";
 
@@ -41,14 +42,13 @@ namespace BannerlordAgents
         {
             _today = new Dictionary<string, Taken>();
             LastSummary = "No day measured yet.";
-            Background.Post("recruitment reset", () => { HoursAt.Clear(); _hoursCounted = 0; });
+            Background.Post("recruitment reset", () => { HoursAt.Clear(); _hoursCounted = 0; _lastHour = double.NaN; });
         }
 
         /// <summary>Game's thread, every recruit in the world: kept only for the watched realm's lords (a lookup, no allocation for anyone else).</summary>
         public static void OnTroopRecruited(Hero recruiter, Settlement where, Hero source, CharacterObject troop, int amount)
         {
-            Kingdom watched = Bridge.Watched;
-            if (watched == null || recruiter == null || amount <= 0 || recruiter.MapFaction != watched) return;
+            if (recruiter == null || amount <= 0 || !Bridge.IsSeat(recruiter.MapFaction)) return;
             if (!_today.TryGetValue(recruiter.StringId, out Taken t)) _today[recruiter.StringId] = t = new Taken();
             t.Men += amount;
             string at = where?.StringId ?? "elsewhere";
@@ -59,7 +59,8 @@ namespace BannerlordAgents
         /// <summary>Worker, every in-game hour: which of the realm's lords sat where the game lets a lord recruit.</summary>
         public static void OnHour(Snapshot s)
         {
-            _hoursCounted++;
+            // called once for each watched realm: the hour counts once
+            if (s.Hours != _lastHour) { _hoursCounted++; _lastHour = s.Hours; }
             foreach (PartyRow r in s.Parties)
             {
                 if (r.Faction != s.Watched || r.Kind != "lord" || r.InSettlement == null || r.InBattle) continue;

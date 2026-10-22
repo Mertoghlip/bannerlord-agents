@@ -124,6 +124,7 @@ namespace BannerlordAgents
             Files.Overwrite(Path.Combine(Root, "current.json"), Json.Line(new
             {
                 s.Campaign, LoadId = Path.GetFileName(dir), s.Hours, s.Date, Dir = dir, Frame = name, Map = s.MapCrc, Realms = realms.Keys.ToList(), Agent = s.Watched,
+                Agents = s.Seats != null && s.Seats.Count > 0 ? s.Seats.Select(x => x.Realm).ToList() : new List<string> { s.Watched },
                 AgentOn = AgentChannel.On, Written = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Text.Inv),
                 Calendar = new { Calendar.HoursInDay, Calendar.DaysInSeason, Calendar.SeasonsInYear, Calendar.SeasonNames }
             }));

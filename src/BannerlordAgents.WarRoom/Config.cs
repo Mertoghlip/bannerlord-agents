@@ -13,6 +13,8 @@ namespace BannerlordAgents.WarRoom
         public string AgentDir = @"C:\Users\karab\Projects\orc-war-council";
         /// <summary>The agent channel, a folder inside the agent's: the bridge's agent_dir points here.</summary>
         public string Channel = "warroom";
+        /// <summary>Where this war room writes its logs (empty: %LOCALAPPDATA%\BannerlordAgents\logs\warroom). A second agent's war room keeps its own (since 0.8).</summary>
+        public string LogDir = "";
         public string Model = "claude-opus-5-5";
         /// <summary>Claude Code's effort level for an ordinary poke, and for an urgent one (low, medium, high, xhigh, max).</summary>
         public string Effort = "high";
@@ -86,6 +88,7 @@ namespace BannerlordAgents.WarRoom
                 switch (k)
                 {
                     case "channel": if (v.Length > 0) c.Channel = v; break;
+                    case "log_dir": c.LogDir = v; break;
                     case "model": if (v.Length > 0) c.Model = v; break;
                     case "effort": if (v.Length > 0) c.Effort = v; break;
                     case "urgent_effort": if (v.Length > 0) c.UrgentEffort = v; break;
@@ -124,6 +127,8 @@ namespace BannerlordAgents.WarRoom
             var sb = new StringBuilder();
             sb.AppendLine("# The war room's settings (scripts\\warroom.ps1 starts it). One \"key = value\" per line.");
             sb.AppendLine("channel = " + Channel);
+            sb.AppendLine("# where its logs go (empty: %LOCALAPPDATA%\\BannerlordAgents\\logs\\warroom); a second agent's war room keeps its own");
+            sb.AppendLine("log_dir = " + LogDir);
             sb.AppendLine("model = " + Model);
             sb.AppendLine("# effort: low, medium, high, xhigh or max; urgent pokes (any of the words below in their reasons) get urgent_effort");
             sb.AppendLine("effort = " + Effort);

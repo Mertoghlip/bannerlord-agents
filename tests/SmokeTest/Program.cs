@@ -213,6 +213,8 @@ namespace SmokeTest
                   "loading an earlier save cuts the chronicle back to its date, and keeps what came before (" + linesBefore + " lines, then " + Chronicle.Count + ")");
             Check(!Read(Path.Combine(dir, "chronicle_orcs.jsonl")).Contains("Theoden"), "in the campaign's own copy too");
 
+            TwoRealmsTests(root, agentDir);
+
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");
             Files.Overwrite(swap, "first");
@@ -1289,6 +1291,58 @@ namespace SmokeTest
         }
 
         /// <summary>A small orc realm for the tools: two castles and a village of theirs, a castle and a village of the player's.</summary>
+        /// <summary>
+        /// 0.8: two watched realms, each with its own agent: each is poked in its own folder with a report of what its own eyes
+        /// saw, keeps its own poke file, an answer in a realm's folder is that realm's, and each realm's orders in force are its own.
+        /// </summary>
+        private static void TwoRealmsTests(string root, string agentDir)
+        {
+            string orcDir = Path.Combine(root, "agent2_orcs"), dgDir = Path.Combine(root, "agent2_dg");
+            Settings.AgentDir = orcDir;
+            Settings.AgentDirs["dg"] = dgDir;
+            Brain.Reset("smoketest2", double.NaN, new List<string> { "orcs", "dg" }, null);
+            var host = new PartyRow { Id = "p_ar", Leader = "lord_ar", Name = "Elessar", Faction = "player_k", Kind = "lord", Men = 500, Strength = 900, X = 106, Y = 104, Doing = "Hold", Spottable = true };
+            Snapshot s = ToolWorld(7000, host);
+            s.Factions["dg"] = new FactionRow { Id = "dg", Name = "Dol Guldur", Ruler = "Khamul", AtWar = { "player_k" } };
+            s.FactionNames["dg"] = "Dol Guldur";
+            Add(s, new SettlementRow { Id = "town_dg", Name = "Dol Guldur", Kind = "town", Faction = "dg", X = 400, Y = 400, Garrison = 500, Militia = 100 });
+            Add(s, new PartyRow { Id = "p_khamul", Leader = "lord_khamul", Name = "Khamul", Faction = "dg", Kind = "lord", Men = 400, Strength = 800, X = 402, Y = 400, Doing = "Hold", InSettlement = "town_dg" });
+            Add(s, new PartyRow { Id = "p_elf", Leader = "lord_elf", Name = "Haldir", Faction = "player_k", Kind = "lord", Men = 300, Strength = 600, X = 410, Y = 405, Doing = "GoToSettlement", TargetSettlement = "town_dg", Spottable = true });
+            s.Seats = new List<SeatSight>
+            {
+                new SeatSight { Realm = "orcs", Sees = s.WatchedSees, Inspected = s.InspectedByWatched, Hostile = s.HostileToWatched },
+                new SeatSight { Realm = "dg", Sees = new Dictionary<string, Sighting> { ["p_elf"] = new Sighting { Party = "p_elf", By = "Dol Guldur", Distance = 9f } },
+                                Inspected = new HashSet<string> { "town_dg" }, Hostile = new HashSet<string> { "player_k" } }
+            };
+            Brain.OnHour(s);
+            Files.FlushAll();
+            string orcPoke = Read(Path.Combine(orcDir, "poke.txt")), dgPoke = Read(Path.Combine(dgDir, "poke.txt"));
+            Check(orcPoke.Contains("MISTY MOUNTAIN ORCS") && dgPoke.Contains("DOL GULDUR"), "two watched realms: each is poked in its own channel folder, with its own report");
+            Check(dgPoke.Contains("Haldir") && !orcPoke.Contains("Haldir") && orcPoke.Contains("Elessar") && !dgPoke.Contains("Elessar"),
+                  "each realm's report holds only what its own eyes saw");
+            Check(File.Exists(Path.Combine(Brain.Dir, "pokes_orcs.jsonl")) && File.Exists(Path.Combine(Brain.Dir, "pokes_dg.jsonl")), "each realm's pokes are kept in its own file");
+            Check(File.Exists(Path.Combine(orcDir, "report.txt")) && File.Exists(Path.Combine(dgDir, "report.txt")) && File.Exists(Path.Combine(dgDir, "council.txt")),
+                  "each realm gets its own hourly report and council briefing");
+
+            // an answer in Dol Guldur's folder is Dol Guldur's: its receipt is written there, not in the orcs' folder
+            AgentChannel.Receipt(new AgentChannel.AgentOrder { File = "a.json", Index = 1, Poke = 1, Lord = "lord_khamul", Do = "hold", Realm = "dg", Received = DateTime.Now },
+                                 "checked", "valid: Khamul holds (shadow mode: not carried out)", 7000.5);
+            Files.FlushAll();
+            Check(Read(Path.Combine(dgDir, "receipts.log")).Contains("lord_khamul hold") && !ReadIf(Path.Combine(orcDir, "receipts.log")).Contains("lord_khamul"),
+                  "a receipt goes to the channel the order came by");
+            Check(!ReadIf(Path.Combine(orcDir, "chronicle.txt")).Contains("Khamul"), "and nothing of it into the other realm's chronicle");
+
+            // the tools run per realm: Dol Guldur's order is in its own orders in force, not the orcs'
+            Runner.Start(951, new ToolOrder { Tool = "goto", Lord = "lord_khamul", LordName = "Khamul", Party = "p_khamul", At = "town_dg", Realm = "dg" });
+            List<Snapshot> seats = s.SeatViews();
+            string dgInForce = Runner.InForce(Runner.WorldFor(seats[1])), orcInForce = Runner.InForce(Runner.WorldFor(seats[0]));
+            Check(seats.Count == 2 && seats[1].Watched == "dg" && dgInForce.Contains("Khamul") && !orcInForce.Contains("Khamul"), "a realm's orders in force list only its own lords' orders");
+            Runner.Ended(951, "test over");
+
+            Settings.AgentDirs.Remove("dg");
+            Settings.AgentDir = agentDir;
+        }
+
         private static Snapshot ToolWorld(double hours, params PartyRow[] parties)
         {
             var s = new Snapshot { Campaign = "smoketest", Hours = hours, Date = "Summer 9, 1085", PlayerFaction = "player_k", PlayerParty = "main_party", Watched = "orcs" };
@@ -1351,6 +1405,8 @@ namespace SmokeTest
         [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
 
         /// <summary>The module keeps its files open for writing (shared), so read them the same way.</summary>
+        private static string ReadIf(string path) => File.Exists(path) ? Read(path) : "";
+
         private static string Read(string path)
         {
             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
