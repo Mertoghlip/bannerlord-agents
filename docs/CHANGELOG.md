@@ -692,7 +692,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, October 22
 
-### 11:26 · Version 0.7.7: the test-save command no longer stalls on the orcs' own battles, and a refusal says so · commit f52ccf5 (not yet installed: the game is open)
+### 11:26 · Version 0.7.7: the test-save command no longer stalls on the orcs' own battles, and a refusal says so · commit f52ccf5 (installed 11:31)
 - **Why:** Mert: "currently, running the rebalance command does nothing." Both runs that morning (11:19, `agents.rebalance apply` on a save at Summer 20, 1087, 07:00) refused and changed nothing. The orcs were storming Hollin Gate (`castle_MM6`, the camp of `lord_MM8_1`, in the hourly frame `h2192359`), and the command would not run while any battle was fought at one of the places or their villages. It said so, but below a first line that read "REBALANCE, CARRIED OUT" whatever happened, and that first line is all the log keeps.
 - **What** (`TestSetup`):
   - a battle at one of the places or their villages that the orcs' side is fighting against the player's realm (a storm, a raid) is broken off before the handover, as peace breaks one off (`MapEvent.DiplomaticallyFinished`: no winner, no loot, no prisoners; the storm closes with the siege, `SiegeEvent.FinalizeSiegeEvent`, and a raid at the game's next look, `MapEvent.Update`). The game does the same in `ChangeOwnerOfSettlementAction` when a place passes to its attackers' side. The preview names each one;
@@ -700,4 +700,5 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a siege of a place by an enemy of the orcs goes on against the new owner instead of being ended;
   - the first line says what happened: "REBALANCE NOT RUN, nothing was changed: <why>", "REBALANCE, WHAT IT WOULD DO", or "REBALANCE, CARRIED OUT: <n> of <n> places handed over, ..."; the whole answer goes to the log as well.
 - **Checks:** the smoke test passed in full (no new checks: the command needs the game); 512 game references, 0 missing (`MapEvent.DiplomaticallyFinished`, `IsPlayerMapEvent`, `IsSallyOut`, `IsBlockadeSallyOut` read in the 1.4.8 code). All four projects and `SubModule.xml` are at 0.7.7.
+- **Installed** at 11:31, after the game closed (sha256 `2A46E12C9EC59C29…`); the war room and the dashboard were stopped for the build (their self-tests passed) and started again, detached, at 11:31 (dashboard answering on 7329, the war room waiting after poke #418). Settings unchanged: watch mistymountainorcs, agent live, agent_lords all.
 - **Not yet seen in a game:** the run through a storm.
