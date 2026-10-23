@@ -839,7 +839,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** at 19:48 (sha256 `A263BA3D602E8BA8…`, 437,760 bytes), the game closed, over `2D3A3986EC987787…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-limits-20261022-1948`. CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars are still in it.
 - **Not yet seen in a game.**
 
-### 20:19 · Version 0.9.2: an agent's recruit order tours, as Mert's own parties do · commit COMMIT_HASH (installed 20:18)
+### 20:19 · Version 0.9.2: an agent's recruit order tours, as Mert's own parties do · commit 6adf9ac (installed 20:18)
 - **Why:** Mert: "make sure that any lord with a recruit order given by an agent controlling a faction also follows the logic as my own parties." Until now the recruit order went to one town or village and stayed up to three days or until 98% full. It bought only through the game's hourly round: one volunteer per notable an hour, on a dice roll.
 - **What** (new `RecruitTour.cs`; `Orders.cs`; `Tools/Library/recruit.json`; the move kind `tour` in `ToolDef.cs`; [TOOLS.md](TOOLS.md#the-recruit-order-tours-since-092)):
   - **Where:** from the order's place (now any town, castle or village of the realm or an ally), the lord rides to the nearest town, castle or village of the realm, an ally or a realm at peace with it. The place must be within reach (four times the usual gap between neighbouring towns) and not swept by this order in the last day. One after another;
