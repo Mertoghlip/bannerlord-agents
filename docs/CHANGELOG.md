@@ -824,3 +824,17 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the DLL still holds the other sessions' CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars. Their settings were left alone, and both sessions were told and agreed.
 - **Installed** at 19:38 (sha256 `2D3A3986EC987787…`, 434,688 bytes), the game closed, over `434511229FDC618B…`, which is kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-recruit-20261022-1938`. The `.cs` files were edited in place: the source before this change is the one that built that kept DLL.
 - **Not yet seen in a game.**
+
+### 19:48 · Outside the repository: computer garrisons up to 250 / 400, and a one-day sweep memory (TFAOMFixes) · commit COMMIT_HASH
+- **Why:** Mert: "the limit should be raised to 250 men for castles and 400 men for cities", and for the recruit order: "Instead of the last 3 days, set the bar to the last day. Slots refill every day."
+- **What** (`C:\BannerlordArchive\src-TFAOMFixes148`):
+  - new `ComputerGarrisons.cs`. Improved Garrisons has one limit for all computer garrisons (50). Every time it asks for a computer holding's settings, it builds a fresh object that is never saved. A postfix on `GarrisonBehavior.GetTownSettings` sets that object's limit to 250 for a castle and 400 for a town. The player's saved settings and its options file are untouched, so its options screen still shows 50. File `computer_garrisons.txt`, console `tfaomfix.computer_garrisons`;
+  - `RecruitOrders.cs`: a party skips a place it swept in the last 24 hours (was 72);
+  - a line each in `SubModule.cs` and `HookCensus.cs`, and the project file.
+- **Checks:**
+  - built clean;
+  - 592 game references, 0 missing;
+  - the offline dry run bound all 11 patches;
+  - the limit was set on a real computer-garrison settings object offline (0, then 250).
+- **Installed** at 19:48 (sha256 `A263BA3D602E8BA8…`, 437,760 bytes), the game closed, over `2D3A3986EC987787…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-limits-20261022-1948`. CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars are still in it.
+- **Not yet seen in a game.**
