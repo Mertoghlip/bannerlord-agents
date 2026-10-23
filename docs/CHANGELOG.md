@@ -1048,3 +1048,39 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the installed DLL has sha256 `63B98CE5EBAA2859…`, the war room's `WarRoom.dll` (rebuilt, same code) `D837EF65793F935D…`;
   - the war rooms (three) and the dashboard were stopped for the build and started again at 15:34.
 - **Not yet seen in a game:** the sight check's new numbers (it needs the game; expected near 100%).
+
+### 16:04 · Version 0.11.0: the test runs' record, scoreboard, setups and watcher · commit COMMIT (built and installed 16:04)
+- Mert's test plan (Oct 23, [RUNS.md](RUNS.md)): "All tests will be for 60 in-game days, starting from the TEST START save". **A:** Mert against the orcs' and Dol Guldur's agents (first). **B:** Mert against the game's own AI ("If I can"). **C1, C2:** "give control of my kingdom first to an agent and have it play against other agents and against the game's raw ai, and see how its performance compares to me".
+- His choices for the agent-ruler runs: "switch the player character to a wanderer in a random town, give that character a lot of money and food so it doesn't die, and simply let the game run". The lieutenant stays on when he plays. The rivals' agents stay on, watching, against the game's AI "so long as usage is fine". "lets try to track token usage stats as well."
+- **The run record in the bridge** (new `Runs.cs`: `Run`, `RunRules`, `RunDay`, `RunFiles`):
+  - Loading TEST START (`run_save`) readies a run. It begins on the first in-game hour the clock runs, named by who commands each side (A, B, C1, C2). It ends after `run_days` (60) × 24 in-game hours: the game pauses and offers a save "TEST END (arm) (run)".
+  - A load of one of the run's own saves carries it on, an autosave after a crash included; reloaded hours are marked. Loading TEST START again ends the old run unfinished.
+  - **Its folder** `%LOCALAPPDATA%\BannerlordAgents\runs\(run)\`:
+    - `run.json`: who commands what, the loads, the saves, the marks against it, the running tally, the game's war tally at the start;
+    - `setup.json`: the versions, every mod, each agent's mode, war room settings and fingerprints of its instructions, the save's fingerprint;
+    - `days.jsonl`: the scoreboard at day 0 and every 24 in-game hours, per realm (holdings by kind, garrisons, lords, men, strength, armies, loot, prisoners, lords alive, held and holding, clans' gold and daily change, influence, recruits that day, the tally), the game's own war tally per pair (casualties, sieges, towns and raids won, tribute), the player's party;
+    - `events.jsonl`: battles with each side's realm, leader, who commanded it (you, your lieutenant, an agent, the game), men and losses; holdings changing hands; sieges; lords taken, killed and freed; villages looted; armies; war and peace; `agents.run note` lines.
+  - **The run's copy of the detailed log:** `Diag` tees the run kinds into `events.jsonl`, kept whole past the trace's 200 MB cap: pokes, answers and receipts, orders, the lieutenant, decisions, alarms, errors, freezes, the fog and sight checks, speed, saves and loads. Left out: an order's hourly line, lord look-ups and tool steps (4,100 hourly lines in one 3-hour launch).
+  - **Marks against a run:** true sight, cheat mode, a change of commander after the start, a late start, a crash, replayed hours, a stop by hand.
+  - **Console:** `agents.run [check|note (text)|stop]`. **Settings:** `run_save`, `run_days`, `run_rivals`, `run_kingdom`.
+  - **Two agents naming one realm:** the one switched on plays it (`Bridge.Start`), so the lieutenant and the kingdom's agent can both stay listed. `Orders.SourceOf` says who gave a lord's order.
+- **`Runs.exe`** (new project `src/BannerlordAgents.Runs`, read-only):
+  - `watch`: what is new since the last look, with NEEDS A LOOK first and exit code 1 then;
+  - `status`;
+  - `report`: `report.md` and `report.json`;
+  - `compare`: `runs\compare.md`.
+  - **Token use** per agent and kind of call, from each war room's `calls.jsonl` within the run's real-time spans: tokens read (fresh, from the cache, written to it), written and thinking, list price, per in-game day, per real hour, the most in any 5 hours, failed calls and usage-limit hits.
+- **`scripts\arm.ps1 -Arm A|B|C1|C2|show`:** switches the four agents' modes in their `agent.txt` (read at every load, so no restart), logs each switch in `runs\arms.log`, and prints the in-game steps.
+- **Docs:** [RUNS.md](RUNS.md) (new), PLAN.md's checkpoint, CLAUDE.md. A control character in CLAUDE.md's code map (`scripts\agents.ps1` had lost its backslash-a in an earlier edit) is put right.
+- **Outside the repository:**
+  - **The kingdom's agent** `C:\Users\karab\Projects\kingdom-war-council` (`scripts\setup-agent.ps1 -Realm new_kingdom -Mode off`): its instructions are the realm template word for word, only the title and opening line its own ("the Kingdom of Arnor and Gondor, the reunited realm of the Dúnedain of the north and the south"; no ruler named). Its war room settings are the orcs' (effort high, council on), logs in `logs\warroom-new_kingdom`.
+  - **The bridge's settings:** `agents` now lists it fourth (backup `settings.txt.bak-20261023-before-kingdom-agent`); the next launch writes the `run_*` keys.
+  - **Arm A set** at 16:01 (no mode changed: orcs and Dol Guldur live, lieutenant live, the kingdom's agent off); the memory index's same lost backslash-a is put right.
+- **Checks:**
+  - the smoke test passed in full, with 5 new checks: the arms from who commands; the run's days and its end at 1,440 hours; the day line from an hour's copy; the state read back as written; the run's copy of the log holding only its kinds while it runs;
+  - the war room's and the dashboard's self-tests passed at the install;
+  - 630 game references, 0 missing (the new ones: the game's war tally, saving under a name, a pop-up's two buttons, heroes held prisoner); all 7 hooks bound;
+  - `Runs.exe` tried on a made-up run whose agents' logs were the real ones of Oct 22, 20:22: status, two watches (the second only what was new), report and compare;
+  - the installed DLL has sha256 `063E6A5FEF59F2CC…`, the war room's `WarRoom.dll` (rebuilt, same code) `FA4847C5D6BA8A3E…`;
+  - the war rooms, now four, and the dashboard were stopped for the build and started again at 16:04.
+- **Not yet seen in a game:** all of it (see RUNS.md).

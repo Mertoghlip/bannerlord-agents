@@ -24,6 +24,8 @@ namespace BannerlordAgents
     {
         public static string Version => typeof(SubModule).Assembly.GetName().Version.ToString(3);
         private static bool _modulesLogged;
+        /// <summary>The modules of this launch, in load order, with their versions (a test run's setup keeps them).</summary>
+        public static System.Collections.Generic.List<string> Modules = new System.Collections.Generic.List<string>();
 
         protected override void OnSubModuleLoad()
         {
@@ -74,6 +76,7 @@ namespace BannerlordAgents
             try
             {
                 var mods = ModuleHelper.GetActiveModules().Select(m => m.Id + " " + m.Version).ToList();
+                Modules = mods;
                 Log.Line("modules loaded (" + mods.Count + ", in load order): " + string.Join(", ", mods));
                 Diag.Event("session", "modules", new { modules = mods });
             }

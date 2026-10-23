@@ -32,7 +32,20 @@ namespace BannerlordAgents
             public string Kind;
             public string What;
             public object Data;
+            public string RunFile; // the test run's events.jsonl when this kind is the run's (Run.EventsFile at the time), else null
         }
+
+        /// <summary>
+        /// The kinds of the detailed log a test run keeps a copy of in its own events.jsonl (0.11, docs/RUNS.md): its own events,
+        /// the orders, tools, pokes and answers, the lieutenant, your decisions, armies and notices, and what spoils or slows a
+        /// run (alarms, errors, freezes, the fog and sight checks, speed, focus, saves and loads). Not the AI's reasons, the
+        /// lords' plan changes or the hourly sight lines, which are many and stay in the launch's trace.
+        /// </summary>
+        private static readonly HashSet<string> RunKinds = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "run", "order", "tool", "poke", "answer", "agent", "lieutenant", "decision", "recorder", "army", "notice", "takings", "wages", "purse", "storm",
+            "alarm", "error", "freeze", "fog", "sight_check", "speed", "focus", "save", "load", "session", "history", "self_check", "pac", "command", "day"
+        };
 
         /// <summary>Time spent on the game's thread by one of our hooks. Written by the game's thread only.</summary>
         internal sealed class HookStat
@@ -172,11 +185,11 @@ namespace BannerlordAgents
                 Drain();
                 lock (WriteGate)
                 {
-                    foreach (StreamWriter w in new[] { _trace, _errors, _lords, _health })
+                    foreach (StreamWriter w in new[] { _trace, _errors, _lords, _health, _runWriter })
                     {
                         try { w?.Dispose(); } catch { /* closing anyway */ }
                     }
-                    _trace = _errors = _lords = _health = null;
+                    _trace = _errors = _lords = _health = _runWriter = null;
                 }
                 if (SessionDir != null) File.Delete(Path.Combine(SessionDir, "running.marker"));
                 Log.Close();
@@ -207,9 +220,12 @@ namespace BannerlordAgents
         {
             bool main = MainThread != 0 && Thread.CurrentThread.ManagedThreadId == MainThread;
             long t = main ? Stopwatch.GetTimestamp() : 0;
-            var e = new Ev { Wall = DateTime.UtcNow.Ticks, Hours = Hours, Kind = kind, What = what, Data = data };
+            string runFile = Run.EventsFile;
+            // the run's copy leaves out the many small lines: an order's every hour, a lord's look-up, a tool's every step
+            bool forRun = runFile != null && RunKinds.Contains(kind) && !(kind == "order" && (what == "hour" || what == "lord lookup")) && !(kind == "tool" && what == "step");
+            var e = new Ev { Wall = DateTime.UtcNow.Ticks, Hours = Hours, Kind = kind, What = what, Data = data, RunFile = forRun ? runFile : null };
             Keep(e);
-            if (!_traceCapped || kind == "alarm" || kind == "error") Trace.Enqueue(e);
+            if (!_traceCapped || kind == "alarm" || kind == "error" || e.RunFile != null) Trace.Enqueue(e);
             if (main) Took(Logging, t, false);
         }
 
@@ -378,10 +394,16 @@ namespace BannerlordAgents
                         while (Trace.TryDequeue(out Ev e))
                         {
                             string line = TraceLine(e);
-                            w.WriteLine(line);
-                            _traceBytes += line.Length + 2;
+                            // past the cap, only alarms and errors go on in the trace; a run's copy is kept whole
+                            if (!_traceCapped || e.Kind == "alarm" || e.Kind == "error")
+                            {
+                                w.WriteLine(line);
+                                _traceBytes += line.Length + 2;
+                            }
+                            if (e.RunFile != null) RunLine(e.RunFile, line);
                         }
                         w.Flush();
+                        _runWriter?.Flush();
                         if (!_traceCapped && _traceBytes > TraceCap)
                         {
                             _traceCapped = true;
@@ -403,6 +425,26 @@ namespace BannerlordAgents
                 }
                 catch (Exception e) { Emergency("the detailed logs could not be written: " + e.Message); }
             }
+        }
+
+        private static StreamWriter _runWriter;
+        private static string _runWriterPath;
+
+        /// <summary>A line for the test run's events.jsonl (under WriteGate), its file opened anew when the run changes.</summary>
+        private static void RunLine(string path, string line)
+        {
+            try
+            {
+                if (_runWriter == null || _runWriterPath != path)
+                {
+                    try { _runWriter?.Dispose(); } catch { /* the old run's file is closed anyway */ }
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
+                    _runWriter = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete), Utf8);
+                    _runWriterPath = path;
+                }
+                _runWriter.WriteLine(line);
+            }
+            catch (Exception e) { Emergency("the test run's events could not be written: " + e.Message); }
         }
 
         private static StreamWriter Writer(ref StreamWriter w, string file)

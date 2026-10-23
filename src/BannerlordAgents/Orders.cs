@@ -127,6 +127,13 @@ namespace BannerlordAgents
             return false;
         }
 
+        /// <summary>Who gave the order holding this party (agent, you, hand), or null when none holds it (a test run's battles say who commanded).</summary>
+        public static string SourceOf(MobileParty p)
+        {
+            for (int i = 0; i < Active.Count; i++) if (ReferenceEquals(Active[i].Party, p)) return Active[i].Source;
+            return null;
+        }
+
         /// <summary>For the lord watch: did we flip this party's switch since it last looked? (Consumes the mark.)</summary>
         public static bool TookSwitch(MobileParty p) => Toggled.Remove(p);
 

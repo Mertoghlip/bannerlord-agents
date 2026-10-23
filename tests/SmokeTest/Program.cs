@@ -390,6 +390,7 @@ namespace SmokeTest
             FieldLessonsTests(dir, moves);
             GameClockTests(dir);
             RoadTests();
+            RunTests();
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
@@ -1291,6 +1292,56 @@ namespace SmokeTest
         /// distance"): through the party's entrance and the game's table between holdings, the nearest holding chosen by road,
         /// both in the report, the poke rule by road, and times in the facts by road.
         /// </summary>
+        /// <summary>
+        /// Test runs (0.11, docs/RUNS.md): the arm from who commands each side, the run's days, the day line from an hour's copy,
+        /// the run's state read back as it was written, and the run's copy of the detailed log (its kinds only, while it runs).
+        /// </summary>
+        private static void RunTests()
+        {
+            Check(RunRules.Arm("you", new[] { "agent", "agent" }) == "A" && RunRules.Arm("you", new[] { "watching", "game" }) == "B"
+                  && RunRules.Arm("agent", new[] { "agent", "agent" }) == "C1" && RunRules.Arm("agent", new[] { "game", "watching" }) == "C2"
+                  && RunRules.Arm("you", new[] { "agent", "game" }) == "mixed" && RunRules.Arm("game", new[] { "agent" }) == "other",
+                  "a run's arm follows who commands each side: A, B, C1, C2 (mixed when the rivals differ)");
+            double h0 = 1000.3;
+            Check(RunRules.Day(h0, h0) == 1 && RunRules.Day(h0 + 23.9, h0) == 1 && RunRules.Day(h0 + 24, h0) == 2 && !RunRules.Over(h0 + 1439, h0, 60) && RunRules.Over(h0 + 1440, h0, 60),
+                  "day 1 is the first 24 in-game hours from the save's time, and a 60-day run is over at 1,440 hours");
+
+            var host = new PartyRow { Id = "p_rh", Leader = "lord_rh", Name = "Gothmog", Faction = "orcs", Kind = "lord", Men = 400, Wounded = 20, Strength = 600, ArmyLeader = "p_rh", ArmyMen = 700, ArmyParties = 2, X = 100, Y = 100, Spottable = true, Loot = 900, Prisoners = 12, Ransom = 240 };
+            var rider = new PartyRow { Id = "p_rr", Leader = "lord_rr", Name = "Shagrat", Faction = "orcs", Kind = "lord", Men = 300, Strength = 400, ArmyLeader = "p_rh", Attached = true, X = 100, Y = 100, Spottable = true };
+            var foe = new PartyRow { Id = "p_rf", Leader = "lord_rf", Name = "Faramir", Faction = "player_k", Kind = "lord", Men = 250, Strength = 500, X = 160, Y = 100, Spottable = true };
+            Snapshot s = ToolWorld(1100, host, rider, foe);
+            var head = new RunDayHeader { Run = "r1", Arm = "A", Day = 3, Hours = 1100, Date = "Summer 12", Wall = "2026-10-24 10:00:00", Who = { ["player_k"] = "you", ["orcs"] = "agent" } };
+            var tally = new Dictionary<string, RunTally> { ["orcs"] = new RunTally { BattlesWon = 2, CastlesLost = 1 } };
+            string line = Json.Line(RunDay.Build(head, new List<string> { "player_k", "orcs" }, "player_k", s,
+                new List<RealmExtras> { new RealmExtras { Realm = "orcs", LordsAlive = 30, LordsCaptive = 4, ClansGold = 50000, ClansDaily = -800 } },
+                new List<WarRow> { new WarRow { A = "player_k", B = "orcs", AtWar = true, CasualtiesA = 100, CasualtiesB = 300 } }, tally, new Dictionary<string, int> { ["orcs"] = 55 }));
+            Check(line.Contains("\"type\":\"day\"") && line.Contains("\"day\":3") && line.Contains("\"realm\":\"orcs\",\"name\":\"Misty Mountain Orcs\",\"who\":\"agent\"")
+                  && line.Contains("\"castles\":2") && line.Contains("\"villages\":1") && line.Contains("\"lords\":2,\"men\":700,\"wounded\":20,\"strength\":1000")
+                  && line.Contains("\"armies\":1,\"army_men\":700") && line.Contains("\"lords_captive\":4") && line.Contains("\"recruited_today\":55") && line.Contains("\"battles_won\":2")
+                  && line.Contains("\"casualties_b\":300"),
+                  "the day line counts each realm's holdings, lords, men, strength and armies from the hour's copy, with the game's numbers and the run's tally");
+
+            var st = new RunState { Id = "r1-A", Arm = "A", Status = "running", Save = "TEST START", H0 = 1000.3, Kingdom = "player_k", Rivals = { "orcs" }, Who = { ["player_k"] = "you" } };
+            st.Saves.Add("autosave");
+            st.Tally["orcs"] = new RunTally { LordsTaken = 3 };
+            st.Flag("2026-10-24 10:00:00", 1030, "true sight", "a test mark");
+            RunState back = Json.Read<RunState>(Json.Line(st));
+            Check(back.Id == "r1-A" && back.H0 == 1000.3 && back.Rivals.SequenceEqual(new[] { "orcs" }) && back.Who["player_k"] == "you" && back.Saves[0] == "autosave"
+                  && back.Tally["orcs"].LordsTaken == 3 && back.Flags[0].Day == 2 && back.AllRealms().SequenceEqual(new[] { "player_k", "orcs" }),
+                  "a run's state reads back as it was written, so a run carried on after a crash keeps its counts and its saves");
+
+            string events = Path.Combine(Paths.Runs, "smoke-run", "events.jsonl");
+            BannerlordAgents.Run.EventsFile = events;
+            Diag.Event("order", "issued for the run", new { lord = "lord_rh" });
+            Diag.Event("ai", "changed plan for the run", new { lord = "lord_rh" });
+            BannerlordAgents.Run.EventsFile = null;
+            Diag.Event("order", "issued after the run", new { lord = "lord_rr" });
+            Diag.Drain();
+            string copied = File.Exists(events) ? Read(events) : "";
+            Check(copied.Contains("issued for the run") && !copied.Contains("changed plan") && !copied.Contains("after the run"),
+                  "a run keeps its own copy of the detailed log's run kinds (orders, not the AI's reasons), only while it runs");
+        }
+
         private static void RoadTests()
         {
             var far = new PartyRow { Id = "p_far", Leader = "lord_far2", Name = "Beregond", Faction = "player_k", Kind = "lord", Men = 400, Strength = 500, Speed = 4, X = 150, Y = 120, Doing = "Hold", Spottable = true, Entrance = "castle_men" };

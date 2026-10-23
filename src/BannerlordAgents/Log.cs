@@ -28,6 +28,9 @@ namespace BannerlordAgents
         /// <summary>One folder per game launch, for the detailed logs (Diag).</summary>
         public static string Sessions => Ensure(Path.Combine(Root, "logs", "sessions"));
 
+        /// <summary>The test runs (0.11, docs/RUNS.md): one folder each, and current.txt naming the one that is open.</summary>
+        public static string Runs => Ensure(Path.Combine(Root, "runs"));
+
         /// <summary>One folder per campaign, named by the game's own id for it.</summary>
         public static string Data(string campaign) => Ensure(Path.Combine(Root, "data", Safe(campaign)));
 

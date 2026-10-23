@@ -102,6 +102,9 @@ namespace BannerlordAgents
         };
 
         public static string Line(object o) => JsonConvert.SerializeObject(o, Options);
+
+        /// <summary>Reads back what Line wrote (the test run's run.json).</summary>
+        public static T Read<T>(string text) => JsonConvert.DeserializeObject<T>(text, Options);
     }
 
     /// <summary>

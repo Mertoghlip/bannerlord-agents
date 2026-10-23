@@ -35,6 +35,7 @@ namespace BannerlordAgents
         public static string Help(List<string> args) => Cmd("help", args, () =>
             "Bannerlord Agents commands:\n" +
             "  agents.status                    what the module is doing, and where its files are\n" +
+            "  agents.run [check|note <text>|stop]  the test run (docs/RUNS.md): where it stands; who commands what now; a note of yours; end it early\n" +
             "  agents.health                    alarms so far and the state right now (the logs' own view)\n" +
             "  agents.view                      the watched realm's report as of now (and the file it is in)\n" +
             "  agents.pokes [n]                 the watched realm's last pokes\n" +
@@ -90,6 +91,22 @@ namespace BannerlordAgents
             lines.Add("  processor: " + Cpu.Description);
             lines.Add("  log: " + Log.FilePath);
             return string.Join("\n", lines);
+        });
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("run", "agents")]
+        public static string RunCmd(List<string> args) => Cmd("run", args, () =>
+        {
+            string sub = args != null && args.Count > 0 ? args[0].ToLowerInvariant() : "";
+            switch (sub)
+            {
+                case "": return Run.Status();
+                case "check": return Run.CheckText();
+                case "stop": return Run.Stop();
+                case "note":
+                    string text = string.Join(" ", args.Skip(1)).Trim();
+                    return text.Length == 0 ? "Usage: agents.run note <what you want kept, with today's day of the run>" : Run.Note(text);
+                default: return "Usage: agents.run [check|note <text>|stop]";
+            }
         });
 
         [CommandLineFunctionality.CommandLineArgumentFunction("health", "agents")]

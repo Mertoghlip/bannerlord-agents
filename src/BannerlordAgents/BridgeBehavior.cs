@@ -61,11 +61,21 @@ namespace BannerlordAgents
             var configs = new List<AgentConfig>();
             var seats = new List<Kingdom>();
             Unusable.Clear();
+            var resolved = new List<KeyValuePair<AgentConfig, Kingdom>>();
             foreach (AgentConfig c in Agents.Configured())
             {
                 Kingdom k = c.Problem == null ? Resolve(c.Realm) : null;
                 if (k == null) { Unusable.Add(c.Problem ?? "no realm matches '" + c.Realm + "'" + (c.Workspace != null ? " (" + c.Workspace + ")" : "")); continue; }
-                if (seats.Contains(k)) { Unusable.Add(Names.Faction(k) + " has two agents; only the first plays it (" + c.Workspace + ")"); continue; }
+                resolved.Add(new KeyValuePair<AgentConfig, Kingdom>(c, k));
+            }
+            // two agents for one realm: the one switched on plays it, else the first (0.11: the test runs keep every agent listed
+            // and switch them on and off, so your kingdom's own agent and the lieutenant can both name it)
+            foreach (KeyValuePair<AgentConfig, Kingdom> kv in resolved)
+            {
+                AgentConfig c = kv.Key;
+                Kingdom k = kv.Value;
+                AgentConfig first = resolved.Where(x => x.Value == k).Select(x => x.Key).OrderBy(x => x.On ? 0 : 1).First();
+                if (first != c) { Unusable.Add(Names.Faction(k) + " has two agents; " + (first.On ? "the one switched on" : "the first") + " plays it (" + c.Workspace + " does not)"); continue; }
                 c.Realm = k.StringId;
                 configs.Add(c);
                 seats.Add(k);
@@ -97,6 +107,9 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("reading the save's name", e); }
             History history = History.Of(LoadId, loadedAt, save, Paths.Data(id), save == null);
             History = history;
+            // a test run (0.11, docs/RUNS.md): the run's save readies one; one of a running run's own saves carries it on
+            try { Run.OnLoad(save, loadedAt, LoadId); }
+            catch (Exception e) { Diag.Error("the test run at the load", e); }
             Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories, history));
             AgentChannel.Start();
             GameHooks.Apply();
@@ -266,6 +279,8 @@ namespace BannerlordAgents
                 LordWatch.Refresh();
                 Recorder.PollVassalOrders();
                 Background.Post("hourly view and pokes", () => Brain.OnHour(snap));
+                try { Run.OnHour(snap); }
+                catch (Exception e) { Diag.Error("the test run's hour", e); }
                 if (++_hoursThisSession == 6 && Reasons.Active && Diag.CountOf("ai:thoughts") == 0 && LordWatch.Count > 0)
                     Diag.Alarm("ai_reasons_silent", "The AI-reasons hook is attached but recorded nothing in 6 in-game hours, although the watched realm has lords. "
                                                      + "Another mod may have replaced the game's decision step for them.");
@@ -335,7 +350,11 @@ namespace BannerlordAgents
         private void OnTroopRecruited(Hero recruiter, Settlement where, Hero source, CharacterObject troop, int amount)
         {
             if (!Bridge.Running) return;
-            try { Recruitment.OnTroopRecruited(recruiter, where, source, troop, amount); }
+            try
+            {
+                Recruitment.OnTroopRecruited(recruiter, where, source, troop, amount);
+                Run.OnRecruited(recruiter, amount);
+            }
             catch (Exception e) { Diag.Error("recruit count", e); }
         }
 
@@ -344,6 +363,7 @@ namespace BannerlordAgents
         {
             Orders.TakeBackAfterSave(saved, name);
             Wages.TakeBackAfterSave();
+            if (saved) Run.OnSaved(name);
             // the save's history note (History): which records its world has lived through, so loading it later finds exactly those
             if (!saved || Bridge.History == null || string.IsNullOrEmpty(name)) return;
             object note = Bridge.History.NoteFor(name, CampaignTime.Now.ToHours);
@@ -352,31 +372,31 @@ namespace BannerlordAgents
             Diag.Event("history", "save noted", new { save = name, load = Bridge.History.Label });
         });
 
-        private void OnWarDeclared(IFaction a, IFaction b, DeclareWarAction.DeclareWarDetail d) => Guard("war notice", () => Notices.OnWarDeclared(a, b, d));
-        private void OnPeace(IFaction a, IFaction b, MakePeaceAction.MakePeaceDetail d) => Guard("peace notice", () => Notices.OnPeace(a, b, d));
+        private void OnWarDeclared(IFaction a, IFaction b, DeclareWarAction.DeclareWarDetail d) => Guard("war notice", () => { Notices.OnWarDeclared(a, b, d); Run.OnStance(a, b, true); });
+        private void OnPeace(IFaction a, IFaction b, MakePeaceAction.MakePeaceDetail d) => Guard("peace notice", () => { Notices.OnPeace(a, b, d); Run.OnStance(a, b, false); });
         private void OnAllianceStarted(Kingdom a, Kingdom b) => Guard("alliance notice", () => Notices.OnAllianceStarted(a, b));
         private void OnAllianceEnded(Kingdom a, Kingdom b) => Guard("alliance notice", () => Notices.OnAllianceEnded(a, b));
         private void OnCallToWarStarted(Kingdom a, Kingdom b, Kingdom c) => Guard("call-to-war notice", () => Notices.OnCallToWarStarted(a, b, c));
         private void OnCallToWarEnded(Kingdom a, Kingdom b, Kingdom c) => Guard("call-to-war notice", () => Notices.OnCallToWarEnded(a, b, c));
 
-        private void OnSiegeStarted(SiegeEvent se) => Guard("siege", () => { Notices.OnSiegeStarted(se); Recorder.OnSiegeStarted(se); });
-        private void OnSiegeEnded(SiegeEvent se) => Guard("siege notice", () => Notices.OnSiegeEnded(se));
-        private void OnHeroKilled(Hero victim, Hero killer, KillCharacterAction.KillCharacterActionDetail d, bool notify) => Guard("death notice", () => Notices.OnHeroKilled(victim, killer, d, notify));
-        private void OnPrisonerReleased(Hero h, PartyBase party, IFaction capturers, EndCaptivityDetail d, bool notify) => Guard("release notice", () => Notices.OnPrisonerReleased(h, party, capturers, d, notify));
+        private void OnSiegeStarted(SiegeEvent se) => Guard("siege", () => { Notices.OnSiegeStarted(se); Recorder.OnSiegeStarted(se); Run.OnSiege(se, true); });
+        private void OnSiegeEnded(SiegeEvent se) => Guard("siege notice", () => { Notices.OnSiegeEnded(se); Run.OnSiege(se, false); });
+        private void OnHeroKilled(Hero victim, Hero killer, KillCharacterAction.KillCharacterActionDetail d, bool notify) => Guard("death notice", () => { Notices.OnHeroKilled(victim, killer, d, notify); Run.OnLordKilled(victim, killer, d); });
+        private void OnPrisonerReleased(Hero h, PartyBase party, IFaction capturers, EndCaptivityDetail d, bool notify) => Guard("release notice", () => { Notices.OnPrisonerReleased(h, party, capturers, d, notify); Run.OnLordFreed(h, d); });
         private void OnVillageRaided(Village v) => Guard("raid", () => { Notices.OnVillageRaided(v); Recorder.OnVillageRaided(v); });
-        private void OnVillageLooted(Village v) => Guard("looting notice", () => Notices.OnVillageLooted(v));
+        private void OnVillageLooted(Village v) => Guard("looting notice", () => { Notices.OnVillageLooted(v); Run.OnVillageLooted(v); });
 
         private void OnOwnerChanged(Settlement s, bool open, Hero newOwner, Hero oldOwner, Hero capturer, ChangeOwnerOfSettlementAction.ChangeOwnerOfSettlementDetail d)
-            => Guard("holding notice", () => Notices.OnOwnerChanged(s, open, newOwner, oldOwner, capturer, d));
+            => Guard("holding notice", () => { Notices.OnOwnerChanged(s, open, newOwner, oldOwner, capturer, d); Run.OnOwnerChanged(s, newOwner, oldOwner, d); });
 
-        private void OnArmyCreated(Army a) => Guard("army", () => { Recorder.OnArmyCreated(a); Notices.OnArmyCreated(a); });
-        private void OnArmyDispersed(Army a, Army.ArmyDispersionReason r, bool mine) => Guard("army notice", () => Notices.OnArmyDispersed(a, r, mine));
+        private void OnArmyCreated(Army a) => Guard("army", () => { Recorder.OnArmyCreated(a); Notices.OnArmyCreated(a); Run.OnArmy(a, true); });
+        private void OnArmyDispersed(Army a, Army.ArmyDispersionReason r, bool mine) => Guard("army notice", () => { Notices.OnArmyDispersed(a, r, mine); Run.OnArmy(a, false, r.ToString()); });
         private void OnPartyJoinedArmy(MobileParty p) => Guard("army", () => Recorder.OnPartyJoinedArmy(p));
         private void OnPartyDestroyed(MobileParty p, PartyBase by) => Guard("party notice", () => Notices.OnPartyDestroyed(p, by));
 
         private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); });
-        private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => Notices.OnBattleEnded(me));
-        private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () => Notices.OnPrisonerTaken(capturer, h));
+        private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); });
+        private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () => { Notices.OnPrisonerTaken(capturer, h); Run.OnLordTaken(capturer, h); });
 
         private void OnDecisionAdded(KingdomDecision d, bool involved) => Guard("realm vote", () => { Notices.OnDecisionAdded(d, involved); Recorder.OnDecisionAdded(d, involved); });
         private void OnDecisionConcluded(KingdomDecision d, DecisionOutcome o, bool involved) => Guard("realm vote", () => { Notices.OnDecisionConcluded(d, o, involved); Recorder.OnDecisionConcluded(d, o, involved); });

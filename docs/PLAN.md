@@ -7,6 +7,12 @@ Started Tue Oct 6, 2026, the day the proposal went in; updated Thu Oct 8. This i
 - **Proposal:** submitted Tue Oct 6. The repository and the separate module were set up Oct 6–7.
 - **Now:** the first tests, on the Misty Mountain Orcs in your own campaign. They are laid out phase by phase in [FIRST-TESTS.md](FIRST-TESTS.md). Since Oct 8 (version 0.4) the tools, armies and war room are in, so Opus 5.5 commands the whole orc realm live (phase 7), a week ahead of the plan.
 - **Checkpoint, Tue Oct 27:** the Mordor, Harad and Rhûn coalition playing on our tools, every decision logged, first numbers against the game's own AI, and a first look at your recorded play.
+  - **Changed Oct 23, by Mert ([RUNS.md](RUNS.md)):** the measured runs are 60 in-game days each from the fixed TEST START save.
+    - **A:** you against the Misty Mountain Orcs' and Dol Guldur's agents.
+    - **B:** you against the game's own AI (if time allows).
+    - **C1:** an agent ruling your kingdom against the agents.
+    - **C2:** an agent ruling your kingdom against the game's own AI.
+  - These use the realms already playing in your campaign. The coalition waits.
 - **Final report and talk, Tue Dec 1:** tool writing, the trained small models, what your play adds, and the full comparison for the everyday gamer.
 - **Budget:** about 90 hours. [worklog.md](worklog.md) keeps the count.
 
@@ -172,6 +178,8 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 ### Week 4 · Oct 26–Nov 1 · 12 h · checkpoint, then tool writing
 
 - [ ] **Checkpoint, Tue Oct 27:** first numbers against the stock AI, and a first summary of your recorded play
+  - [x] The test runs' record, scoreboard, setups and watcher (Oct 23, 0.11; [RUNS.md](RUNS.md))
+  - [ ] Run A (you against the agents, 60 days), then C1, then C2; B if time allows
 - [ ] Tool writing: the checker, replay tests on recorded game states, each tool's record, repair and retire
 - [ ] Every-move runs, and overnight data collection
 - [ ] Your playbook: Opus 5.5 reads your recordings and writes down how you play

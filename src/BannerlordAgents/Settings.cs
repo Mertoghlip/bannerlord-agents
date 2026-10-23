@@ -90,6 +90,14 @@ namespace BannerlordAgents
         public static bool LieutenantPause = true;
         /// <summary>How many loads of a campaign keep their hourly pictures (for rewinding on the dashboard).</summary>
         public static int KeepLoads = 12;
+        /// <summary>
+        /// Test runs (0.11, docs/RUNS.md): the save a run starts from, how many in-game days it lasts, the rival realms it keeps
+        /// numbers for, and the kingdom whose commander is tested (empty: the player's realm when the run's save is loaded).
+        /// </summary>
+        public static string RunSave = "TEST START";
+        public static int RunDays = 60;
+        public static List<string> RunRivals = new List<string> { "mistymountainorcs", "dolguldur" };
+        public static string RunKingdom = "";
 
         /// <summary>Lines of settings.txt that were not understood, for the start-up self-check.</summary>
         public static readonly List<string> Unknown = new List<string>();
@@ -148,11 +156,19 @@ namespace BannerlordAgents
                             if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int kl) && kl >= 1) KeepLoads = kl;
                             else Unknown.Add(line);
                             break;
+                        case "run_save": if (value.Length > 0) RunSave = value; break;
+                        case "run_days":
+                            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int rd) && rd >= 1) RunDays = rd;
+                            else Unknown.Add(line);
+                            break;
+                        case "run_rivals": RunRivals = value.Split(';', ',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList(); break;
+                        case "run_kingdom": RunKingdom = value; break;
                         default: Unknown.Add(line); break;
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
-                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause" })
+                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause",
+                                             "run_save", "run_days", "run_rivals", "run_kingdom" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -191,6 +207,11 @@ namespace BannerlordAgents
                 sb.AppendLine("keep_loads = " + KeepLoads.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("# the lieutenant (docs/LIEUTENANT.md): the game's clock stops while you type to it in the campaign map's chat box");
                 sb.AppendLine("lieutenant_pause = " + (LieutenantPause ? "on" : "off"));
+                sb.AppendLine("# test runs (docs/RUNS.md): the save a run starts from, its length in in-game days, the rival realms it keeps numbers for, and the kingdom tested (empty: yours at the save)");
+                sb.AppendLine("run_save = " + RunSave);
+                sb.AppendLine("run_days = " + RunDays.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("run_rivals = " + string.Join("; ", RunRivals));
+                sb.AppendLine("run_kingdom = " + RunKingdom);
                 File.WriteAllText(FilePath, sb.ToString());
             }
             catch (Exception e) { Log.Line("settings could not be saved: " + e.Message); }

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The test runs' watcher and reports (docs/RUNS.md): reads what the bridge writes for each run (runs\(id)\) and the war rooms'
+       call logs, and says what is new since the last look (watch), where a run stands (status), its numbers in full (report)
+       and every run side by side (compare). It only reads; the game and the agents never see it. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Runs</AssemblyName>
+    <RootNamespace>BannerlordAgents.Runs</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Version>0.11.0</Version>
+  </PropertyGroup>
+
+</Project>
