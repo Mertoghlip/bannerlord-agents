@@ -966,6 +966,25 @@ namespace SmokeTest
             Takings.Reset(Brain.Dir);
             Check(Takings.For("orcs").Battles == 3 && Takings.For("dg").Battles == 0, "the takings are kept in the campaign's folder and read back at a load, each realm its own");
 
+            // the fog check's two false alarms (0.10.4): a lord of the realm riding in its army with loot is named in YOUR PURSE
+            // (Oct 23), and a raider of its village that the news named is gone from its sight before the hour's look (Oct 22)
+            var host = Lord("p_mh", 150, 300, 700);
+            host.ArmyLeader = "p_mh"; host.ArmyMen = 500; host.ArmyParties = 2; host.ArmyStrength = 750;
+            var rider = Lord("p_mr", 150, 200, 700);
+            rider.ArmyLeader = "p_mh"; rider.Attached = true; rider.Loot = 2500; rider.LootPieces = 20; rider.Gold = 500; host.Gold = 900;
+            var raider = new PartyRow { Id = "p_cadda", Leader = "lord_cadda", Name = "Cadda", Faction = "player_k", Kind = "lord", Men = 60, Strength = 90, Speed = 5, FoodDays = 10, X = 400, Y = 400, Doing = "GoToPoint", Spottable = true };
+            Snapshot raid = ToolWorld(6100, host, rider, raider);
+            raid.WatchedSees.Remove("p_cadda");
+            long leaksBefore = Diag.CountOf("fog:leaks"), checkedBefore = Diag.CountOf("fog:reports"), pokedBefore = Brain.PokesWatched;
+            Brain.OnNotice(new Notice { Id = 9101, Hours = 6099.8, Kind = "raided", Text = "Orc Village is being raided by Cadda (Kingdom of Arnor and Gondor).", Factions = { "orcs" }, Party = "p_cadda" });
+            Brain.OnHour(raid);
+            Files.FlushAll();
+            string raidPoke = Read(Path.Combine(dir, "pokes_orcs.jsonl")).Split('\n').Where(l => l.Trim().Length > 0).Last();
+            Check(Brain.PokesWatched > pokedBefore && raidPoke.Contains("only named in the news") && raidPoke.Contains("lord_cadda") && !raidPoke.Contains("9999 hours"),
+                  "a raider the news named but the realm never saw is said to be only named in the news, not seen 9999 hours ago");
+            Check(raidPoke.Contains("p_mr [lord_p_mr] about 2,500") && Diag.CountOf("fog:reports") > checkedBefore && Diag.CountOf("fog:leaks") == leaksBefore,
+                  "the fog check takes the realm's own lords in its armies and the parties the news named (" + (Diag.CountOf("fog:leaks") - leaksBefore) + " leaks)");
+
             // the sell order rides into a friendly castle or town, then calls back with what the sale brought, and ends
             var seller = Lord("p_s1", 130, 200, 400);
             Brain.OnHour(ToolWorld(6010, seller));

@@ -182,7 +182,9 @@ namespace BannerlordAgents
                 {
                     p = w.Lead(p);
                     subjects++;
-                    string where = w.InView(p.Id) ? "in view" : "last seen " + Math.Round(w.SeenAgo(p.Id)) + " hours ago";
+                    // a party the news named that the realm's eyes never saw (a raider gone before the hour's look) has no "last seen"
+                    double ago = w.SeenAgo(p.Id);
+                    string where = w.InView(p.Id) ? "in view" : ago < 9999 ? "last seen " + Math.Round(ago) + " hours ago" : "not seen by your eyes, only named in the news";
                     SettlementRow home = w.S.Settlements.Where(x => x.Faction == w.Realm).OrderBy(x => Reach(w, p.Id, x.Id)).FirstOrDefault();
                     List<string> near = lords.Where(l => !double.IsNaN(Hours(w, l.Row, p.Id))).OrderBy(l => Hours(w, l.Row, p.Id)).Take(5).Select(l => LordLine(w, l, p.Id)).ToList();
                     double? str = w.KnownStrength(p.Id);

@@ -145,8 +145,27 @@ namespace BannerlordAgents
         }
 
         /// <summary>Every id the agent may legitimately be shown this hour beyond the report's own lists (for the fog check).</summary>
-        private static IEnumerable<string> Known(Snapshot s, Dictionary<string, Sighting> sees, Memory m, Tools.World w)
+        /// <summary>
+        /// For the fog check, beyond the report's own lists: what the realm (realm) sees, remembers or holds orders on, its own
+        /// lords riding in its armies (YOUR PURSE names them, 0.9.4; Oct 23 they were flagged), and the parties its poke is
+        /// about (triggers), which the game's own news named to it whether or not its eyes saw them (Oct 22: a raider of its
+        /// village, gone before the hour's look).
+        /// </summary>
+        private static IEnumerable<string> Known(Snapshot s, string realm, Dictionary<string, Sighting> sees, Memory m, Tools.World w, List<Trigger> triggers = null)
         {
+            foreach (PartyRow r in s.Parties)
+            {
+                if (r.Kind != "lord" || r.Faction == null || r.Faction != realm) continue;
+                yield return r.Id;
+                if (r.Leader != null) yield return r.Leader;
+            }
+            if (triggers != null)
+                foreach (Trigger t in triggers)
+                {
+                    if (t.Party == null || !s.PartyById.TryGetValue(t.Party, out PartyRow tr)) continue;
+                    yield return tr.Id;
+                    if (tr.Leader != null) yield return tr.Leader;
+                }
             foreach (string id in sees.Keys)
             {
                 yield return id;
@@ -253,7 +272,7 @@ namespace BannerlordAgents
                     // kept fresh every hour, since it is never poked and answers whenever the player speaks
                     bool lt = ag.Config.IsLieutenant;
                     string report = Views.Report(watchedView, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true, Ruler = lt ? Views.RulerLine(v) : null });
-                    Audit.CheckReport(watchedView, report, v.WatchedSees, v.InspectedByWatched, "hourly report", Known(v, v.WatchedSees, m, w));
+                    Audit.CheckReport(watchedView, report, v.WatchedSees, v.InspectedByWatched, "hourly report", Known(v, v.Watched, v.WatchedSees, m, w));
                     ag.Channel.OnHour(v.Hours, report);
                     if (lt)
                     {
@@ -422,7 +441,7 @@ namespace BannerlordAgents
                 InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On
             };
             string report = Views.Report(v, triggers, extras);
-            Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, Known(s, sees, m, w));
+            Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, Known(s, fid, sees, m, w, triggers));
             if (ch.On)
             {
                 // the look-ups go out before the poke, so they are there when the agent wakes

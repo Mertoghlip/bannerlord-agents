@@ -38,11 +38,12 @@ Installed with version 0.3 of the module (Oct 8); version 0.4 added the tools' a
 ### What the orcs see
 - **Every in-game hour:** how many parties they see, from how many eyes, which holdings they look over, and how the hourly copy's time split between its parts. (`hour` events, `parts_ms`: kingdoms, holdings, parties with sieges and battles, the realm, sight, names; since 0.7.5 three more at the end splitting the parties part: the rows, the march rules and sieges, the battles.)
 - **The sight check, every 3 in-game hours:** our sight rule against the game's own view for your party, with the numbers behind every disagreement.
+  - Since 0.10.4 it compares only where the game itself refreshes its "seen" flags: within its largest sight range, plus 5, of your party, and never garrisons or militias. Beyond that the game leaves a party's flag as it was when last refreshed. On Oct 22 an orc army seen days before, 247 away, still counted as seen, which brought agreement down to 86–91%. Without those old flags, every launch from Oct 8 to Oct 23 agrees on 99.9–100%.
 - **The fog check, on every report:**
   - every enemy listed in view really is in sight;
   - "seen earlier" never lists a party still in sight;
   - garrisons show only for holdings in sight;
-  - every id in brackets belongs to something the realm owns, sees, remembers or knows from the map.
+  - every id in brackets belongs to something the realm owns, sees, remembers, knows from the map, or was named by the game's own news to it. "Owns" includes its lords riding in its armies. Both sources were added in 0.10.4, after two false alarms: on Oct 23, YOUR PURSE named lords riding in the orcs' armies; on Oct 22, a poke named a raider of an orc village, known only from the raid notice and gone from sight before the hour's look.
 - **Alarms** for:
   - a whole day blind while at war;
   - seeing more than 60% of the enemy lords on the map;

@@ -1029,3 +1029,22 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the installed DLL has sha256 `FABBE79B9454D6BE…`, the war room's `WarRoom.dll` (rebuilt, same code) `76AECB0C43C94EC8…`;
   - the war rooms (three) and the dashboard were stopped for the build and started again at 15:11; the lieutenant's war room waits for the player's words (last answered #2).
 - **Not yet seen in a game:** the scrolling itself, following the newest line, and the proposal's box with a long proposal.
+
+### 15:34 · Version 0.10.4: the fog check's two false alarms, and the sight check's drop, explained and fixed · commit COMMIT (built and installed 15:34)
+- Mert asked: "Look into the problems now and figure out why they materialized" (the fog check's leaks on Oct 22 and Oct 23, and the sight check's agreement falling from 96–98% to 86–91% on Oct 22).
+- **The fog check, Oct 23 (20 flags in 2 reports, 0.10.0):** all 20 were the orcs' own lords, in YOUR PURSE's "Carrying loot" and "Holding prisoners" lines (0.9.4). They were lords riding in the orcs' two armies (12 and 8 parties). The check took the realm's own lords only from the report's own-lords list, which holds only those leading parties. **Not a leak:** a realm knows its own lords.
+- **The fog check, Oct 22 (1 flag):** poke #429 was about a raid on the orc village Linhamm, named by the game's own notice ("Linhamm is being raided by Cadda Tordaging"). The raid began at 21:53. By the hour's look 20 minutes later the raider was off the village and out of the orcs' sight, so the poke's fact line named a lord the orcs had never seen ("last seen 9999 hours ago"). **Not a leak either:** the game's news named him to the realm.
+- **The sight check's drop:** the game refreshes each party's "seen" flag every frame, but only within its largest sight range, plus 5, of the player's party, and never for garrisons and militias (`CampaignTickCacheDataStore.UpdateVisibilitiesAroundMainParty`, read in the game's code). Beyond that a flag stays as it was. On Oct 22 Naglur's orc army (12 parties), seen days before, was still flagged seen 210–247 away (Mert's sight is 47.7) in all 42 checks. Those flags made 504 of 504 disagreements in one launch and 360 of 364 in the other. Oct 16's main disagreements were garrisons and militia. **Our sight rule was right:** with those taken out, every launch from Oct 8 to Oct 23 agrees on 99.9–100% (recomputed from the logged disagreements).
+- **What changed** ([LOGGING.md](LOGGING.md#what-the-orcs-see)):
+  - the fog check also takes the realm's own lords riding in its armies, and the parties its poke is about, which the game's news named to it (`Brain.Known`);
+  - a party the news named but the realm never saw now reads "not seen by your eyes, only named in the news" instead of "last seen 9999 hours ago" (`Facts.ForPoke`);
+  - the sight check compares only where the game itself refreshes its flags: from the player's party (or the port town it besieges or raids, with a third more sight, as the game does), within the game's largest sight range plus 5, garrisons and militias left out (`Vision.Audit`).
+  - Nothing the agents see changed.
+  - Version 0.10.4 (the module; the war room is unchanged at 0.10.1).
+- **Checks:**
+  - the smoke test passed in full, with 2 new checks rebuilding both cases (an army rider carrying loot, and a raider the news named but the realm never saw). The new fog check test fails on the old code (3 leaks) and passes on the new;
+  - the war room's and the dashboard's self-tests passed at the install;
+  - 612 game references, 0 missing; all 7 hooks bound in the offline dry run;
+  - the installed DLL has sha256 `63B98CE5EBAA2859…`, the war room's `WarRoom.dll` (rebuilt, same code) `D837EF65793F935D…`;
+  - the war rooms (three) and the dashboard were stopped for the build and started again at 15:34.
+- **Not yet seen in a game:** the sight check's new numbers (it needs the game; expected near 100%).

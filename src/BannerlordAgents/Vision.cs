@@ -173,20 +173,29 @@ namespace BannerlordAgents
 
         /// <summary>
         /// The sight check, as numbers: our rule applied to the player's own party, against the game's own flags, for
-        /// every party near the player. Each disagreement keeps the numbers that explain it.
+        /// every party where the game itself refreshes them. Each disagreement keeps the numbers that explain it.
+        /// The game looks from the player's party (from the port town it besieges or raids, with a third more sight) and
+        /// refreshes the seen flag only within its largest sight range, plus 5, of there, and never for garrisons and
+        /// militias (CampaignTickCacheDataStore.UpdateVisibilitiesAroundMainParty); elsewhere a flag is whatever it was when
+        /// last refreshed. Until 0.10.4 the check also took those old flags, and an orc army seen days before, 247 away,
+        /// counted as a disagreement every run (Oct 22: 86-91% agreement).
         /// </summary>
         public static SightAudit Audit()
         {
             MobileParty me = MobileParty.MainParty;
             if (me == null || Campaign.Current.TrueSight) return null;
             float range = me.SeeingRange;
+            CampaignVec2 from = me.Position;
+            if (me.SiegeEvent != null && me.SiegeEvent.BesiegedSettlement.HasPort) { from = me.SiegeEvent.BesiegedSettlement.Position; range *= 1.35f; }
+            else if (me.MapEvent != null && me.MapEvent.IsRaid && me.MapEvent.MapEventSettlement.HasPort) { from = me.MapEvent.MapEventSettlement.Position; range *= 1.35f; }
+            float reach = Campaign.Current.Models.MapVisibilityModel.MaximumSeeingRange() + 5f;
             var a = new SightAudit { Range = range, Night = Campaign.Current.IsNight };
             foreach (MobileParty p in MobileParty.All)
             {
-                if (p == null || p == me || !p.IsActive) continue;
-                float d = p.Position.Distance(me.Position);
-                if (d > range * 1.6f && !p.IsVisible) continue;
-                bool ours = OursForPlayer(p, me, range, 0, out float ratio);
+                if (p == null || p == me || !p.IsActive || p.IsGarrison || p.IsMilitia) continue;
+                float d = p.Position.Distance(from);
+                if (d > reach) continue;
+                bool ours = OursForPlayer(p, from, range, 0, out float ratio);
                 bool game = p.IsVisible;
                 a.Total++;
                 if (ours == game) { a.Agree++; continue; }
@@ -216,7 +225,7 @@ namespace BannerlordAgents
                                                                                      + "): our rule says " + (c.Ours ? "seen" : "hidden") + ", the game says " + (c.Game ? "seen" : "hidden")));
         }
 
-        private static bool OursForPlayer(MobileParty p, MobileParty me, float range, int depth, out float ratio)
+        private static bool OursForPlayer(MobileParty p, CampaignVec2 from, float range, int depth, out float ratio)
         {
             ratio = -1f;
             if (!p.IsActive) return false;
@@ -224,17 +233,17 @@ namespace BannerlordAgents
                             || (p.MapEvent != null && p.MapEvent.IsSiegeAssault && p.Party.Side == TaleWorlds.Core.BattleSideEnum.Attacker);
             if (!computed) return false;
             if (p.Army != null && p.Army.LeaderParty != null && p.Army.LeaderParty != p && p.Army.LeaderParty.AttachedParties.Contains(p))
-                return depth < 3 && OursForPlayer(p.Army.LeaderParty, me, range, depth + 1, out ratio);
-            if (p.SiegeEvent != null && Inspected(p.SiegeEvent.BesiegedSettlement, me, range)) return true;
-            if (p.MapEvent != null && p.MapEvent.IsRaid && Inspected(p.MapEvent.MapEventSettlement, me, range)) return true;
-            float n = p.Position.Distance(me.Position) / range;
+                return depth < 3 && OursForPlayer(p.Army.LeaderParty, from, range, depth + 1, out ratio);
+            if (p.SiegeEvent != null && Inspected(p.SiegeEvent.BesiegedSettlement, from, range)) return true;
+            if (p.MapEvent != null && p.MapEvent.IsRaid && Inspected(p.MapEvent.MapEventSettlement, from, range)) return true;
+            float n = p.Position.Distance(from) / range;
             try { ratio = Campaign.Current.Models.MapVisibilityModel.GetPartySpottingRatioForMainPartySeeingRange(p); }
             catch (Exception e) { Diag.Swallowed("the game's spotting ratio (sight check)", e); ratio = 1f; }
             if (n >= 1f) return false;
             return n <= ratio;
         }
 
-        private static bool Inspected(Settlement s, MobileParty me, float range)
-            => s != null && s.Position.Distance(me.Position) / range <= 1.5f;
+        private static bool Inspected(Settlement s, CampaignVec2 from, float range)
+            => s != null && s.Position.Distance(from) / range <= 1.5f;
     }
 }
