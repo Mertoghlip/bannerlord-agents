@@ -773,7 +773,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   The war room's (50) and the dashboard's (27) self-tests passed. 512 game references, 0 missing. The installed DLL has sha256 `A691501CF37904FD…`.
 - **Not yet seen in a game.**
 
-### 17:49 · The agents' goal: no region, the whole map · commit (follow-up below)
+### 17:49 · The agents' goal: no region, the whole map · commit 04aeabd
 - **Why:** Mert, reviewing both agents' system prompts: "The goal shouldn't be to win the war for a specific region. It should be to systematically eradicate all enemies and assert its dominance over the game map with its allies."
 - **What:** the goal now reads "Systematically eradicate all your enemies, and assert your dominance over the whole map together with your allies." It replaces "Win the war for the mountains:" (Dol Guldur's: "... for Rhovanion:") and its three points:
   - break the enemy's power around your lands;
