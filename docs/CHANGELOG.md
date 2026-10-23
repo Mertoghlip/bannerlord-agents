@@ -1049,7 +1049,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms (three) and the dashboard were stopped for the build and started again at 15:34.
 - **Not yet seen in a game:** the sight check's new numbers (it needs the game; expected near 100%).
 
-### 16:04 · Version 0.11.0: the test runs' record, scoreboard, setups and watcher · commit COMMIT (built and installed 16:04)
+### 16:04 · Version 0.11.0: the test runs' record, scoreboard, setups and watcher · commit d416ad5 (built and installed 16:04)
 - Mert's test plan (Oct 23, [RUNS.md](RUNS.md)): "All tests will be for 60 in-game days, starting from the TEST START save". **A:** Mert against the orcs' and Dol Guldur's agents (first). **B:** Mert against the game's own AI ("If I can"). **C1, C2:** "give control of my kingdom first to an agent and have it play against other agents and against the game's raw ai, and see how its performance compares to me".
 - His choices for the agent-ruler runs: "switch the player character to a wanderer in a random town, give that character a lot of money and food so it doesn't die, and simply let the game run". The lieutenant stays on when he plays. The rivals' agents stay on, watching, against the game's AI "so long as usage is fine". "lets try to track token usage stats as well."
 - **The run record in the bridge** (new `Runs.cs`: `Run`, `RunRules`, `RunDay`, `RunFiles`):
