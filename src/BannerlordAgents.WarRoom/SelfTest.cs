@@ -268,13 +268,14 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(channel);
             File.WriteAllText(Path.Combine(dir, "agent.txt"), "realm = player\nmode = live\nlords = all\nchannel = warroom\nkind = lieutenant\n");
             Check(Config.Load(dir).IsLieutenant, "a folder whose agent.txt says kind = lieutenant gets the lieutenant's war room");
-            var chat = (JsonObject)JsonNode.Parse("{\"number\":7,\"said\":\"yes, send them\",\"earlier\":[\"hold on\"],\"date\":\"Summer 3, 1087, 14:00\",\"campaign\":\"camp5\",\"realm\":\"new_kingdom\","
+            var chat = (JsonObject)JsonNode.Parse("{\"number\":7,\"said\":\"yes, send them\",\"earlier\":[\"hold on\"],\"notes\":[\"The ruler declined your proposal of message #5 with the button; nothing was given.\"],\"date\":\"Summer 3, 1087, 14:00\",\"campaign\":\"camp5\",\"realm\":\"new_kingdom\","
                                                   + "\"pending\":{\"chat\":6,\"say\":\"Send Dain and Nori to Goblin Town?\",\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}]}}");
             var history = new List<JsonObject> { (JsonObject)JsonNode.Parse("{\"date\":\"Summer 3, 1087, 13:00\",\"said\":\"hold Goblin Town\",\"say\":\"Send Dain and Nori to Goblin Town?\",\"proposed\":\"lord_dain defend town_gt\"}") };
             string m = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string> { "order applied: lord_dain defend" });
             Check(m.Contains("THE CONVERSATION SO FAR") && m.Contains("Ruler: hold Goblin Town") && m.Contains("[you proposed: lord_dain defend town_gt]") && m.Contains("YOUR PROPOSAL WAITING FOR YOUR RULER'S ANSWER (from message #6)")
-                  && m.IndexOf("REPORT FOR X", StringComparison.Ordinal) < m.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal) && m.Contains("(said just before) \"hold on\"") && m.TrimEnd().EndsWith("\"yes, send them\""),
-                  "the lieutenant's message: the conversation, what became of its orders, the waiting proposal, the realm, then the ruler's words");
+                  && m.IndexOf("REPORT FOR X", StringComparison.Ordinal) < m.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal) && m.Contains("(said just before) \"hold on\"") && m.TrimEnd().EndsWith("\"yes, send them\"")
+                  && m.Contains("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER\n- The ruler declined your proposal of message #5"),
+                  "the lieutenant's message: the conversation, what became of its orders, what the ruler did with the buttons, the waiting proposal, the realm, then the ruler's words");
             string bad = LieutenantRoom.ExtractAnswer("{\"say\":\"ok\",\"orders\":[{\"lord\":\"x\"}]}", out JsonObject none);
             string good = LieutenantRoom.ExtractAnswer("thinking it over... {\"say\":\"Riding out.\",\"carry_out\":true,\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}],\"pending_chat\":99}", out JsonObject ok);
             Check(bad != null && none == null && good == null && ok != null, "an answer is read from the last JSON object with \"say\", and an order without \"do\" is refused (" + bad + ")");

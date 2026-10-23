@@ -1,0 +1,95 @@
+<Prefab>
+  <!-- Bannerlord Agents (0.10.1): the lieutenant's window, in the look of the game's own text pop-up
+       (Native\GUI\Prefabs\Information\Inquiries\TextQueryPopup.xml): its title, the conversation (the last lines, newest at the
+       bottom), the proposal waiting with Decline and Approve, the line to type in (focused when the window opens), and Close and
+       Send. LieutenantWindow.cs opens it with the chat keys on the campaign map; the data is LieutenantVM. -->
+  <Window>
+    <TextQueryParentWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" TextInputWidget="Panel\Content\InputParent\InputWidget">
+      <Children>
+
+        <!-- the map behind, darkened -->
+        <Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#000000FF" AlphaFactor="0.4" />
+
+        <Widget Id="Panel" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="780" SuggestedHeight="780" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <Children>
+            <Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\Popup\canvas" />
+
+            <ListPanel Id="Content" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" StackLayout.LayoutMethod="VerticalTopToBottom">
+              <Children>
+
+                <!--Title-->
+                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="50" MarginLeft="30" MarginRight="30" MarginTop="10" Brush="Popup.Title.Text" Text="@TitleText" />
+                <Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="23" Sprite="StdAssets\Popup\divider" />
+
+                <!--The conversation: the last lines that fit, newest at the bottom, the oldest cut at the top-->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="380" MarginLeft="34" MarginRight="34" MarginTop="8" ClipContents="true">
+                  <Children>
+                    <ListPanel DataSource="{Lines}" DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" VerticalAlignment="Bottom" StackLayout.LayoutMethod="VerticalTopToBottom">
+                      <ItemTemplate>
+                        <RichTextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginBottom="8" Brush="Popup.Description.Text" Brush.FontSize="20" Brush.FontColor="@Color" Brush.TextHorizontalAlignment="Left" Text="@Text" />
+                      </ItemTemplate>
+                    </ListPanel>
+                  </Children>
+                </Widget>
+
+                <!--While it thinks-->
+                <TextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginLeft="34" MarginRight="34" Brush="Popup.Description.Text" Brush.FontSize="18" Brush.TextHorizontalAlignment="Left" Text="@ThinkingText" />
+
+                <!--The proposal waiting, with Decline and Approve-->
+                <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginLeft="34" MarginRight="34" StackLayout.LayoutMethod="VerticalTopToBottom" IsVisible="@HasProposal">
+                  <Children>
+                    <RichTextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MaxHeight="140" ClipContents="true" Brush="Popup.Description.Text" Brush.FontSize="18" Brush.TextHorizontalAlignment="Left" Text="@ProposalText" />
+                    <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" HorizontalAlignment="Center" MarginTop="4" StackLayout.LayoutMethod="HorizontalLeftToRight">
+                      <Children>
+                        <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" Brush="Popup.Cancel.Button" Command.Click="ExecuteDecline">
+                          <Children>
+                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32" VerticalAlignment="Center" MarginLeft="40" MarginRight="40" Brush="Popup.Button.Text" Text="@DeclineText" />
+                          </Children>
+                        </ButtonWidget>
+                        <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" MarginLeft="20" Brush="Popup.Done.Button" Command.Click="ExecuteApprove">
+                          <Children>
+                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32" VerticalAlignment="Center" MarginLeft="40" MarginRight="40" Brush="Popup.Button.Text" Text="@ApproveText" />
+                          </Children>
+                        </ButtonWidget>
+                      </Children>
+                    </ListPanel>
+                  </Children>
+                </ListPanel>
+
+                <!--The line to type in-->
+                <Widget Id="InputParent" DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="700" SuggestedHeight="62" HorizontalAlignment="Center" MarginTop="10" Sprite="General\CharacterCreation\name_input_area">
+                  <Children>
+                    <EditableTextWidget Id="InputWidget" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="16" MarginRight="16" MarginTop="12" MarginBottom="12" Brush="Review.NameInput.Text" Brush.FontSize="20" Brush.TextHorizontalAlignment="Left" RealText="@InputText" MaxLength="400" />
+                  </Children>
+                </Widget>
+                <TextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="26" MarginLeft="34" MarginRight="34" MarginTop="4" Brush="Popup.Description.Text" Brush.FontSize="15" Text="@HintText" />
+
+                <!--Close and Send-->
+                <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" HorizontalAlignment="Center" MarginTop="4" MarginBottom="18" StackLayout.LayoutMethod="HorizontalLeftToRight">
+                  <Children>
+                    <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" Brush="Popup.Cancel.Button" Command.Click="ExecuteClose">
+                      <Children>
+                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32" VerticalAlignment="Center" MarginLeft="40" MarginRight="40" Brush="Popup.Button.Text" Text="@CloseText" />
+                      </Children>
+                    </ButtonWidget>
+                    <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" MarginLeft="20" Brush="Popup.Done.Button" Command.Click="ExecuteSend">
+                      <Children>
+                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32" VerticalAlignment="Center" MarginLeft="40" MarginRight="40" Brush="Popup.Button.Text" Text="@SendText" />
+                      </Children>
+                    </ButtonWidget>
+                  </Children>
+                </ListPanel>
+
+              </Children>
+            </ListPanel>
+
+            <Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\Popup\canvas_gradient" IsEnabled="false" />
+            <!--Frame Border-->
+            <Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="frame_9" ExtendLeft="18" ExtendTop="18" ExtendRight="18" ExtendBottom="18" IsEnabled="false" />
+          </Children>
+        </Widget>
+
+      </Children>
+    </TextQueryParentWidget>
+  </Window>
+</Prefab>

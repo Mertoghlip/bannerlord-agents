@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.10.0</Version>
+    <Version>0.10.1</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -43,6 +43,11 @@
     <!-- the game's chat box, for the lieutenant (0.10): MPChatVM and its channels -->
     <Reference Include="TaleWorlds.MountAndBlade.ViewModelCollection" HintPath="$(GameBin)\TaleWorlds.MountAndBlade.ViewModelCollection.dll" Private="false" />
     <Reference Include="TaleWorlds.MountAndBlade.Diamond" HintPath="$(GameBin)\TaleWorlds.MountAndBlade.Diamond.dll" Private="false" />
+    <!-- the lieutenant's window (0.10.1): a screen layer of the game's own UI -->
+    <Reference Include="TaleWorlds.Engine.GauntletUI" HintPath="$(GameBin)\TaleWorlds.Engine.GauntletUI.dll" Private="false" />
+    <Reference Include="TaleWorlds.GauntletUI" HintPath="$(GameBin)\TaleWorlds.GauntletUI.dll" Private="false" />
+    <Reference Include="TaleWorlds.ScreenSystem" HintPath="$(GameBin)\TaleWorlds.ScreenSystem.dll" Private="false" />
+    <Reference Include="TaleWorlds.InputSystem" HintPath="$(GameBin)\TaleWorlds.InputSystem.dll" Private="false" />
     <Reference Include="TaleWorlds.DotNet" HintPath="$(GameBin)\TaleWorlds.DotNet.dll" Private="false" />
     <Reference Include="TaleWorlds.Engine" HintPath="$(GameBin)\TaleWorlds.Engine.dll" Private="false" />
     <Reference Include="TaleWorlds.SaveSystem" HintPath="$(GameBin)\TaleWorlds.SaveSystem.dll" Private="false" />

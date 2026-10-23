@@ -4,38 +4,40 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.Library;
+using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.MountAndBlade;
-using TaleWorlds.MountAndBlade.Diamond;
-using TaleWorlds.MountAndBlade.ViewModelCollection.Multiplayer;
 
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The player's lieutenant (0.10; Mert, Oct 22: the player types orders into the chat "to their liutenant, which then orders
-    /// lords to do stuff on the map ... it would propose sending x, x, x lords there ... I would verify and approve the order";
-    /// Oct 23: "keep everything verbal in the chatbox. My approval should also be verbal. Keep its answers short and concise
-    /// whenever possible, make popups pause the game until the popup is closed", and it may command every lord of the realm,
-    /// "including my own clan's parties"). An agent folder of kind lieutenant, "realm = player", in the agents' settings:
-    /// - the game's own chat box (the message log at the bottom left: the campaign map lets the player type in it, but in
-    ///   single-player it has no channel to send to) gets a channel of the lieutenant's on the campaign map (ChatHook). What the
-    ///   player sends goes into the lieutenant's channel as chat.json; the clock stops while the player types (lieutenant_pause);
-    /// - its war room (LieutenantRoom) answers in orders\chat-N.json: a few words for the chat box, maybe a proposal of orders,
-    ///   maybe the orders the player has just agreed to, maybe a longer text for a window that pauses the game;
-    /// - it never acts unasked: orders are carried out only when the player's words answered a proposal still waiting (the war
-    ///   room says which, from chat.json; LieutenantRules.Gate); any others become the proposal and wait for the player's yes;
+    /// The player's lieutenant (0.10; Mert, Oct 22: the player types orders to "their liutenant, which then orders lords to do
+    /// stuff on the map ... it would propose sending x, x, x lords there ... I would verify and approve the order"; Oct 23: "keep
+    /// everything verbal", "Keep its answers short and concise whenever possible, make popups pause the game until the popup is
+    /// closed", it commands every lord of the realm "including my own clan's parties", and (0.10.1) a window of its own, opened
+    /// with Enter, with buttons to approve or decline a proposal). An agent folder of kind lieutenant, "realm = player":
+    /// - on the campaign map, the chat keys (Enter, T) open its window (LieutenantWindow) instead of the game's chat box
+    ///   (ChatHook); what the player sends goes into the lieutenant's channel as chat.json, with the waiting proposal and what the
+    ///   player did with the last one (notes);
+    /// - its war room (LieutenantRoom) answers in orders\chat-N.json: a few words, maybe a proposal, maybe the orders the player
+    ///   has just agreed to in words, maybe a longer text (shown in the window);
+    /// - it never acts unasked: orders are carried out when the player presses Approve on the proposal waiting, or when the
+    ///   player's words answered that proposal (the war room says which, from chat.json; LieutenantRules.Gate); any others
+    ///   become the proposal and wait;
     /// - its orders go through the door every agent's go through (Orders.FromAgent), for the player's realm's lords, the player
-    ///   and lords holding a Party AI Controls order excepted; what becomes of them comes into the chat box.
-    /// It is never poked. Game's thread, except ReadAnswer and Heard (worker).
+    ///   and lords holding a Party AI Controls order excepted, and wait for the clock as every agent's do; what becomes of them
+    ///   comes into the window.
+    /// It is never poked. Answers are shown at once, even with the game paused (the frame's queue, Background.ToUi); orders
+    /// are carried out on the game's tick (Background.ToMain). Game's thread, except ReadAnswer and Heard (worker).
     /// </summary>
     internal static class Lieutenant
     {
         public const string Name = "Lieutenant";
+        private const uint Voice = 0xFFE6C36Au, You = 0xFFC8C8C8u, Aside = 0xFF8FB3D9u, Refused = 0xFFD98F8Fu;
 
         private sealed class Proposal
         {
             public int Chat;
-            public string Say;
+            public string Say, Words;
             public JArray Orders;
             public double Hours;
         }
@@ -44,6 +46,11 @@ namespace BannerlordAgents
         private static int _next = -1;
         // what the player said since the lieutenant's last answer (it answers the newest, with these before it)
         private static readonly List<string> Unanswered = new List<string>();
+        // what the player did with a proposal (the buttons), told with the next words
+        private static readonly List<string> Notes = new List<string>();
+
+        /// <summary>Waiting for the lieutenant's answer.</summary>
+        public static bool Thinking { get; private set; }
 
         /// <summary>The lieutenant of this load (null: none in the agents' settings, or its channel is off).</summary>
         public static RealmAgent Agent => Agents.All.FirstOrDefault(a => a.Config.IsLieutenant && a.On && a.Realm != null);
@@ -63,22 +70,25 @@ namespace BannerlordAgents
         {
             _pending = null;
             _next = -1;
+            Thinking = false;
             Unanswered.Clear();
+            Notes.Clear();
+            LieutenantWindow.Reset();
         }
 
         // ---------- the player speaks ----------
 
-        /// <summary>What the player sent in the chat box on the campaign map: shown, and written for the lieutenant.</summary>
+        /// <summary>What the player sent in the lieutenant's window: shown, and written for the lieutenant.</summary>
         public static void OnPlayerSays(string text)
         {
             text = (text ?? "").Trim();
             if (text.Length == 0) return;
-            Line("You: " + text, 0xFFC8C8C8u);
+            LieutenantWindow.Add("You: " + text, You, false);
             RealmAgent ag = Agent;
             Kingdom realm = ag != null ? Bridge.SeatOf(ag.Realm) : null;
             if (ag == null || realm == null)
             {
-                Line(Name + ": (no lieutenant serves your realm in this game)", 0xFF8FB3D9u);
+                LieutenantWindow.Add("(No lieutenant serves your realm in this game.)", Aside, true);
                 return;
             }
             if (_next < 0) _next = Math.Max(1, ag.Channel.LastChatNumber() + 1);
@@ -87,19 +97,51 @@ namespace BannerlordAgents
             double hours = CampaignTime.Now.ToHours;
             var chat = new
             {
-                Number = n, Said = text, Earlier = Unanswered.Take(Unanswered.Count - 1).ToList(), Hours = hours, Date = Text.When(hours),
+                Number = n, Said = text, Earlier = Unanswered.Take(Unanswered.Count - 1).ToList(), Notes = Notes.ToList(), Hours = hours, Date = Text.When(hours),
                 Campaign = Bridge.CampaignId, Realm = realm.StringId, RealmName = Names.Faction(realm), LoadId = Bridge.LoadId, Ruler = Names.Hero(Hero.MainHero),
                 Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Hours }
             };
+            Notes.Clear();
+            Thinking = true;
+            LieutenantWindow.Refresh();
             Channel ch = ag.Channel;
             Background.Post("lieutenant chat", () => ch.WriteChat(n, chat, text));
             Diag.Count("lieutenant:said");
             Diag.Event("lieutenant", "said", new { chat = n, text, pending = _pending?.Chat });
         }
 
+        /// <summary>The Approve button: the proposal waiting is carried out as it stands, and the lieutenant is told with the next words.</summary>
+        public static void Approve()
+        {
+            Proposal p = _pending;
+            if (p == null) return;
+            _pending = null;
+            RealmAgent ag = Agent;
+            LieutenantWindow.Add("You approved it.", You, false);
+            Notes.Add("The ruler approved your proposal of message #" + p.Chat + " with the button, and its orders were given.");
+            if (ag != null) { string realm = ag.Realm; Background.ToMain.Enqueue(() => Carry(p.Orders, p.Chat, realm)); }
+            LieutenantWindow.Refresh();
+            Diag.Event("lieutenant", "approved", new { chat = p.Chat, orders = p.Orders.Count });
+        }
+
+        /// <summary>The Decline button: the proposal waiting is dropped, and the lieutenant is told with the next words.</summary>
+        public static void Decline()
+        {
+            Proposal p = _pending;
+            if (p == null) return;
+            _pending = null;
+            LieutenantWindow.Add("You declined it.", You, false);
+            Notes.Add("The ruler declined your proposal of message #" + p.Chat + " with the button; nothing was given.");
+            LieutenantWindow.Refresh();
+            Diag.Event("lieutenant", "declined", new { chat = p.Chat });
+        }
+
+        /// <summary>The proposal waiting, in words for the window (empty: none).</summary>
+        public static string ProposalWords() => _pending == null ? "" : _pending.Words;
+
         // ---------- the lieutenant answers ----------
 
-        /// <summary>Worker: one answer file (orders\chat-N.json), handed to the game's thread.</summary>
+        /// <summary>Worker: one answer file (orders\chat-N.json), shown at once on the frame's queue (even with the game paused).</summary>
         public static bool ReadAnswer(string path, string realm, out string error)
         {
             error = null;
@@ -117,7 +159,7 @@ namespace BannerlordAgents
                 return false;
             }
             Diag.Event("lieutenant", "answer file", new { file = Path.GetFileName(path), chat = (int?)a["chat"], carry_out = (bool?)a["carry_out"], orders = (a["orders"] as JArray)?.Count, proposed = (a["propose"] as JArray)?.Count });
-            Background.ToMain.Enqueue(() => OnAnswer(a, realm));
+            Background.ToUi.Enqueue(() => OnAnswer(a, realm));
             return true;
         }
 
@@ -129,34 +171,53 @@ namespace BannerlordAgents
             bool carry = (bool?)a["carry_out"] == true, drop = (bool?)a["drop"] == true;
             int answered = (int?)a["pending_chat"] ?? -1;
             Unanswered.Clear();
-            if (!string.IsNullOrWhiteSpace(say)) Line(Name + ": " + say.Trim(), 0xFFE6C36Au);
-            double now = CampaignTime.Now.ToHours;
+            Thinking = false;
+            if (!string.IsNullOrWhiteSpace(say)) LieutenantWindow.Add(Name + ": " + say.Trim(), Voice, true);
+            if (!string.IsNullOrWhiteSpace(detail)) LieutenantWindow.Add(detail.Trim(), Voice, false);
+            double now = Campaign.Current != null ? CampaignTime.Now.ToHours : 0;
             string gate = LieutenantRules.Gate(_pending?.Chat, answered, carry, orders?.Count ?? 0, propose?.Count ?? 0, drop);
             switch (gate)
             {
                 case "carry":
-                    Carry(orders, n, realmId);
+                    Background.ToMain.Enqueue(() => Carry(orders, n, realmId));
                     _pending = null;
                     break;
                 case "wait":
                     // orders the player has not agreed to: they wait for the yes, as a proposal
-                    _pending = new Proposal { Chat = n, Say = say, Orders = orders, Hours = now };
-                    Line("(" + Name + " waits for your yes before giving those orders.)", 0xFF8FB3D9u);
+                    _pending = Make(n, say, orders, now);
+                    LieutenantWindow.Add("(Your lieutenant waits for your yes before giving those orders.)", Aside, false);
                     Diag.Count("lieutenant:orders held for a yes");
                     break;
                 case "propose":
-                    _pending = new Proposal { Chat = n, Say = say, Orders = propose, Hours = now };
+                    _pending = Make(n, say, propose, now);
                     break;
                 case "drop":
                     _pending = null;
                     break;
             }
-            if (!string.IsNullOrWhiteSpace(detail)) Window(detail.Trim());
+            LieutenantWindow.Refresh();
             Diag.Count("lieutenant:answers");
             Diag.Event("lieutenant", "answered", new { chat = n, gate, pending = _pending?.Chat, said = say });
         }
 
-        /// <summary>The orders the player agreed to, through the door every agent's orders go through; a refusal is said in the chat box.</summary>
+        private static Proposal Make(int chat, string say, JArray orders, double hours)
+        {
+            var lines = new List<string>();
+            foreach (JObject o in orders.OfType<JObject>())
+            {
+                string lord = Str(o["lord"]), what = Str(o["do"] ?? o["order"]), at = Str(o["at"] ?? o["place"]), target = Str(o["target"]);
+                Hero h = lord != null ? Hero.Find(lord) : null;
+                Settlement s = at != null ? Settlement.Find(at) : null;
+                Hero t = target != null ? Hero.Find(target) : null;
+                lines.Add("- " + (h != null ? Names.Hero(h) : lord) + ": " + what + (s != null ? " " + Names.Settlement(s) : at != null ? " " + at : "")
+                          + (t != null ? " " + Names.Hero(t) : target != null && s == null ? " " + target : ""));
+            }
+            return new Proposal { Chat = chat, Say = say, Orders = orders, Hours = hours, Words = "Waiting for your answer:\n" + string.Join("\n", lines) };
+        }
+
+        private static string Str(JToken t) => t == null || t.Type == JTokenType.Null ? null : ((string)t)?.Trim().Trim('[', ']');
+
+        /// <summary>The orders the player agreed to, through the door every agent's orders go through; a refusal is said in the window.</summary>
         private static void Carry(JArray orders, int chat, string realmId)
         {
             int i = 0;
@@ -168,7 +229,7 @@ namespace BannerlordAgents
                 string lord = order.Lord;
                 Orders.FromAgent(order, (status, reason) =>
                 {
-                    if (status == "refused") Line("(" + Name + ": " + (reason ?? "an order for " + lord + " was refused") + ")", 0xFFD98F8Fu);
+                    if (status == "refused") { string r = reason ?? "an order for " + lord + " was refused"; Background.ToUi.Enqueue(() => LieutenantWindow.Add("(" + r + ")", Refused, true)); }
                 });
             }
             Diag.Count("lieutenant:orders carried out", i);
@@ -176,34 +237,19 @@ namespace BannerlordAgents
 
         // ---------- what becomes of its orders ----------
 
-        /// <summary>Worker: the call-backs of the lieutenant's orders and their endings, from its realm's hour, into the chat box.</summary>
+        /// <summary>Worker: the call-backs of the lieutenant's orders and their endings, from its realm's hour, into the window.</summary>
         public static void Heard(List<Trigger> triggers)
         {
             List<string> said = triggers.Where(t => t.Kind == "tool" || t.Kind == "order_ended").Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().Take(6).ToList();
             foreach (string t in said)
             {
                 string text = Name + ": " + t;
-                Background.ToMain.Enqueue(() => Line(text, 0xFF8FB3D9u));
+                Background.ToUi.Enqueue(() => LieutenantWindow.Add(text, Aside, true));
             }
         }
 
-        /// <summary>Is this the lieutenant's realm (its orders' endings go to the chat box, not the corner)?</summary>
+        /// <summary>Is this the lieutenant's realm (its orders' endings go to its window, not the corner)?</summary>
         public static bool IsRealm(string fid) => fid != null && Agents.All.Any(a => a.Config.IsLieutenant && a.Realm == fid);
-
-        // ---------- the chat box and the window ----------
-
-        private static void Line(string text, uint argb)
-        {
-            try { InformationManager.DisplayMessage(new InformationMessage(text, Color.FromUint(argb))); }
-            catch (Exception e) { Diag.Swallowed("a line in the chat box", e); }
-        }
-
-        /// <summary>A longer answer: a window the game stands still behind until it is closed (Mert: "make popups pause the game").</summary>
-        private static void Window(string text)
-        {
-            try { InformationManager.ShowInquiry(new InquiryData(Name, text, true, false, "Close", null, null, null), true); }
-            catch (Exception e) { Diag.Swallowed("the lieutenant's window", e); }
-        }
     }
 
     /// <summary>The lieutenant's rules that need no game (the smoke test reads them).</summary>
@@ -223,72 +269,25 @@ namespace BannerlordAgents
     }
 
     /// <summary>
-    /// The chat box on the campaign map, for the lieutenant (0.10). The game's chat box (MPChatVM, under GauntletChatLogView) closes
-    /// in single-player because its "all" and "team" channels need a multiplayer server: on the campaign map, with a lieutenant,
-    /// they become its channel (the "party" channel, which the box keeps open), named for it, and what is sent goes to the
-    /// lieutenant instead of a server. Messages may be longer there (400 letters, not 100), and the clock stops while the player
-    /// types. Missions (battles) and multiplayer are left as they are. Harmony, from GameHooks.
+    /// The chat keys on the campaign map, for the lieutenant (0.10.1). The game's chat box (MPChatVM) stays closed in single-player;
+    /// its Enter and T start typing there (StartTyping), which with a lieutenant on the campaign map opens the lieutenant's window
+    /// instead. Missions and multiplayer are left as they are. Harmony, from GameHooks.
     /// </summary>
     internal static class ChatHook
     {
-        private static bool OnMap => Campaign.Current != null && Mission.Current == null && !GameNetwork.IsMultiplayer;
-        private static bool Ours => OnMap && Lieutenant.Active;
-        private static CampaignTimeControlMode? _clockBefore;
-
-        internal static void ChannelPrefix(ref ChatChannelType value)
-        {
-            try { if ((value == ChatChannelType.All || value == ChatChannelType.Team) && Ours) value = ChatChannelType.Party; }
-            catch (Exception e) { Diag.Swallowed("the lieutenant's chat channel", e); }
-        }
-
-        internal static void NamePostfix(MPChatVM __instance)
-        {
-            try { if (__instance.ActiveChannelType == ChatChannelType.Party && Ours) __instance.ActiveChannelNameText = "(" + Lieutenant.Name + ")"; }
-            catch (Exception e) { Diag.Swallowed("the lieutenant's chat channel name", e); }
-        }
-
-        internal static bool SendPrefix(string message)
+        internal static bool StartPrefix()
         {
             try
             {
-                if (!Ours) return true;
-                Lieutenant.OnPlayerSays(message);
+                if (Campaign.Current == null || Mission.Current != null || GameNetwork.IsMultiplayer || !Lieutenant.Active) return true;
+                LieutenantWindow.AskOpen();
                 return false;
             }
             catch (Exception e)
             {
-                Diag.Error("the lieutenant's chat", e);
-                return false;
+                Diag.Swallowed("the lieutenant's key", e);
+                return true;
             }
-        }
-
-        internal static void StartPostfix(MPChatVM __instance)
-        {
-            try
-            {
-                if (!Ours) return;
-                if (__instance.MaxMessageLength < 400) __instance.MaxMessageLength = 400;
-                Campaign c = Campaign.Current;
-                if (Settings.LieutenantPause && c.TimeControlMode != CampaignTimeControlMode.Stop)
-                {
-                    _clockBefore = c.TimeControlMode;
-                    c.TimeControlMode = CampaignTimeControlMode.Stop;
-                }
-            }
-            catch (Exception e) { Diag.Swallowed("stopping the clock for the chat box", e); }
-        }
-
-        internal static void StopPostfix()
-        {
-            try
-            {
-                if (_clockBefore == null) return;
-                Campaign c = Campaign.Current;
-                // the clock runs again as it ran, unless the player has set it otherwise meanwhile
-                if (c != null && c.TimeControlMode == CampaignTimeControlMode.Stop) c.TimeControlMode = _clockBefore.Value;
-                _clockBefore = null;
-            }
-            catch (Exception e) { Diag.Swallowed("starting the clock after the chat box", e); }
         }
     }
 }

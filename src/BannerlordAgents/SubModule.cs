@@ -86,6 +86,7 @@ namespace BannerlordAgents
             base.OnApplicationTick(dt);
             Watchdog.Frame();
             Background.DrainToUi();
+            LieutenantWindow.Frame();
             MapExport.Frame();
         }
 

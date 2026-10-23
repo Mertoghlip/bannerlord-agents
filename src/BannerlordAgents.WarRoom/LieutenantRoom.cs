@@ -131,6 +131,13 @@ namespace BannerlordAgents.WarRoom
             if (receipts.Count == 0) sb.AppendLine("- Nothing yet.");
             foreach (string l in receipts) sb.AppendLine("- " + l);
             sb.AppendLine();
+            // what the ruler did with a proposal by the window's buttons (0.10.1), since your last answer
+            if (chat["notes"] is JsonArray notes && notes.Count > 0)
+            {
+                sb.AppendLine("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER");
+                foreach (JsonNode n in notes) sb.AppendLine("- " + Str(n));
+                sb.AppendLine();
+            }
             if (chat["pending"] is JsonObject p && p["orders"] is JsonArray po)
             {
                 sb.AppendLine("YOUR PROPOSAL WAITING FOR YOUR RULER'S ANSWER (from message #" + (int)Num(p["chat"]) + "): " + Str(p["say"]));

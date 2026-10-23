@@ -180,32 +180,19 @@ namespace BannerlordAgents
                                                  loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
         }
 
-        /// <summary>The chat box's hooks for the lieutenant (ChatHook): five members of the game's chat box view model.</summary>
+        /// <summary>The lieutenant's key (ChatHook): the game's chat box's start of typing, which opens the lieutenant's window instead.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void InstallChat()
         {
             var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
             const BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            Type vm = typeof(TaleWorlds.MountAndBlade.ViewModelCollection.Multiplayer.MPChatVM);
-            var found = new Dictionary<string, MethodInfo>
-            {
-                ["channel"] = vm.GetProperty("ActiveChannelType", any)?.GetSetMethod(true),
-                ["name"] = vm.GetMethod("RefreshActiveChannelNameData", any, null, Type.EmptyTypes, null),
-                ["send"] = vm.GetMethod("SendMessageToChannel", any, null, new[] { typeof(TaleWorlds.MountAndBlade.Diamond.ChatChannelType), typeof(string) }, null),
-                ["start"] = vm.GetMethod("StartTyping", any, null, Type.EmptyTypes, null),
-                ["stop"] = vm.GetMethod("StopTyping", any, null, new[] { typeof(bool) }, null)
-            };
-            List<string> missing = found.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList();
-            if (missing.Count > 0) { Parts["chat"] = "the lieutenant's chat box: the game's chat box is not as expected (" + string.Join(", ", missing) + " not found), so it is off"; return; }
-            HarmonyLib.HarmonyMethod M(string n) => new HarmonyLib.HarmonyMethod(typeof(ChatHook).GetMethod(n, BindingFlags.Static | BindingFlags.NonPublic));
-            h.Patch(found["channel"], prefix: M("ChannelPrefix"));
-            h.Patch(found["name"], postfix: M("NamePostfix"));
-            h.Patch(found["send"], prefix: M("SendPrefix"));
-            h.Patch(found["start"], postfix: M("StartPostfix"));
-            h.Patch(found["stop"], postfix: M("StopPostfix"));
-            ChatInstalled = found.Values.All(Ours);
-            Parts["chat"] = "the lieutenant's chat box " + (ChatInstalled ? "attached" : "did not attach") + Others(found["send"]);
-            Diag.Event("hooks", "chat box", new { attached = ChatInstalled });
+            // since 0.10.1 one hook: the chat keys' start of typing opens the lieutenant's window on the campaign map
+            MethodInfo start = typeof(TaleWorlds.MountAndBlade.ViewModelCollection.Multiplayer.MPChatVM).GetMethod("StartTyping", any, null, Type.EmptyTypes, null);
+            if (start == null) { Parts["chat"] = "the lieutenant's key: the game's chat box has no StartTyping, so Enter does not open the lieutenant's window"; return; }
+            h.Patch(start, prefix: new HarmonyLib.HarmonyMethod(typeof(ChatHook).GetMethod("StartPrefix", BindingFlags.Static | BindingFlags.NonPublic)));
+            ChatInstalled = Ours(start);
+            Parts["chat"] = "the lieutenant's key (Enter, T) " + (ChatInstalled ? "attached" : "did not attach") + Others(start);
+            Diag.Event("hooks", "lieutenant key", new { attached = ChatInstalled });
         }
 
         /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>

@@ -959,3 +959,25 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the installed DLL has sha256 `9744690DB8543D18…`, the war room's `WarRoom.dll` `614277F9AB9AB6FC…`;
   - the war rooms (now three) and the dashboard were stopped for the build and started again at 14:17; the lieutenant's war room waits for the player's first words.
 - **Not yet seen in a game:** the chat box itself (the typing line, Enter, the clock), the player's clan parties under Party AI Controls, and the cost of the player's realm as a seat.
+
+### 14:29 · Seen in a game: the lieutenant's first message (0.10.0)
+- Mert wrote "I would like to get a contingent of dwarven lords to defend goblin town, about 2000 men strong." The chat box sent it (14:29:12); the war room answered in 42 s with six dwarf lords, 2,209 men, all at Goblin Town by Autumn 4, 11:00, and a longer write-up; the bridge read the answer at 14:29:55.
+- **The gap:** the answer waited until the game's clock ran again, since the bridge handed it to the game's tick (which stops while paused). The write-up came as a window although Mert had not asked for one.
+- Mert then asked for a window of the lieutenant's own: "have a button work as a shortcut (say 'enter') to go into the liutenant pop-up automatically and chat with it through that pop-up rather than through the game's own log. This way its easier to approve, disapprove, or comment on its proposals as well (we could have buttons for each)."
+
+### 14:55 · Version 0.10.1: the lieutenant's own window, with Approve and Decline · commit COMMIT (built; installed once the game is closed)
+- **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); new `LieutenantWindow.cs`, `module\GUI\Prefabs\LieutenantWindow.xml`; `Lieutenant.cs` rewritten around it):
+  - **The window:** on the campaign map, the game's chat keys (Enter, T) open it (one Harmony prefix on `MPChatVM.StartTyping`; the game's chat box stays as it is). In the look of the game's own text pop-up: the conversation (the last 14 lines, newest at the bottom), the proposal waiting with **Decline** and **Approve**, the line to type in (focused on opening; Enter sends), **Close** (Esc). The game stands still while it is open, the clock locked (`lieutenant_pause`), and runs again as it ran.
+  - **Approve and Decline:** the button carries out the proposal waiting as it stands, or drops it; the next message tells the war room which ("notes" in `chat.json`, WHAT YOUR RULER DID SINCE YOUR LAST ANSWER in its message). Words still work ("yes", "only Dain and Thorin"), and a comment typed instead goes with the proposal, to change it.
+  - **Answers show at once, even paused:** they come in on the frame's queue (`Background.ToUi`); only orders go to the game's tick, as every agent's do. A longer write-up follows the words in the window, no separate pop-up. With the window closed, answers and what becomes of its orders also show in the message log.
+  - **Gone:** 0.10.0's override of the game's chat log prefab (`SPChatLog.xml`) and its five chat box patches.
+  - The lieutenant's instructions: the buttons, and "detail" now shows in its window (`agent\lieutenant-system.template.md`; the same copied into `C:\Users\karab\Projects\lieutenant\warroom-system.md`, outside the repository).
+  - The module references the game's `TaleWorlds.Engine.GauntletUI`, `GauntletUI`, `ScreenSystem` and `InputSystem`.
+  - Version 0.10.1 (module and war room).
+- **Checks:**
+  - the smoke test passed in full (225 checks);
+  - the war room's self-test: the lieutenant's message check now covers the buttons' notes (it runs at the install, with the war rooms stopped);
+  - 597 game references, 0 missing (RefCheck, with Native's assemblies too);
+  - the offline dry run applied all 7 of the module's hooks (the new key hook, the 3 money hooks, the 3 older) with the pack's Harmony 2.4.2: all bound;
+  - every sprite and brush of the window is one the game's own text pop-up or chat log uses.
+- **Not yet seen in a game:** the window itself (its look, focus, Enter and Esc, the buttons, the clock lock).
