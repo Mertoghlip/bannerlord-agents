@@ -45,7 +45,7 @@ namespace BannerlordAgents
         public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled;
         /// <summary>The money hooks (0.9.4, Purse): our loot-only sale for held lords, the game's prisoner sale measured, a won battle's takings.</summary>
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
-        /// <summary>The chat box's hooks for the lieutenant (0.10, ChatHook): its channel, its name, what is sent, the clock while typing.</summary>
+        /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
         private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried;
         private static object _harmony;
@@ -180,18 +180,18 @@ namespace BannerlordAgents
                                                  loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
         }
 
-        /// <summary>The lieutenant's key (ChatHook): the game's chat box's start of typing, which opens the lieutenant's window instead.</summary>
+        /// <summary>The lieutenant's key (ChatHook): the game's chat box's look at its keys, where Enter opens the lieutenant's window instead.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void InstallChat()
         {
             var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
-            const BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            // since 0.10.1 one hook: the chat keys' start of typing opens the lieutenant's window on the campaign map
-            MethodInfo start = typeof(TaleWorlds.MountAndBlade.ViewModelCollection.Multiplayer.MPChatVM).GetMethod("StartTyping", any, null, Type.EmptyTypes, null);
-            if (start == null) { Parts["chat"] = "the lieutenant's key: the game's chat box has no StartTyping, so Enter does not open the lieutenant's window"; return; }
-            h.Patch(start, prefix: new HarmonyLib.HarmonyMethod(typeof(ChatHook).GetMethod("StartPrefix", BindingFlags.Static | BindingFlags.NonPublic)));
-            ChatInstalled = Ours(start);
-            Parts["chat"] = "the lieutenant's key (Enter, T) " + (ChatInstalled ? "attached" : "did not attach") + Others(start);
+            // since 0.10.2 the chat box's look at its keys (in Native's GauntletUI, so by name); 0.10.1's hook on its start of
+            // typing was never reached, the game folding those two lines into their callers
+            MethodInfo look = HarmonyLib.AccessTools.Method("TaleWorlds.MountAndBlade.GauntletUI.GauntletChatLogView:HandleInput");
+            if (look == null) { Parts["chat"] = "the lieutenant's key: the game's chat box's look at its keys was not found, so Enter does not open the lieutenant's window"; return; }
+            h.Patch(look, prefix: new HarmonyLib.HarmonyMethod(typeof(ChatHook).GetMethod("InputPrefix", BindingFlags.Static | BindingFlags.NonPublic)));
+            ChatInstalled = Ours(look);
+            Parts["chat"] = "the lieutenant's key (Enter) " + (ChatInstalled ? "attached" : "did not attach") + Others(look);
             Diag.Event("hooks", "lieutenant key", new { attached = ChatInstalled });
         }
 

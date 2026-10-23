@@ -12,8 +12,8 @@ namespace BannerlordAgents
     /// <summary>
     /// The lieutenant's window (0.10.1; Mert, Oct 23: "have a button work as a shortcut (say 'enter') to go into the liutenant
     /// pop-up automatically and chat with it through that pop-up rather than through the game's own log ... its easier to approve,
-    /// disapprove, or comment on its proposals as well (we could have buttons for each)"). On the campaign map, the chat keys
-    /// (Enter, T) open it instead of the game's chat box (ChatHook). It holds the conversation (the last lines, newest at the
+    /// disapprove, or comment on its proposals as well (we could have buttons for each)"). On the campaign map, Enter opens it
+    /// instead of the game's chat box, which keeps T (ChatHook, since 0.10.2). It holds the conversation (the last lines, newest at the
     /// bottom), the lieutenant's proposal waiting with Approve and Decline, a line to type in (Enter sends), and Close (Esc). The
     /// game stands still while it is open, and the clock cannot be started from the map meanwhile; it runs again as it ran when the
     /// window closes. Its look is the game's own text pop-up's (LieutenantWindow.xml). Game's thread (the UI's), every frame.
@@ -33,7 +33,7 @@ namespace BannerlordAgents
 
         public static bool IsOpen => _layer != null;
 
-        /// <summary>The chat keys were pressed on the campaign map (from the game's chat box, mid-frame): the window opens next frame.</summary>
+        /// <summary>Enter was pressed on the campaign map (from the game's chat box's look at its keys, mid-frame): the window opens next frame.</summary>
         public static void AskOpen() => _openAsked = true;
 
         /// <summary>Close was clicked (inside the window's own event): it closes next frame, outside the window's handling.</summary>

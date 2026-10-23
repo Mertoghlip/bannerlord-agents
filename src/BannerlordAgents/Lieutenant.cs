@@ -15,7 +15,7 @@ namespace BannerlordAgents
     /// everything verbal", "Keep its answers short and concise whenever possible, make popups pause the game until the popup is
     /// closed", it commands every lord of the realm "including my own clan's parties", and (0.10.1) a window of its own, opened
     /// with Enter, with buttons to approve or decline a proposal). An agent folder of kind lieutenant, "realm = player":
-    /// - on the campaign map, the chat keys (Enter, T) open its window (LieutenantWindow) instead of the game's chat box
+    /// - on the campaign map, Enter opens its window (LieutenantWindow) instead of the game's chat box, which keeps T
     ///   (ChatHook); what the player sends goes into the lieutenant's channel as chat.json, with the waiting proposal and what the
     ///   player did with the last one (notes);
     /// - its war room (LieutenantRoom) answers in orders\chat-N.json: a few words, maybe a proposal, maybe the orders the player
@@ -269,17 +269,34 @@ namespace BannerlordAgents
     }
 
     /// <summary>
-    /// The chat keys on the campaign map, for the lieutenant (0.10.1). The game's chat box (MPChatVM) stays closed in single-player;
-    /// its Enter and T start typing there (StartTyping), which with a lieutenant on the campaign map opens the lieutenant's window
-    /// instead. Missions and multiplayer are left as they are. Harmony, from GameHooks.
+    /// Enter on the campaign map, for the lieutenant (0.10.2; Mert, Oct 23: "enter should open the liutenant window, t should
+    /// open the chat window"). The game's chat box looks at its keys every frame (GauntletChatLogView.HandleInput, through the
+    /// map's own keys); with a lieutenant on the campaign map and the chat box shut, Enter there opens the lieutenant's window
+    /// instead, and T, and Enter while the chat box is open, stay the chat box's. While the window is open the chat box does not
+    /// look at its keys, so it stays shut beneath. Missions and multiplayer are left as they are. Harmony, from GameHooks.
+    /// (0.10.1 hooked the chat box's start of typing, MPChatVM.StartTyping: two lines, which the game folds into its callers,
+    /// so the hook was never reached.)
     /// </summary>
     internal static class ChatHook
     {
-        internal static bool StartPrefix()
+        private const int ChatEnter = 8; // the chat keys' Enter (ChatLogHotKeyCategory.FinalizeChat)
+
+        internal static bool InputPrefix(TaleWorlds.MountAndBlade.ViewModelCollection.Multiplayer.MPChatVM ____dataSource)
         {
             try
             {
                 if (Campaign.Current == null || Mission.Current != null || GameNetwork.IsMultiplayer || !Lieutenant.Active) return true;
+                if (LieutenantWindow.IsOpen) return false;
+                if (____dataSource == null || ____dataSource.IsTypingText || ____dataSource.IsInspectingMessages) return true;
+                TaleWorlds.ScreenSystem.ScreenBase top = TaleWorlds.ScreenSystem.ScreenManager.TopScreen;
+                if (top == null || top.GetType().Name != "MapScreen") return true;
+                TaleWorlds.InputSystem.InputContext keys = top.FindLayer<TaleWorlds.Engine.Screens.SceneLayer>()?.Input;
+                if (keys == null) return true;
+                // the chat box registers its keys on the map's the same way before it reads them
+                TaleWorlds.InputSystem.GameKeyContext chatKeys = TaleWorlds.InputSystem.HotKeyManager.GetCategory("ChatLogHotKeyCategory");
+                if (chatKeys == null) return true;
+                if (!keys.IsCategoryRegistered(chatKeys)) keys.RegisterHotKeyCategory(chatKeys);
+                if (!keys.IsGameKeyReleased(ChatEnter) && !keys.IsHotKeyReleased("FinalizeChatAlternative")) return true;
                 LieutenantWindow.AskOpen();
                 return false;
             }
