@@ -726,7 +726,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Also answered:** why the lords near Eastern Moria "keep wandering off" although under orders. They were not under orders. Ufza and Shagash had ridden in Naglur's army, whose members hold no order of their own. When it broke up from lost cohesion (Autumn 5, about 08:00), the game's own AI sent both at once to defend Skar-ghâsh, a raided village by Sirannon, towards Górli's host. The agent's poke at 10:00 was answered 21 s later, but the game ran 5 in-game hours meanwhile and was then paused. Its defend order and the next poke's garrison order were carried out together at 15:00, and from then on both stayed in Eastern Moria.
 - **Not yet seen in a game:** two agents at once.
 
-### 17:40 · Version 0.9.0: an agent is a folder; no agent is special; one script runs them all · commit (follow-up below) (installed 17:38)
+### 17:40 · Version 0.9.0: an agent is a folder; no agent is special; one script runs them all · commit 1d28917 (installed 17:38)
 - **Why:** Mert asked how 0.8.0's two agents compare to "adding a new agent should only entail strapping on a new modular component with a new system prompt", with tools reused like function calls and no crossover between brains. The comparison found five gaps:
   - the game-side pieces of an agent were kept in five places, each filtered by realm;
   - the first agent was special;
