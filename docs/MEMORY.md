@@ -72,10 +72,12 @@ Then the poke itself, as before. The agent can also read the whole `chronicle.tx
 ## Reloads, restarts and campaigns
 
 - **Closing the game or the war room** loses nothing: the chronicle, the notes and the story are files.
-- **Loading an earlier save:**
-  - the bridge cuts the chronicle back to the save's date;
-  - the war room puts the notes and the story back as they were at that date, from `memory\<campaign>\snapshots.jsonl` (written at every change, with the in-game hour).
-  - So the realm never remembers what then did not happen. The war room tells a reload by `poke.json`, which names this load of the game and the save's date.
+- **Loading any save** (since 0.9.1: earlier, later, or on another branch of play):
+  - every chronicle line, and every copy of the notes and the story in `memory\<campaign>\snapshots.jsonl` (written at every change, with the in-game hour), is labelled with the game session that wrote it, and nothing is deleted;
+  - at every save the bridge notes, in the campaign's own `saves.jsonl` (never in the save itself), the save's name, its in-game hour, the session that made it, and that session's own history;
+  - a load finds its save's note by name and hour, so its history is exactly the sessions its world lived through, each up to the hour it was saved at. The chronicle shows only those lines, and the war room puts back the last copy of the notes and the story written within that history. `poke.json` carries the history;
+  - a save with no note (made before 0.9.1, renamed, or made without this mod) gets the lines written before labels began, up to its date. That is the old rule, which kept those lines to one line of play;
+  - so the realm never remembers what then did not happen, and switching between saves of different runs never mixes their histories.
 - **Another campaign** gets its own memory, and its own chronicle in its own folder.
 - **Measured runs** start from the same save, so each starts with the memory of that date: empty, apart from the game's own history.
 - **Each realm** keeps its own memory, of only what it could know. When Mordor, Harad and Rhûn play, each will have its own channel.

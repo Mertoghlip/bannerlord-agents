@@ -135,11 +135,56 @@ namespace BannerlordAgents.WarRoom
             {
                 var o = new JsonObject
                 {
-                    ["hours"] = double.IsNaN(hours) ? null : hours, ["date"] = date, ["poke"] = poke, ["why"] = why, ["at"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    ["hours"] = double.IsNaN(hours) ? null : hours, ["date"] = date, ["poke"] = poke, ["why"] = why, ["load"] = string.IsNullOrEmpty(LoadId) ? null : LoadId, ["at"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                     ["notes"] = Notes, ["story"] = Story, ["story_hours"] = double.IsNaN(StoryHours) ? null : StoryHours, ["story_date"] = StoryDate
                 };
                 File.AppendAllText(SnapshotFile, o.ToJsonString() + "\n", new UTF8Encoding(false));
             }
+        }
+
+        /// <summary>
+        /// A save was loaded, with the history the bridge found for it (since 0.9.1: which game sessions its world lived
+        /// through, each up to the hour it was saved at). The notes and the story go back to the last copy written within that
+        /// history, and no copy is dropped, so a later load of another save, earlier, later or on another branch of play, finds
+        /// its own. Returns the date gone back to.
+        /// </summary>
+        public string Restore(List<KeyValuePair<string, double>> before, double loadedAt)
+        {
+            lock (Gate)
+            {
+                JsonObject last = null;
+                if (File.Exists(SnapshotFile))
+                    foreach (string line in File.ReadAllLines(SnapshotFile))
+                    {
+                        if (line.Trim().Length == 0) continue;
+                        try
+                        {
+                            if (JsonNode.Parse(line) is not JsonObject o) continue;
+                            if (InHistory(before, (string)o["load"], Num(o["hours"]))) last = o;
+                        }
+                        catch (JsonException) { }
+                    }
+                Notes = (string)last?["notes"] ?? Compose("(not set yet)", new List<KeyValuePair<string, string>>(), new List<string>());
+                Story = (string)last?["story"] ?? "";
+                StoryHours = Num(last?["story_hours"]);
+                StoryDate = (string)last?["story_date"] ?? "";
+                LastHours = loadedAt;
+                Generation++;
+                SessionId = null;   // a conversation held another history; it starts afresh
+                SessionTokens = 0;
+                SessionStarted = false;
+                Save();
+                return (string)last?["date"] ?? "";
+            }
+        }
+
+        /// <summary>Was a copy written by that session (null: before copies were labelled) at that hour within this history?</summary>
+        internal static bool InHistory(List<KeyValuePair<string, double>> before, string load, double hours)
+        {
+            foreach (KeyValuePair<string, double> s in before)
+                if ((string.IsNullOrEmpty(s.Key) ? string.IsNullOrEmpty(load) : s.Key == load) && (double.IsNaN(s.Value) || double.IsNaN(hours) || hours <= s.Value + 0.01))
+                    return true;
+            return false;
         }
 
         /// <summary>

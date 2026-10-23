@@ -192,7 +192,7 @@ namespace BannerlordAgents
         /// A campaign was loaded (worker): the agents of this load, each new, each forgetting the last session. The ids file
         /// of 0.8 and before (ids_shown.txt) belonged to the one realm then watched, which is listed first: it is renamed for it.
         /// </summary>
-        public static void Reset(string dataDir, double loadedAt, List<AgentConfig> configs, Dictionary<string, List<ChronicleEntry>> histories)
+        public static void Reset(string dataDir, double loadedAt, List<AgentConfig> configs, Dictionary<string, List<ChronicleEntry>> histories, History history = null)
         {
             var fresh = (configs ?? new List<AgentConfig>()).Where(c => c != null && c.Realm != null).Select(c => new RealmAgent(c)).ToList();
             if (fresh.Count == 0) fresh.Add(new RealmAgent(AgentConfig.FromSettings(null, Settings.AgentFolder, Settings.Agent, Settings.AgentLords)));
@@ -203,7 +203,7 @@ namespace BannerlordAgents
             foreach (RealmAgent a in fresh)
             {
                 a.Channel.Reset(dataDir);
-                a.Chronicle.Reset(dataDir, loadedAt, a.Realm, histories != null && a.Realm != null && histories.TryGetValue(a.Realm, out List<ChronicleEntry> h) ? h : null);
+                a.Chronicle.Reset(dataDir, loadedAt, a.Realm, histories != null && a.Realm != null && histories.TryGetValue(a.Realm, out List<ChronicleEntry> h) ? h : null, history);
             }
         }
 

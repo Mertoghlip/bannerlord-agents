@@ -25,6 +25,8 @@ namespace BannerlordAgents
         /// <summary>The agents of this load, each realm resolved to its kingdom id (Agents.Configured), and what could not be used.</summary>
         public static List<AgentConfig> Configs = new List<AgentConfig>();
         public static readonly List<string> Unusable = new List<string>();
+        /// <summary>Which records are this game's history (History, since 0.9.1): found at the load, noted at every save.</summary>
+        public static History History;
         public static bool Running;
         public static string CampaignId = "unknown";
         /// <summary>This load of the campaign (a new one each time a save is loaded), and the in-game hour of the save: the war room tells a reload by them.</summary>
@@ -80,14 +82,20 @@ namespace BannerlordAgents
             var histories = new Dictionary<string, List<ChronicleEntry>>();
             foreach (Kingdom k in Seats)
             {
-                List<ChronicleEntry> history = GameHistory.Collect(k, out int scanned, out int unread);
-                histories[k.StringId] = history;
-                Diag.Event("chronicle", "game history read", new { realm = k.StringId, entries = scanned, about_the_realm = history.Count, unread, ms = Math.Round(Perf.Ms(th), 1) });
+                List<ChronicleEntry> fromGame = GameHistory.Collect(k, out int scanned, out int unread);
+                histories[k.StringId] = fromGame;
+                Diag.Event("chronicle", "game history read", new { realm = k.StringId, entries = scanned, about_the_realm = fromGame.Count, unread, ms = Math.Round(Perf.Ms(th), 1) });
             }
             List<string> realms = Seats.Select(k => k.StringId).ToList();
             double loadedAt = LoadedAt;
             Background.Start();
-            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories));
+            // which records are this game's history: its save's note in the campaign's saves.jsonl, found by name and hour (History)
+            string save = null;
+            try { save = TaleWorlds.Core.MBSaveLoad.ActiveSaveSlotName; }
+            catch (Exception e) { Diag.Swallowed("reading the save's name", e); }
+            History history = History.Of(LoadId, loadedAt, save, Paths.Data(id), save == null);
+            History = history;
+            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories, history));
             AgentChannel.Start();
             GameHooks.Apply();
             MapExport.Start();
@@ -95,6 +103,7 @@ namespace BannerlordAgents
             Log.Line("session started: campaign " + id + ", " + Kingdom.All.Count + " kingdoms, " + MobileParty.All.Count + " parties, "
                      + Settlement.All.Count + " settlements; " + warmed + " names prepared in " + warmMs.ToString("0", Text.Inv) + " ms");
             Log.Line("watching: " + WatchedSummary());
+            Log.Line("history: " + history);
             Log.Line("at load: " + Orders.FrozenAtLoad());
             Log.Line("files for this campaign: " + Paths.Data(id));
             for (int i = 0; i < configs.Count; i++)
@@ -111,6 +120,7 @@ namespace BannerlordAgents
             Watched = null;
             Seats = new List<Kingdom>();
             Configs = new List<AgentConfig>();
+            History = null;
             Diag.Event("session", "campaign ended");
             Background.Post("flush", Files.FlushAll);
             Background.Post("summary", () => Diag.Summary(false));
@@ -316,7 +326,16 @@ namespace BannerlordAgents
         }
 
         private void OnBeforeSave() => Guard("save hand-back", Orders.HandBackForSave);
-        private void OnSaveOver(bool saved, string name) => Guard("save take-back", () => Orders.TakeBackAfterSave(saved, name));
+        private void OnSaveOver(bool saved, string name) => Guard("save take-back", () =>
+        {
+            Orders.TakeBackAfterSave(saved, name);
+            // the save's history note (History): which records its world has lived through, so loading it later finds exactly those
+            if (!saved || Bridge.History == null || string.IsNullOrEmpty(name)) return;
+            object note = Bridge.History.NoteFor(name, CampaignTime.Now.ToHours);
+            string file = History.NotesFile(Paths.Data(Bridge.CampaignId));
+            Background.Post("save history note", () => { Files.Append(file, Json.Line(note)); Files.FlushAll(); });
+            Diag.Event("history", "save noted", new { save = name, load = Bridge.History.Label });
+        });
 
         private void OnWarDeclared(IFaction a, IFaction b, DeclareWarAction.DeclareWarDetail d) => Guard("war notice", () => Notices.OnWarDeclared(a, b, d));
         private void OnPeace(IFaction a, IFaction b, MakePeaceAction.MakePeaceDetail d) => Guard("peace notice", () => Notices.OnPeace(a, b, d));

@@ -787,3 +787,16 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
     - the war rooms read the instructions anew before every call, so the change holds from each agent's next call, with no restart.
   - `scripts\setup-agent.ps1` loses `-Theatre`: the goal names no region now, so only the title and the opening line name the realm.
 - **Checks:** both scripts parse.
+
+### 18:23 · Version 0.9.1: every save gets exactly its own history back · commit (follow-up below) (installed 18:22)
+- **Why:** Mert asked how loading different saves keeps histories apart. The cut-back went by date alone and deleted what it cut. So loading a later save from a run played before another one gave the agents the other run's history, and nothing of its own after the branch point. Mert: "Yes, this is an important fix. Build it now please."
+- **What** (`History`):
+  - every chronicle line, in the module, and every copy of the notes and the story, in the war room's `snapshots.jsonl`, is labelled with the game session (load id) that wrote it, and nothing is deleted any more;
+  - at every successful save (`OnSaveOverEvent`) the bridge appends a note to the campaign's own `saves.jsonl`: the save's name, its in-game hour, this session, and this session's own history. Nothing goes into the save itself, as the project's rule says;
+  - at a load, the save's name (`MBSaveLoad.ActiveSaveSlotName`) and hour find its note. Its history is the sessions its world lived through, each up to the hour it was saved at. The chronicle shows only those lines, the load record and every poke carry the history, and each war room puts back the last memory copy written within it (`Memory.Restore`);
+  - a save with no note (made before 0.9.1, renamed, overwritten without this mod: its hour no longer matches) gets the unlabelled lines up to its date, the old rule. A new game starts empty.
+- **Checks:**
+  - the smoke test passed in full, with 7 new checks: a run played on two branches from one save, then a save of the first branch loaded after the second, gets exactly its own lines; the file keeps every branch's lines; a mismatched hour counts as no note; a new game starts empty; the load records what it found. The old check that the campaign's file was cut now checks that it keeps every line;
+  - the war room's self-test (55) passed, with 5 new checks: session A's save gets A's memory, not B's, though B came later; B's gets B's; the shared start gets the memory from before both; no copy is dropped; an unlabelled copy counts only for the history from before labels;
+  - the dashboard's (27) passed; 514 game references, 0 missing; the installed DLL has sha256 `3D4F551CEA13A24A…`. The war rooms and the dashboard were stopped for the build and started again at 18:23.
+- **Not yet seen in a game.**

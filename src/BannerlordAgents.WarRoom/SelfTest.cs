@@ -60,6 +60,29 @@ namespace BannerlordAgents.WarRoom
             Check(File.ReadAllLines(Path.Combine(m.Dir, "snapshots.jsonl")).Length == 2, "the snapshots after the cut are dropped (the seed and the one at 100 remain)");
             m.CutBack(10);
             Check(m.Notes.Contains("Hold Western Moria."), "cut back before any answer, the notes are the seed again");
+            // since 0.9.1 each copy is labelled with the game session that wrote it and none is dropped: any save, earlier, later or
+            // on another branch of play, gets its own memory back from the history the bridge found for it
+            Memory hm = Memory.Open(c, "camp-branches", said.Add, double.NaN);
+            hm.LoadId = "A";
+            hm.Apply((JsonObject)JsonNode.Parse("{\"plan\": \"Plan of A at 110.\"}"));
+            hm.Snapshot(110, "A 110", 1, "answer");
+            hm.Apply((JsonObject)JsonNode.Parse("{\"plan\": \"Plan of A at 130.\"}"));
+            hm.Snapshot(130, "A 130", 2, "answer");
+            hm.LoadId = "B";
+            hm.Apply((JsonObject)JsonNode.Parse("{\"plan\": \"Plan of B at 105.\"}"));
+            hm.Snapshot(105, "B 105", 3, "answer");
+            var KV = new Func<string, double, KeyValuePair<string, double>>((l, u) => new KeyValuePair<string, double>(l, u));
+            string toA = hm.Restore(new List<KeyValuePair<string, double>> { KV(null, 100), KV("A", 120) }, 120);
+            Check(hm.Notes.Contains("Plan of A at 110.") && !hm.Notes.Contains("at 130") && !hm.Notes.Contains("of B") && toA == "A 110",
+                  "a save made in session A at 120 gets A's memory as it was then, not B's, though B came later (" + toA + ")");
+            hm.Restore(new List<KeyValuePair<string, double>> { KV(null, 100), KV("B", 140) }, 140);
+            Check(hm.Notes.Contains("Plan of B at 105.") && !hm.Notes.Contains("of A"), "a save of session B gets B's");
+            hm.Restore(new List<KeyValuePair<string, double>> { KV(null, 100) }, 100);
+            Check(!hm.Notes.Contains("Plan of"), "the save both began from gets the memory from before either");
+            Check(File.ReadAllLines(Path.Combine(hm.Dir, "snapshots.jsonl")).Length >= 4, "and no copy is dropped on the way");
+            Check(Memory.InHistory(new List<KeyValuePair<string, double>> { KV(null, 100) }, null, 90) && !Memory.InHistory(new List<KeyValuePair<string, double>> { KV(null, 100) }, "A", 90),
+                  "a copy from before the labels counts only for the history from before them");
+
             // the old journal belonged to another run of the game: a save from before the memory began starts afresh
             File.WriteAllText(c.Journal, "# Journal\n\n## Standing plan\nRelieve Western Moria, besieged since Summer 17.\n\n## Lessons\n- A lesson from Summer 17.\n");
             Memory late = Memory.Open(c, "camp4", said.Add, 500);

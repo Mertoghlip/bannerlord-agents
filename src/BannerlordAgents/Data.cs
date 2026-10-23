@@ -285,6 +285,8 @@ namespace BannerlordAgents
         public string Party;
         /// <summary>"game" for a line from the game's own history log, read at the first load; empty for our own.</summary>
         public string From;
+        /// <summary>The game session (load id) that wrote it; null for lines written before labels began (0.9.1). Lines are never cut: a load keeps those of its save's history (History).</summary>
+        public string Load;
     }
 
     /// <summary>The world as copied once per in-game hour.</summary>

@@ -73,9 +73,16 @@ namespace BannerlordAgents
         public static void Reset(string campaign, double loadedAt, List<string> realms, Dictionary<string, List<ChronicleEntry>> histories)
             => Reset(campaign, loadedAt, realms.Select((r, i) => AgentConfig.FromSettings(r, Settings.AgentFolderFor(r, i == 0), Settings.Agent, Settings.AgentLords)).ToList(), histories);
 
-        /// <summary>A campaign was loaded, with its agents (Agents.Configured, each realm resolved) and the game's own history of each realm.</summary>
-        public static void Reset(string campaign, double loadedAt, List<AgentConfig> agents, Dictionary<string, List<ChronicleEntry>> histories)
+        /// <summary>The history of the game now running (History, since 0.9.1): which records it lived through.</summary>
+        public static History History = History.Unmarked("", double.NaN);
+
+        /// <summary>
+        /// A campaign was loaded, with its agents (Agents.Configured, each realm resolved), the game's own history of each realm,
+        /// and which records are this game's history (History; for none, the unlabelled records up to the save's hour).
+        /// </summary>
+        public static void Reset(string campaign, double loadedAt, List<AgentConfig> agents, Dictionary<string, List<ChronicleEntry>> histories, History history = null)
         {
+            History = history ?? History.Unmarked(Bridge.LoadId, loadedAt);
             Files.FlushAll();
             Mem.Clear();
             RecentDecisions.Clear();
@@ -85,7 +92,7 @@ namespace BannerlordAgents
             _dir = Paths.Data(campaign);
             MarkLoad(loadedAt, agents);
             Tools.Runner.Reset();
-            Agents.Reset(_dir, loadedAt, agents, histories);
+            Agents.Reset(_dir, loadedAt, agents, histories, History);
             AgentChannel.WriteLibrary();
             Audit.Reset();
             LiveMap.Reset();
@@ -117,7 +124,7 @@ namespace BannerlordAgents
                 Files.Append(Path.Combine(_dir, "loads.jsonl"), Json.Line(new
                 {
                     LoadId = Bridge.LoadId, LoadedAt = double.IsNaN(loadedAt) ? (double?)null : loadedAt, Realm = named.FirstOrDefault()?.Realm, Realms = named.Select(a => a.Realm).ToList(),
-                    Agents = named.Select(a => new { a.Realm, a.Workspace, a.LogDir, a.Mode }).ToList(),
+                    Agents = named.Select(a => new { a.Realm, a.Workspace, a.LogDir, a.Mode }).ToList(), History = History.ForAgent(), HistoryText = History.ToString(),
                     Wall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), Offsets = offsets
                 }));
                 Files.FlushAll();
@@ -412,7 +419,8 @@ namespace BannerlordAgents
                 {
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
-                    LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count
+                    LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count,
+                    History = History.ForAgent()
                 });
 
             Dictionary<string, int> sizes = Audit.Sizes(report, out int tokens);

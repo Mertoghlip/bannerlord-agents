@@ -19,9 +19,9 @@ namespace BannerlordAgents
     ///   before our own lines begin. The game keeps most events for only a week, so from then on these lines are the
     ///   only record.
     /// Kept per campaign and realm in the campaign's folder (chronicle_&lt;realm&gt;.jsonl) and mirrored into the agent
-    /// channel: chronicle.txt to read, chronicle.jsonl for the war room. When an earlier save is loaded, the lines dated
-    /// after it are cut, so the realm never remembers what then did not happen. Worker thread; the console reads it
-    /// under the lock.
+    /// channel: chronicle.txt to read, chronicle.jsonl for the war room. Since 0.9.1 each line is labelled with the game
+    /// session that wrote it and none is cut: a load shows the lines of its save's history (History), so the realm never
+    /// remembers what then did not happen, on any branch of play. Worker thread; the console reads it under the lock.
     /// </summary>
     internal static class Chronicle
     {
@@ -66,6 +66,8 @@ namespace BannerlordAgents
         private double _loadedAt = double.NaN;
         private List<ChronicleEntry> _fromGame;
         private bool _open;
+        /// <summary>Which lines are this game's history (since 0.9.1 lines are labelled and never cut).</summary>
+        private History _history = History.Unmarked("", double.NaN);
 
         public ChronicleBook(string realm) { _realm = realm; }
 
@@ -87,10 +89,11 @@ namespace BannerlordAgents
         /// A campaign was loaded (worker): the realm's lines are read at its first hourly copy (Ensure). loadedAt is the
         /// in-game hour of the save; fromGame, the game's own history lines about seedRealm (GameHistory, game's thread).
         /// </summary>
-        public void Reset(string dataDir, double loadedAt, string seedRealm, List<ChronicleEntry> fromGame)
+        public void Reset(string dataDir, double loadedAt, string seedRealm, List<ChronicleEntry> fromGame, History history = null)
         {
             lock (Gate)
             {
+                _history = history ?? History.Unmarked("", loadedAt);
                 if (_file != null) Files.Close(_file);
                 Entries.Clear();
                 WaitingNotices.Clear();
@@ -122,15 +125,19 @@ namespace BannerlordAgents
                 _open = true;
                 _realmName = realmName;
                 _file = Path.Combine(_dir ?? Paths.Data("unknown"), "chronicle_" + realm + ".jsonl");
-                Entries.AddRange(Read(_file));
+                // every line ever written stays in the file; this game's history is the lines its save lived through
+                List<ChronicleEntry> all = Read(_file);
+                Entries.AddRange(all.Where(e => _history.Holds(e.Load, e.Hours)));
+                cut = all.Count - Entries.Count;
                 cutoff = double.IsNaN(_loadedAt) ? now : _loadedAt;
-                cut = Entries.RemoveAll(e => e.Hours > cutoff + 0.01);
                 seeded = 0;
+                var older = new List<ChronicleEntry>();
                 if (_fromGame != null && realm == _seedRealm)
                 {
                     // the game's own lines only for the time before ours begin, so nothing is told twice
                     double first = Entries.Count > 0 ? Entries.Min(e => e.Hours) : double.MaxValue;
-                    List<ChronicleEntry> older = _fromGame.Where(e => e.Hours < first - 0.01 && e.Hours <= cutoff + 0.01).ToList();
+                    older = _fromGame.Where(e => e.Hours < first - 0.01 && e.Hours <= cutoff + 0.01).ToList();
+                    foreach (ChronicleEntry e in older) e.Load = _history.Label;
                     seeded = older.Count;
                     Entries.AddRange(older);
                 }
@@ -139,16 +146,13 @@ namespace BannerlordAgents
                 Entries.Clear();
                 Entries.AddRange(sorted);
                 foreach (ChronicleEntry e in Entries) if (string.IsNullOrEmpty(e.Date)) e.Date = Text.When(e.Hours);
-                if (cut > 0 || seeded > 0)
-                {
-                    Files.Close(_file);
-                    Files.Overwrite(_file, string.Concat(Entries.Select(e => Json.Line(e) + "\n")));
-                }
+                // the game's own lines join the file, labelled with this session; nothing in it is rewritten or cut
+                foreach (ChronicleEntry e in older) Files.Append(_file, Json.Line(e));
                 WriteChannel();
             }
-            Diag.Event("chronicle", "loaded", new { realm, lines = Entries.Count, cut, seeded_from_game = seeded, cutoff = Math.Round(cutoff, 2) });
+            Diag.Event("chronicle", "loaded", new { realm, lines = Entries.Count, other_histories = cut, seeded_from_game = seeded, history = _history.ToString() });
             if (cut > 0)
-                Log.Line("chronicle: " + cut + " lines dated after " + Text.When(cutoff) + " were cut, because an earlier save was loaded; " + Entries.Count + " lines kept.");
+                Log.Line("chronicle of " + (realmName ?? realm) + ": " + Entries.Count + " lines are this save's history; " + cut + " lines of other saves' histories are left aside (kept in the file).");
             if (seeded > 0) Log.Line("chronicle: " + seeded + " lines from the game's own history log, for the time before our own records.");
             List<Notice> notices = WaitingNotices.ToList();
             List<ChronicleEntry> lines = WaitingLines.ToList();
@@ -183,6 +187,7 @@ namespace BannerlordAgents
             lock (Gate)
             {
                 e.Date = Text.When(e.Hours);
+                if (e.Load == null) e.Load = _history.Label;
                 Entries.Add(e);
                 Files.Append(_file, Json.Line(e));
                 if (ChannelOn)
@@ -260,7 +265,7 @@ namespace BannerlordAgents
                             list.Add(new ChronicleEntry
                             {
                                 Hours = (double?)o["hours"] ?? 0, Date = (string)o["date"], Kind = (string)o["kind"], Text = (string)o["text"],
-                                Place = (string)o["place"], Party = (string)o["party"], From = (string)o["from"]
+                                Place = (string)o["place"], Party = (string)o["party"], From = (string)o["from"], Load = (string)o["load"]
                             });
                         }
                         catch (Exception e)

@@ -13,6 +13,9 @@ namespace BannerlordAgents.WarRoom
         public int Number = -1;
         public double Hours = double.NaN, LoadedAt = double.NaN;
         public string Date = "", Campaign, Realm, RealmName, LoadId, LoadedAtDate = "";
+        /// <summary>The save's history, as the bridge found it (since 0.9.1): the game sessions its world lived through, each up to the hour it was saved at; null from an older bridge.</summary>
+        public List<KeyValuePair<string, double>> Before;
+        public string HistoryFound = "";
     }
 
     /// <summary>
@@ -298,7 +301,13 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory of campaign " + campaign + ": " + _mem.Dir + (_mem.Story.Length > 0 ? "; the story so far reaches " + _mem.StoryDate : "") + ".");
             }
             if (meta == null || string.IsNullOrEmpty(meta.LoadId) || meta.LoadId == _mem.LoadId) return;
-            if (!double.IsNaN(meta.LoadedAt) && !double.IsNaN(_mem.LastHours) && meta.LoadedAt < _mem.LastHours - 0.5)
+            if (meta.Before != null)
+            {
+                // since 0.9.1 the bridge says which sessions this save's world lived through: the memory is as it was in that history
+                string back = _mem.Restore(meta.Before, meta.LoadedAt);
+                Say("Memory: a save was loaded (" + meta.LoadedAtDate + (meta.HistoryFound == "marked" ? ", its history from its note" : meta.HistoryFound == "new" ? ", a new game" : ", with no history note") + "), so the realm's memory is as it was " + (back.Length > 0 ? "at " + back : "at its beginning") + ".");
+            }
+            else if (!double.IsNaN(meta.LoadedAt) && !double.IsNaN(_mem.LastHours) && meta.LoadedAt < _mem.LastHours - 0.5)
             {
                 string back = _mem.CutBack(meta.LoadedAt);
                 Say("Memory: an earlier save was loaded (" + meta.LoadedAtDate + "), so the realm's memory went back to " + (back.Length > 0 ? back : "its beginning") + ".");
@@ -325,6 +334,12 @@ namespace BannerlordAgents.WarRoom
                     Number = (int?)o["number"] ?? -1, Hours = Num(o["hours"]), Date = (string)o["date"] ?? "", Campaign = (string)o["campaign"], Realm = (string)o["realm"],
                     RealmName = (string)o["realm_name"], LoadId = (string)o["load_id"], LoadedAt = Num(o["loaded_at"]), LoadedAtDate = (string)o["loaded_at_date"] ?? ""
                 };
+                if (o["history"] is JsonObject h && h["before"] is JsonArray steps)
+                {
+                    m.HistoryFound = (string)h["found"] ?? "";
+                    m.Before = new List<KeyValuePair<string, double>>();
+                    foreach (JsonNode st in steps) m.Before.Add(new KeyValuePair<string, double>((string)st?["load"], Num(st?["until"])));
+                }
                 return number < 0 || m.Number == number ? m : null;   // -1: whatever poke.json holds (the council)
             }
             catch (Exception e) when (e is JsonException || e is InvalidOperationException || e is FormatException) { return null; }

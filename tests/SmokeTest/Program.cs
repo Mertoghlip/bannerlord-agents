@@ -211,7 +211,7 @@ namespace SmokeTest
             string cut = Read(Path.Combine(agentDir, "chronicle.txt"));
             Check(Chronicle.Count < linesBefore && !cut.Contains("Theoden") && !cut.Contains("ransomed") && cut.Contains("Orc Village is being raided") && cut.Contains("taken prisoner by Galenor"),
                   "loading an earlier save cuts the chronicle back to its date, and keeps what came before (" + linesBefore + " lines, then " + Chronicle.Count + ")");
-            Check(!Read(Path.Combine(dir, "chronicle_orcs.jsonl")).Contains("Theoden"), "in the campaign's own copy too");
+            Check(Read(Path.Combine(dir, "chronicle_orcs.jsonl")).Contains("Theoden"), "but the campaign's own file keeps every line, for the saves whose history it is (0.9.1)");
 
             TwoRealmsTests(root, agentDir);
 
@@ -1342,6 +1342,56 @@ namespace SmokeTest
             Settings.AgentDirs.Remove("dg");
             Settings.AgentDir = agentDir;
             FolderAgentsTests(root, agentDir);
+            SaveHistoryTests(agentDir);
+        }
+
+        /// <summary>
+        /// 0.9.1: a campaign played on two branches from one save, then a save of the first branch loaded again. Each line is
+        /// labelled with its session and none is cut; each save's note says its history, so every load gets exactly its own.
+        /// </summary>
+        private static void SaveHistoryTests(string agentDir)
+        {
+            const string campaign = "smoketest5";
+            string dir = Paths.Data(campaign);
+            Settings.AgentFolders.Clear();
+            Settings.AgentDir = agentDir;
+            var configs = new List<AgentConfig> { AgentConfig.FromSettings("orcs", agentDir, "shadow", "all") };
+            // the chronicle as 0.9.0 left it: unlabelled lines, one from before the save at 100 and one from a later session
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "chronicle_orcs.jsonl"),
+                "{\"hours\":90,\"kind\":\"order\",\"text\":\"Old line at 90.\"}\n{\"hours\":150,\"kind\":\"order\",\"text\":\"Old line at 150.\"}\n");
+            string Shown() { Files.FlushAll(); return Chronicle.For("orcs").Last(100); }
+            void Load(string load, double at, string save)
+            {
+                History h = History.Of(load, at, save, dir, false);
+                Brain.Reset(campaign, at, configs, null, h);
+                Brain.OnHour(World(at, playerSeen: false));
+            }
+
+            // session A, from the old save "start" (made at 100, before notes): the old lines up to 100
+            Load("A", 100, "start");
+            Check(Brain.History.Found == "unmarked" && Shown().Contains("Old line at 90.") && !Shown().Contains("Old line at 150."),
+                  "a save with no history note gets the unlabelled lines up to its date (" + Brain.History + ")");
+            Chronicle.For("orcs").Line(110, "order", "A at 110.");
+            Files.Append(History.NotesFile(dir), Json.Line(Brain.History.NoteFor("saveA", 120)));
+            Chronicle.For("orcs").Line(130, "order", "A at 130, after its save.");
+
+            // session B, from "start" again: another branch
+            Load("B", 100, "start");
+            Chronicle.For("orcs").Line(105, "order", "B at 105.");
+            string b = Shown();
+            Check(b.Contains("Old line at 90.") && b.Contains("B at 105.") && !b.Contains("A at 110."), "a second branch from the same save does not see the first branch's lines");
+
+            // session C, from A's save at 120: A's history, not B's, though B came later
+            Load("C", 120, "saveA");
+            string c = Shown();
+            Check(Brain.History.Found == "marked" && c.Contains("Old line at 90.") && c.Contains("A at 110.") && !c.Contains("A at 130") && !c.Contains("B at 105.") && !c.Contains("Old line at 150."),
+                  "a save of the first branch, loaded after the second, gets exactly its own history (" + Brain.History + ")");
+            string file = Read(Path.Combine(dir, "chronicle_orcs.jsonl"));
+            Check(file.Contains("Old line at 150.") && file.Contains("A at 130") && file.Contains("B at 105.") && file.Contains("\"load\":\"C\"") == false, "and the file keeps every line of every branch");
+            Check(History.Of("D", 121, "saveA", dir, false).Found == "unmarked", "a save whose hour does not match its note (overwritten without this mod) is treated as having none");
+            Check(History.Of("E", 0, null, dir, true).Found == "new" && History.Of("E", 0, null, dir, true).Before.Count == 0, "a new game's history starts empty");
+            Check(Read(Path.Combine(dir, "loads.jsonl")).Contains("\"found\":\"marked\""), "each load records the history it found");
         }
 
         /// <summary>
