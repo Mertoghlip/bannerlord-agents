@@ -982,7 +982,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - every sprite and brush of the window is one the game's own text pop-up or chat log uses.
 - **Not yet seen in a game:** the window itself (its look, focus, Enter and Esc, the buttons, the clock lock).
 
-### 14:47 · Version 0.10.1 installed · commit COMMIT
+### 14:47 · Version 0.10.1 installed · commit 930342d
 - The game closed, Mert said to install. The war rooms (three) and the dashboard were stopped for the build and started again at 14:47; the lieutenant's war room waits for the player's words (last answered #1: the Goblin Town proposal of 14:29 was never answered, so nothing was given).
 - **Fixed at the install:** the war room's self-test check of the lieutenant's message looked for a line break as `\n`, but the message's lines end in `\r\n` on Windows; the check now looks for the heading and the note on their own, in order. All of its checks passed, as did the smoke test (225) and the dashboard's (27).
 - **Installed:** the module's DLL sha256 `5FB015DC4F311217…`, the war room's `WarRoom.dll` `4DB80E7E8E136400…`; the module's `GUI` holds only `Prefabs\LieutenantWindow.xml` (the mirror removed 0.10.0's `SPChatLog.xml`).
