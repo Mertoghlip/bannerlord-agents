@@ -13,8 +13,8 @@
   This script:
   - writes agent.txt (the values given here; any not given are kept from the folder's agent.txt);
   - installs the instructions from agent\*.template.md ONLY where the folder has none, so edits to a prompt are never lost;
-    -Force puts fresh copies in. A fresh copy for another realm has the three lines that name the realm rewritten (the title,
-    the opening line, and the goal's first line) from -RealmTitle, -RealmLine and -Theatre;
+    -Force puts fresh copies in. A fresh copy for another realm has the two lines that name the realm rewritten (the title and
+    the opening line) from -RealmTitle and -RealmLine;
   - gives a new agent a warroom.txt copied from -SettingsFrom (so agents think alike), with its own log_dir
     (logs\warroom-<realm>); an existing warroom.txt is left alone;
   - writes the order library into the channel;
@@ -26,7 +26,7 @@
   powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\orc-war-council -Realm mistymountainorcs -Mode live
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\dolguldur-war-council -Realm dolguldur -Mode live -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamul, the Easterling" -Theatre Rhovanion
+  powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\dolguldur-war-council -Realm dolguldur -Mode live -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamul, the Easterling"
 #>
 param(
     [string]$Workspace = 'C:\Users\karab\Projects\orc-war-council',
@@ -35,7 +35,6 @@ param(
     [string]$Lords = '',
     [string]$RealmTitle = '',
     [string]$RealmLine = '',
-    [string]$Theatre = '',
     [string]$SettingsFrom = 'C:\Users\karab\Projects\orc-war-council\warroom.txt',
     # put fresh copies of the instructions in, over the folder's own
     [switch]$Force
@@ -91,13 +90,12 @@ foreach ($pair in @(@('warroom-system.template.md', 'warroom-system.md'), @('chr
     $fresh += $to
     Write-Host "Installed $($pair[1]) from the template." -ForegroundColor Green
 }
-# a fresh copy for another realm: the three lines that name the realm, nothing else (read and written as UTF-8, never through Get-Content)
+# a fresh copy for another realm: the two lines that name the realm, nothing else (read and written as UTF-8, never through Get-Content)
 if ($RealmTitle) {
     foreach ($p in $fresh) {
         $text = [System.IO.File]::ReadAllText($p, $utf8)
         $text = [regex]::Replace($text, '(?m)^# War council of .*$', '# War council of ' + $RealmTitle)
         if ($RealmLine) { $text = [regex]::Replace($text, '(You are the war council of |You command )[^\r\n]*?, in a live campaign', { param($m) $m.Groups[1].Value + $RealmLine + ', in a live campaign' }) }
-        if ($Theatre) { $text = $text.Replace('Win the war for the mountains:', 'Win the war for ' + $Theatre + ':') }
         [System.IO.File]::WriteAllText($p, $text, $utf8)
     }
     if ($fresh.Count -gt 0) { Write-Host "Fresh instructions written for $RealmTitle ($Realm)." -ForegroundColor Green }

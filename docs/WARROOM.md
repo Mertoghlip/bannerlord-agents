@@ -57,10 +57,10 @@ An agent is a folder outside this repository. Adding one means making a folder w
 
 - **The bridge:** `agents = <folder>; <folder>` in the bridge's `settings.txt` lists the agents. At every load, each folder's `agent.txt` makes one agent in the game. The agent holds its channel, chronicle, memory of sightings, orders in force and latest view together. Each is poked about what its own realm sees, and an answer in its folder can order only its own realm's lords. A folder that cannot be used (no `agent.txt`, no such realm, a realm listed twice) is named in the log and the self-check. Without `agents`, the settings of 0.8 and before (`watch`, `agent`, `agent_lords`, `agent_dir`, `agent_dir.<realm>`) describe the agents.
 - **The war rooms:** one per agent, each its own program running from its own folder, with its own Claude calls, memory and logs. They share nothing but the order library's code.
-- **Making one:** `scripts\setup-agent.ps1 -Workspace <folder> -Realm <id> -Mode live`. It writes `agent.txt`, installs the instructions from the templates only where the folder has none (`-Force` puts fresh copies in), gives a new agent a `warroom.txt` copied from another's with its own `log_dir`, and adds the folder to `agents`. For a new realm, `-RealmTitle`, `-RealmLine` and `-Theatre` rewrite the three lines of a fresh copy that name the realm.
+- **Making one:** `scripts\setup-agent.ps1 -Workspace <folder> -Realm <id> -Mode live`. It writes `agent.txt`, installs the instructions from the templates only where the folder has none (`-Force` puts fresh copies in), gives a new agent a `warroom.txt` copied from another's with its own `log_dir`, and adds the folder to `agents`. For a new realm, `-RealmTitle` and `-RealmLine` rewrite the two lines of a fresh copy that name the realm: the title and the opening line. The goal names no region, so it needs no rewriting.
 
 ```
-powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\dolguldur-war-council -Realm dolguldur -Mode live -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamûl, the Easterling" -Theatre Rhovanion
+powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\dolguldur-war-council -Realm dolguldur -Mode live -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamûl, the Easterling"
 powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 ```
 
