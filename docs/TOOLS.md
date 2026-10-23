@@ -60,6 +60,14 @@ The agent reads it in every call as `tools.txt` (written from the same code; `ag
 
 What each one does, takes, sets and calls back on is in `tools.txt`. The definitions are the JSON files in `src/BannerlordAgents/Tools/Library`, built into the DLL.
 
+### The recruit order tours (since 0.9.2)
+Mert, Oct 22: a lord with a recruit order from an agent "also follows the logic as my own parties". The same rules as his own parties' recruit orders and the computer's lords (both in TFAOMFixes); the agents' copy is `RecruitTour.cs`, on the game's thread:
+- **Where:** the order's place (a town, castle or village of the realm or an ally; castles give recruits in this pack), then the nearest town, castle or village of the realm, an ally or a realm at peace with it, within reach (four times the usual gap between neighbouring towns), that the order has not swept in the last day; one after another. The move is `tour`, and the stop it is bound for is the order's place.
+- **What he takes:** every volunteer his standing with the notable reaches and he can pay for, by the game's own gold and wage rules, with no dice, until his ranks are at 80%. Above that, only men of his clan's troop lines: the troops of the clan's party recipe, what grows into them and what they grow into. Once he is full, a man from outside them goes for each one taken (lowest tier, wounded first). Purchases go through the game's own (`GetRecruitVolunteerFromIndividual`), so with TFAOMFixes loaded he gets his own people's troops (its `Offers`, asked by name what that will be).
+- **The end:** his ranks full and all of his clan's lines, or nothing left within reach to recruit. It ends on the game's side, and the agent hears why with the next poke (`order_ended`). It no longer stops after three days at one place, and a stop that falls or empties is simply passed over.
+- **The refill stop** that defend and patrol make (the single-stop `recruit` move) stays one stop, but buys the same way there.
+- A hand order (`agents.vassal ... recruit <place>`) tours the same way.
+
 ### Armies, by the game's own rules
 - **gather** forms the army at once with the game's own call (`Kingdom.CreateArmy`), at the meeting place the agent names. The called lords march there and join as they arrive. The tool judges the army from the next hour on, since the hour's map copy was taken before the army existed.
   - **Lords too far away to be called yet** (since 0.6) are not left out: each gets a **join** order and marches toward the army until the game would let it be called (below). The army then forms with whoever is in range, even the leader alone, and gather waits for the marching lords too (`army_joining`) before it calls back that the army has formed.
@@ -215,7 +223,7 @@ The defend tool, shortened:
   "when": [ { "if": "hours_in_state >= 3 and not besieged(at) and enemy_strength_near(at, radius) < strength * shelter_at * 0.8", "go": "patrol" } ] }
 ```
 
-- **Moves:** goto, enter, near (close to a holding's gate), toward (where a party was last seen), leave, patrol, defend, engage, follow, join (follow an army's leader and join once it can be called), besiege, raid, recruit and hold; since 0.7.1, post (stand on a spot, or at a holding's gate, outside) and shadow (keep `keep` map units from a party, worked out again every hour).
+- **Moves:** goto, enter, near (close to a holding's gate), toward (where a party was last seen), leave, patrol, defend, engage, follow, join (follow an army's leader and join once it can be called), besiege, raid, recruit and hold; since 0.7.1, post (stand on a spot, or at a holding's gate, outside) and shadow (keep `keep` map units from a party, worked out again every hour); since 0.9.2, tour (the recruit order's place-by-place recruiting, above).
 - **Expressions:** numbers, true, false and none; + - * /; == != < <= > >=; and, or, not.
   - A comparison with something unknown (none) is false, so no rule fires on a missing fact.
   - `{...}` in a call-back is filled in, with ids shown as names.

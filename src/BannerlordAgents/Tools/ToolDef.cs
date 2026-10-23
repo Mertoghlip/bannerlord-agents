@@ -59,7 +59,7 @@ namespace BannerlordAgents.Tools
         public static readonly Dictionary<string, string> Verbs = new Dictionary<string, string>
         {
             ["goto"] = "holding", ["enter"] = "holding", ["near"] = "holding", ["patrol"] = "holding", ["defend"] = "holding",
-            ["besiege"] = "holding", ["raid"] = "holding", ["recruit"] = "holding",
+            ["besiege"] = "holding", ["raid"] = "holding", ["recruit"] = "holding", ["tour"] = "holding",
             ["engage"] = "party", ["follow"] = "party", ["toward"] = "party", ["join"] = "party", ["shadow"] = "party",
             ["post"] = "spot",
             ["leave"] = "none", ["hold"] = "none"

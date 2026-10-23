@@ -90,7 +90,7 @@ namespace BannerlordAgents
         private const string VassalUsage =
             "Usage: agents.vassal <your lord> <verb> <target>\n" +
             "  verbs: goto <place>, garrison <castle or town>, patrol <place>, defend <place>, engage <lord>, besiege <castle or town>,\n" +
-            "         raid <village>, recruit <town or village>, hold";
+            "         raid <village>, recruit <town, castle or village> (tours on from there), hold";
 
         private const double RecruitDays = 3;
         private const double StuckHours = 6;
@@ -113,6 +113,7 @@ namespace BannerlordAgents
             Toggled.Clear();
             LastCulprit.Clear();
             HandedBack.Clear();
+            RecruitTour.Reset();
             Mirror();
         }
 
@@ -484,6 +485,7 @@ namespace BannerlordAgents
             foreach (HandOrder old in Active.Where(x => x.Party == party).ToList())
             {
                 Active.Remove(old);
+                RecruitTour.Forget(old.Id);
                 Diag.Event("order", "replaced", new { id = old.Id, by = byId, lord = old.Lord?.StringId, tool = old.Tool });
                 if (old.ToolId > 0)
                 {
@@ -575,6 +577,7 @@ namespace BannerlordAgents
                 case "recruit":
                 case "garrison":
                     return o.Place != null && (realm == null || o.Place.MapFaction == null || !FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm));
+                case "tour": return true;   // a stop that fell or emptied: the tour picks the next one itself
                 case "besiege":
                 case "raid":
                     return o.Place != null && realm != null && o.Place.MapFaction != null && FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm);
@@ -600,7 +603,7 @@ namespace BannerlordAgents
                 case "engage": text = lord + " attacks " + target; break;
                 case "follow": text = lord + " follows " + target; break;
                 case "leave": text = lord + " leaves the holding"; break;
-                case "recruit": text = lord + " fills the ranks at " + at; break;
+                case "recruit": text = lord + " recruits from " + at + " onward, place by place, to 80% of the ranks and then the clan's own troop lines"; break;
                 case "hold": text = lord + " holds position"; break;
                 case "gather": text = lord + " gathers an army at " + at + " with " + with; break;
                 case "join": text = lord + " marches to join " + target + "'s army"; break;
@@ -935,6 +938,7 @@ namespace BannerlordAgents
             o.Place = FindSettlement(targetWords, out error);
             if (o.Place == null) return null;
             error = Refused(verb, o.Place, realm);
+            if (error == null && verb == "recruit") o.Verb = "tour";   // since 0.9.2 a recruit order tours from its place (RecruitTour)
             return error == null ? o : null;
         }
 
@@ -997,14 +1001,40 @@ namespace BannerlordAgents
                     continue;
                 }
                 if (p.MapEvent != null || (p.BesiegedSettlement != null && o.Verb != "besiege")) continue;   // busy fighting; look again next hour
+                if (o.Verb == "tour")
+                {
+                    // a recruit order (0.9.2): it takes what it may where it stands, ends when done, else rides on to the next place
+                    string tourEnd = RecruitTour.Step(o, now, out string tourKey, out bool movedOn);
+                    if (tourEnd != null)
+                    {
+                        End(o, tourEnd, tourKey);
+                        Active.RemoveAt(i);
+                        changed = true;
+                        continue;
+                    }
+                    if (movedOn)
+                    {
+                        o.Arrived = false;
+                        o.ArrivedAt = -1;
+                        o.ReissueTimes.Clear();
+                        o.StuckAlarmed = o.FightAlarmed = false;
+                        Apply(o);
+                        o.BestDistance = Distance(o) ?? float.MaxValue;
+                        o.LastProgressAt = now;
+                        Note(o, "next stop", Describe(o) + " (" + (100 * p.Party.NumberOfAllMembers / Math.Max(1, p.Party.PartySizeLimit)) + "% of its ranks)", quiet: true);
+                        changed = true;
+                        continue;
+                    }
+                }
                 if (o.ToolId > 0 && !Possible(o))
                 {
                     // the move cannot be made any more (its target is gone); the lord holds and the tool decides next hour
                     if (o.Verb != "hold") { o.Verb = "hold"; Apply(o); }
                     continue;
                 }
-                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter") && p.CurrentSettlement == o.Place)
+                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour") && p.CurrentSettlement == o.Place)
                 {
+                    if (o.Verb == "recruit") RecruitTour.SweepAt(o, now);   // a refill stop buys the same way as a tour (0.9.2)
                     if (!o.Arrived)
                     {
                         o.Arrived = true;
@@ -1276,7 +1306,8 @@ namespace BannerlordAgents
                     case "goto":
                     case "garrison":
                     case "enter":
-                    case "recruit": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
+                    case "recruit":
+                    case "tour": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
                     case "near":
                         p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, 6f, 3f), p.NavigationCapability);
                         break;
@@ -1337,7 +1368,8 @@ namespace BannerlordAgents
                 case "goto":
                 case "garrison":
                 case "enter":
-                case "recruit": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
+                case "recruit":
+                case "tour": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
                 // on the way to a spot close to the place (its target there), or standing close to it
                 case "near": return o.Place != null && ((b == AiBehavior.GoToPoint && p.TargetPosition.Distance(o.Place.GatePosition) < 12f)
                                                         || ((b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f));
@@ -1439,6 +1471,7 @@ namespace BannerlordAgents
                 }
             }
             catch (Exception e) { Diag.Error("releasing a lord", e); stillOff = true; }
+            RecruitTour.Forget(o.Id);
             Diag.Count("order:ended");
             Diag.Count("order end:" + (key ?? "other"));
             // a tool that finished has already called the agent back in its own words; a lord who joined an army as ordered,
@@ -1469,7 +1502,7 @@ namespace BannerlordAgents
                     if (!friendly) return Names.Settlement(s) + " is not " + Names.Faction(realm) + "'s or an ally's.";
                     break;
                 case "recruit":
-                    if (!s.IsTown && !s.IsVillage) return Names.Settlement(s) + " is not a town or village (the game only lets lords recruit in those).";
+                    if (!s.IsTown && !s.IsCastle && !s.IsVillage) return Names.Settlement(s) + " is not a town, castle or village.";
                     if (hostile) return Names.Settlement(s) + " belongs to an enemy.";
                     if (s.IsUnderSiege || (s.IsVillage && s.Village.VillageState != Village.VillageStates.Normal)) return Names.Settlement(s) + " cannot give recruits right now.";
                     break;
@@ -1603,6 +1636,7 @@ namespace BannerlordAgents
                 case "besiege": return lord + " besieges " + Names.Settlement(o.Place);
                 case "raid": return lord + " raids " + Names.Settlement(o.Place);
                 case "recruit": return lord + " fills the ranks at " + Names.Settlement(o.Place);
+                case "tour": return lord + " recruits place by place, now bound for " + Names.Settlement(o.Place);
                 default: return lord + " holds position";
             }
         }

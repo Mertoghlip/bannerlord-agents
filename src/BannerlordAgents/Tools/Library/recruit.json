@@ -1,19 +1,11 @@
 {
   "tool": "recruit",
   "kind": "move",
-  "about": "Goes to a town or village of yours or an ally's and fills the ranks there, for up to three days.",
-  "at": "friendly_town_or_village",
-  "start": "go",
+  "about": "Fills the lord's ranks. He goes to a town, castle or village of yours or an ally's and takes every volunteer he can pay for there, then rides on to the nearest place he may recruit in (yours, an ally's, or a realm's at peace with you; each at most once a day), one after another, until his ranks are at 80%. From then on, until you give him another order, he keeps going place to place, taking only men of his clan's own troop lines and letting a man from outside them go for each once his ranks are full. It ends when his ranks are full with his clan's own lines, or when nothing within reach is left to recruit, and you are told which.",
+  "calls_back": "it ends, with the ranks it reached",
+  "at": "friendly_holding",
+  "start": "tour",
   "states": {
-    "go": { "about": "going to recruit at {at}", "do": "recruit at",
-      "when": [
-        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly, so {me} did not recruit there." },
-        { "if": "inside(at)", "go": "stay" } ] },
-    "stay": { "about": "recruiting at {at}", "do": "recruit at",
-      "when": [
-        { "if": "ranks >= 0.98", "go": "over", "poke": "{me}'s ranks are full ({men} men)." },
-        { "if": "hours_in_state >= 72", "go": "over", "poke": "{me} recruited three days at {at}: {men} men, ranks at {round(ranks * 100)}%." },
-        { "if": "not friendly(at)", "go": "over", "poke": "{at} is no longer friendly." } ] },
-    "over": { "about": "done", "end": "free" }
+    "tour": { "about": "recruiting place by place, from {at} onward", "do": "tour at" }
   }
 }

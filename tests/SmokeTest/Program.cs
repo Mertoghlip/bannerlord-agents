@@ -557,6 +557,21 @@ namespace SmokeTest
             Check(moves.Any(m => m.Key == 914 && m.Value.Verb == "recruit" && m.Value.Place == "village_orc"), "a lord whose ranks fall below the floor goes to refill in the nearest town or village");
             Runner.Ended(914, "test over");
 
+            // the recruit order tours (0.9.2, Mert: "follows the logic as my own parties"): its move is a tour from its place,
+            // a castle may start it, and it no longer stops itself after three days there (the game's side ends it, and says why)
+            var tourer = Lord("p_r1", 112, 60, 300, 80);
+            Brain.OnHour(ToolWorld(5003, tourer));
+            moves.Clear();
+            released.Clear();
+            Runner.Start(915, new ToolOrder { Tool = "recruit", Lord = "lord_p_r1", LordName = "R1", Party = "p_r1", At = "castle_two" });
+            bool toured = moves.Any(m => m.Key == 915 && m.Value.Verb == "tour" && m.Value.Place == "castle_two");
+            var stayed4days = Lord("p_r1", 140, 70, 300, 90);
+            stayed4days.InSettlement = "castle_two";
+            Brain.OnHour(ToolWorld(5003 + 100, stayed4days));
+            Check(toured && !released.Contains(915) && Library.Text().Contains("**recruit** (at: your or an ally's holding)") && Library.Text().Contains("until his ranks are at 80%"),
+                  "the recruit order tours from its place (a castle too), does not stop itself after three days, and the library says how it works");
+            Runner.Ended(915, "test over");
+
             // a chase broken off when a strong force comes into the area
             var d4 = Lord("p_d4", 104, 300, 320, 400);
             var raider = new PartyRow { Id = "p_rd", Leader = "lord_rd", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 70, Strength = 100, Speed = 5, X = 108, Y = 96, Doing = "Hold", Spottable = true };

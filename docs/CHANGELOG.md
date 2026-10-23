@@ -838,3 +838,46 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the limit was set on a real computer-garrison settings object offline (0, then 250).
 - **Installed** at 19:48 (sha256 `A263BA3D602E8BA8…`, 437,760 bytes), the game closed, over `2D3A3986EC987787…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-limits-20261022-1948`. CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars are still in it.
 - **Not yet seen in a game.**
+
+### 20:19 · Version 0.9.2: an agent's recruit order tours, as Mert's own parties do · commit COMMIT_HASH (installed 20:18)
+- **Why:** Mert: "make sure that any lord with a recruit order given by an agent controlling a faction also follows the logic as my own parties." Until now the recruit order went to one town or village and stayed up to three days or until 98% full. It bought only through the game's hourly round: one volunteer per notable an hour, on a dice roll.
+- **What** (new `RecruitTour.cs`; `Orders.cs`; `Tools/Library/recruit.json`; the move kind `tour` in `ToolDef.cs`; [TOOLS.md](TOOLS.md#the-recruit-order-tours-since-092)):
+  - **Where:** from the order's place (now any town, castle or village of the realm or an ally), the lord rides to the nearest town, castle or village of the realm, an ally or a realm at peace with it. The place must be within reach (four times the usual gap between neighbouring towns) and not swept by this order in the last day. One after another;
+  - **What he buys:** in each, every volunteer his standing reaches and he can pay for (the game's own gold and wage rules), with no dice, until 80%. Then only men of his clan's troop lines (its party recipe, what grows into it and what it grows into), and once he is full he lets a man from outside them go for each one taken;
+  - **How he buys:** through the game's own purchase, so with TFAOMFixes loaded he gets his own people's troops;
+  - **The end:** full and all on his clan's lines, or nothing within reach. The agent hears why with the next poke. There is no three-day limit, and a stop that falls or empties is passed over;
+  - **The refill stop of defend and patrol** stays a single stop, but buys the same way there, so an agent's lords refill as fast as the computer's (TFAOMFixes, next entry);
+  - **Hand orders:** `agents.vassal ... recruit <place>` tours too;
+  - the library's text for recruit says all this to the agent (`tools.txt` is written from it at the next load).
+- **For the test:** both agents' lords now recruit much faster when ordered to. Every computer lord does too, through TFAOMFixes (next entry), which leaves alone any lord an agent is steering.
+- **Checks:**
+  - the smoke test passed in full (210 checks): 1 new, that the recruit order's move is a tour from its place, a castle accepted, with no stop after three days, and the library saying how it works;
+  - the war room's and the dashboard's self-tests passed;
+  - 538 game references, 0 missing;
+  - the installed DLL has sha256 `DDD9623F3D35A6C6…`;
+  - the war rooms and the dashboard were stopped for the build and started again at 20:19.
+- **Not yet seen in a game.**
+
+### 20:19 · Outside the repository: computer lords tour to recruit (TFAOMFixes)
+- **Why:** Mert asked how computer lords recruit. The orc side's daily log over 30+ days:
+  - lords at about 25% of their size limit, 9 in 10 below half;
+  - about 3 recruits a lord a day;
+  - 35–51 weak lords a day never spent an hour where they could recruit, while 300–670 volunteers waited in their lands;
+  - money was not the brake: the clan tops each lord up to 5,000 a day.
+
+  Proposed, then: "I would make that change."
+- **What** (`C:\BannerlordArchive\src-TFAOMFixes148`: new `LordRecruiting.cs`; `RecruitOrders.cs`'s rules shared with it; a line each in `SubModule.cs` and the project file):
+  - **Who:** every computer lord. Left out: Mert's clan, raised companions, lords Party AI Controls manages for him, and anyone already steered by someone else (the game's AI off and the plan not ours, as with an agent's order).
+  - **Tour:** below 50% of his size limit, and free (no army, siege, battle, hunger or stronger enemy close by), he tours the nearest towns, castles and villages of his realm, an ally or a realm at peace with his. Each must be within reach and not swept in the last day. One after another, until 80%.
+  - **Sweep:** in any place he stands in, touring or staying (then at most every 6 hours), he takes every volunteer his standing reaches and he can pay for, with no dice, until 80%. Above that, only his clan's troop lines, one out for one in once full.
+  - **The end:** a tour ends at 80%, on an army, a siege or a battle, in danger (no new tour for 6 hours) or with nothing in reach (12).
+  - **Saves:** lords on tour are handed back to the game around every save.
+  - **Controls:** file `lord_recruiting.txt`, console `tfaomfix.lord_recruiting [on|off|start <pct>|fill <pct>|status]`.
+- **Not changed:** the game's gold and wage rules, the standing limit (3 of 6 slots at ordinary standing), and how many volunteers a realm produces.
+- **Checks:**
+  - built clean;
+  - 601 game references, 0 missing;
+  - the offline dry run bound all 11 patches (the tours use the game's hourly event, no patch);
+  - the DLL still holds the other sessions' CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars.
+- **Installed** at 20:19 (sha256 `133342C6545379D0…`, 448,512 bytes), the game closed, over `A263BA3D602E8BA8…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-lordtours-20261022-2019`.
+- **Not yet seen in a game.**
