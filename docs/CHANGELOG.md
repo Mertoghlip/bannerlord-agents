@@ -910,7 +910,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms and the dashboard were stopped for the build and started again at 13:16.
 - **Not yet seen in a game.**
 
-### 13:55 · Version 0.9.4: money for the agents (their own wage caps, a purse, a loot-only sell order, a battle's worth) · commit COMMIT (installed 13:54)
+### 13:55 · Version 0.9.4: money for the agents (their own wage caps, a purse, a loot-only sell order, a battle's worth) · commit 3f6dd19 (installed 13:54)
 - **Why:** Mert, Oct 23: "The caps should be the agent's call. It should be able to estimate the value of loot and prisoner ransom money from a battle and decide accordingly. An understanding of economics should be given to it now. When needed, it should send armies/lords to friendly settlements that have battle loot to go and sell stuff and ransom prisoners." On the plan: "Agents should be able to set caps freely. I would also be careful with the sell order and make sure that an order to sell actually sells loot and just loot, instead of important food and other things."
 - **The game's rules it rests on** (1.4.8, read in its code): each lord pays his men every day from his own purse; his clan's leader tops him back up to 5,000 while the leader has 4,000 or more; a lord above 10,000 hands a tenth of the excess to his clan daily; unpaid wages cost morale and men desert. The wage cap only stops recruiting. Computer lords sell everything but food and good riding horses on entering a friendly town (pack animals too), and hand prisoners over on entering a friendly castle or town; a soldier fetches a quarter of his recruit price.
 - **What** ([TOOLS.md](TOOLS.md#money-since-094); new `Purse.cs`, `PurseView.cs`, `Tools/Library/sell.json`):
