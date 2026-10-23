@@ -37,7 +37,7 @@ namespace BannerlordAgents
         private sealed class Proposal
         {
             public int Chat;
-            public string Say, Words;
+            public string Say, Words, List;
             public JArray Orders;
             public double Hours;
         }
@@ -83,7 +83,7 @@ namespace BannerlordAgents
         {
             text = (text ?? "").Trim();
             if (text.Length == 0) return;
-            LieutenantWindow.Add("You: " + text, You, false);
+            LieutenantWindow.Add("You: " + text, You, false, mine: true);
             RealmAgent ag = Agent;
             Kingdom realm = ag != null ? Bridge.SeatOf(ag.Realm) : null;
             if (ag == null || realm == null)
@@ -117,7 +117,8 @@ namespace BannerlordAgents
             if (p == null) return;
             _pending = null;
             RealmAgent ag = Agent;
-            LieutenantWindow.Add("You approved it.", You, false);
+            // what was approved stays in the conversation, as the proposal's box empties
+            LieutenantWindow.Add(string.IsNullOrEmpty(p.List) ? "You approved it." : "You approved:\n" + p.List, You, false, mine: true);
             Notes.Add("The ruler approved your proposal of message #" + p.Chat + " with the button, and its orders were given.");
             if (ag != null) { string realm = ag.Realm; Background.ToMain.Enqueue(() => Carry(p.Orders, p.Chat, realm)); }
             LieutenantWindow.Refresh();
@@ -130,7 +131,7 @@ namespace BannerlordAgents
             Proposal p = _pending;
             if (p == null) return;
             _pending = null;
-            LieutenantWindow.Add("You declined it.", You, false);
+            LieutenantWindow.Add("You declined it.", You, false, mine: true);
             Notes.Add("The ruler declined your proposal of message #" + p.Chat + " with the button; nothing was given.");
             LieutenantWindow.Refresh();
             Diag.Event("lieutenant", "declined", new { chat = p.Chat });
@@ -212,7 +213,8 @@ namespace BannerlordAgents
                 lines.Add("- " + (h != null ? Names.Hero(h) : lord) + ": " + what + (s != null ? " " + Names.Settlement(s) : at != null ? " " + at : "")
                           + (t != null ? " " + Names.Hero(t) : target != null && s == null ? " " + target : ""));
             }
-            return new Proposal { Chat = chat, Say = say, Orders = orders, Hours = hours, Words = "Waiting for your answer:\n" + string.Join("\n", lines) };
+            string list = string.Join("\n", lines);
+            return new Proposal { Chat = chat, Say = say, Orders = orders, Hours = hours, List = list, Words = "Waiting for your answer:\n" + list };
         }
 
         private static string Str(JToken t) => t == null || t.Type == JTokenType.Null ? null : ((string)t)?.Trim().Trim('[', ']');

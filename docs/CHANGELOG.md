@@ -1006,3 +1006,26 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the installed DLL has sha256 `4E17EC9235073C04…`, the war room's `WarRoom.dll` (rebuilt, same code) `C8CE07BFE3BAB9AA…`;
   - the war rooms (three) and the dashboard were stopped for the build and started again at 14:57; the lieutenant's war room waits for the player's words (last answered #1).
 - **Not yet seen in a game:** Enter opening the window, and the window itself (its look, focus, Enter and Esc, the buttons, the clock lock).
+
+### 15:02 · Seen in a game: Enter opens the lieutenant's window (0.10.2)
+- Mert, after a launch from 14:59 to 15:03: "The window works well, but I should be able to scroll up and down to see the full answers of my liutenant and the chat's history."
+- In that launch Mert asked for "a contingent of dwarven lords to defend my border with the misty mountain orcs, and a contingent of silvan elven lords to defend my border with dol guldur" (15:02:12); the answer came in 44 s with a proposal of 7 orders (six dwarf lords, 2,209 men, at Goblin Town, and an elven force), not answered before the game closed. Errors: none.
+- **The gaps:** the conversation showed only its last 14 lines, cut at the top with no way back; the proposal's list was cut at 140 points, so a 7-order proposal lost its last lines; and the window had no room for a proposal's box at all (its parts added up to more than its height).
+
+### 15:11 · Version 0.10.3: the lieutenant's window scrolls · commit COMMIT (built and installed 15:11)
+- **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); `module\GUI\Prefabs\LieutenantWindow.xml`, `LieutenantWindow.cs`, `Lieutenant.cs`):
+  - the conversation is the game's own scrolling panel, set up as the game's chat log's is (`SPChatLog.xml`: newest at the bottom), with a bar in the look of the game's selection pop-up (`MultiSelectionQueryPopup.xml`): the mouse wheel over it or the bar scrolls back through everything since the load (up to the last 200 lines, was 60 kept and 14 shown);
+  - it opens at the newest line and follows each new one, unless the player has scrolled back to read (then it stays put); the player's own words always bring it to the end (`LieutenantWindow.Add(mine)`; the window finds its bar by `LinesScrollbar` and holds it at the end for 8 frames, as a new line's height is known a frame or two after it is added);
+  - the conversation takes the room the rest of the window leaves (more with no proposal waiting); the proposal's list has its own scrolling box (130 points);
+  - Approve now leaves what was approved in the conversation ("You approved:" and the orders);
+  - a new line is added to the shown list instead of the list being rebuilt;
+  - the hint under the typing line says "Scroll for earlier lines".
+  - Version 0.10.3 (the module; the war room is unchanged at 0.10.1).
+- **Checks:**
+  - the smoke test passed in full; the war room's and the dashboard's self-tests passed at the install;
+  - 610 game references, 0 missing (RefCheck, with Native's assemblies);
+  - the offline dry run applied all 7 of the module's hooks: all bound;
+  - the window's file reads as well-formed XML; every widget, sprite and brush in it is one the game's own pop-ups or chat log use (the bar's handle `FaceGen.Scrollbar.Handle` is Native's); the game's stacking layout was read to confirm a stretching part gets only the room left;
+  - the installed DLL has sha256 `FABBE79B9454D6BE…`, the war room's `WarRoom.dll` (rebuilt, same code) `76AECB0C43C94EC8…`;
+  - the war rooms (three) and the dashboard were stopped for the build and started again at 15:11; the lieutenant's war room waits for the player's words (last answered #2).
+- **Not yet seen in a game:** the scrolling itself, following the newest line, and the proposal's box with a long proposal.

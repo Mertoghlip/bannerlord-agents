@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Engine.GauntletUI;
+using TaleWorlds.GauntletUI.BaseTypes;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.ScreenSystem;
@@ -13,8 +14,10 @@ namespace BannerlordAgents
     /// The lieutenant's window (0.10.1; Mert, Oct 23: "have a button work as a shortcut (say 'enter') to go into the liutenant
     /// pop-up automatically and chat with it through that pop-up rather than through the game's own log ... its easier to approve,
     /// disapprove, or comment on its proposals as well (we could have buttons for each)"). On the campaign map, Enter opens it
-    /// instead of the game's chat box, which keeps T (ChatHook, since 0.10.2). It holds the conversation (the last lines, newest at the
-    /// bottom), the lieutenant's proposal waiting with Approve and Decline, a line to type in (Enter sends), and Close (Esc). The
+    /// instead of the game's chat box, which keeps T (ChatHook, since 0.10.2). It holds the conversation (everything since the
+    /// load, newest at the bottom; since 0.10.3 it scrolls, Mert: "I should be able to scroll up and down to see the full answers
+    /// of my liutenant and the chat's history"), the lieutenant's proposal waiting with Approve and Decline (its list scrolls too),
+    /// a line to type in (Enter sends), and Close (Esc). The
     /// game stands still while it is open, and the clock cannot be started from the map meanwhile; it runs again as it ran when the
     /// window closes. Its look is the game's own text pop-up's (LieutenantWindow.xml). Game's thread (the UI's), every frame.
     /// </summary>
@@ -26,10 +29,15 @@ namespace BannerlordAgents
         private static LieutenantVM _vm;
         private static CampaignTimeControlMode? _clockBefore;
         private static bool _openAsked, _closeAsked, _paused;
+        // the conversation's scrollbar (found once the window is up) and the frames left to hold it at the newest line
+        private static ScrollbarWidget _scrollbar;
+        private static int _seek, _toEnd;
+        // a new line's height is known a frame or two after it is added, so the view is held at the end a few frames
+        private const int SettleFrames = 8;
 
         // the conversation as it is shown, kept while the window is closed (this load only)
         private static readonly List<KeyValuePair<string, uint>> Lines = new List<KeyValuePair<string, uint>>();
-        private const int MaxLines = 60;
+        private const int MaxLines = 200;
 
         public static bool IsOpen => _layer != null;
 
@@ -46,12 +54,20 @@ namespace BannerlordAgents
             _openAsked = false;
         }
 
-        /// <summary>A line of the conversation: into the window (open or not); when it is closed, into the game's message log too.</summary>
-        public static void Add(string text, uint argb, bool alsoLog)
+        /// <summary>
+        /// A line of the conversation: into the window (open or not); when it is closed, into the game's message log too. With the
+        /// window open, the view follows to the new line when it was at the end or the line is the player's (mine); a player
+        /// scrolled back to read stays where they are.
+        /// </summary>
+        public static void Add(string text, uint argb, bool alsoLog, bool mine = false)
         {
             Lines.Add(new KeyValuePair<string, uint>(text, argb));
             if (Lines.Count > MaxLines) Lines.RemoveRange(0, Lines.Count - MaxLines);
-            if (IsOpen) _vm.Show(Lines);
+            if (IsOpen)
+            {
+                if (mine || AtEnd()) _toEnd = SettleFrames;
+                _vm.Append(text, argb, MaxLines);
+            }
             else if (alsoLog)
             {
                 try { InformationManager.DisplayMessage(new InformationMessage(text, Color.FromUint(argb))); }
@@ -78,6 +94,8 @@ namespace BannerlordAgents
                 if (!IsOpen) { _closeAsked = false; return; }
                 // every frame while open: nothing that allocates
                 if (_closeAsked || !OnMap() || ScreenManager.TopScreen != _screen) { _closeAsked = false; Close(); return; }
+                if (_scrollbar == null && _seek > 0) { _seek--; _scrollbar = FindScrollbar(); }
+                if (_toEnd > 0) { _toEnd--; if (_scrollbar != null) _scrollbar.ValueFloat = _scrollbar.MaxValue; }
                 if (_layer.Input.IsHotKeyReleased("Exit")) Close();
                 else if (_layer.Input.IsHotKeyReleased("Confirm")) _vm.ExecuteSend();
             }
@@ -85,6 +103,15 @@ namespace BannerlordAgents
         }
 
         private static bool OnMap() => Campaign.Current != null && TaleWorlds.MountAndBlade.Mission.Current == null && ScreenManager.TopScreen?.GetType().Name == "MapScreen";
+
+        /// <summary>The conversation's view is at its newest line (or all of it fits, the scrollbar hidden).</summary>
+        private static bool AtEnd() => _scrollbar == null || !_scrollbar.IsVisible || _scrollbar.ValueFloat >= _scrollbar.MaxValue - 4f;
+
+        private static ScrollbarWidget FindScrollbar()
+        {
+            try { return _layer.UIContext.Root.FindChild("LinesScrollbar", true) as ScrollbarWidget; }
+            catch (Exception e) { Diag.Swallowed("the lieutenant's window's scrollbar", e); _seek = 0; return null; }
+        }
 
         private static void Open()
         {
@@ -98,6 +125,10 @@ namespace BannerlordAgents
             _layer.IsFocusLayer = true;
             _screen.AddLayer(_layer);
             ScreenManager.TrySetFocus(_layer);
+            // opens at the newest line
+            _seek = 10;
+            _scrollbar = FindScrollbar();
+            _toEnd = SettleFrames;
             // the game stands still while the window is open (Mert: popups pause the game until closed; lieutenant_pause)
             _clockBefore = null;
             if (Settings.LieutenantPause)
@@ -125,6 +156,8 @@ namespace BannerlordAgents
             _layer = null;
             _movie = null;
             _screen = null;
+            _scrollbar = null;
+            _seek = _toEnd = 0;
             _vm?.OnFinalize();
             _vm = null;
             try
@@ -145,9 +178,6 @@ namespace BannerlordAgents
     /// <summary>The window's data (LieutenantWindow.xml binds to these).</summary>
     internal sealed class LieutenantVM : ViewModel
     {
-        /// <summary>The conversation lines shown: the last ones that fit, newest at the bottom.</summary>
-        private const int Shown = 14;
-
         private MBBindingList<LieutenantLineVM> _lines = new MBBindingList<LieutenantLineVM>();
         private string _inputText = "", _proposalText = "", _thinkingText = "";
         private bool _hasProposal, _isThinking;
@@ -157,7 +187,7 @@ namespace BannerlordAgents
         [DataSourceProperty] public string CloseText => "Close";
         [DataSourceProperty] public string ApproveText => "Approve";
         [DataSourceProperty] public string DeclineText => "Decline";
-        [DataSourceProperty] public string HintText => "Type to your lieutenant and press Enter. Esc closes. The game is paused while this is open.";
+        [DataSourceProperty] public string HintText => "Type to your lieutenant and press Enter. Scroll for earlier lines. Esc closes. The game is paused while this is open.";
 
         [DataSourceProperty]
         public MBBindingList<LieutenantLineVM> Lines
@@ -201,12 +231,20 @@ namespace BannerlordAgents
             set { if (value != _thinkingText) { _thinkingText = value ?? ""; OnPropertyChangedWithValue(_thinkingText, "ThinkingText"); } }
         }
 
+        /// <summary>The whole conversation kept, when the window opens (newest at the bottom; the view scrolls).</summary>
         public void Show(List<KeyValuePair<string, uint>> lines)
         {
             var list = new MBBindingList<LieutenantLineVM>();
-            foreach (KeyValuePair<string, uint> l in lines.Skip(Math.Max(0, lines.Count - Shown))) list.Add(new LieutenantLineVM(l.Key, Color.FromUint(l.Value)));
+            foreach (KeyValuePair<string, uint> l in lines) list.Add(new LieutenantLineVM(l.Key, Color.FromUint(l.Value)));
             Lines = list;
             Refresh();
+        }
+
+        /// <summary>One new line while the window is open, the oldest let go past max.</summary>
+        public void Append(string text, uint argb, int max)
+        {
+            _lines.Add(new LieutenantLineVM(text, Color.FromUint(argb)));
+            while (_lines.Count > max) _lines.RemoveAt(0);
         }
 
         public void Refresh()

@@ -1,8 +1,10 @@
 <Prefab>
-  <!-- Bannerlord Agents (0.10.1): the lieutenant's window, in the look of the game's own text pop-up
-       (Native\GUI\Prefabs\Information\Inquiries\TextQueryPopup.xml): its title, the conversation (the last lines, newest at the
-       bottom), the proposal waiting with Decline and Approve, the line to type in (focused when the window opens), and Close and
-       Send. LieutenantWindow.cs opens it with the chat keys on the campaign map; the data is LieutenantVM. -->
+  <!-- Bannerlord Agents (0.10.1; scrolling since 0.10.3): the lieutenant's window, in the look of the game's own text pop-up
+       (Native\GUI\Prefabs\Information\Inquiries\TextQueryPopup.xml): its title, the conversation (everything since the load,
+       newest at the bottom, scrolled with the wheel or the bar as the game's chat log is, SPChatLog.xml; the bar in the look of
+       MultiSelectionQueryPopup.xml's), the proposal waiting with Decline and Approve (its list scrolls when long), the line to
+       type in (focused when the window opens), and Close and Send. LieutenantWindow.cs opens it with Enter on the campaign map
+       and finds LinesScrollbar by its Id to follow the newest line; the data is LieutenantVM. -->
   <Window>
     <TextQueryParentWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" TextInputWidget="Panel\Content\InputParent\InputWidget">
       <Children>
@@ -21,24 +23,57 @@
                 <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="50" MarginLeft="30" MarginRight="30" MarginTop="10" Brush="Popup.Title.Text" Text="@TitleText" />
                 <Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="23" Sprite="StdAssets\Popup\divider" />
 
-                <!--The conversation: the last lines that fit, newest at the bottom, the oldest cut at the top-->
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="380" MarginLeft="34" MarginRight="34" MarginTop="8" ClipContents="true">
+                <!--The conversation: everything since the load, newest at the bottom; it takes the room the rest leaves and scrolls
+                    (the wheel over it, or the bar on its right)-->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="34" MarginRight="24" MarginTop="8">
                   <Children>
-                    <ListPanel DataSource="{Lines}" DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" VerticalAlignment="Bottom" StackLayout.LayoutMethod="VerticalTopToBottom">
-                      <ItemTemplate>
-                        <RichTextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginBottom="8" Brush="Popup.Description.Text" Brush.FontSize="20" Brush.FontColor="@Color" Brush.TextHorizontalAlignment="Left" Text="@Text" />
-                      </ItemTemplate>
-                    </ListPanel>
+                    <ScrollablePanel Id="LinesPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginRight="20" AutoHideScrollBars="true" ReverseInitialScrollBarAlignment="true" VerticalAlignment="Bottom" ClipRect="ClipRect" InnerPanel="ClipRect\LinesList" VerticalScrollbar="..\LinesScrollbar">
+                      <Children>
+                        <Widget Id="ClipRect" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true">
+                          <Children>
+                            <ListPanel Id="LinesList" DataSource="{Lines}" DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" VerticalAlignment="Bottom" StackLayout.LayoutMethod="VerticalTopToBottom">
+                              <ItemTemplate>
+                                <RichTextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginBottom="8" Brush="Popup.Description.Text" Brush.FontSize="20" Brush.FontColor="@Color" Brush.TextHorizontalAlignment="Left" Text="@Text" />
+                              </ItemTemplate>
+                            </ListPanel>
+                          </Children>
+                        </Widget>
+                      </Children>
+                    </ScrollablePanel>
+                    <ScrollbarWidget Id="LinesScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="8" HorizontalAlignment="Right" VerticalAlignment="Top" AlignmentAxis="Vertical" Handle="LinesScrollbarHandle" MaxValue="100" MinValue="0">
+                      <Children>
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4" HorizontalAlignment="Center" Sprite="BlankWhiteSquare_9" Color="#5A4033FF" AlphaFactor="0.5" />
+                        <ImageWidget Id="LinesScrollbarHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedHeight="10" SuggestedWidth="10" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+                      </Children>
+                    </ScrollbarWidget>
                   </Children>
                 </Widget>
 
                 <!--While it thinks-->
                 <TextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginLeft="34" MarginRight="34" Brush="Popup.Description.Text" Brush.FontSize="18" Brush.TextHorizontalAlignment="Left" Text="@ThinkingText" />
 
-                <!--The proposal waiting, with Decline and Approve-->
-                <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginLeft="34" MarginRight="34" StackLayout.LayoutMethod="VerticalTopToBottom" IsVisible="@HasProposal">
+                <!--The proposal waiting, with Decline and Approve; its list scrolls when long-->
+                <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginLeft="34" MarginRight="24" StackLayout.LayoutMethod="VerticalTopToBottom" IsVisible="@HasProposal">
                   <Children>
-                    <RichTextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MaxHeight="140" ClipContents="true" Brush="Popup.Description.Text" Brush.FontSize="18" Brush.TextHorizontalAlignment="Left" Text="@ProposalText" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="130">
+                      <Children>
+                        <ScrollablePanel Id="ProposalPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginRight="20" AutoHideScrollBars="true" ClipRect="ClipRect" InnerPanel="ClipRect\ProposalList" VerticalScrollbar="..\ProposalScrollbar">
+                          <Children>
+                            <Widget Id="ClipRect" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true">
+                              <Children>
+                                <RichTextWidget Id="ProposalList" DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" Brush="Popup.Description.Text" Brush.FontSize="18" Brush.TextHorizontalAlignment="Left" Text="@ProposalText" />
+                              </Children>
+                            </Widget>
+                          </Children>
+                        </ScrollablePanel>
+                        <ScrollbarWidget Id="ProposalScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="8" HorizontalAlignment="Right" VerticalAlignment="Top" AlignmentAxis="Vertical" Handle="ProposalScrollbarHandle" MaxValue="100" MinValue="0">
+                          <Children>
+                            <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4" HorizontalAlignment="Center" Sprite="BlankWhiteSquare_9" Color="#5A4033FF" AlphaFactor="0.5" />
+                            <ImageWidget Id="ProposalScrollbarHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedHeight="10" SuggestedWidth="10" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+                          </Children>
+                        </ScrollbarWidget>
+                      </Children>
+                    </Widget>
                     <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" HorizontalAlignment="Center" MarginTop="4" StackLayout.LayoutMethod="HorizontalLeftToRight">
                       <Children>
                         <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" Brush="Popup.Cancel.Button" Command.Click="ExecuteDecline">
