@@ -1030,7 +1030,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms (three) and the dashboard were stopped for the build and started again at 15:11; the lieutenant's war room waits for the player's words (last answered #2).
 - **Not yet seen in a game:** the scrolling itself, following the newest line, and the proposal's box with a long proposal.
 
-### 15:34 · Version 0.10.4: the fog check's two false alarms, and the sight check's drop, explained and fixed · commit COMMIT (built and installed 15:34)
+### 15:34 · Version 0.10.4: the fog check's two false alarms, and the sight check's drop, explained and fixed · commit f1c3a0d (built and installed 15:34)
 - Mert asked: "Look into the problems now and figure out why they materialized" (the fog check's leaks on Oct 22 and Oct 23, and the sight check's agreement falling from 96–98% to 86–91% on Oct 22).
 - **The fog check, Oct 23 (20 flags in 2 reports, 0.10.0):** all 20 were the orcs' own lords, in YOUR PURSE's "Carrying loot" and "Holding prisoners" lines (0.9.4). They were lords riding in the orcs' two armies (12 and 8 parties). The check took the realm's own lords only from the report's own-lords list, which holds only those leading parties. **Not a leak:** a realm knows its own lords.
 - **The fog check, Oct 22 (1 flag):** poke #429 was about a raid on the orc village Linhamm, named by the game's own notice ("Linhamm is being raided by Cadda Tordaging"). The raid began at 21:53. By the hour's look 20 minutes later the raider was off the village and out of the orcs' sight, so the poke's fact line named a lord the orcs had never seen ("last seen 9999 hours ago"). **Not a leak either:** the game's news named him to the realm.
