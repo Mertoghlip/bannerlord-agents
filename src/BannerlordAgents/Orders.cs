@@ -218,6 +218,11 @@ namespace BannerlordAgents
             if (string.IsNullOrWhiteSpace(a.Lord)) return "the order names no lord";
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;
+            // the two guards the vassal door always had (Oct 22): never the player, never a lord on a Party AI Controls order
+            if (lord == Hero.MainHero) return Names.Hero(lord) + " takes no orders from an agent";
+            string pacOrder = PacReader.OrderOf(lord);
+            if (pacOrder != null)
+                return Names.Hero(lord) + " already follows an order from his ruler's own dialogue (" + pacOrder + "); the two would fight each hour, so it stands until the ruler releases him there";
             string verb = (a.Do ?? "").Trim().ToLowerInvariant();
             // the agent of the realm decides (its agent.txt, since 0.9): its mode, and who obeys it
             string mode = ModeOf(realm);
@@ -1280,16 +1285,35 @@ namespace BannerlordAgents
             List<Kingdom> watched = Bridge.Seats.ToList();
             var other = new List<string>();
             var pac = new List<string>();
+            var touring = new List<string>();
             foreach (MobileParty p in MobileParty.AllLordParties)
             {
                 if (p == null || !p.IsActive || p.LeaderHero == null || ours.Contains(p) || !p.Ai.DoNotMakeNewDecisions) continue;
                 if (PacReader.HoldsOrder(p.LeaderHero)) pac.Add(Names.Hero(p.LeaderHero));
+                else if (OnRecruitingTour(p)) touring.Add(Names.Hero(p.LeaderHero) + " (" + Names.Faction(p.MapFaction) + ")");
                 else other.Add(Names.Hero(p.LeaderHero) + " (" + Names.Faction(p.MapFaction) + ")");
             }
-            Diag.Event("sweep", "daily", new { held_by_party_ai_controls = pac, held_by_something_else = other });
+            Diag.Event("sweep", "daily", new { held_by_party_ai_controls = pac, on_tfaomfixes_recruiting_tour = touring, held_by_something_else = other });
             List<string> orcs = other.Where(x => watched.Any(k => x.EndsWith("(" + Names.Faction(k) + ")", StringComparison.Ordinal))).ToList();
             if (orcs.Count > 0)
                 Diag.Alarm("held_by_other", "Something other than us has switched off the game's AI for " + orcs.Count + " lords of the watched realm: " + string.Join(", ", orcs) + ".");
+        }
+
+        // TFAOMFixes (Mert's own mod) steers weak computer lords on recruiting tours with their AI off (Oct 22); asked by
+        // name, as RecruitTour asks it for its offers, so those lords are not taken for something unknown holding them.
+        private static System.Collections.IDictionary _tfaomTours;
+        private static bool _toursLooked;
+
+        private static bool OnRecruitingTour(MobileParty p)
+        {
+            if (!_toursLooked)
+            {
+                _toursLooked = true;
+                Type t = HarmonyLib.AccessTools.TypeByName("TFAOMFixes.LordRecruiting");
+                _tfaomTours = t != null ? HarmonyLib.AccessTools.Field(t, "_tours")?.GetValue(null) as System.Collections.IDictionary : null;
+                Log.Line("daily sweep: TFAOMFixes' recruiting tours " + (_tfaomTours != null ? "found" : "not found (lords it steers count as held by something else)"));
+            }
+            return _tfaomTours != null && _tfaomTours.Contains(p);
         }
 
         // ---------- the move itself ----------

@@ -122,7 +122,16 @@ namespace BannerlordAgents.Tools
                 StormSink(old.Order.Party, null);
                 Diag.Event("tool", "replaced", new { id = old.Id, by = id, lord = o.Lord, tool = old.Def.Name });
             }
-            RealmAgent owner = Agents.For(o.Realm);
+            // the named realm's own agent (or the smoke test's stand-in), never the first one listed: a tool for a realm with no
+            // agent would otherwise run on another realm's agent, its view and its call-backs (found Oct 22, planning the
+            // lieutenant). An order naming no realm (a test's) keeps the first agent, as Agents.For says.
+            RealmAgent owner = o.Realm == null ? Agents.For(null) : Agents.Serving(o.Realm);
+            if (owner == null)
+            {
+                Diag.Alarm("tool_no_agent", "A " + def.Name + " order for " + o.Lord + " came for a realm no agent serves (" + o.Realm + "); the lord is let go.");
+                ReleaseSink(id, "no agent serves that realm");
+                return;
+            }
             var t = new ToolInstance { Id = id, Order = o, Def = def, Started = Diag.Hours, Owner = owner };
             foreach (SettingDef s in def.Settings.Values) t.Settings[s.Name] = o.Settings.TryGetValue(s.Name, out double v) ? Math.Max(s.Min, Math.Min(s.Max, v)) : s.Default;
             ById[id] = t;

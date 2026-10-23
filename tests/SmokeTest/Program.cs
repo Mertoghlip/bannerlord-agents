@@ -1457,6 +1457,20 @@ namespace SmokeTest
             Runner.Ended(961, "test over");
             Check(!Agents.Of("dg").Tools.ContainsKey(961), "and leaves them when it ends");
 
+            // 0.9.3: a tool for a realm no agent serves no longer runs on the first agent listed; the lord is let go
+            Action<int, string> keptSink = Runner.ReleaseSink;
+            var letGo = new List<int>();
+            Runner.ReleaseSink = (id, why) => letGo.Add(id);
+            Runner.Start(962, new ToolOrder { Tool = "goto", Lord = "lord_ar", LordName = "Elessar", Party = "p_ar", At = "town_dg", Realm = "player_k" });
+            Runner.ReleaseSink = keptSink;
+            Check(letGo.Contains(962) && !Agents.Of("dg").Tools.ContainsKey(962) && !Agents.Of("orcs").Tools.ContainsKey(962) && Runner.ForParty("p_ar") == null,
+                  "a tool for a realm no agent serves is not run on another realm's agent: the lord is let go");
+            // and the player's own party is never among a realm's lords to order (a realm of the player's with an agent)
+            Snapshot sp = ToolWorld(8001, host, new PartyRow { Id = "main_party", Leader = "main_hero", Name = "You", Faction = "player_k", Kind = "lord", Men = 100, Strength = 200, X = 108, Y = 104, Doing = "Hold" });
+            View pv = Views.Build(sp, "player_k", new Dictionary<string, Sighting>(), new HashSet<string>(), null);
+            Check(pv.Forces.Any(f => f.Id == "p_ar") && !pv.Forces.Any(f => f.Id == "main_party"), "the player's own party is not one of the realm's lords in its report");
+            Check(Library.Text().Contains("Weigh the two paces first") && Library.Text().Contains("nothing better to do"), "the hunt order's guide says to weigh the paces, and when a faster target is worth it");
+
             string loads = ReadIf(Path.Combine(Brain.Dir, "loads.jsonl"));
             Check(loads.Contains("\"calls.jsonl@dg\"") && loads.Contains("\"calls.jsonl@orcs\"") && loads.Contains("warroom-dg"), "the load names each agent and marks its own war room's logs");
 

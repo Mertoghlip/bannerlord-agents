@@ -881,3 +881,31 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the DLL still holds the other sessions' CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars.
 - **Installed** at 20:19 (sha256 `133342C6545379D0…`, 448,512 bytes), the game closed, over `A263BA3D602E8BA8…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-lordtours-20261022-2019`.
 - **Not yet seen in a game.**
+
+## Friday, October 23
+
+### 13:17 · Version 0.9.3: recruit tours say why they stop, the chase question before a hunt, and fixes for a realm of Mert's with an agent · commit COMMIT (installed 13:16)
+- **Why:**
+  - **The first evening on 0.9.2** (Oct 22, 20:22 to 20:39, about three in-game days): 13 of Dol Guldur's 14 recruit tours ended in their first hour at 3 to 43%, saying "nothing left to recruit within reach", while 1,500 volunteers waited in its lands. The cause is the game's daily wage cap (`ClanVariablesCampaignBehavior.MakeClanFinancialEvaluation`). It caps each war party's daily wages from the gold of its clan's leader: under 30,000, 200 + (gold / 30,000)² × 400; 30,000 to 90,000, 600 to 1,200; above 90,000, no cap; half again for the leader's own party. 21 of Dol Guldur's 47 lords were at their cap: Skûlgar, for one, had 81 men, wages 354 of 359, and 10,555 gold. The agent was not told why, sent the same five lords again, and three stopped again at once. The orcs were hardly touched (3 lords at the cap); their limit is the volunteers themselves (about 440 waiting, 220 within their standing).
+  - **Mert, Oct 23, on hunt:** "It is completely unneccessary for a party/army to hunt an enemy that is faster than them if they have other competing objectives. The only reason they should be doing this is if they have nothing else to do/are trying to drive them away from something. For this to happen, the agent should be able to ask for the speed of an enemy party in sight before giving a hunt order, and should have this as part of the guide for its use of the hunt order."
+  - **The snags found planning the lieutenant** (Oct 22): Mert, "Fix the snags in the code."
+- **What:**
+  - **A tour's end says why** (`RecruitTour.cs`): when volunteers were within reach but none could be paid for, the end names the commonest bar: his wages at their cap (key `wage cap`, with his wages and the cap, and that the cap comes each day from his clan leader's gold), his gold, or his clan's purse (`no gold`). "Nothing left to recruit within reach" now means just that ([TOOLS.md](TOOLS.md#the-recruit-order-tours-since-092)).
+  - **The chase question** (war room, new `ChaseTool.cs`, served beside "ask the way", "battle odds" and "roads in"): `can_catch` (`hunter`, `quarry`) gives each side's pace by the game's rules, the way between them, the hours to reach the enemy if it holds still and to run it down if it flees, how much a faster enemy gains an hour, and who gets first to where it is marching ([TOOLS.md](TOOLS.md#the-chase-question-before-a-hunt-since-093)).
+  - **hunt's text** in the library: weigh the two paces first; a faster target is reached only when it stops or turns toward the hunter, so set its hunt only when the hunter has nothing better to do, or to keep it from a place or a lord it threatens. In general words, not Mert's.
+  - **The instructions** (`agent/warroom-system.template.md`, "Asking the way"): one sentence naming `can_catch`, so the question is promised only in calls that have it.
+  - **A tool for a realm no agent serves** (`Tools/Runner.cs`) no longer runs on the first agent listed (its view, orders in force and call-backs): alarm `tool_no_agent`, and the lord is let go. An order that names no realm (the tests') keeps the first agent.
+  - **Every order door refuses the player, and a lord on a Party AI Controls order** (`Orders.Issue`): until now only `agents.vassal` had these two guards.
+  - **The player's own party is never one of a realm's lords** in its report or in the tools' list of own lords (`Views.Build`, `Facts.OwnLords`).
+  - **The record of Mert's play** keeps his realm's pokes if that realm gets an agent of its own (`Brain.Process`), and the dashboard still marks that realm's frame as his.
+  - **Lords on TFAOMFixes' recruiting tour** (asked by name, `TFAOMFixes.LordRecruiting._tours`) are named as such in the daily sweep (`on_tfaomfixes_recruiting_tour`), no longer counted as "held by something else": on Oct 22 that raised the `held_by_other` alarm for 12 lords.
+  - Version 0.9.3 (module and war room).
+- **Outside the repository:** the same sentence on `can_catch` in both agents' instructions, `C:\Users\karab\Projects\orc-war-council\warroom-system.md` and `C:\Users\karab\Projects\dolguldur-war-council\warroom-system.md`, edited in place.
+- **Checks:**
+  - the smoke test passed in full (213 checks): 3 new, that a tool for a realm no agent serves is not run on another's agent and lets the lord go, that the player's own party is not among a realm's lords, and that hunt's text says to weigh the paces;
+  - the war room's self-test passed: 2 new, the chase on the made-up map (Bolg at his own pace against Aragorn's army at its trail's pace: faster, run down in about 28 hours, at Edoras first) and the chase refused for an enemy as hunter;
+  - the dashboard's 27 checks passed;
+  - 539 game references, 0 missing (RefCheck);
+  - the installed DLL has sha256 `A64709B5A6457BB8…`, the war room's `WarRoom.dll` `5A5A9197059AAF20…`;
+  - the war rooms and the dashboard were stopped for the build and started again at 13:16.
+- **Not yet seen in a game.**

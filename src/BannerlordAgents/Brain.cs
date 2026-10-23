@@ -264,7 +264,8 @@ namespace BannerlordAgents
             foreach (KeyValuePair<Snapshot, View> kv in views)
             {
                 Snapshot v = kv.Key;
-                realms[v.Watched] = LiveMap.Realm(v, v.Watched, kv.Value, v.WatchedSees, v.HostileToWatched, Get(v.Watched), (Agents.Of(v.Watched) ?? Agents.For(null)).On, false);
+                // a realm of the player's with an agent of its own (the lieutenant) is still the player's frame
+                realms[v.Watched] = LiveMap.Realm(v, v.Watched, kv.Value, v.WatchedSees, v.HostileToWatched, Get(v.Watched), (Agents.Of(v.Watched) ?? Agents.For(null)).On, v.Watched == s.PlayerFaction);
             }
             if (s.PlayerFaction != null && !realms.ContainsKey(s.PlayerFaction))
             {
@@ -385,12 +386,14 @@ namespace BannerlordAgents
             m.Recent.AddRange(triggers);
             m.Recent.RemoveAll(t => s.Hours - t.Hours > 24);
 
-            if (isPlayer)
+            // the record of the player's own play keeps its pokes when the player's realm has an agent of its own (the
+            // lieutenant), which then takes the place of the player's pass above (Oct 22)
+            if (isPlayer || fid == s.PlayerFaction)
             {
                 PokesPlayer++;
                 Files.Append(Path.Combine(Dir, "record", "pokes_you.jsonl"),
-                    Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = triggers }));
-                return;
+                    Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = triggers, Seat = !isPlayer }));
+                if (isPlayer) return;
             }
 
             PokesWatched++;

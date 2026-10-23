@@ -223,8 +223,15 @@ namespace BannerlordAgents.WarRoom
             Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
             // 0.7.4: the battle odds and the roads in, served beside the way
             string Ask(string name, string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
-            Check((list?["result"]?["tools"] as JsonArray)?.Count == 3 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in",
-                  "the server lists the battle odds and the roads in beside the way");
+            Check((list?["result"]?["tools"] as JsonArray)?.Count == 4 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
+                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch",
+                  "the server lists the battle odds, the roads in and the chase beside the way");
+            // 0.9.3: the chase question before a hunt (Bolg at his own pace against Aragorn's army at the pace its trail shows)
+            string k1 = Ask("can_catch", "{\"hunter\":\"lord_bolg\",\"quarry\":\"lord_ar\"}");
+            Check(k1 != null && k1.StartsWith("CAN Bolg [lord_bolg] CATCH Aragorn [lord_ar]?") && k1.Contains("Bolg is the faster") && k1.Contains("caught in about") && k1.Contains("It is marching to Edoras [castle_e]"),
+                  "the chase: each side's pace, the way between them, how long to run it down, and who gets first to where it is marching: " + k1?.Replace("\n", " | "));
+            string k2 = Ask("can_catch", "{\"hunter\":\"lord_ar\",\"quarry\":\"lord_bolg\"}");
+            Check(k2 != null && k2.StartsWith("Name one of your own lords or armies in hunter"), "the chase is asked only for the realm's own hunters: " + k2);
             string o1 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"theirs\":[\"lord_ar\"]}");
             Check(o1 != null && o1.StartsWith("BATTLE ODDS: Bolg [lord_bolg] against Aragorn [lord_ar], in the open") && o1.Contains("they win") && o1.Contains("two rounds an hour"),
                   "a field battle by the game's rules: Bolg's 300 against Aragorn's army of 5,000 loses: " + o1?.Replace("\n", " | "));

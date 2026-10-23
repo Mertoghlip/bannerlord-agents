@@ -34,7 +34,7 @@ namespace BannerlordAgents
             string rulerClan = w.Realm == w.S.Watched ? w.S.Clans.FirstOrDefault(c => c.Ruler)?.Leader : null;
             foreach (PartyRow r in w.S.Parties)
             {
-                if (r.Faction != w.Realm || r.Kind != "lord" || r.Attached) continue;
+                if (r.Faction != w.Realm || r.Kind != "lord" || r.Attached || r.Id == w.S.PlayerParty) continue;   // never the player's own party
                 ToolInstance t = Runner.ForParty(r.Id);
                 list.Add(new Lord
                 {

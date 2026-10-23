@@ -135,7 +135,8 @@ namespace BannerlordAgents
 
             foreach (PartyRow r in s.Parties)
             {
-                if (r.Faction != fid || r.Kind != "lord" || r.Attached) continue;
+                // the player's own party is never one of an agent's lords to order (Oct 22: a realm of the player's with an agent)
+                if (r.Faction != fid || r.Kind != "lord" || r.Attached || r.Id == s.PlayerParty) continue;
                 v.Forces.Add(Party(s, r, null, "own", own));
             }
             v.Forces = v.Forces.OrderByDescending(x => x.ArmyMen > 0 ? x.ArmyMen : x.Men).ToList();

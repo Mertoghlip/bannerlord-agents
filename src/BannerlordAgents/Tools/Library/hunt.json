@@ -1,7 +1,7 @@
 {
   "tool": "hunt",
   "kind": "tool",
-  "about": "Chases an enemy lord or army while it is in view, and searches where it was last seen when it is not.",
+  "about": "Chases an enemy lord or army while it is in view, and searches where it was last seen when it is not. Weigh the two paces first: a target faster than the hunter is reached only when it stops (to besiege, raid, fight or go into a holding) or turns toward the hunter, so chasing it can tie the hunter up for days and take it from other work. Set a faster target's hunt only when the hunter has nothing better to do, or to keep the target away from a place or a lord it threatens.",
   "calls_back": "contact is lost, the target is gone, or it joins a force too strong to attack",
   "target": "enemy_lord",
   "settings": {

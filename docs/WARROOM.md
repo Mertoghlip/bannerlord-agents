@@ -77,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 | `urgent` | is besieged, laid siege, passed from, declared war, Enemy army in view, was taken prisoner, army has formed, fell, striking the besiegers | words in a poke's reasons that make it urgent |
 | `timeout_seconds` | 120 | the longest a call may take |
 | `lookups` | on | let the agent read its look-up files during a call |
-| `route_tool` | on | offer the agent the "ask the way" tool in its answers and councils (0.7), and since 0.7.4 the "battle odds" and "roads in" questions beside it, once the walking map is copied ([ROUTES.md](ROUTES.md), [TOOLS.md](TOOLS.md#siege-control-the-storm-rule-the-relief-bars-and-battles-run-ahead-before-they-begin-since-074)) |
+| `route_tool` | on | offer the agent the "ask the way" tool in its answers and councils (0.7), and since 0.7.4 the "battle odds" and "roads in" questions beside it (since 0.9.3 "can catch" too, [TOOLS.md](TOOLS.md#the-chase-question-before-a-hunt-since-093)), once the walking map is copied ([ROUTES.md](ROUTES.md), [TOOLS.md](TOOLS.md#siege-control-the-storm-rule-the-relief-bars-and-battles-run-ahead-before-they-begin-since-074)) |
 | `max_lessons` | 12 | lessons kept in the notes; past it, the chronicler merges them |
 | `memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit` | written, 12, 450, (the agent's), medium, 2000, 180000 | the realm's memory and its chronicler ([MEMORY.md](MEMORY.md#settings-warroomtxt)) |
 | `council` | on | the council of war ([below](#the-council-of-war)); written memory only |

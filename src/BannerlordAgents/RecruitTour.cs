@@ -26,7 +26,8 @@ namespace BannerlordAgents
     ///   the clan's party recipe, what grows into them and what they grow into), and once he is full one man from outside
     ///   them goes for each one taken (lowest tier, wounded first);
     /// - the order ends when his ranks are full and all of his clan's lines, or when nothing within reach is left to recruit,
-    ///   and the agent hears why. A new order replaces it, as any order.
+    ///   and the agent hears why: no volunteers, or volunteers he cannot pay for (his gold, his clan's, his wage cap; since
+    ///   0.9.3). A new order replaces it, as any order.
     /// The single-stop "recruit at" move that defend and patrol use to refill stays one stop, but buys the same way there.
     /// Purchases go through the game's own (RecruitmentCampaignBehavior.GetRecruitVolunteerFromIndividual), so other mods see
     /// them as usual; when TFAOMFixes is loaded, what the lord is shown and gets is his own people's troop (its Offers), and
@@ -85,13 +86,10 @@ namespace BannerlordAgents
                 return "the ranks are full (" + men + " men), all of the clan's own troop lines";
             }
             Settlement target = o.Place;
+            Array.Clear(Unpaid, 0, Unpaid.Length);
             if (target == null || target == here || !MayRecruitHere(p, target) || SweptWithin(o.Id, target, SweepMemoryHours, now) || !AnyOffer(p, target, limit, lines))
                 target = FindNext(o, p, now, limit, lines);
-            if (target == null)
-            {
-                key = "nothing to recruit";
-                return "nothing left to recruit within reach, ranks at " + (100 * men / limit) + "%";
-            }
+            if (target == null) return Stopped(p, men, limit, out key);
             if (target != o.Place) { o.Place = target; moved = true; }
             return null;
         }
@@ -104,6 +102,38 @@ namespace BannerlordAgents
             if (here == null || p.Party.PartySizeLimit <= 0 || !MayRecruitHere(p, here) || SweptWithin(o.Id, here, ResweepHours, now)) return;
             Sweep(p, here, p.Party.PartySizeLimit, LinesOf(p));
             Mark(o.Id, here, now);
+        }
+
+        /// <summary>
+        /// Why the tour stops with no place left to go (Oct 22: 13 of Dol Guldur's 14 tours ended in their first hour with
+        /// "nothing left to recruit" while volunteers waited; their wages were at the cap the game sets each day from the clan
+        /// leader's gold, and the agent, not told so, sent them again). When the volunteers within reach were there but none
+        /// could be paid for, the commonest bar is named.
+        /// </summary>
+        private static string Stopped(MobileParty p, int men, int limit, out string key)
+        {
+            string ranks = ", ranks at " + (100 * men / limit) + "%";
+            Hero leader = p.LeaderHero;
+            Bar main = Bar.None;
+            for (int b = 1; b < Unpaid.Length; b++) if (Unpaid[b] > 0 && (main == Bar.None || Unpaid[b] > Unpaid[(int)main])) main = (Bar)b;
+            switch (main)
+            {
+                case Bar.Wage:
+                    key = "wage cap";
+                    return "volunteers are within reach, but his wages are at their cap: " + p.TotalWage + " a day of the " + p.PaymentLimit
+                           + " his clan lets him pay (the game sets that cap each day from the gold of his clan's leader)" + ranks;
+                case Bar.Gold:
+                    key = "no gold";
+                    return "volunteers are within reach, but he has too little gold: " + (leader?.Gold ?? 0) + ", and the game keeps a lord from recruiting below "
+                           + (leader != null ? (int)HeroHelper.StartRecruitingMoneyLimit(leader) : 0) + ranks;
+                case Bar.ClanGold:
+                    key = "no gold";
+                    return "volunteers are within reach, but his clan's purse is too low: " + (leader?.Clan?.Gold ?? 0) + ", and the game keeps its lords from recruiting below "
+                           + (leader != null ? (int)HeroHelper.StartRecruitingMoneyLimitForClanLeader(leader) : 0) + ranks;
+                default:
+                    key = "nothing to recruit";
+                    return "nothing left to recruit within reach" + ranks;
+            }
         }
 
         private static bool SweptWithin(int id, Settlement s, double hours, double now)
@@ -160,7 +190,9 @@ namespace BannerlordAgents
                     if (raw == null) continue;
                     CharacterObject t = Offered(p, n, i, raw);
                     if (!fill && !lines(t)) continue;
-                    if (CanPay(p, leader, t)) return true;
+                    Bar bar = CanPay(p, leader, t);
+                    if (bar == Bar.None) return true;
+                    Unpaid[(int)bar]++;
                 }
             }
             return false;
@@ -186,7 +218,7 @@ namespace BannerlordAgents
                     CharacterObject t = Offered(p, n, i, raw);
                     int men = p.Party.NumberOfAllMembers;
                     if (men >= FillTo * limit && !lines(t)) continue;
-                    if (!CanPay(p, leader, t)) continue;
+                    if (CanPay(p, leader, t) != Bar.None) continue;
                     if (men >= limit)
                     {
                         if (!LetOneGo(p, lines)) { Report(p, s, got, let); return; }
@@ -222,18 +254,24 @@ namespace BannerlordAgents
             catch { return raw; }
         }
 
+        /// <summary>What keeps a lord from paying for a volunteer: none, his gold, his clan's purse, his wage cap.</summary>
+        private enum Bar { None, Gold, ClanGold, Wage }
+
+        // the bars met by volunteers seen but not payable, for the decision being made now
+        private static readonly int[] Unpaid = new int[4];
+
         /// <summary>The game's own gates: gold above what an AI lord keeps in hand (and his clan's, for a lord who does not lead it), room in his wages.</summary>
-        private static bool CanPay(MobileParty p, Hero leader, CharacterObject t)
+        private static Bar CanPay(MobileParty p, Hero leader, CharacterObject t)
         {
             int cost = Campaign.Current.Models.PartyWageModel.GetTroopRecruitmentCost(t, leader).RoundedResultNumber;
-            if (leader.Gold <= cost) return false;
+            if (leader.Gold <= cost) return Bar.Gold;
             if (leader.Clan != Clan.PlayerClan)
             {
-                if (leader.Gold - cost < HeroHelper.StartRecruitingMoneyLimit(leader)) return false;
-                if (leader.Clan != null && leader != leader.Clan.Leader && leader.Clan.Gold < HeroHelper.StartRecruitingMoneyLimitForClanLeader(leader)) return false;
+                if (leader.Gold - cost < HeroHelper.StartRecruitingMoneyLimit(leader)) return Bar.Gold;
+                if (leader.Clan != null && leader != leader.Clan.Leader && leader.Clan.Gold < HeroHelper.StartRecruitingMoneyLimitForClanLeader(leader)) return Bar.ClanGold;
             }
-            if (p.HasLimitedWage() && p.GetAvailableWageBudget() < Campaign.Current.Models.PartyWageModel.GetCharacterWage(t)) return false;
-            return true;
+            if (p.HasLimitedWage() && p.GetAvailableWageBudget() < Campaign.Current.Models.PartyWageModel.GetCharacterWage(t)) return Bar.Wage;
+            return Bar.None;
         }
 
         private static bool HasOffLines(MobileParty p, Func<CharacterObject, bool> lines)
