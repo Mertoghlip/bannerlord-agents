@@ -992,7 +992,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Mert loaded the campaign (14:50) and closed the game (14:51): "enter and t still open the chat window. enter should open the liutenant window, t should open the chat window."
 - The key hook had attached ("the lieutenant's key (Enter, T) attached" in the bridge's log) but was never reached: it sat on the chat box's start of typing (`MPChatVM.StartTyping`), whose body is 15 bytes of code, and the runtime always folds bodies under 16 bytes into the code that calls them, so the chat box's key handling ran its own copy and never our hook. (The same trap as Harmony patches on tiny getters, noted before; the offline dry run only shows that a hook attaches, not that it is reached.)
 
-### 14:57 · Version 0.10.2: Enter opens the lieutenant's window, T the game's chat box · commit COMMIT (built and installed 14:57)
+### 14:57 · Version 0.10.2: Enter opens the lieutenant's window, T the game's chat box · commit 697bd79 (built and installed 14:57)
 - **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); `Lieutenant.cs` `ChatHook`, `GameHooks.InstallChat`):
   - the hook moves to the chat box's look at its keys each frame (`GauntletChatLogView.HandleInput`, 813 bytes, in Native's GauntletUI, found by name): on the campaign map, with a lieutenant and the chat box shut, Enter (read from the map's own keys, as the chat box reads it) opens the lieutenant's window and the chat box does nothing that frame;
   - **T** is left to the game: it opens the game's chat box, as Mert asked; Enter while the chat box is open stays the chat box's;
