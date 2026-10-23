@@ -284,6 +284,15 @@ namespace BannerlordAgents.WarRoom
             var written = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(channel, "orders", "chat-7.json")));
             Check((int)written["pending_chat"] == 6 && (int)written["chat"] == 7 && (bool)written["carry_out"] && LieutenantRoom.LastAnsweredOnDisk(channel) == 7,
                   "the answer file carries the waiting proposal's number from chat.json, never the model's, and counts as answered");
+            // 0.11.1: the save's conversation from the bridge, and Party AI Controls now
+            chat["history"] = new JsonArray("Summer 2, 1087, 09:00 · Ruler: keep the elves at Imnagath", "  You: They hold there now.");
+            chat["history_total"] = 80;
+            chat["party_ai"] = "Managed now (1):\n- Thalion [lord_m5_3]: order: defend Imnagath (yours)";
+            string m2 = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string>());
+            Check(m2.Contains("THE CONVERSATION IN THIS SAVE SO FAR") && m2.Contains("its last 2 of 80 lines") && m2.Contains("conversation.txt") && m2.Contains("Ruler: keep the elves at Imnagath")
+                  && !m2.Contains("[you proposed: lord_dain defend town_gt]") && m2.Contains("PARTY AI CONTROLS NOW") && m2.Contains("Thalion [lord_m5_3]")
+                  && m2.IndexOf("PARTY AI CONTROLS NOW", StringComparison.Ordinal) < m2.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal),
+                  "with the save's conversation from the bridge, the message has its latest lines (not the war room's own memory) and Party AI Controls before the ruler's words");
         }
 
         private static Program.Trigger T(string kind, string text) => new Program.Trigger { Kind = kind, Text = text };

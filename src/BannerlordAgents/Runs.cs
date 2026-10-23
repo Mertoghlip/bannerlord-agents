@@ -76,6 +76,19 @@ namespace BannerlordAgents
                 Diag.Event("run", "armed", new { run = _run.Id, save, hours = loadedAt, kingdom = _run.Kingdom });
                 return;
             }
+            // a save made while setting up, before the clock first ran (0.11.1; Mert saved TEST A first): it readies the run again from there
+            if (open != null && open.Status == "armed" && !string.IsNullOrEmpty(save) && open.Saves.Contains(save.Trim()))
+            {
+                _run = open;
+                open.CloseSegment(wall, open.LastHours);
+                open.Segments.Add(new RunSegment { Load = loadId, From = loadedAt, WallFrom = wall, How = "readied again from " + save + " (saved while setting up)" });
+                open.H0 = loadedAt;
+                open.LastHours = loadedAt;
+                RunFiles.Write(open, current: true);
+                Say("Test run ready again from " + save.Trim() + " (saved before its clock first ran). It begins when the clock runs.");
+                Diag.Event("run", "readied again", new { run = open.Id, save, hours = loadedAt });
+                return;
+            }
             if (open != null && open.Status == "running" && !string.IsNullOrEmpty(save) && open.Saves.Contains(save.Trim()))
             {
                 _run = open;
@@ -123,7 +136,10 @@ namespace BannerlordAgents
             _run.Arm = RunRules.Arm(_run.Who.TryGetValue(_run.Kingdom ?? "", out string ruler) ? ruler : "none", _run.Rivals.Select(r => _run.Who.TryGetValue(r, out string w) ? w : "none"));
             _run.Status = "running";
             _run.Started = wall;
+            string armedId = _run.Id;
             _run.Id = _run.Id.EndsWith("-" + _run.Arm, StringComparison.Ordinal) ? _run.Id : _run.Id + "-" + _run.Arm;
+            // the folder it was readied under holds only that run.json: it goes (0.11.1), so only the named run is left
+            if (armedId != _run.Id) Background.Post("run folder", () => RunFiles.DropArmed(armedId));
             if (h - _run.H0 > 2) _run.Flag(wall, h, "late start", "The clock ran " + Text.D((float)(h - _run.H0)) + " in-game hours between the load and the first hour of the run (setting up).");
             Realms.Clear();
             Realms.UnionWith(_run.AllRealms());
@@ -219,10 +235,13 @@ namespace BannerlordAgents
             return "Noted in run " + _run.Id + ", day " + RunRules.Day(h, _run.H0) + ".";
         }
 
-        /// <summary>agents.run save: one of the run's own saves (made by the game or by you), so a load of it carries the run on.</summary>
+        /// <summary>
+        /// One of the run's own saves (made by the game or by you), so a load of it carries the run on; since 0.11.1 one made while
+        /// setting up, before the clock first ran, too, whose load readies the run again from there.
+        /// </summary>
         public static void OnSaved(string name)
         {
-            if (!Active || string.IsNullOrEmpty(name) || _run.Saves.Contains(name)) return;
+            if (_run == null || (_run.Status != "running" && _run.Status != "armed") || string.IsNullOrEmpty(name) || _run.Saves.Contains(name)) return;
             _run.Saves.Add(name);
             RunFiles.Write(_run);
         }
@@ -463,6 +482,7 @@ namespace BannerlordAgents
             foreach (AgentConfig c in Bridge.Configs)
                 s.Agents.Add(new RunAgentInfo { Realm = c.Realm, Kind = c.Kind, Mode = c.Mode, Lords = c.Lords, Workspace = c.Workspace, LogDir = c.LogDir });
             s.Unusable.AddRange(Bridge.Unusable);
+            s.SetAside.AddRange(Bridge.SetAside);
             try { s.CheatMode = TaleWorlds.Core.Game.Current?.CheatMode == true; }
             catch (Exception e) { Diag.Swallowed("reading cheat mode", e); }
             try { s.PartyAiOrders = PacReader.Status; }
@@ -554,7 +574,8 @@ namespace BannerlordAgents
             // with you ruling, the only agent giving your lords orders is your lieutenant, and only with your yes
             if (src == "agent") return _run.Lieutenant && m.MapFaction?.StringId == _run.Kingdom ? "lieutenant" : "agent";
             if (src != null) return src == "you" ? "you" : "hand";
-            if (m.LeaderHero != null && PacReader.HoldsOrder(m.LeaderHero)) return "you (Party AI Controls)";
+            if (m.LeaderHero != null && PacReader.KeyOf(m.LeaderHero) is string key)
+                return PacLink.IsOurs(m.LeaderHero.StringId, key) ? "lieutenant (Party AI Controls)" : "you (Party AI Controls)";
             return "game";
         }
 
@@ -704,6 +725,19 @@ namespace BannerlordAgents
             Files.Overwrite(Path.Combine(Dir(id), "setup.json"), Json.Line(s));
         }
 
+        /// <summary>The folder a run was readied under before it was named by its arm: gone once only its run.json is in it.</summary>
+        public static void DropArmed(string id)
+        {
+            try
+            {
+                string dir = Path.Combine(Paths.Runs, id);
+                if (!Directory.Exists(dir)) return;
+                if (Directory.GetFiles(dir).Any(f => !string.Equals(Path.GetFileName(f), "run.json", StringComparison.OrdinalIgnoreCase)) || Directory.GetDirectories(dir).Length > 0) return;
+                Directory.Delete(dir, true);
+            }
+            catch (Exception e) { Diag.Swallowed("removing the readied run's folder", e); }
+        }
+
         public static void AppendDay(string id, object line)
         {
             Files.Append(Path.Combine(Dir(id), "days.jsonl"), Json.Line(line));
@@ -833,6 +867,8 @@ namespace BannerlordAgents
         public List<string> Modules = new List<string>();
         public List<RunAgentInfo> Agents = new List<RunAgentInfo>();
         public List<string> Unusable = new List<string>();
+        /// <summary>Agents switched off and set aside for the one switched on for the same realm (0.11.1).</summary>
+        public List<string> SetAside = new List<string>();
         public RunSaveInfo Save = new RunSaveInfo();
     }
 

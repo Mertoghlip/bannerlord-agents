@@ -391,6 +391,7 @@ namespace SmokeTest
             GameClockTests(dir);
             RoadTests();
             RunTests();
+            LieutenantPacTests();
 
             // poke numbers: a campaign's poke file holds a whole report per line, longer than any tail; the highest number
             // is read from the whole file once, then kept beside it
@@ -1536,6 +1537,57 @@ namespace SmokeTest
                   "the lieutenant carries out orders only when the player's words answered the proposal still waiting; any others wait for a yes");
             Settings.AgentFolders.Clear();
             Settings.AgentDir = agentDir;
+        }
+
+        /// <summary>
+        /// 0.11.1: the lieutenant and Party AI Controls (what its panel shows for each of our orders, the options and troop mix in
+        /// its terms), and the conversation of a save (a line said after a save, in the same paused hour, is not that save's).
+        /// </summary>
+        private static void LieutenantPacTests()
+        {
+            Check(PacRules.MirrorOf("defend", true) == "DefendSettlement" && PacRules.MirrorOf("relieve", true) == "DefendSettlement" && PacRules.MirrorOf("besiege", true) == "BesiegeSettlement"
+                  && PacRules.MirrorOf("follow", false) == "EscortParty" && PacRules.MirrorOf("hunt", false) == "AttackParty" && PacRules.MirrorOf("recruit", true) == "RecruitFromTemplate"
+                  && PacRules.MirrorOf("watch", true) == "PatrolAroundPoint" && PacRules.MirrorOf("watch", false) == null && PacRules.MirrorOf("raid", true) == null
+                  && PacRules.MirrorOf("shadow", false) == null && PacRules.MirrorOf("gather", true) == null && PacRules.MirrorOf("join", false) == null && PacRules.MirrorOf("hold", false) == null,
+                  "each of the lieutenant's orders shows in Party AI Controls as the nearest of its own kinds, and raids, shadows, watch posts and armies as none");
+            Check(PacRules.UsesParty("EscortParty") && PacRules.UsesParty("AttackParty") && !PacRules.UsesParty("DefendSettlement"), "follow and attack aim at a party, the rest at a holding");
+            bool a = PacRules.Option("raid_villages", new JValue(false), out string p1, out object v1, out string w1, out _);
+            bool b = PacRules.Option("auto_recruit_below", new JValue(40), out string p2, out object v2, out _, out _);
+            bool c = PacRules.Option("max_troop_tier", new JValue(12), out _, out _, out _, out string e3);
+            bool d = PacRules.Option("fly", new JValue(true), out _, out _, out _, out string e4);
+            bool e = PacRules.Option("patrol_radius", new JValue(5), out _, out _, out _, out _);
+            bool f = PacRules.Option("join_armies", new JValue(1), out _, out _, out _, out string e6);
+            Check(a && p1 == "AllowRaidVillages" && (bool)v1 == false && w1 == "raid_villages no" && b && p2 == "AutoRecruitmentPercentage" && Math.Abs((float)v2 - 0.4f) < 1e-6
+                  && !c && e3.Contains("0 to 10") && !d && e4.Contains("not an option") && !e && !f && e6.Contains("true or false"),
+                  "the panel's options in Party AI Controls' own terms: percentages as fractions, numbers kept to their ranges, unknown names and wrong kinds refused");
+            Check(PacRules.Composition(JObject.Parse("{\"infantry\":50,\"ranged\":30,\"cavalry\":20}"), out float[] mix, out _) && Math.Abs(mix[0] - 0.5f) < 1e-6 && Math.Abs(mix[3]) < 1e-6
+                  && PacRules.Composition(JObject.Parse("{\"infantry\":2,\"horse_archers\":2}"), out float[] mix2, out _) && Math.Abs(mix2[3] - 0.5f) < 1e-6
+                  && !PacRules.Composition(JObject.Parse("{\"infantry\":-5,\"ranged\":10}"), out _, out _) && !PacRules.Composition(JObject.Parse("{\"cavalry\":0}"), out _, out _)
+                  && !PacRules.Composition(JObject.Parse("{\"pikes\":50}"), out _, out _),
+                  "a troop mix in percentages becomes Party AI Controls' fractions summing to 1; below 0, nothing, or an unknown part is refused");
+            string lib = PacRules.LibraryText();
+            Check(lib.Contains("**party_ai**") && lib.Contains("fallback") && lib.Contains("new_template") && lib.Contains("composition") && PacRules.Options.All(o => lib.Contains(o.Word))
+                  && PacRules.Kinds.All(k => lib.Contains(k.Word + " (")) && lib.Contains("the ruler's wins"),
+                  "the lieutenant's library tells every Party AI Controls order and option, and that the ruler's own order there wins");
+
+            // the conversation of a save: session S1 saves "saveX" at 120; a line it said after the save, the clock stopped, is not saveX's
+            const string campaign = "smoketest-lt";
+            string dir = Paths.Data(campaign);
+            History s1 = History.Of("S1", 100, null, dir, true);
+            File.AppendAllText(History.NotesFile(dir), Json.Line(s1.NoteFor("saveX", 120)) + "\n");
+            DateTime saved = DateTime.Now;
+            string file = Path.Combine(dir, "lieutenant", "chat.jsonl");
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            string L(string load, double h, DateTime w, string t) => "{\"load\":\"" + load + "\",\"h\":" + h.ToString(Text.Inv) + ",\"w\":\"" + w.ToString("o", Text.Inv) + "\",\"k\":\"you\",\"t\":\"" + t + "\"}\n";
+            File.WriteAllText(file, L("S1", 110, saved.AddMinutes(-5), "before the save") + L("S1", 120, saved.AddMinutes(-1), "just before the save, paused")
+                                    + L("S1", 120, saved.AddMinutes(2), "after the save, same hour") + L("S0", 105, saved.AddMinutes(-9), "another branch") + "{half a line");
+            History s2 = History.Of("S2", 120, "saveX", dir, false);
+            List<string> got = LabelledLines.Read(file, s2).Select(o => (string)o["t"]).ToList();
+            Check(s2.Found == "marked" && got.SequenceEqual(new[] { "before the save", "just before the save, paused" }),
+                  "loading a save brings back exactly the conversation it lived through: not what was said after it while paused, nor another branch's (" + string.Join(" | ", got) + ")");
+            Check(s2.HoldsLine("S2", 500, DateTime.Now.AddHours(1)) && !s2.HoldsLine(null, 50, null), "this session's own lines are always its; unlabelled ones are not a marked save's");
+            var old = new History { Load = "S3", Before = new List<HistoryStep> { new HistoryStep { Load = "S1", Until = 120 } } };
+            Check(old.HoldsLine("S1", 120, saved.AddMinutes(30)) && !old.HoldsLine("S1", 121, null), "a note from before 0.11.1 (no wall clock) still goes by the in-game hour");
         }
 
         /// <summary>

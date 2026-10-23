@@ -235,12 +235,23 @@ namespace BannerlordAgents
             if (string.IsNullOrWhiteSpace(a.Lord)) return "the order names no lord";
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;
-            // the two guards the vassal door always had (Oct 22): never the player, never a lord on a Party AI Controls order
+            // the two guards the vassal door always had (Oct 22): never the player, never a lord on a Party AI Controls order; the
+            // ruler's lieutenant's orders replace a Party AI Controls order instead, and show there (0.11.1, PacLink)
             if (lord == Hero.MainHero) return Names.Hero(lord) + " takes no orders from an agent";
-            string pacOrder = PacReader.OrderOf(lord);
+            bool lieutenant = source == "agent" && Lieutenant.IsRealm(realm.StringId);
+            string pacOrder = lieutenant ? null : PacReader.OrderOf(lord);
             if (pacOrder != null)
                 return Names.Hero(lord) + " already follows an order from his ruler's own dialogue (" + pacOrder + "); the two would fight each hour, so it stands until the ruler releases him there";
             string verb = (a.Do ?? "").Trim().ToLowerInvariant();
+            if (verb == "party_ai")
+            {
+                if (!lieutenant) return "party_ai is only for the ruler's lieutenant";
+                MobileParty lp = lord.PartyBelongedTo;
+                if (lp == null || lp.LeaderHero != lord || !lp.IsActive) return Names.Hero(lord) + " is not leading a party right now.";
+                bool sh = !forceLive && ModeOf(realm) == "shadow";
+                if (!forceLive && !sh && !(ModeOf(realm) == "live" && ObeysAgent(lord))) return NotYours(lord);
+                return PacLink.Apply(lord, lp, a.Raw, realm, sh, ref status);
+            }
             // the agent of the realm decides (its agent.txt, since 0.9): its mode, and who obeys it
             string mode = ModeOf(realm);
             bool live = forceLive || (mode == "live" && ObeysAgent(lord));
@@ -298,9 +309,9 @@ namespace BannerlordAgents
                 return "valid: " + text + Notes(notes) + " (shadow mode: not carried out)";
             }
             if (!live) return NotYours(lord);
-            StartTool(lord, party, def, o, realm, words);
+            string shown = StartTool(lord, party, def, o, realm, words);
             status = "applied";
-            return text + Notes(notes);
+            return text + Notes(notes) + shown;
         }
 
         private static string Notes(List<string> notes) => notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : "";
@@ -479,7 +490,8 @@ namespace BannerlordAgents
         }
 
         /// <summary>Holds the lord for a tool and hands the tool to the runner, which makes the first move.</summary>
-        private static void StartTool(Hero lord, MobileParty party, ToolDef def, ToolOrder o, Kingdom realm, string words)
+        /// <summary>Starts a tool order; returns what Party AI Controls now shows for it, for the receipt (PacLink; "" for none).</summary>
+        private static string StartTool(Hero lord, MobileParty party, ToolDef def, ToolOrder o, Kingdom realm, string words)
         {
             if (realm != null) o.Realm = realm.StringId;
             int id = Runner.NewId();
@@ -500,6 +512,10 @@ namespace BannerlordAgents
             Note(h, "issued", h.ToolText, new { words, before, tool = def.Name, at = o.At, target = o.Target, lords = o.Lords, settings = o.Settings, then = o.Then?.ToString(Newtonsoft.Json.Formatting.None) });
             Say("Order: " + h.ToolText + ".", Colors.Cyan);
             Background.Post("tool start", () => Runner.Start(id, o));
+            string shown = null;
+            try { shown = PacLink.OnOrderStarted(h.Id, lord, party, h.Source, realm, def.Name, o.At, o.Target); }
+            catch (Exception e) { Diag.Error("showing an order in Party AI Controls", e); }
+            return shown ?? "";
         }
 
         /// <summary>Whatever order the party held before ends here, quietly: the new one replaces it.</summary>
@@ -693,10 +709,10 @@ namespace BannerlordAgents
             Diag.Count("army:formed");
             Diag.Event("army", "formed", new { leader = lord.StringId, place = place.StringId, members = members.Select(m => m.LeaderHero.StringId).ToList(),
                                                 far = far.Select(m => m.LeaderHero?.StringId).ToList(), cost, far_cost_now = farCost, influence_before = (int)influence, type = type.ToString() });
-            StartTool(lord, lp, def, o, realm, o.Words);
+            string shown = StartTool(lord, lp, def, o, realm, o.Words);
             SendToJoin(far, lp, o, realm);
             status = "applied";
-            return text + Notes(notes);
+            return text + Notes(notes) + shown;
         }
 
         /// <summary>add, release (with lords) and disband, for a lord who leads an army.</summary>
@@ -1008,6 +1024,8 @@ namespace BannerlordAgents
             Active.Add(o);
             AfterRelease.RemoveAll(r => r.Party == o.Party);
             Changed();
+            try { PacLink.OnOrderStarted(o.Id, o.Lord, o.Party, o.Source, o.Realm, o.Verb, o.Place?.StringId, o.Target?.StringId); }   // not the lieutenant's: a mirror of its order left on him goes
+            catch (Exception e) { Diag.Error("taking an order off Party AI Controls", e); }
             o.LastProgressAt = CampaignTime.Now.ToHours;
             o.BestDistance = Distance(o) ?? float.MaxValue;
             string text = Describe(o);
@@ -1151,6 +1169,8 @@ namespace BannerlordAgents
             }
             CheckReleased(now);
             if (changed) Changed();
+            try { PacLink.Hourly(); }
+            catch (Exception e) { Diag.Error("the lieutenant's orders in Party AI Controls", e); }
         }
 
         private static void Hold(MobileParty p)
@@ -1226,6 +1246,8 @@ namespace BannerlordAgents
         {
             HandedBack.Clear();
             _handBackClean = true;
+            // the lieutenant's orders shown in Party AI Controls never reach a save either (PacLink)
+            PacLink.StripForSave();
             foreach (HandOrder o in Active)
             {
                 try
@@ -1251,6 +1273,7 @@ namespace BannerlordAgents
 
         public static void TakeBackAfterSave(bool saved, string name)
         {
+            PacLink.RestoreAfterSave();
             int taken = 0;
             foreach (HandOrder o in Active)
             {
@@ -1567,7 +1590,28 @@ namespace BannerlordAgents
                 string w = why;
                 Background.Post("tool ended", () => Runner.Ended(tid, w));
             }
+            // the lieutenant's order comes off Party AI Controls' panel, and his next order there starts (PacLink)
+            try { PacLink.OnOrderEnded(o.Party, o.Id, key); }
+            catch (Exception e) { Diag.Error("taking an order off Party AI Controls", e); }
         }
+
+        /// <summary>Ends the order holding this party, if one does (PacLink: the ruler took the lord back in Party AI Controls; a party_ai order replaced it).</summary>
+        public static bool EndFor(MobileParty p, string why, string key)
+        {
+            HandOrder o = Active.FirstOrDefault(x => x.Party == p);
+            if (o == null) return false;
+            End(o, why, key);
+            Active.Remove(o);
+            Changed();
+            return true;
+        }
+
+        /// <summary>The tool an order holding this party runs, in words (the lieutenant's view of Party AI Controls), or null.</summary>
+        internal static string ToolOf(MobileParty p) => Active.FirstOrDefault(x => x.Party == p) is HandOrder o ? (o.ToolText ?? Describe(o)) : null;
+
+        internal static Settlement SettlementFor(string words, out string error) => FindSettlement(words, out error);
+        internal static MobileParty PartyFor(string words, out string error) => FindParty(words, out error);
+        internal static MobileParty PartyById(string id) => FindPartyById(id);
 
         private static string Refused(string verb, Settlement s, Kingdom realm)
         {

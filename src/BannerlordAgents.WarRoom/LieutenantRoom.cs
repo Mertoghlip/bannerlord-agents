@@ -17,6 +17,8 @@ namespace BannerlordAgents.WarRoom
     /// "carry_out" with "orders" (what the player has just agreed to), "drop" (the proposal is off), "detail" (a longer text,
     /// shown in a window that pauses the game). The war room adds "pending_chat", the waiting proposal's number from chat.json,
     /// so the bridge carries out only orders that answer a proposal (the player's yes), whatever the answer says.
+    /// Since 0.11.1 the conversation is the save's, kept by the bridge (chat.json's "history", the whole in conversation.txt), not
+    /// this room's memory, which is still written as a log; and each message has PARTY AI CONTROLS NOW (chat.json's "party_ai").
     /// </summary>
     internal sealed class LieutenantRoom
     {
@@ -108,7 +110,8 @@ namespace BannerlordAgents.WarRoom
             {
                 kind = "chat", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), chat = n, campaign, realm, said, model = _c.Model, effort = _c.Effort,
                 thinking_cap = _c.ThinkingCap, ok = problem == null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), tokens_in = r.InTokens,
-                tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, turns = r.Turns, proposed, carried, pending, ways_asked = routes?.Asked ?? 0, folder
+                tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost, turns = r.Turns, proposed, carried, pending,
+                ways_asked = routes?.Asked ?? 0, folder
             });
             Say("Message #" + n + ": answered in " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s" + (proposed > 0 ? ", proposing " + proposed + " orders" : "")
                 + (carried > 0 ? ", carrying out " + carried + " orders" : "") + (problem != null ? " (" + problem + ")" : "") + ".");
@@ -118,13 +121,25 @@ namespace BannerlordAgents.WarRoom
         internal static string Message(JsonObject chat, List<JsonObject> history, string report, List<string> receipts)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("THE CONVERSATION SO FAR (oldest first" + (history.Count >= HistoryLines ? "; the last " + HistoryLines + " exchanges" : "") + ")");
-            if (history.Count == 0) sb.AppendLine("- (This is the first thing your ruler says to you in this campaign.)");
-            foreach (JsonObject h in history)
+            if (chat["history"] is JsonArray lines)
             {
-                sb.AppendLine("- " + Str(h["date"]) + " · Ruler: " + Str(h["said"]));
-                string orders = Str(h["carried"]) != null ? " [you gave: " + Str(h["carried"]) + "]" : Str(h["proposed"]) != null ? " [you proposed: " + Str(h["proposed"]) + "]" : "";
-                sb.AppendLine("  You: " + Str(h["say"]) + orders);
+                // since 0.11.1 the bridge keeps the conversation of the save being played and sends its latest lines; the whole of it is conversation.txt
+                int total = (int)Num(chat["history_total"]);
+                bool cut = total > lines.Count;
+                sb.AppendLine("THE CONVERSATION IN THIS SAVE SO FAR (oldest first" + (cut ? "; its last " + lines.Count + " of " + total + " lines: the whole of it is in conversation.txt" : "") + ")");
+                if (lines.Count == 0) sb.AppendLine("- (This is the first thing your ruler says to you in this save.)");
+                foreach (JsonNode l in lines) sb.AppendLine(Str(l));
+            }
+            else
+            {
+                sb.AppendLine("THE CONVERSATION SO FAR (oldest first" + (history.Count >= HistoryLines ? "; the last " + HistoryLines + " exchanges" : "") + ")");
+                if (history.Count == 0) sb.AppendLine("- (This is the first thing your ruler says to you in this campaign.)");
+                foreach (JsonObject h in history)
+                {
+                    sb.AppendLine("- " + Str(h["date"]) + " · Ruler: " + Str(h["said"]));
+                    string orders = Str(h["carried"]) != null ? " [you gave: " + Str(h["carried"]) + "]" : Str(h["proposed"]) != null ? " [you proposed: " + Str(h["proposed"]) + "]" : "";
+                    sb.AppendLine("  You: " + Str(h["say"]) + orders);
+                }
             }
             sb.AppendLine();
             sb.AppendLine("WHAT BECAME OF ORDERS LATELY (receipts.log, newest last)");
@@ -149,6 +164,12 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("THE REALM NOW");
             sb.AppendLine(report.Trim());
             sb.AppendLine();
+            if (Str(chat["party_ai"]) is string pac && pac.Trim().Length > 0)
+            {
+                sb.AppendLine("PARTY AI CONTROLS NOW");
+                sb.AppendLine(pac.Trim());
+                sb.AppendLine();
+            }
             sb.AppendLine("YOUR RULER SAYS (message #" + (int)Num(chat["number"]) + ", " + Str(chat["date"]) + ")");
             if (chat["earlier"] is JsonArray earlier && earlier.Count > 0)
                 foreach (JsonNode e in earlier) sb.AppendLine("(said just before) \"" + Str(e) + "\"");
@@ -325,6 +346,7 @@ namespace BannerlordAgents.WarRoom
             {
                 if (v.TryGetValue(out double d)) return d;
                 if (v.TryGetValue(out long l)) return l;
+                if (v.TryGetValue(out int i)) return i;   // a value made from an int converts only to an int
             }
             return -1;
         }

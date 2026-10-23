@@ -263,6 +263,9 @@ namespace BannerlordAgents
             if (!On) return;
             foreach (PacReader.Change c in PacReader.Poll())
             {
+                // the lieutenant's orders shown there, and its own party_ai orders, are not the player's (0.11.1, PacLink)
+                string hid = c.Hero?.StringId;
+                if (c.After != null ? PacLink.IsOurs(hid, c.After) : PacLink.WasOurs(hid, c.Before)) continue;
                 string who = c.Hero != null ? Names.Hero(c.Hero) : "A lord";
                 if (c.After != null)
                 {

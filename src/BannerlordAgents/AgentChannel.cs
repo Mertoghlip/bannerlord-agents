@@ -50,6 +50,8 @@ namespace BannerlordAgents
             public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             /// <summary>The order to start when this one finishes (same lord).</summary>
             public JObject Then;
+            /// <summary>The order as written (the lieutenant's party_ai reads its settings from it, 0.11.1).</summary>
+            public JObject Raw;
             public DateTime Received;
         }
 
@@ -148,7 +150,8 @@ namespace BannerlordAgents
             if (problems.Count > 0)
                 Diag.Alarm("tool_library", "The tool library has " + problems.Count + " problems, so some orders will not work: " + string.Join("; ", problems.Take(3)) + ".", true);
             string text = Tools.Library.Text();
-            foreach (Channel c in All) Files.Overwrite(Path.Combine(c.Dir, "tools.txt"), text);
+            // the lieutenant's library also has Party AI Controls (0.11.1); the other agents' stays as it was
+            foreach (Channel c in All) Files.Overwrite(Path.Combine(c.Dir, "tools.txt"), c.IsLieutenant ? text + PacRules.LibraryText() : text);
             Diag.Event("tool", "library written", new { tools = Tools.Library.All.Count, problems, channels = All.Count });
         }
 
@@ -289,7 +292,7 @@ namespace BannerlordAgents
             {
                 File = file, Index = 1, Poke = (int?)o["poke"] ?? poke, Received = DateTime.Now,
                 Lord = (string)o["lord"] ?? lord, Do = (string)(o["do"] ?? o["order"] ?? o["verb"]),
-                Target = Str(o["target"]), At = Str(o["at"] ?? o["place"]), Why = (string)o["why"], Then = o["then"] as JObject
+                Target = Str(o["target"]), At = Str(o["at"] ?? o["place"]), Why = (string)o["why"], Then = o["then"] as JObject, Raw = o
             };
             JToken lords = o["lords"];
             if (lords is JArray arr) a.Lords.AddRange(arr.Select(Str).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
@@ -364,10 +367,15 @@ namespace BannerlordAgents
         /// <summary>The highest chat number in the channel's chats.log, so numbers carry on across loads (-1: none yet).</summary>
         public int LastChatNumber() => AgentChannel.LastNumberIn(Path.Combine(Dir, "chats.log"), "#", true);
 
-        /// <summary>The player's words for the lieutenant: chat.json (swapped in whole), then a line in chats.log. Worker.</summary>
-        public void WriteChat(int n, object chat, string said)
+        /// <summary>
+        /// The player's words for the lieutenant: the save's whole conversation so far (conversation.txt, which the lieutenant may
+        /// read, 0.11.1), chat.json (swapped in whole), then a line in chats.log. Worker.
+        /// </summary>
+        public void WriteChat(int n, object chat, string said, string conversation = null)
         {
             Paths.Ensure(OrdersDir);
+            if (conversation != null)
+                Files.Overwrite(Path.Combine(Dir, "conversation.txt"), "THE WHOLE CONVERSATION WITH YOUR RULER IN THIS SAVE (oldest first)\n" + (conversation.Length > 0 ? conversation : "(nothing yet)") + "\n");
             Files.Overwrite(Path.Combine(Dir, "chat.json"), Json.Line(chat));
             Files.Append(Path.Combine(Dir, "chats.log"), "#" + n + " | " + DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " | you: " + said);
             Files.FlushAll();

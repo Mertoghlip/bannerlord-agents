@@ -472,7 +472,7 @@ namespace BannerlordAgents
             {
                 number, faction = fid, triggers = triggers.Select(t => t.Kind).ToList(), notices = triggers.Where(t => t.Notice.HasValue).Select(t => t.Notice.Value).ToList(),
                 tokens, sections = sizes, seen = v.Seen.Count, not_listed = v.SeenNotListed, last_seen = v.LastSeen.Count,
-                written_ms_after_the_hour = Math.Round(lagMs, 1), to_agent = ch.On
+                written_ms_after_the_hour = Math.Round(lagMs, 1), to_agent = ch.On, sent = ch.On && !ch.IsLieutenant
             });
             m.PokedHoursRunning++;
             if (m.PokedHoursRunning == 12)

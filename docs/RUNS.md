@@ -24,7 +24,7 @@ The measured runs for the checkpoint and after: 60 in-game days each, all from o
 
 ## What a run keeps
 
-Loading TEST START readies a run. It begins on the first in-game hour the clock runs (after any setting up), named by who commands each side, and ends after 60 × 24 in-game hours: the game pauses and offers a save named `TEST END <arm> <run>`. A load of one of the run's own saves (an autosave after a crash) carries it on; loading TEST START again ends the old one unfinished; any other save leaves it waiting. Every run of a campaign replays the same days, so a run's own folder, not the campaign's, tells runs apart.
+Loading TEST START readies a run. It begins on the first in-game hour the clock runs (after any setting up), named by who commands each side, and ends after 60 × 24 in-game hours: the game pauses and offers a save named `TEST END <arm> <run>`. A load of one of the run's own saves (an autosave after a crash) carries it on; loading TEST START again ends the old one unfinished; any other save leaves it waiting. Since 0.11.1 a save made while setting up, before the clock first ran, counts too: loading it readies the run again from there (Mert saved TEST A first, Oct 23), and the folder the run was readied under goes once the run is named by its arm. Every run of a campaign replays the same days, so a run's own folder, not the campaign's, tells runs apart.
 
 `%LOCALAPPDATA%\BannerlordAgents\runs\<run>\` (`current.txt` names the open one):
 - `run.json`: the arm, who commands each side, its loads (wall clock and in-game hours), its saves, the marks against it, its running tally, the game's war tally at its start.

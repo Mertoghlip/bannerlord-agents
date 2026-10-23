@@ -25,6 +25,8 @@ namespace BannerlordAgents
         /// <summary>The agents of this load, each realm resolved to its kingdom id (Agents.Configured), and what could not be used.</summary>
         public static List<AgentConfig> Configs = new List<AgentConfig>();
         public static readonly List<string> Unusable = new List<string>();
+        /// <summary>Agents switched off and set aside for the one switched on for the same realm (0.11.1: as meant, logged only).</summary>
+        public static readonly List<string> SetAside = new List<string>();
         /// <summary>Which records are this game's history (History, since 0.9.1): found at the load, noted at every save.</summary>
         public static History History;
         public static bool Running;
@@ -61,6 +63,7 @@ namespace BannerlordAgents
             var configs = new List<AgentConfig>();
             var seats = new List<Kingdom>();
             Unusable.Clear();
+            SetAside.Clear();
             var resolved = new List<KeyValuePair<AgentConfig, Kingdom>>();
             foreach (AgentConfig c in Agents.Configured())
             {
@@ -75,7 +78,14 @@ namespace BannerlordAgents
                 AgentConfig c = kv.Key;
                 Kingdom k = kv.Value;
                 AgentConfig first = resolved.Where(x => x.Value == k).Select(x => x.Key).OrderBy(x => x.On ? 0 : 1).First();
-                if (first != c) { Unusable.Add(Names.Faction(k) + " has two agents; " + (first.On ? "the one switched on" : "the first") + " plays it (" + c.Workspace + " does not)"); continue; }
+                if (first != c)
+                {
+                    // an agent switched off, set aside for the one switched on, is as meant (the test runs' arms): a note, not a problem
+                    string why = Names.Faction(k) + " has two agents; " + (first.On ? "the one switched on" : "the first") + " plays it (" + c.Workspace + " does not)";
+                    if (first.On && !c.On) SetAside.Add(why);
+                    else Unusable.Add(why);
+                    continue;
+                }
                 c.Realm = k.StringId;
                 configs.Add(c);
                 seats.Add(k);
@@ -107,6 +117,11 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("reading the save's name", e); }
             History history = History.Of(LoadId, loadedAt, save, Paths.Data(id), save == null);
             History = history;
+            // the lieutenant's conversation of this save, and its own Party AI Controls orders (0.11.1)
+            try { Lieutenant.Restore(history); }
+            catch (Exception e) { Diag.Error("the lieutenant's conversation at the load", e); }
+            try { PacLink.Reset(history); }
+            catch (Exception e) { Diag.Error("the lieutenant's Party AI Controls record at the load", e); }
             // a test run (0.11, docs/RUNS.md): the run's save readies one; one of a running run's own saves carries it on
             try { Run.OnLoad(save, loadedAt, LoadId); }
             catch (Exception e) { Diag.Error("the test run at the load", e); }
@@ -124,6 +139,7 @@ namespace BannerlordAgents
             for (int i = 0; i < configs.Count; i++)
                 Log.Line("agent for " + Names.Faction(Seats[i]) + ": " + AgentChannel.ModeText(configs[i].Mode, configs[i].Lords) + " Folder: " + (configs[i].Workspace ?? configs[i].ChannelDir));
             foreach (string u in Unusable) Log.Line("agent not used: " + u);
+            foreach (string u in SetAside) Log.Line("agent switched off, set aside: " + u);
             Diag.Event("session", "campaign started", new { campaign = id, watched = Watched?.StringId, agents = configs.Select(c => new { c.Realm, c.Mode, c.Workspace }).ToList(), unusable = Unusable.ToList(), detail = Settings.Detail });
             SelfCheck.Run();
         }

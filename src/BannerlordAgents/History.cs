@@ -12,6 +12,8 @@ namespace BannerlordAgents
     {
         public string Load;
         public double Until = double.NaN;
+        /// <summary>The wall clock of the save that ended this step (0.11.1; null in notes written before), for lines written while paused.</summary>
+        public DateTime? Wall;
     }
 
     /// <summary>
@@ -42,6 +44,25 @@ namespace BannerlordAgents
             return false;
         }
 
+        /// <summary>
+        /// The same for a line of the lieutenant's conversation (0.11.1): many are written with the clock stopped, so a step's save
+        /// is told by its wall clock when the note has one (a line said after a save, in the same paused hour, is not that save's).
+        /// </summary>
+        public bool HoldsLine(string load, double hours, DateTime? wall)
+        {
+            if (!string.IsNullOrEmpty(load) && load == Load) return true;
+            foreach (HistoryStep s in Before)
+            {
+                if (!Same(s.Load, load)) continue;
+                if (s.Wall.HasValue && wall.HasValue) { if (wall.Value <= s.Wall.Value) return true; }
+                else if (double.IsNaN(s.Until) || hours <= s.Until + 0.01) return true;
+            }
+            return false;
+        }
+
+        private static DateTime? Wall(JToken t)
+            => t != null && DateTime.TryParse((string)t, Text.Inv, System.Globalization.DateTimeStyles.None, out DateTime w) ? w : (DateTime?)null;
+
         private static bool Same(string a, string b) => string.IsNullOrEmpty(a) ? string.IsNullOrEmpty(b) : a == b;
 
         /// <summary>The label for a record written now (null when this session has none, as in the smoke test).</summary>
@@ -67,8 +88,8 @@ namespace BannerlordAgents
                     var steps = new List<HistoryStep>();
                     if (o["before"] is JArray before)
                         foreach (JToken t in before)
-                            steps.Add(new HistoryStep { Load = (string)t["load"], Until = (double?)t["until"] ?? double.NaN });
-                    steps.Add(new HistoryStep { Load = (string)o["load"], Until = h });
+                            steps.Add(new HistoryStep { Load = (string)t["load"], Until = (double?)t["until"] ?? double.NaN, Wall = Wall(t["wall"]) });
+                    steps.Add(new HistoryStep { Load = (string)o["load"], Until = h, Wall = Wall(o["wall"]) });
                     return new History { Load = load ?? "", Before = steps, Save = save, Found = "marked" };
                 }
             History u = Unmarked(load, loadedAt);
@@ -80,8 +101,8 @@ namespace BannerlordAgents
         public object NoteFor(string save, double hours) => new
         {
             Type = "save", Save = save, Load = Label, Hours = hours, Date = Text.When(hours),
-            Before = Before.Select(s => new { s.Load, Until = double.IsNaN(s.Until) ? (double?)null : s.Until }).ToList(),
-            Wall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Text.Inv)
+            Before = Before.Select(s => new { s.Load, Until = double.IsNaN(s.Until) ? (double?)null : s.Until, Wall = s.Wall?.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv) }).ToList(),
+            Wall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv)
         };
 
         /// <summary>The history for a war room (poke.json): this session and the steps before it.</summary>

@@ -42,7 +42,7 @@ namespace BannerlordAgents
         private const string Owner = "bannerlordagents.logs";
         private static readonly Dictionary<string, string> Parts = new Dictionary<string, string>();
         public static string Status => Parts.Count == 0 ? "not attached" : string.Join("; ", Parts.Values);
-        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled;
+        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled, PacEntryInstalled;
         /// <summary>The money hooks (0.9.4, Purse): our loot-only sale for held lords, the game's prisoner sale measured, a won battle's takings.</summary>
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
@@ -129,6 +129,15 @@ namespace BannerlordAgents
                             postfix: new HarmonyLib.HarmonyMethod(typeof(KeepHeldPatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
                     KeepHeldInstalled = Ours(target);
                     Parts["keep"] = "held lords kept from Party AI Controls' hourly look: " + (KeepHeldInstalled ? "attached" : "did not attach") + Others(target);
+                    // 0.11.1: its check at a holding's gate passes the lieutenant's lords by too (PacLink)
+                    MethodInfo entry = pai.GetMethod("OnSettlementEntered", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, new[] { typeof(MobileParty), typeof(Settlement), typeof(Hero) }, null);
+                    if (entry == null) Parts["pac entry"] = "Party AI Controls' check at a holding's gate was not found, so it may end a visit or recruit order it shows for the lieutenant";
+                    else
+                    {
+                        h.Patch(entry, prefix: new HarmonyLib.HarmonyMethod(typeof(PacEntryPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+                        PacEntryInstalled = Ours(entry);
+                        Parts["pac entry"] = "the lieutenant's lords kept from Party AI Controls' check at a gate: " + (PacEntryInstalled ? "attached" : "did not attach") + Others(entry);
+                    }
                 }
             }
             if (storm && !StormInstalled)
@@ -176,7 +185,7 @@ namespace BannerlordAgents
                 }
             }
             Log.Line("game hooks: " + Status);
-            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, storm_rule = StormInstalled,
+            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, pac_entry = PacEntryInstalled, storm_rule = StormInstalled,
                                                  loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
         }
 
@@ -242,16 +251,35 @@ namespace BannerlordAgents
         private static void Postfix(MobileParty mobileParty, Reasons.Before __state) => Reasons.After(mobileParty, __state);
     }
 
-    /// <summary>Party AI Controls' hourly look at one party (its first argument): held before it, woken by it, held again if the lord is ours.</summary>
+    /// <summary>
+    /// Party AI Controls' hourly look at one party (its first argument): held before it, woken by it, held again if the lord is ours.
+    /// Since 0.11.1 a lord one of the lieutenant's orders holds is passed by altogether (PacLink.Skip), so Party AI Controls does
+    /// not carry out, nor end, the order it shows for him, nor start his backup order or a recruiting trip meanwhile.
+    /// </summary>
     internal static class KeepHeldPatch
     {
-        private static void Prefix(MobileParty __0, out bool __state) => __state = __0?.Ai != null && __0.Ai.DoNotMakeNewDecisions;
+        private static bool Prefix(MobileParty __0, out bool __state)
+        {
+            __state = __0?.Ai != null && __0.Ai.DoNotMakeNewDecisions;
+            try { return !PacLink.Skip(__0); }
+            catch (Exception e) { Diag.Swallowed("the lieutenant's lords in Party AI Controls' hourly look", e); return true; }
+        }
 
         private static void Postfix(MobileParty __0, bool __state)
         {
             if (!__state || __0?.Ai == null || __0.Ai.DoNotMakeNewDecisions) return;
             try { Orders.KeepHeld(__0); }
             catch (Exception e) { Diag.Swallowed("keeping a held lord held", e); }
+        }
+    }
+
+    /// <summary>Party AI Controls' check when a lord enters a holding (it ends a recruit or visit order there): passed by for a lord the lieutenant's order holds (PacLink).</summary>
+    internal static class PacEntryPatch
+    {
+        private static bool Prefix(MobileParty __0)
+        {
+            try { return !PacLink.Skip(__0); }
+            catch (Exception e) { Diag.Swallowed("the lieutenant's lords in Party AI Controls' settlement check", e); return true; }
         }
     }
 

@@ -121,7 +121,7 @@ namespace BannerlordAgents.Runs
                 ["refusals"] = new JsonArray(g.Where(e => Str(e["d"], "status") == "refused").GroupBy(e => Str(e["d"], "reason")).OrderByDescending(s => s.Count()).Take(5)
                                               .Select(s => (JsonNode)(s.Count() + " x " + s.Key)).ToArray())
             }).ToArray());
-            List<JsonObject> pokes = r.Events.Where(e => Str(e, "k") == "poke").ToList();
+            List<JsonObject> pokes = r.Events.Where(e => Str(e, "k") == "poke" && Str(e["d"], "sent") != "false").ToList();
             o["pokes"] = new JsonObject(pokes.GroupBy(e => Str(e["d"], "faction") ?? "?").Select(g => new KeyValuePair<string, JsonNode>(g.Key, new JsonObject
             {
                 ["pokes"] = g.Count(), ["report_tokens_median"] = Median(g.Select(e => Dbl(e["d"], "tokens")))

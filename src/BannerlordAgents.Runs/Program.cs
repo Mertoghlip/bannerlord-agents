@@ -71,7 +71,7 @@ namespace BannerlordAgents.Runs
         public static string Head(RunData r)
         {
             JsonObject last = r.LastDay;
-            string day = last != null ? "day " + Str(last, "day") + " of " + r.DaysPlanned + " (" + Str(last, "date") + ")" : "no day line yet";
+            string day = last != null ? Str(last, "day") + " of " + r.DaysPlanned + " days done (the last day line: " + Str(last, "date") + ")" : "no day line yet";
             string arm = r.Arm + (ArmWords(r.Arm) != null ? ", " + ArmWords(r.Arm) : "");
             return "Run " + r.Id + " (" + arm + "): " + r.Status + ", " + day + "; started " + (Str(r.State, "started") ?? "-") + (Str(r.State, "finished") != null ? ", ended " + Str(r.State, "finished") : "")
                    + "; " + (r.State?["segments"] as JsonArray)?.Count + " load(s), " + (r.State?["flags"] as JsonArray)?.Count + " mark(s) against it.";
@@ -187,7 +187,8 @@ namespace BannerlordAgents.Runs
                 said.Add("  agents' orders: " + string.Join("; ", receipts.GroupBy(e => Str(e["d"], "realm")).Select(g => g.Key + " " + string.Join(", ", g.GroupBy(e => Str(e["d"], "status")).Select(s => s.Count() + " " + s.Key)))));
             var refused = receipts.Where(e => Str(e["d"], "status") == "refused").ToList();
             if (refused.Count > 0) said.Add("  refused, e.g.: " + string.Join(" | ", refused.Take(3).Select(e => Str(e["d"], "reason"))));
-            var pokes = evs.Where(e => Str(e, "k") == "poke").ToList();
+            // the reports for your own realm with the lieutenant serving it are kept, never sent (0.11.1: "sent" false)
+            var pokes = evs.Where(e => Str(e, "k") == "poke" && Str(e["d"], "sent") != "false").ToList();
             if (pokes.Count > 0) said.Add("  pokes: " + string.Join("; ", pokes.GroupBy(e => Str(e["d"], "faction")).Select(g => g.Key + " " + g.Count())));
             var mine = evs.Where(e => Str(e, "k") == "decision").ToList();
             var lt = evs.Where(e => Str(e, "k") == "lieutenant").ToList();

@@ -42,8 +42,9 @@ namespace BannerlordAgents
             {
                 IFaction mine = Clan.PlayerClan?.MapFaction;
                 if (mine == null) return null;
-                List<string> peace = Bridge.Seats.Where(k => !FactionManager.IsAtWarAgainstFaction(k, mine)).Select(Names.Faction).ToList();
-                return peace.Count == 0 ? null : string.Join(", ", peace) + (peace.Count == 1 ? " is" : " are") + " not at war with you, which the first tests assume";
+                // your own realm (the lieutenant's, or its agent's) is never at war with you (0.11.1)
+                List<string> peace = Bridge.Seats.Where(k => k != mine && !FactionManager.IsAtWarAgainstFaction(k, mine)).Select(Names.Faction).ToList();
+                return peace.Count == 0 ? null : string.Join(", ", peace) + (peace.Count == 1 ? " is" : " are") + " at peace with you now";
             });
             Check("calendar", () =>
             {

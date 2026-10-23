@@ -158,6 +158,13 @@ namespace BannerlordAgents
             return now.TryGetValue(h.StringId, out KeyValuePair<string, object> kv) ? Words(kv.Key, kv.Value) : null;
         }
 
+        /// <summary>A lord's Party AI Controls order as "Kind|target id", or null (the runs ask whose it is, PacLink.IsOurs). Read-only.</summary>
+        public static string KeyOf(Hero h)
+        {
+            if (h == null || !Resolve()) return null;
+            return Read(out _).TryGetValue(h.StringId, out KeyValuePair<string, object> kv) ? kv.Key : null;
+        }
+
         public static string TargetId(object target)
         {
             if (target is Settlement s) return s.StringId;
