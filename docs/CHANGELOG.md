@@ -788,7 +788,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `scripts\setup-agent.ps1` loses `-Theatre`: the goal names no region now, so only the title and the opening line name the realm.
 - **Checks:** both scripts parse.
 
-### 18:23 · Version 0.9.1: every save gets exactly its own history back · commit (follow-up below) (installed 18:22)
+### 18:23 · Version 0.9.1: every save gets exactly its own history back · commit 46b8447 (installed 18:22)
 - **Why:** Mert asked how loading different saves keeps histories apart. The cut-back went by date alone and deleted what it cut. So loading a later save from a run played before another one gave the agents the other run's history, and nothing of its own after the branch point. Mert: "Yes, this is an important fix. Build it now please."
 - **What** (`History`):
   - every chronicle line, in the module, and every copy of the notes and the story, in the war room's `snapshots.jsonl`, is labelled with the game session (load id) that wrote it, and nothing is deleted any more;
