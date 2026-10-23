@@ -825,7 +825,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** at 19:38 (sha256 `2D3A3986EC987787…`, 434,688 bytes), the game closed, over `434511229FDC618B…`, which is kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-recruit-20261022-1938`. The `.cs` files were edited in place: the source before this change is the one that built that kept DLL.
 - **Not yet seen in a game.**
 
-### 19:48 · Outside the repository: computer garrisons up to 250 / 400, and a one-day sweep memory (TFAOMFixes) · commit COMMIT_HASH
+### 19:48 · Outside the repository: computer garrisons up to 250 / 400, and a one-day sweep memory (TFAOMFixes) · commit e2a440f
 - **Why:** Mert: "the limit should be raised to 250 men for castles and 400 men for cities", and for the recruit order: "Instead of the last 3 days, set the bar to the last day. Slots refill every day."
 - **What** (`C:\BannerlordArchive\src-TFAOMFixes148`):
   - new `ComputerGarrisons.cs`. Improved Garrisons has one limit for all computer garrisons (50). Every time it asks for a computer holding's settings, it builds a fresh object that is never saved. A postfix on `GarrisonBehavior.GetTownSettings` sets that object's limit to 250 for a castle and 400 for a town. The player's saved settings and its options file are untouched, so its options screen still shows 50. File `computer_garrisons.txt`, console `tfaomfix.computer_garrisons`;
