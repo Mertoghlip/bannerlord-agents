@@ -965,7 +965,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The gap:** the answer waited until the game's clock ran again, since the bridge handed it to the game's tick (which stops while paused). The write-up came as a window although Mert had not asked for one.
 - Mert then asked for a window of the lieutenant's own: "have a button work as a shortcut (say 'enter') to go into the liutenant pop-up automatically and chat with it through that pop-up rather than through the game's own log. This way its easier to approve, disapprove, or comment on its proposals as well (we could have buttons for each)."
 
-### 14:55 · Version 0.10.1: the lieutenant's own window, with Approve and Decline · commit bf0b406 (built; installed once the game is closed)
+### 14:43 · Version 0.10.1: the lieutenant's own window, with Approve and Decline · commit bf0b406 (built 14:43; installed 14:47, next entry)
 - **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); new `LieutenantWindow.cs`, `module\GUI\Prefabs\LieutenantWindow.xml`; `Lieutenant.cs` rewritten around it):
   - **The window:** on the campaign map, the game's chat keys (Enter, T) open it (one Harmony prefix on `MPChatVM.StartTyping`; the game's chat box stays as it is). In the look of the game's own text pop-up: the conversation (the last 14 lines, newest at the bottom), the proposal waiting with **Decline** and **Approve**, the line to type in (focused on opening; Enter sends), **Close** (Esc). The game stands still while it is open, the clock locked (`lieutenant_pause`), and runs again as it ran.
   - **Approve and Decline:** the button carries out the proposal waiting as it stands, or drops it; the next message tells the war room which ("notes" in `chat.json`, WHAT YOUR RULER DID SINCE YOUR LAST ANSWER in its message). Words still work ("yes", "only Dain and Thorin"), and a comment typed instead goes with the proposal, to change it.
@@ -981,3 +981,9 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the offline dry run applied all 7 of the module's hooks (the new key hook, the 3 money hooks, the 3 older) with the pack's Harmony 2.4.2: all bound;
   - every sprite and brush of the window is one the game's own text pop-up or chat log uses.
 - **Not yet seen in a game:** the window itself (its look, focus, Enter and Esc, the buttons, the clock lock).
+
+### 14:47 · Version 0.10.1 installed · commit COMMIT
+- The game closed, Mert said to install. The war rooms (three) and the dashboard were stopped for the build and started again at 14:47; the lieutenant's war room waits for the player's words (last answered #1: the Goblin Town proposal of 14:29 was never answered, so nothing was given).
+- **Fixed at the install:** the war room's self-test check of the lieutenant's message looked for a line break as `\n`, but the message's lines end in `\r\n` on Windows; the check now looks for the heading and the note on their own, in order. All of its checks passed, as did the smoke test (225) and the dashboard's (27).
+- **Installed:** the module's DLL sha256 `5FB015DC4F311217…`, the war room's `WarRoom.dll` `4DB80E7E8E136400…`; the module's `GUI` holds only `Prefabs\LieutenantWindow.xml` (the mirror removed 0.10.0's `SPChatLog.xml`).
+- **Not yet seen in a game:** the window.

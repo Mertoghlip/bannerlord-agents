@@ -274,7 +274,8 @@ namespace BannerlordAgents.WarRoom
             string m = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string> { "order applied: lord_dain defend" });
             Check(m.Contains("THE CONVERSATION SO FAR") && m.Contains("Ruler: hold Goblin Town") && m.Contains("[you proposed: lord_dain defend town_gt]") && m.Contains("YOUR PROPOSAL WAITING FOR YOUR RULER'S ANSWER (from message #6)")
                   && m.IndexOf("REPORT FOR X", StringComparison.Ordinal) < m.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal) && m.Contains("(said just before) \"hold on\"") && m.TrimEnd().EndsWith("\"yes, send them\"")
-                  && m.Contains("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER\n- The ruler declined your proposal of message #5"),
+                  && m.Contains("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER") && m.Contains("- The ruler declined your proposal of message #5")
+                  && m.IndexOf("WHAT YOUR RULER DID", StringComparison.Ordinal) < m.IndexOf("YOUR PROPOSAL WAITING", StringComparison.Ordinal),
                   "the lieutenant's message: the conversation, what became of its orders, what the ruler did with the buttons, the waiting proposal, the realm, then the ruler's words");
             string bad = LieutenantRoom.ExtractAnswer("{\"say\":\"ok\",\"orders\":[{\"lord\":\"x\"}]}", out JsonObject none);
             string good = LieutenantRoom.ExtractAnswer("thinking it over... {\"say\":\"Riding out.\",\"carry_out\":true,\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}],\"pending_chat\":99}", out JsonObject ok);
