@@ -96,6 +96,7 @@ namespace BannerlordAgents
             AgentChannel.WriteLibrary();
             Audit.Reset();
             LiveMap.Reset();
+            Takings.Reset(_dir);
         }
 
         /// <summary>

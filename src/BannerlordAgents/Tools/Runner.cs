@@ -733,6 +733,13 @@ namespace BannerlordAgents.Tools
                     case "relief_within": return _w.ReliefWithin(Id(a[0]), Expr.Number(a[1]), Expr.Number(a[2]));
                     case "prep_hours": return Nan(_w.PrepHours(Id(a[0])));
                     case "storm_text": return _w.StormText(Id(a[0]));
+                    // what a lord's last sale brought, if he made it while this order ran (0.9.4, the sell order's call-back)
+                    case "sale_text":
+                        {
+                            PartyRow r = _w.Party(Id(a[0]));
+                            if (r == null) return "nothing known";
+                            return !double.IsNaN(r.SaleHours) && r.SaleHours >= _t.Started - 0.01 && r.SaleText != null ? r.SaleText : "he had nothing to sell there";
+                        }
                     case "strength_of": return _w.KnownStrength(Id(a[0]));
                     case "men_of": { int? n = _w.KnownMen(Id(a[0])); return n.HasValue ? (object)(double)n.Value : null; }
                     case "in_view": return _w.InView(Id(a[0]));

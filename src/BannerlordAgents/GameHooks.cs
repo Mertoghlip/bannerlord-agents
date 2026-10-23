@@ -32,6 +32,8 @@ namespace BannerlordAgents
     /// - The storm rule (always on since 0.7.4; the second hook that changes what happens). For a siege led by a lord
     ///   holding the agent's besiege order with a storm rule, the game's storm test answers by the agent's rule instead
     ///   of the game's roll (StormGate); every other siege is untouched.
+    /// - Money (always on since 0.9.4, Purse): for a lord holding one of our orders, the game's sale on entering a town is
+    ///   replaced by ours, which sells loot only; the game's prisoner sale is measured; a won battle's takings are recorded.
     /// Harmony 2.4.2 comes from TAOM.Dependencies. Only InstallCore touches it, so a missing Harmony disables these
     /// pieces and nothing else.
     /// </summary>
@@ -41,7 +43,9 @@ namespace BannerlordAgents
         private static readonly Dictionary<string, string> Parts = new Dictionary<string, string>();
         public static string Status => Parts.Count == 0 ? "not attached" : string.Join("; ", Parts.Values);
         public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled;
-        private static bool _keepHeldTried, _stormTried;
+        /// <summary>The money hooks (0.9.4, Purse): our loot-only sale for held lords, the game's prisoner sale measured, a won battle's takings.</summary>
+        public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
+        private static bool _keepHeldTried, _stormTried, _moneyTried;
         private static object _harmony;
 
         /// <summary>Game's thread: at start-up and whenever the settings change. Attaches what is wanted and not yet attached.</summary>
@@ -51,9 +55,10 @@ namespace BannerlordAgents
             bool wantReasons = Settings.AiReasons;
             bool wantKeep = !KeepHeldInstalled && !_keepHeldTried;
             bool wantStorm = !StormInstalled && !_stormTried;
-            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep || wantStorm)
+            bool wantMoney = !_moneyTried;
+            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep || wantStorm || wantMoney)
             {
-                try { InstallCore(wantWitness, wantReasons, wantKeep, wantStorm); }
+                try { InstallCore(wantWitness, wantReasons, wantKeep, wantStorm, wantMoney); }
                 catch (Exception e)
                 {
                     Parts["error"] = "could not attach (" + e.GetType().Name + ": " + e.Message + ")";
@@ -67,7 +72,7 @@ namespace BannerlordAgents
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void InstallCore(bool witness, bool reasons, bool keep, bool storm)
+        private static void InstallCore(bool witness, bool reasons, bool keep, bool storm, bool money)
         {
             var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
             Parts.Remove("error");
@@ -123,8 +128,41 @@ namespace BannerlordAgents
                     Parts["storm"] = "the storm rule " + (StormInstalled ? "attached" : "did not attach") + Others(target);
                 }
             }
+            if (money)
+            {
+                _moneyTried = true;
+                const BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                Type[] entered = { typeof(MobileParty), typeof(Settlement), typeof(Hero) };
+                MethodInfo loot = typeof(TaleWorlds.CampaignSystem.CampaignBehaviors.PartiesSellLootCampaignBehavior).GetMethod("OnSettlementEntered", any, null, entered, null);
+                MethodInfo prisoners = typeof(TaleWorlds.CampaignSystem.CampaignBehaviors.PartiesSellPrisonerCampaignBehavior).GetMethod("OnSettlementEntered", any, null, entered, null);
+                MethodInfo results = typeof(TaleWorlds.CampaignSystem.MapEvents.MapEvent).GetMethod("CalculateAndCommitMapEventResults", any, null, Type.EmptyTypes, null);
+                if (loot == null) Parts["loot"] = "loot only: the game's loot sale was not found, so held lords sell as every computer lord does";
+                else
+                {
+                    h.Patch(loot, prefix: new HarmonyLib.HarmonyMethod(typeof(LootSalePatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    LootSaleInstalled = Ours(loot);
+                    Parts["loot"] = "held lords sell loot only " + (LootSaleInstalled ? "attached" : "did not attach") + Others(loot);
+                }
+                if (prisoners == null) Parts["ransom"] = "prisoner sales: the game's was not found, so sales are not measured";
+                else
+                {
+                    h.Patch(prisoners, prefix: new HarmonyLib.HarmonyMethod(typeof(PrisonerSalePatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
+                            postfix: new HarmonyLib.HarmonyMethod(typeof(PrisonerSalePatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    PrisonerSaleInstalled = Ours(prisoners);
+                    Parts["ransom"] = "prisoner sales measured " + (PrisonerSaleInstalled ? "attached" : "did not attach") + Others(prisoners);
+                }
+                if (results == null) Parts["takings"] = "battle takings: the game's handing out of a battle's results was not found, so they are not recorded";
+                else
+                {
+                    h.Patch(results, prefix: new HarmonyLib.HarmonyMethod(typeof(TakingsPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
+                            postfix: new HarmonyLib.HarmonyMethod(typeof(TakingsPatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    TakingsInstalled = Ours(results);
+                    Parts["takings"] = "battle takings " + (TakingsInstalled ? "attached" : "did not attach") + Others(results);
+                }
+            }
             Log.Line("game hooks: " + Status);
-            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, storm_rule = StormInstalled, status = Status });
+            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, storm_rule = StormInstalled,
+                                                 loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
         }
 
         /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>

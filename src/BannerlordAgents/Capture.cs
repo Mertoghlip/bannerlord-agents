@@ -287,10 +287,11 @@ namespace BannerlordAgents
             {
                 if (cl == null || cl.IsEliminated) continue;
                 bool ruler = cl == watched.RulingClan;
+                // every clan's gold (its leader's) and its day's change by the game's reckoning: the realm's own purses (0.9.4)
                 seat.Clans.Add(new ClanRow
                 {
                     Id = cl.StringId, Name = Names.Faction(cl), Leader = cl.Leader?.StringId, Influence = (float)Math.Round(cl.Influence),
-                    Gold = ruler ? cl.Gold : -1, Ruler = ruler
+                    Gold = cl.Leader != null ? cl.Gold : -1, Daily = Purse.DailyOf(cl), Ruler = ruler
                 });
             }
         }
@@ -314,6 +315,7 @@ namespace BannerlordAgents
                 r.SizeLimit = party.PartySizeLimit;
                 r.FoodDays = p.GetNumDaysForFoodToLast();
                 r.Clan = leader?.Clan?.StringId;
+                if (leader != null) Purse.Fill(r, p);
             }
             r.Leader = leader?.StringId;
             Settlement inside = p.CurrentSettlement;

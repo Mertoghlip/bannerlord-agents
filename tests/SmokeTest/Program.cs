@@ -88,6 +88,8 @@ namespace SmokeTest
             Console.WriteLine("---- agents.record show ----");
             Console.WriteLine(Brain.ShowDecisions(10));
             Files.FlushAll();
+            // the checks read the whole report, not the console's first lines (since 0.9.4 YOUR PURSE comes before the lords)
+            now = File.ReadAllText(Path.Combine(dir, "reports", "orcs_now.txt"));
 
             Check(Brain.PokesWatched == 3, "three pokes for the orcs (first look, the player's army, the raid), got " + Brain.PokesWatched);
             Check(now.Contains("YOUR LORDS AND ARMIES") && now.Contains("Bolg"), "the report lists the orc lords");
@@ -260,7 +262,7 @@ namespace SmokeTest
 
             List<string> problems = Library.Problems();
             Check(problems.Count == 0, "the tool library passes its own checks" + (problems.Count > 0 ? ": " + string.Join("; ", problems) : ""));
-            Check(Library.All.Count == 19, "the library holds 19 orders (7 moves, 9 tools, 3 for armies), got " + Library.All.Count);
+            Check(Library.All.Count == 20, "the library holds 20 orders (7 moves, 10 tools, 3 for armies), got " + Library.All.Count);
             Check(Library.Text().Contains("**join** (target: one of your lords)") && Library.Text().Contains("more than 1.5 times the besiegers' strength"),
                   "the library has the join order, and relieve says when the defenders inside sally out");
             var scope = new TestScope();
@@ -384,6 +386,7 @@ namespace SmokeTest
             WatchShadowTests(dir, moves, released);
             SiegeReliefTests(dir);
             SiegeControlTests(dir, moves, released, thens);
+            MoneyTests(dir, moves, released);
             FieldLessonsTests(dir, moves);
             GameClockTests(dir);
             RoadTests();
@@ -934,6 +937,60 @@ namespace SmokeTest
         /// nearest castle, stopping without the next order), the siege clock by the rule, a storm begun now, the enemy realms as
         /// their encyclopedia pages show them, and a field battle's odds in the facts.
         /// </summary>
+        /// <summary>
+        /// 0.9.4, money (Mert, Oct 23: the caps "should be the agent's call", and a battle's loot and ransom weighed): the report's
+        /// purse, the battles' takings reckoned and read back at a load, the sell order and its call-back, and the library's text.
+        /// </summary>
+        private static void MoneyTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released)
+        {
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            PartyRow Lord(string id, float x, int men, int limit) => new PartyRow
+            {
+                Id = id, Leader = "lord_" + id, Name = id, Faction = "orcs", Kind = "lord", Men = men, SizeLimit = limit, Strength = men * 1.5f, Speed = 4, FoodDays = 10, X = x, Y = 100, Doing = "Hold", Spottable = true
+            };
+            var capped = Lord("p_m1", 102, 80, 700);
+            capped.Gold = 10555; capped.Wages = 354; capped.WageCap = 359;
+            var rich = Lord("p_m2", 104, 300, 700);
+            rich.Gold = 8000; rich.Wages = 900; rich.WageCap = 2000; rich.CapOurs = true; rich.Loot = 3400; rich.LootPieces = 41; rich.Prisoners = 23; rich.PrisonerLords = 1; rich.Ransom = 1150;
+            Snapshot s = ToolWorld(6000, capped, rich);
+            s.Clans.Add(new ClanRow { Id = "clan_a", Name = "Clan A", Leader = "lord_p_m1", Gold = 10555, Daily = -1240, Ruler = true });
+            string report = Views.Report(Views.Build(s, "orcs", s.WatchedSees, s.HostileToWatched, null), null);
+            Check(report.Contains("YOUR PURSE") && report.Contains("Clan A (yours) 10,555 (-1,240)") && report.Contains("At their wage cap, so they cannot recruit (1): p_m1 [lord_p_m1] wages 354 of 359")
+                  && report.Contains("Caps you set: p_m2 [lord_p_m2] 2,000 (wages 900)") && report.Contains("Carrying loot (1 lords, about 3,400 in all)") && report.Contains("about 1,150 in ransom"),
+                  "the report's purse: the clans' gold and its day, who is at his wage cap, the caps set, the loot and prisoners carried");
+            Check(Takings.Text("orcs").Contains("too few to reckon"), "with no won battle on record, what a battle brings in is not reckoned: " + Takings.Text("orcs"));
+            for (int i = 0; i < 3; i++) Takings.Add(new TakingsRow { Hours = 6000 + i, Realm = "orcs", Kind = "field", EnemyFallen = 100, Loot = 2000, Pieces = 30, Prisoners = 40, Ransom = 800, Men = 300 });
+            Check(Takings.Text("orcs").Contains("each 100 enemy men fallen left about 2,000 in loot and 40 prisoners, a prisoner worth about 20 in ransom"),
+                  "three won battles reckon what each 100 fallen leave: " + Takings.Text("orcs"));
+            Files.FlushAll();
+            Takings.Reset(Brain.Dir);
+            Check(Takings.For("orcs").Battles == 3 && Takings.For("dg").Battles == 0, "the takings are kept in the campaign's folder and read back at a load, each realm its own");
+
+            // the sell order rides into a friendly castle or town, then calls back with what the sale brought, and ends
+            var seller = Lord("p_s1", 130, 200, 400);
+            Brain.OnHour(ToolWorld(6010, seller));
+            moves.Clear();
+            released.Clear();
+            Runner.Start(991, new ToolOrder { Tool = "sell", Lord = "lord_p_s1", LordName = "S1", Party = "p_s1", At = "castle_two" });
+            bool rode = moves.Any(m => m.Key == 991 && m.Value.Verb == "enter" && m.Value.Place == "castle_two");
+            var inside = Lord("p_s1", 140, 200, 400);
+            inside.InSettlement = "castle_two";
+            inside.SaleHours = 6010.5;
+            inside.SaleText = "handed over 23 prisoners for 1,150 in ransom at Orc Keep";
+            Brain.OnHour(ToolWorld(6011, inside));
+            Brain.OnHour(ToolWorld(6012, inside));
+            string sold = Notices();
+            Check(rode && released.Contains(991) && sold.Contains("p_s1 cashed in: handed over 23 prisoners for 1,150 in ransom at Orc Keep"),
+                  "the sell order rides into the castle, calls back with what the sale brought, and lets the lord go (rode " + rode + ", let go " + released.Contains(991)
+                  + ", last notice: " + sold.Substring(Math.Max(0, sold.Length - 300)).Replace("\n", " | ") + ")");
+            Runner.Ended(991, "test over");
+            moves.Clear();
+            released.Clear();
+            string lib = Library.Text();
+            Check(Library.Get("sell")?.At == "friendly_fort" && lib.Contains("never food, horses, pack animals, herds, books or banners") && lib.Contains("**wages** (cap, or target \"none\" or \"game\"; lords)"),
+                  "the library has the sell order (loot only, never food or horses) and the wages order");
+        }
+
         private static void SiegeControlTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released, List<KeyValuePair<int, JObject>> thens)
         {
             string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }

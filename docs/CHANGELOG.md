@@ -909,3 +909,27 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the installed DLL has sha256 `A64709B5A6457BB8…`, the war room's `WarRoom.dll` `5A5A9197059AAF20…`;
   - the war rooms and the dashboard were stopped for the build and started again at 13:16.
 - **Not yet seen in a game.**
+
+### 13:55 · Version 0.9.4: money for the agents (their own wage caps, a purse, a loot-only sell order, a battle's worth) · commit COMMIT (installed 13:54)
+- **Why:** Mert, Oct 23: "The caps should be the agent's call. It should be able to estimate the value of loot and prisoner ransom money from a battle and decide accordingly. An understanding of economics should be given to it now. When needed, it should send armies/lords to friendly settlements that have battle loot to go and sell stuff and ransom prisoners." On the plan: "Agents should be able to set caps freely. I would also be careful with the sell order and make sure that an order to sell actually sells loot and just loot, instead of important food and other things."
+- **The game's rules it rests on** (1.4.8, read in its code): each lord pays his men every day from his own purse; his clan's leader tops him back up to 5,000 while the leader has 4,000 or more; a lord above 10,000 hands a tenth of the excess to his clan daily; unpaid wages cost morale and men desert. The wage cap only stops recruiting. Computer lords sell everything but food and good riding horses on entering a friendly town (pack animals too), and hand prisoners over on entering a friendly castle or town; a soldier fetches a quarter of his recruit price.
+- **What** ([TOOLS.md](TOOLS.md#money-since-094); new `Purse.cs`, `PurseView.cs`, `Tools/Library/sell.json`):
+  - **The purse in the hourly copy:** each own lord's gold, wages and cap (and whether the agent set it), the loot he carries (its worth and pieces, worked out again only when his goods change), his prisoners and their ransom by the game's reckoning, and his last sale; every clan's gold, no longer the ruler's only, and its change a day by the game's own reckoning (the clan screen's number, worked out at each clan's daily tick).
+  - **YOUR PURSE** in the report: the clans' gold and its day, the lords at their wage cap, the caps the agent set, loot and prisoners carried, and the battles' takings; in full in the council's briefing; per lord in the look-ups.
+  - **The wages order** (plain, like adjust): a cap a day, no cap, or the game's own again, for a lord and any lords listed with him. Put back right after the game's daily setting and checked hourly; handed back to the game around every save, since a party's cap is saved with the game; cleared at every load like every order.
+  - **The sell order** (tool, at a castle or town of the realm or an ally): rides in, sells, and calls back with what it got. **Loot only:** weapons, armour, shields, ammunition, harness and plunder (goods that are not food); never food, horses (riding, war or pack), herds, books or banners. For every lord holding one of our orders, the game's own sale on entering a town is replaced by this loot-only one, so recruit tours sell loot only too. Prisoners go by the game's own sale, measured.
+  - **A battle's worth:** each won battle's takings (loot, prisoners, ransom, the enemy's fallen shared among the winners by men) are recorded into the campaign's `takings.jsonl` and read back at every load. With 3 won battles on record, the war room's `battle_odds` adds to a win what it would bring in, from the realm's own battles.
+  - **Three new game hooks** (always on): the loot-only sale for held lords, the prisoner sale measured, and a won battle's results counted before and after.
+  - **The instructions** (`agent/warroom-system.template.md`): a "Money" section with the game's rules above in plain words, and in "Asking the way" that `battle_odds` says what a win would bring in.
+  - The library's text: a Money part (the wages order, the sell order).
+  - Version 0.9.4 (module and war room).
+- **Outside the repository:** the same "Money" section and sentence in both agents' instructions, `C:\Users\karab\Projects\orc-war-council\warroom-system.md` and `C:\Users\karab\Projects\dolguldur-war-council\warroom-system.md`.
+- **Checks:**
+  - the smoke test passed in full (219 checks): 6 new (the report's purse; no reckoning before 3 battles; the reckoning after them; the takings read back at a load, each realm its own; the sell order riding in, calling back with the sale and letting the lord go; the library's two orders), and 2 changed (the first report test reads the whole report, not the console's first 24 lines, which the purse pushed the enemy lines out of; the library now holds 20 orders);
+  - the war room's self-test passed: 1 new, a won field battle's takings;
+  - the dashboard's 27 checks passed;
+  - 571 game references, 0 missing (RefCheck);
+  - an offline dry run applied all 6 of the module's game hooks (the 3 new and the 3 older) to the real game's and Party AI Controls' methods with the pack's Harmony 2.4.2: all bound;
+  - the installed DLL has sha256 `10DB38BEE54EB417…`, the war room's `WarRoom.dll` `F2D6660262D0825E…`;
+  - the war rooms and the dashboard were stopped for the build and started again at 13:55.
+- **Not yet seen in a game.**

@@ -60,6 +60,15 @@ namespace BannerlordAgents
         /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts, and the lord's clan.</summary>
         public int SizeLimit, FoodDays = -1;
         public string Clan;
+        /// <summary>
+        /// The watched realms' own lords too (0.9.4, Purse): his gold; his wages a day and their cap (-1: no cap; CapOurs: the
+        /// agent set it); the loot he carries (its worth at base value, and pieces); his prisoners (soldiers, lords, and their
+        /// ransom by the game's reckoning); and his last sale (the hour, and in words).
+        /// </summary>
+        public int Gold = -1, Wages, WageCap = -1, Loot, LootPieces, Prisoners, PrisonerLords, Ransom;
+        public bool CapOurs;
+        public double SaleHours = double.NaN;
+        public string SaleText;
         /// <summary>The game's own flag: the player's party can see this one.</summary>
         public bool SeenByPlayer;
         /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>
@@ -214,14 +223,29 @@ namespace BannerlordAgents
         public double Since = double.NaN;
     }
 
-    /// <summary>One clan of the watched realm: its influence (the price of calling lords into an army), and the ruler's own clan's gold.</summary>
+    /// <summary>One clan of the watched realm: its influence (the price of calling lords into an army), and its gold.</summary>
     internal sealed class ClanRow
     {
         public string Id, Name, Leader;
         public float Influence;
-        /// <summary>Known only for the ruler's own clan (the realm's treasury); -1 for the others.</summary>
+        /// <summary>Its leader's gold, which pays the clan's lords their top-ups and sets the game's wage caps (every clan of the realm since 0.9.4; before, the ruler's only); -1 unknown.</summary>
         public int Gold = -1;
+        /// <summary>Its gold's change a day by the game's own reckoning (the clan screen's number; 0.9.4); int.MinValue when not worked out.</summary>
+        public int Daily = int.MinValue;
         public bool Ruler;
+    }
+
+    /// <summary>
+    /// What one won battle brought one watched realm (0.9.4, TakingsPatch): its winning lords and their men, the enemy's fallen
+    /// (the beaten side's casualties, shared out among the winners by men), and the loot, prisoners and ransom its lords gained.
+    /// </summary>
+    internal sealed class TakingsRow
+    {
+        public string Type = "takings";
+        public double Hours;
+        public string Date, Realm, Kind, Place, Load;
+        public List<string> Lords = new List<string>();
+        public int Men, EnemyFallen, Loot, Pieces, Prisoners, PrisonerLords, Ransom;
     }
 
     internal sealed class FactionRow

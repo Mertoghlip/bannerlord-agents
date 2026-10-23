@@ -77,12 +77,13 @@ namespace BannerlordAgents
         public static readonly string[] Verbs = { "goto", "garrison", "patrol", "defend", "engage", "besiege", "raid", "recruit", "hold" };
 
         /// <summary>Order words that are not tools: they act at once.</summary>
-        private static readonly string[] Plain = { "free", "release", "adjust", "add", "disband" };
+        private static readonly string[] Plain = { "free", "release", "adjust", "add", "disband", "wages" };
 
         public const string Usage =
             "Usage: agents.order <lord> <order> <place or lord> [setting=value ...] [lords=name,name]\n" +
             "  moves: goto, patrol, engage, follow, leave, recruit, hold, free\n" +
-            "  tools: defend, garrison, besiege, raid, hunt, screen, rest; armies: gather, relieve, add, release, disband; adjust\n" +
+            "  tools: defend, garrison, besiege, raid, hunt, screen, rest, sell; armies: gather, relieve, add, release, disband; adjust\n" +
+            "  money: wages cap=<a day> | wages none | wages game\n" +
             "  examples: agents.order Throkmaw defend Caradhras radius=25\n" +
             "            agents.order Krumbash gather Methedras lords=Naglur,Vughza\n" +
             "  agents.tools lists every order with its settings. Names can be partial, accents optional, or ids.";
@@ -118,6 +119,13 @@ namespace BannerlordAgents
         }
 
         public static HashSet<MobileParty> HeldParties() => new HashSet<MobileParty>(Active.Where(o => o.Party != null).Select(o => o.Party));
+
+        /// <summary>Does one of our orders hold this lord's party? (The money hooks ask on every settlement entered: no allocation.)</summary>
+        public static bool Holds(MobileParty p)
+        {
+            for (int i = 0; i < Active.Count; i++) if (ReferenceEquals(Active[i].Party, p)) return true;
+            return false;
+        }
 
         /// <summary>For the lord watch: did we flip this party's switch since it last looked? (Consumes the mark.)</summary>
         public static bool TookSwitch(MobileParty p) => Toggled.Remove(p);
@@ -246,6 +254,7 @@ namespace BannerlordAgents
                 return name + " is led by the game's own AI again";
             }
             if (party == null || party.LeaderHero != lord || !party.IsActive) return name + " is not leading a party right now.";
+            if (verb == "wages") return WagesOrder(lord, party, a, realm, shadow, live, ref status);
             if (party.AttachedTo != null && party.Army?.LeaderParty != party)
                 return name + " marches in " + Names.Party(party.Army?.LeaderParty) + "'s army. Order the army's leader instead.";
 
@@ -682,6 +691,39 @@ namespace BannerlordAgents
         }
 
         /// <summary>add, release (with lords) and disband, for a lord who leads an army.</summary>
+        /// <summary>
+        /// The wages order (0.9.4; Mert: the caps "should be the agent's call"): the most a lord's party may pay in wages a day, which
+        /// decides whether he may recruit: "cap" a number, or target "none" (no cap) or "game" (the game's own daily cap again).
+        /// With lords, the same for those lords too. Kept until changed or the campaign is loaded again (Wages).
+        /// </summary>
+        private static string WagesOrder(Hero lord, MobileParty party, AgentChannel.AgentOrder a, Kingdom realm, bool shadow, bool live, ref string status)
+        {
+            string word = (a.Target ?? a.At ?? "").Trim().Trim('"').ToLowerInvariant();
+            int? cap;
+            if (a.Settings.TryGetValue("cap", out double c) && !double.IsNaN(c)) cap = (int)Math.Round(Math.Max(0, c));
+            else if (word == "none" || word == "no cap" || word == "lift") cap = Wages.None;
+            else if (word == "game" || word == "the game's") cap = null;
+            else return "wages needs \"cap\" (the most his party may pay in wages a day), or \"target\": \"none\" (no cap) or \"game\" (the game's own cap again)";
+            var parties = new List<MobileParty> { party };
+            foreach (string w in a.Lords)
+            {
+                Hero h = FindLord(realm, w, out string error);
+                if (h == null) return error;
+                if (h == Hero.MainHero) return Names.Hero(h) + " takes no orders from an agent";
+                MobileParty hp = h.PartyBelongedTo;
+                if (hp == null || hp.LeaderHero != h || !hp.IsActive) return Names.Hero(h) + " is not leading a party right now.";
+                if (!shadow && live && !ObeysAgent(h)) return NotYours(h);
+                if (!parties.Contains(hp)) parties.Add(hp);
+            }
+            string what = cap == null ? "the game's own wage cap again" : cap.Value >= Wages.None ? "no wage cap" : "a wage cap of " + Text.N(cap.Value) + " a day";
+            if (shadow) { status = "checked"; return "valid: " + string.Join(", ", parties.Select(p => Names.Hero(p.LeaderHero))) + " would get " + what + " (shadow mode: not carried out)"; }
+            if (!live) return NotYours(lord);
+            var said = parties.Select(p => Wages.Set(p, cap)).ToList();
+            Diag.Event("order", "wages", new { lords = parties.Select(p => p.LeaderHero?.StringId).ToList(), cap, source = a.File, poke = a.Poke });
+            status = "applied";
+            return string.Join("; ", said);
+        }
+
         private static string ArmyChange(string verb, Hero lord, MobileParty lp, AgentChannel.AgentOrder a, Kingdom realm, string source, bool shadow, bool live, ref string status)
         {
             string name = Names.Hero(lord);
@@ -1367,6 +1409,8 @@ namespace BannerlordAgents
                 }
                 p.Ai.SetDoNotMakeNewDecisions(true);
                 Toggled.Add(p);
+                // a sell order for a lord already inside its place: the game sells only on entering, so the sale is made now (0.9.4)
+                if (o.Tool == "sell" && o.Verb == "enter" && o.Place != null && p.CurrentSettlement == o.Place) Purse.CashIn(p, o.Place);
             }
             finally { Witness.Ours = false; }
         }

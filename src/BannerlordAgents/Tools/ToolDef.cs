@@ -88,7 +88,8 @@ namespace BannerlordAgents.Tools
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
             ["lords_arrived"] = 0, ["lords_count"] = 0, ["min"] = 2, ["max"] = 2, ["pick"] = 3, ["round"] = 1,
             ["doing_of"] = 1, ["toward_of"] = 1, ["where_of"] = 1,
-            ["relief_coming"] = 2, ["relief_count"] = 2, ["relief_of"] = 2, ["relief_within"] = 3, ["prep_hours"] = 1, ["storm_text"] = 1
+            ["relief_coming"] = 2, ["relief_count"] = 2, ["relief_of"] = 2, ["relief_within"] = 3, ["prep_hours"] = 1, ["storm_text"] = 1,
+            ["sale_text"] = 1
         };
 
         public bool Valid => Problems.Count == 0;
@@ -335,6 +336,12 @@ namespace BannerlordAgents.Tools
             sb.AppendLine("- **release** (lords): lets lords go from the leader's army; they go back to the game's own AI. Without lords, release is the same as free.");
             sb.AppendLine("- **disband**: breaks up the leader's army.");
             sb.AppendLine("- The game's own rules still hold: an army left idle (holding, or waiting at a friendly place) for about two days breaks up, and so does one whose cohesion runs out.");
+            sb.AppendLine();
+            sb.AppendLine("Money:");
+            sb.AppendLine("- **wages** (cap, or target \"none\" or \"game\"; lords): the most this lord's party may pay in wages a day, which decides whether he may recruit: a lord at his cap cannot, whatever his gold. "
+                          + "cap: a number of denars a day; target \"none\": no cap; target \"game\": the game's own cap again, which it sets each day from the gold of his clan's leader. "
+                          + "With lords, the same for those lords too. It does not pay anyone: each lord still pays his men from his own purse. Your cap stands until you change it or the campaign is loaded again.");
+            sb.AppendLine("- **sell** (above, a tool): sends a lord to cash in his loot and prisoners.");
             sb.AppendLine();
             sb.AppendLine("Changing orders:");
             sb.AppendLine("- Give a lord a new order to replace the old one. Lords you do not mention keep their orders.");

@@ -28,6 +28,8 @@ namespace BannerlordAgents
         /// <summary>The watched realm only: its lords held prisoner, and the whole realm in a few numbers.</summary>
         public List<ViewCaptive> Captives = new List<ViewCaptive>();
         public RealmSum Sum;
+        /// <summary>The watched realm only: its purse in a few lines (0.9.4, PurseView).</summary>
+        public List<string> Purse = new List<string>();
         /// <summary>The game's clocks the realm can see (0.7.3, Forecast): each siege and each battle, run ahead by the game's own rules.</summary>
         public List<string> Clocks = new List<string>();
         /// <summary>The realms at war with it, as the encyclopedia shows any player (0.7.4): living lords, and their parties' strength in all, beside what of it is in sight.</summary>
@@ -228,6 +230,7 @@ namespace BannerlordAgents
             {
                 foreach (CaptiveRow c in s.Captives) v.Captives.Add(Captive(s, c));
                 v.Sum = Sum(s, fid, own);
+                v.Purse = PurseView.Lines(s, fid);
             }
             v.Clocks = Clocks(s, fid, sees, allies);
             v.EnemyRealms = EnemyRealms(s, fid, sees);
@@ -480,6 +483,11 @@ namespace BannerlordAgents
                               + (r.Besieged > 0 ? "; " + r.Besieged + " under siege" : "") + "). Villages: " + r.Villages
                               + (r.Looted + r.Raided > 0 ? " (" + string.Join(", ", new[] { r.Looted > 0 ? r.Looted + " looted" : null, r.Raided > 0 ? r.Raided + " being raided" : null }.Where(x => x != null)) + ")" : "") + ".");
                 sb.AppendLine("- Prisoners of the enemy: " + (r.Captives == 0 ? "none of your lords." : r.Captives + " of your lords (YOUR CAPTURED LORDS)."));
+            }
+            if (v.Purse.Count > 0)
+            {
+                sb.AppendLine().AppendLine("YOUR PURSE");
+                foreach (string l in v.Purse) sb.AppendLine("- " + l);
             }
 
             sb.AppendLine().AppendLine("YOUR LORDS AND ARMIES (" + v.Forces.Count + ", " + Text.N(v.Forces.Sum(f => f.ArmyMen > 0 ? f.ArmyMen : f.Men)) + " men)");

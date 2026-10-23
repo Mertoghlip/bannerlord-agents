@@ -261,6 +261,9 @@ namespace BannerlordAgents
                 sb.AppendLine(l.Name + " [" + l.Tag + "]: " + Text.N(World.MenOf(r)) + " men" + (r.ArmyMen > 0 ? " in an army of " + r.ArmyParties + " parties" : "") + ", strength " + Text.N((int)l.Strength)
                               + ranks + wounded + (r.FoodDays >= 0 ? ", food for " + r.FoodDays + " days" : "") + ", speed " + Text.D(World.Speed(r)) + "; " + Views.Doing(w.S, r) + "; " + l.Order
                               + ". As of " + Text.When(w.Hours) + ".");
+                string purse = PurseView.LordLine(r);
+                if (purse != null)
+                    sb.AppendLine("Purse: " + purse + "." + (!double.IsNaN(r.SaleHours) && r.SaleText != null ? " Last sale, " + Math.Round(w.Hours - r.SaleHours) + " hours ago: " + r.SaleText + "." : ""));
                 sb.AppendLine("Hours to your holdings, nearest first:");
                 foreach (SettlementRow h in own.OrderBy(h => Hours(w, r, h.Id)).Take(15)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + H(Hours(w, r, h.Id)));
                 List<PartyRow> foes = w.EnemiesNear(r.Id, 60);
@@ -330,6 +333,7 @@ namespace BannerlordAgents
             ClanRow mine = s.Clans.FirstOrDefault(c => c.Ruler);
             if (mine != null) sb.AppendLine("- Your own clan (" + mine.Name + "): gold " + Text.N(mine.Gold) + ", influence " + Text.N((int)mine.Influence) + ".");
             else sb.AppendLine("- Not known this hour.");
+            foreach (string l in PurseView.Lines(s, w.Realm, 30)) sb.AppendLine("- " + l);
             List<ClanRow> others = s.Clans.Where(c => !c.Ruler).OrderByDescending(c => c.Influence).ToList();
             if (others.Count > 0)
                 sb.AppendLine("- Influence of your other clans (an army's leader's clan pays influence for every lord called into it): "
@@ -343,8 +347,10 @@ namespace BannerlordAgents
                 string ranks = r.SizeLimit > 0 ? " of " + Text.N(r.SizeLimit) + " (" + Math.Round(100.0 * r.Men / r.SizeLimit) + "%)" : "";
                 string army = r.ArmyLeader == r.Id ? ", leads an army of " + Text.N(r.ArmyMen) + " men in " + r.ArmyParties + " parties" : r.ArmyLeader != null ? ", in " + w.Name(r.ArmyLeader) + "'s army" : "";
                 string clan = r.Clan != null && clanNames.TryGetValue(r.Clan, out ClanRow cr) ? "; clan " + cr.Name + (cr.Ruler ? " (yours)" : "") + ", influence " + Text.N((int)cr.Influence) : "";
+                string purse = PurseView.LordLine(r);
                 sb.AppendLine("- " + l.Name + " [" + l.Tag + "]: " + Text.N(r.Men) + ranks + " men" + army + ", strength " + Text.N((int)l.Strength)
-                              + (r.FoodDays >= 0 ? ", food " + r.FoodDays + " days" : "") + ", speed " + Text.D(World.Speed(r)) + "; " + Views.Doing(s, r) + "; " + l.Order + clan + ".");
+                              + (r.FoodDays >= 0 ? ", food " + r.FoodDays + " days" : "") + ", speed " + Text.D(World.Speed(r)) + "; " + Views.Doing(s, r) + "; " + l.Order + clan
+                              + (purse != null ? "; " + purse : "") + ".");
             }
 
             List<SettlementRow> forts = s.Settlements.Where(h => h.Faction == w.Realm && World.IsFort(h)).OrderBy(h => h.Name).ToList();

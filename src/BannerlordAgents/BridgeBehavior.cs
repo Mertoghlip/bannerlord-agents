@@ -43,6 +43,7 @@ namespace BannerlordAgents
             Diag.Count("campaign loads");
             Watchdog.NewCampaign();
             Orders.Reset();
+            Purse.Reset();
             Notices.Reset();
             Recorder.Reset();
             PacReader.Reset();
@@ -181,6 +182,7 @@ namespace BannerlordAgents
             CampaignEvents.OnSessionLaunchedEvent.AddNonSerializedListener(this, OnSessionLaunched);
             CampaignEvents.HourlyTickEvent.AddNonSerializedListener(this, OnHourlyTick);
             CampaignEvents.DailyTickEvent.AddNonSerializedListener(this, OnDailyTick);
+            CampaignEvents.DailyTickClanEvent.AddNonSerializedListener(this, OnDailyClan);
             CampaignEvents.TickEvent.AddNonSerializedListener(this, OnTick);
             CampaignEvents.OnBeforeSaveEvent.AddNonSerializedListener(this, OnBeforeSave);
             CampaignEvents.OnSaveOverEvent.AddNonSerializedListener(this, OnSaveOver);
@@ -257,6 +259,7 @@ namespace BannerlordAgents
                     snap.Sight = Vision.Audit();
                 }
                 Orders.Hourly();
+                Wages.Hourly();
                 LordWatch.Refresh();
                 Recorder.PollVassalOrders();
                 Background.Post("hourly view and pokes", () => Brain.OnHour(snap));
@@ -317,6 +320,14 @@ namespace BannerlordAgents
             if (Bridge.Running && Settings.Bridge) Guard("recruitment check", () => Recruitment.Daily());
         }
 
+        /// <summary>Every clan's day (after the game's own daily tick for it, which sets its wage caps): a watched realm's clan's forecast, and our caps put back. Many a day, so no Guard.</summary>
+        private void OnDailyClan(Clan clan)
+        {
+            if (!Bridge.Running) return;
+            try { Purse.OnDailyClan(clan); }
+            catch (Exception e) { Diag.Error("a clan's day", e); }
+        }
+
         /// <summary>Every recruit in the world: a hot path, so no Guard (it would allocate); the watched realm's are counted.</summary>
         private void OnTroopRecruited(Hero recruiter, Settlement where, Hero source, CharacterObject troop, int amount)
         {
@@ -325,10 +336,11 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Error("recruit count", e); }
         }
 
-        private void OnBeforeSave() => Guard("save hand-back", Orders.HandBackForSave);
+        private void OnBeforeSave() => Guard("save hand-back", () => { Orders.HandBackForSave(); Wages.HandBackForSave(); });
         private void OnSaveOver(bool saved, string name) => Guard("save take-back", () =>
         {
             Orders.TakeBackAfterSave(saved, name);
+            Wages.TakeBackAfterSave();
             // the save's history note (History): which records its world has lived through, so loading it later finds exactly those
             if (!saved || Bridge.History == null || string.IsNullOrEmpty(name)) return;
             object note = Bridge.History.NoteFor(name, CampaignTime.Now.ToHours);

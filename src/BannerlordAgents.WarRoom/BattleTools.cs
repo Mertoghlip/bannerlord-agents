@@ -142,6 +142,9 @@ namespace BannerlordAgents.WarRoom
                           + worth.ToString("0.0", CultureInfo.InvariantCulture) + " (once a ram is built; each further engine lowers it). At first the besiegers lose about " + Words.N(o.AttackerLossPerHour)
                           + " men an hour, the defenders about " + Words.N(o.DefenderLossPerHour) + ".");
                 lines.Add("- Run ahead: " + Outcome(o, "the besiegers", "the defenders", runs, "besiegers", "defenders") + ". Nobody can leave a battle once in it.");
+                // what a win would bring in (0.9.4): storming, the defenders who fall; defending, the besiegers who fall
+                if (weStorm && o.Winner == "attackers") lines.Add(TakingsLine(view, walls.Men - o.DefendersLeft));
+                else if (!weStorm && o.Winner == "defenders") lines.Add(TakingsLine(view, besiegers.Men - o.AttackersLeft));
             }
             else
             {
@@ -156,9 +159,26 @@ namespace BannerlordAgents.WarRoom
                 lines.Add("- In the open: two rounds an hour, each side's blows growing with its own men: yours " + sA + " a round, theirs " + sD + ". At first you lose about "
                           + Words.N(o.AttackerLossPerHour) + " men an hour, they about " + Words.N(o.DefenderLossPerHour) + ".");
                 lines.Add("- Run ahead: " + Outcome(o, "you", "they", runs, "of yours", "of theirs") + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat (nothing is captured then).");
+                if (o.Winner == "attackers") lines.Add(TakingsLine(view, enemy.Men - o.DefendersLeft));
             }
             Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, ours = oursQ, theirs = theirsQ, place = atQ, lines });
             return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// What a win would bring in (0.9.4): the enemy's fallen, times what each fallen man left the realm in its own won battles on
+        /// record (the bridge's takings, in the view file), or why there is no reckoning yet.
+        /// </summary>
+        private static string TakingsLine(JsonObject view, double fallen)
+        {
+            JsonObject t = view["takings"] as JsonObject;
+            int battles = I(t?["battles"]), enough = Math.Max(1, I(view["takings_enough"]));
+            if (t == null || battles < Math.Max(3, enough) || F(t["fallen"]) <= 0)
+                return "- What a win would bring in: your realm has won " + battles + (battles == 1 ? " battle" : " battles") + " on record, too few to reckon it (it takes " + Math.Max(3, enough) + ").";
+            fallen = Math.Max(0, fallen);
+            double loot = fallen * Num(t["loot_per_fallen"]), prisoners = fallen * Num(t["prisoners_per_fallen"]), ransom = prisoners * Num(t["ransom_per_prisoner"]);
+            return "- What a win would bring in, by your realm's " + battles + " won battles on record: about " + Words.N(fallen) + " of theirs fall, leaving about " + Words.N(loot) + " in loot and "
+                   + Words.N(prisoners) + " prisoners worth about " + Words.N(ransom) + " in ransom, into the winning lords' purses once sold (loot in a town, prisoners in a castle or town).";
         }
 
         private static string Outcome(BattleOutcome o, string a, string d, BattleOutcome[] runs, string aOf, string dOf)

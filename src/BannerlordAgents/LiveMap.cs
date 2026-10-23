@@ -151,7 +151,9 @@ namespace BannerlordAgents
                 // the castles and towns of each realm at war with it, as the map shows any player (0.7.4, for the "roads in" question)
                 EnemyHoldings = EnemyHoldings(s, fid),
                 // the marching rules in force, for the "ask the way" tool (GamePace, 0.7.3): the speed model, each people's bonuses, the scout perks' values
-                s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.PerkValues
+                s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.PerkValues,
+                // what the realm's own won battles brought in, for the "battle odds" question's takings (0.9.4)
+                Takings = Takings.For(fid), TakingsEnough = Takings.Enough
             }));
         }
 
