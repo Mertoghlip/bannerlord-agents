@@ -18,13 +18,14 @@ namespace BannerlordAgents
     internal static class Audit
     {
         private static readonly Regex Brackets = new Regex(@"\[([^\]\s]+)\]", RegexOptions.Compiled);
-        private static double _lastSawEnemy = -1;
-        private static bool _blindAlarmed;
+        // each agent's realm's own (since 0.9 the sight check runs for every agent)
+        private static readonly Dictionary<string, double> _lastSawEnemy = new Dictionary<string, double>();
+        private static readonly HashSet<string> _blindAlarmed = new HashSet<string>();
 
         public static void Reset()
         {
-            _lastSawEnemy = -1;
-            _blindAlarmed = false;
+            _lastSawEnemy.Clear();
+            _blindAlarmed.Clear();
         }
 
         /// <summary>The fog check of one report: every line must be something the realm owns, sees, remembers or knows from the map.</summary>
@@ -105,8 +106,9 @@ namespace BannerlordAgents
         public static void CheckSnapshot(Snapshot s)
         {
             var odd = new List<string>();
-            if (s.Watched != null && !s.Parties.Any(r => r.Faction == s.Watched && r.Kind == "lord"))
-                odd.Add("the watched realm has no lords leading parties");
+            foreach (string realm in s.Seats != null && s.Seats.Count > 0 ? s.Seats.Select(x => x.Realm).ToList() : new List<string> { s.Watched })
+                if (realm != null && !s.Parties.Any(r => r.Faction == realm && r.Kind == "lord"))
+                    odd.Add(Views.FactionName(s, realm) + ", a watched realm, has no lords leading parties");
             foreach (PartyRow r in s.Parties)
             {
                 if (odd.Count >= 10) break;
@@ -132,25 +134,25 @@ namespace BannerlordAgents
                 total++;
                 if (s.WatchedSees.ContainsKey(r.Id)) seen++;
             }
-            if (_lastSawEnemy < 0 || seen > 0) _lastSawEnemy = s.Hours;
-            if (seen > 0) _blindAlarmed = false;
+            string realm = s.Watched, name = Views.FactionName(s, s.Watched);
+            if (!_lastSawEnemy.ContainsKey(realm) || seen > 0) _lastSawEnemy[realm] = s.Hours;
+            if (seen > 0) _blindAlarmed.Remove(realm);
             VisionStats v = s.Vision ?? new VisionStats();
             Diag.Event("vision", "hour", new
             {
-                eyes = v.Eyes, holdings_looked_over = v.Inspected, parties_seen = s.WatchedSees.Count, enemy_lords_seen = seen, enemy_lords = total,
+                realm, eyes = v.Eyes, holdings_looked_over = v.Inspected, parties_seen = s.WatchedSees.Count, enemy_lords_seen = seen, enemy_lords = total,
                 spotting_asked = v.RatioAsked, spotting_cached = v.RatioCached, spotting_failed = v.RatioFailed, sight_failed = v.RangeFailed,
                 parts_ms = s.PartsMs?.Select(x => Math.Round(x, 3)).ToArray()
             });
             if (v.RatioFailed > 0 || v.RangeFailed > 0)
                 Diag.Alarm("sight_fallback", "The game's sight rules failed for " + (v.RatioFailed + v.RangeFailed) + " parties this hour, so a stand-in value was used for them.");
             bool atWar = s.Factions.TryGetValue(s.Watched, out FactionRow fr) && fr.AtWar.Count > 0;
-            if (atWar && total > 0 && s.Hours - _lastSawEnemy >= 24 && !_blindAlarmed)
+            if (atWar && total > 0 && s.Hours - _lastSawEnemy[realm] >= 24 && _blindAlarmed.Add(realm))
             {
-                _blindAlarmed = true;
-                Diag.Alarm("realm_blind", "The watched realm has seen no enemy lord for a whole day while at war (" + total + " enemy lords on the map). Its sight may be broken.");
+                Diag.Alarm("realm_blind", name + " has seen no enemy lord for a whole day while at war (" + total + " enemy lords on the map). Its sight may be broken.");
             }
             if (total >= 10 && seen > total * 0.6)
-                Diag.Alarm("realm_sees_too_much", "The watched realm sees " + seen + " of the " + total + " enemy lords on the map. Its sight may be too generous.");
+                Diag.Alarm("realm_sees_too_much", name + " sees " + seen + " of the " + total + " enemy lords on the map. Its sight may be too generous.");
         }
 
         /// <summary>The sight check for the player's party: our rule against the game's own view.</summary>

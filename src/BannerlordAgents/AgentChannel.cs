@@ -59,32 +59,21 @@ namespace BannerlordAgents
             "lord", "do", "order", "verb", "target", "at", "place", "why", "lords", "settings", "then", "poke"
         };
 
-        private static readonly object Gate = new object();
-        private static List<Channel> _all = new List<Channel>();
-        private static Channel _lone;
         private static Timer _fallback;
 
-        public static bool On => Settings.Agent == "shadow" || Settings.Agent == "live";
+        /// <summary>Is any agent's channel on (shadow or live)? Each agent has its own mode (Agents, since 0.9).</summary>
+        public static bool On => Agents.AnyOn;
 
-        /// <summary>Every realm's channel, the first realm's first.</summary>
-        public static List<Channel> All { get { lock (Gate) return _all.Count > 0 ? _all.ToList() : new List<Channel> { Lone() }; } }
+        /// <summary>Every agent's channel, in the order the settings list the agents.</summary>
+        public static List<Channel> All => Agents.All.Select(a => a.Channel).ToList();
 
-        /// <summary>The first realm's channel (before a campaign, or in the smoke test, one channel in agent_dir).</summary>
-        public static Channel Primary { get { lock (Gate) return _all.Count > 0 ? _all[0] : Lone(); } }
+        /// <summary>The channel of the agent listed first (the console's and the smoke test's default).</summary>
+        public static Channel Primary => Agents.For(null).Channel;
 
-        private static Channel Lone() => _lone ?? (_lone = new Channel(null, true));
+        /// <summary>A realm's channel (the first agent's for null or a realm without an agent).</summary>
+        public static Channel For(string realm) => Agents.For(realm).Channel;
 
-        /// <summary>A realm's channel (the first realm's for null or a realm not watched).</summary>
-        public static Channel For(string realm)
-        {
-            lock (Gate)
-            {
-                if (_all.Count == 0) return Lone();
-                return (realm == null ? null : _all.FirstOrDefault(c => c.Realm == realm)) ?? _all[0];
-            }
-        }
-
-        /// <summary>The first realm's channel folder.</summary>
+        /// <summary>The first agent's channel folder.</summary>
         public static string Dir => Primary.Dir;
 
         /// <summary>At session start: the slow safety-net check every 10 s, which also keeps each folder watch in place.</summary>
@@ -102,25 +91,17 @@ namespace BannerlordAgents
             }, null, 1000, 10000);
         }
 
-        /// <summary>A new campaign session (worker): one channel per watched realm, each forgetting the last session's pokes.</summary>
-        public static void Reset(string dataDir, List<string> realms)
-        {
-            var fresh = new List<Channel>();
-            if (realms == null || realms.Count == 0) fresh.Add(new Channel(null, true));
-            else for (int i = 0; i < realms.Count; i++) fresh.Add(new Channel(realms[i], i == 0));
-            List<Channel> old;
-            lock (Gate) { old = _all; _all = fresh; _lone = null; }
-            foreach (Channel c in old) c.Close();
-            foreach (Channel c in fresh) c.Reset(dataDir);
-        }
+        /// <summary>The first agent's mode, in words (the console).</summary>
+        public static string ModeText() => Primary.ModeText();
 
-        public static string ModeText()
+        /// <summary>A mode in words, as the agent reads it.</summary>
+        public static string ModeText(string mode, string lords)
         {
-            switch (Settings.Agent)
+            switch (mode)
             {
                 case "live":
-                    return "LIVE. " + (Text.Plain(Settings.AgentLords) == "all" ? "Every lord of yours obeys your orders."
-                           : "Only these lords obey: " + Settings.AgentLords + ". The others are led by the game's own AI, and orders for them are refused.");
+                    return "LIVE. " + (Text.Plain(lords ?? "all") == "all" ? "Every lord of yours obeys your orders."
+                           : "Only these lords obey: " + lords + ". The others are led by the game's own AI, and orders for them are refused.");
                 case "shadow":
                     return "SHADOW. Every order is checked against the game and answered in receipts.log, but none is carried out yet.";
                 default:
@@ -340,9 +321,8 @@ namespace BannerlordAgents
             public int Answers;
         }
 
-        /// <summary>The realm (null: the one channel before a campaign, or in the smoke test) and whether it is the first realm's.</summary>
-        public readonly string Realm;
-        public readonly bool First;
+        /// <summary>The agent whose channel this is (Agents).</summary>
+        private readonly RealmAgent _agent;
 
         private Timer _recheck;
         private FileSystemWatcher _watcher;
@@ -368,16 +348,17 @@ namespace BannerlordAgents
         public long LastScan;
         public int AnswerFiles, OrdersReceived, Applied, Checked, Refused;
 
-        public Channel(string realm, bool first)
-        {
-            Realm = realm;
-            First = first;
-        }
+        public Channel(RealmAgent agent) { _agent = agent; }
 
-        public string Dir => Settings.AgentFolderFor(Realm, First);
+        /// <summary>The realm (null: the stand-in agent before a campaign, or in the smoke test).</summary>
+        public string Realm => _agent.Realm;
+        public string Dir => _agent.Config.ChannelDir;
+        public bool On => _agent.On;
+        public string Mode => _agent.Config.Mode;
+        public string ModeText() => AgentChannel.ModeText(_agent.Config.Mode, _agent.Config.Lords);
         private string OrdersDir => Path.Combine(Dir, "orders");
         /// <summary>In an alarm, which realm's channel (only when there is more than one).</summary>
-        private string Whose => !First && Realm != null ? "(" + Realm + ") " : "";
+        private string Whose => Realm != null && Agents.All.Count > 1 ? "(" + Realm + ") " : "";
 
         /// <summary>Seconds since the oldest poke still waiting for any answer, for the health row.</summary>
         public double WaitingSeconds => _waitingSince == DateTime.MinValue ? 0 : (DateTime.Now - _waitingSince).TotalSeconds;
@@ -409,7 +390,7 @@ namespace BannerlordAgents
             PokeReasons.Clear();
             Lines.Clear();
             AnswerFiles = OrdersReceived = Applied = Checked = Refused = 0;
-            _shownFile = dataDir != null ? Path.Combine(dataDir, First || Realm == null ? "ids_shown.txt" : "ids_shown_" + Realm + ".txt") : null;
+            _shownFile = dataDir != null ? Path.Combine(dataDir, Realm == null ? "ids_shown.txt" : "ids_shown_" + Realm + ".txt") : null;
             try
             {
                 if (_shownFile != null && System.IO.File.Exists(_shownFile))
@@ -422,7 +403,7 @@ namespace BannerlordAgents
         public string StatusLine()
         {
             string wait = _waitingSince == DateTime.MinValue ? "no poke waiting" : "poke #" + _waitingFor + " unanswered for " + (int)WaitingSeconds + " s";
-            return Settings.Agent + "; last poke #" + _lastPoke + "; " + wait + "; answer files " + AnswerFiles + ", orders " + OrdersReceived
+            return Mode + "; last poke #" + _lastPoke + "; " + wait + "; answer files " + AnswerFiles + ", orders " + OrdersReceived
                    + " (" + Applied + " applied, " + Checked + " checked, " + Refused + " refused)";
         }
 
@@ -548,7 +529,7 @@ namespace BannerlordAgents
         /// <summary>The look-up files, one per id, for details on request; files no longer written are removed.</summary>
         public void WriteLookups(Dictionary<string, string> files)
         {
-            if (!AgentChannel.On || files == null) return;
+            if (!On || files == null) return;
             string dir = Paths.Ensure(Path.Combine(Dir, "lookups"));
             var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (KeyValuePair<string, string> kv in files)
@@ -612,7 +593,7 @@ namespace BannerlordAgents
         /// <summary>Any thread: asks the worker to look at the orders folder (once, however many times it is asked meanwhile).</summary>
         public void RequestScan()
         {
-            if (!AgentChannel.On || !Live.CampaignRunning) return;
+            if (!On || !Live.CampaignRunning) return;
             if (Interlocked.Exchange(ref _scanQueued, 1) == 1) return;
             Background.Post("agent orders folder", () =>
             {
@@ -795,7 +776,7 @@ namespace BannerlordAgents
             Line("poke #" + a.Poke + ", " + a.File + " order " + a.Index + " (" + what + "): " + status.ToUpperInvariant() + ". " + reason + "." + delay);
             // the chronicle keeps what was ordered, and what was refused and why (shadow mode's checks are not history)
             string why = string.IsNullOrWhiteSpace(a.Why) ? "" : " Why: " + a.Why.Trim().TrimEnd('.') + ".";
-            ChronicleBook book = Chronicle.For(Realm);
+            ChronicleBook book = _agent.Chronicle;
             if (status == "applied") book.Line(hours, "order", "You ordered: " + reason.TrimEnd('.') + "." + why, a.At, a.Lord);
             else if (status == "refused" && !reason.StartsWith("it answers poke #", StringComparison.Ordinal))
                 book.Line(hours, "refused", "Your order (" + (a.Lord ?? "?") + " " + (a.Do ?? "?") + (string.IsNullOrEmpty(a.At ?? a.Target) ? "" : " " + (a.At ?? a.Target))
@@ -806,7 +787,7 @@ namespace BannerlordAgents
             {
                 Type = "agent_receipt", Realm, a.Poke, a.File, a.Index, a.Lord, a.Do, a.Target, a.Why, Status = status, Reason = reason,
                 Hours = hours, AnswerSeconds = seconds >= 0 ? seconds : (double?)null, AnswerGameHours = gameHours >= 0 ? gameHours : (double?)null,
-                WaitedSeconds = waited >= 2 ? waited : (double?)null, Mode = Settings.Agent
+                WaitedSeconds = waited >= 2 ? waited : (double?)null, Mode
             });
         }
 
@@ -825,7 +806,7 @@ namespace BannerlordAgents
 
         public void CheckAlive()
         {
-            if (!AgentChannel.On || !Live.CampaignRunning) return;
+            if (!On || !Live.CampaignRunning) return;
             if (LastScan != 0 && Watchdog.Seconds(LastScan) > 30 && !_scanAlarmed)
             {
                 _scanAlarmed = true;

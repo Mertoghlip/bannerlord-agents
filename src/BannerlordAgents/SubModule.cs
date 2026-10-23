@@ -35,9 +35,9 @@ namespace BannerlordAgents
             Watchdog.Start();
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Diag.OnUnhandled(e.ExceptionObject as Exception, e.IsTerminating);
             AppDomain.CurrentDomain.ProcessExit += (s, e) => Diag.EndLaunch("the game closed");
-            Log.Line("Bannerlord Agents " + Version + " loaded. Processor: " + Cpu.Description + ". Settings: watch " + Settings.Watch
+            Log.Line("Bannerlord Agents " + Version + " loaded. Processor: " + Cpu.Description + ". Settings: " + (Settings.AgentFolders.Count > 0 ? "agents " + string.Join("; ", Settings.AgentFolders) : "watch " + Settings.Watch + ", agent " + Settings.Agent)
                      + ", bridge " + (Settings.Bridge ? "on" : "off") + ", recorder " + (Settings.Record ? "on" : "off")
-                     + ", performance log " + (Settings.Perf ? "on" : "off") + ", agent " + Settings.Agent + ", logs " + Settings.Detail + " detail"
+                     + ", performance log " + (Settings.Perf ? "on" : "off") + ", logs " + Settings.Detail + " detail"
                      + (Settings.Unknown.Count > 0 ? "; settings lines not understood: " + string.Join(" | ", Settings.Unknown) : ""));
             Log.Line("this launch's log folder: " + (Diag.SessionDir ?? "(none: the detailed logs are off)"));
             if (previous != null) Diag.Alarm("previous_launch_unclean", previous);

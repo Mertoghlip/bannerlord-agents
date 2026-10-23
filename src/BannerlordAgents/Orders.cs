@@ -218,8 +218,10 @@ namespace BannerlordAgents
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;
             string verb = (a.Do ?? "").Trim().ToLowerInvariant();
-            bool live = forceLive || (Settings.Agent == "live" && ObeysAgent(lord));
-            bool shadow = !forceLive && Settings.Agent == "shadow";
+            // the agent of the realm decides (its agent.txt, since 0.9): its mode, and who obeys it
+            string mode = ModeOf(realm);
+            bool live = forceLive || (mode == "live" && ObeysAgent(lord));
+            bool shadow = !forceLive && mode == "shadow";
             MobileParty party = lord.PartyBelongedTo;
             string name = Names.Hero(lord);
 
@@ -279,9 +281,14 @@ namespace BannerlordAgents
 
         private static string Notes(List<string> notes) => notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : "";
 
+        /// <summary>The mode of the agent playing that realm (off, shadow or live).</summary>
+        private static string ModeOf(IFaction realm) => Agents.Of(realm?.StringId)?.Config.Mode ?? Settings.Agent;
+        /// <summary>Who obeys the agent playing that realm (all, or ids and names).</summary>
+        private static string LordsOf(IFaction realm) => Agents.Of(realm?.StringId)?.Config.Lords ?? Settings.AgentLords;
+
         private static bool ObeysAgent(Hero lord)
         {
-            string list = (Settings.AgentLords ?? "all").Trim();
+            string list = (LordsOf(lord.MapFaction) ?? "all").Trim();
             if (list.Length == 0 || Text.Plain(list) == "all") return true;
             string name = Text.Plain(Names.Hero(lord));
             char[] separators = list.Contains(",") ? new[] { ',' } : new[] { ' ' };
@@ -290,8 +297,8 @@ namespace BannerlordAgents
         }
 
         private static string NotYours(Hero lord)
-            => Names.Hero(lord) + " does not take your orders in this test; only " + Settings.AgentLords + " do"
-               + (Settings.Agent == "off" ? " (the agent channel is off)" : "");
+            => Names.Hero(lord) + " does not take your orders in this test; only " + LordsOf(lord.MapFaction) + " do"
+               + (ModeOf(lord.MapFaction) == "off" ? " (the agent channel is off)" : "");
 
         public static string Release(List<string> args)
         {

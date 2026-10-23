@@ -1341,6 +1341,62 @@ namespace SmokeTest
 
             Settings.AgentDirs.Remove("dg");
             Settings.AgentDir = agentDir;
+            FolderAgentsTests(root, agentDir);
+        }
+
+        /// <summary>
+        /// 0.9: an agent is a folder. Its agent.txt says the realm, the mode, who obeys and the channel; its warroom.txt where its
+        /// war room logs. The settings list the folders, every agent is made the same way, and each agent's mode is its own.
+        /// </summary>
+        private static void FolderAgentsTests(string root, string agentDir)
+        {
+            string orcs = Path.Combine(root, "agents", "orcs"), dg = Path.Combine(root, "agents", "dg"), empty = Path.Combine(root, "agents", "empty");
+            foreach (string d in new[] { orcs, dg, empty }) Directory.CreateDirectory(d);
+            File.WriteAllText(Path.Combine(orcs, "agent.txt"), "# the orcs\nrealm = orcs\nmode = live\nlords = all\n");
+            File.WriteAllText(Path.Combine(dg, "agent.txt"), "realm = dg\nmode = off\nlords = lord_khamul\nchannel = channel\n");
+            string dgLogs = Path.Combine(root, "logs", "warroom-dg");
+            File.WriteAllText(Path.Combine(dg, "warroom.txt"), "channel = channel\nlog_dir = " + dgLogs + "\n");
+
+            AgentConfig c = AgentConfig.Read(dg);
+            Check(c.Problem == null && c.Realm == "dg" && c.Mode == "off" && c.Lords == "lord_khamul" && c.ChannelDir == Path.Combine(dg, "channel") && c.LogDir == dgLogs,
+                  "an agent's folder says its realm, mode, lords and channel (agent.txt) and where its war room logs (warroom.txt)");
+            AgentConfig o = AgentConfig.Read(orcs);
+            Check(o.Mode == "live" && o.ChannelDir == Path.Combine(orcs, "warroom") && o.LogDir == AgentConfig.DefaultLogDir, "the channel is warroom and the logs the shared folder unless the folder says otherwise");
+            Check(AgentConfig.Read(empty).Problem != null, "a folder without agent.txt is reported, not guessed at");
+
+            Settings.AgentFolders.Clear();
+            Settings.AgentFolders.AddRange(new[] { orcs, dg });
+            List<AgentConfig> configs = Agents.Configured();
+            Check(configs.Count == 2 && configs[0].Realm == "orcs" && configs[1].Realm == "dg", "the settings' list of folders makes the agents, in its order");
+
+            Brain.Reset("smoketest3", double.NaN, configs, null);
+            Check(Agents.All.Count == 2 && Agents.Of("dg").Config.Mode == "off" && Agents.Of("orcs").On, "each agent keeps its own mode");
+            var host = new PartyRow { Id = "p_ar", Leader = "lord_ar", Name = "Elessar", Faction = "player_k", Kind = "lord", Men = 500, Strength = 900, X = 106, Y = 104, Doing = "Hold", Spottable = true };
+            Snapshot s = ToolWorld(8000, host);
+            s.Factions["dg"] = new FactionRow { Id = "dg", Name = "Dol Guldur", Ruler = "Khamul", AtWar = { "player_k" } };
+            s.FactionNames["dg"] = "Dol Guldur";
+            Add(s, new SettlementRow { Id = "town_dg", Name = "Dol Guldur", Kind = "town", Faction = "dg", X = 400, Y = 400, Garrison = 500 });
+            Add(s, new PartyRow { Id = "p_khamul", Leader = "lord_khamul", Name = "Khamul", Faction = "dg", Kind = "lord", Men = 400, Strength = 800, X = 402, Y = 400, Doing = "Hold", InSettlement = "town_dg" });
+            s.Seats = new List<SeatSight>
+            {
+                new SeatSight { Realm = "orcs", Sees = s.WatchedSees, Inspected = s.InspectedByWatched, Hostile = s.HostileToWatched },
+                new SeatSight { Realm = "dg", Sees = new Dictionary<string, Sighting>(), Inspected = new HashSet<string> { "town_dg" }, Hostile = new HashSet<string> { "player_k" } }
+            };
+            Brain.OnHour(s);
+            Files.FlushAll();
+            Check(File.Exists(Path.Combine(orcs, "warroom", "poke.txt")) && !File.Exists(Path.Combine(dg, "channel", "poke.txt")) && File.Exists(Path.Combine(Brain.Dir, "pokes_dg.jsonl")),
+                  "an agent that is off gets nothing in its channel, though its realm's pokes are still kept; one that is live gets its poke");
+
+            Runner.Start(961, new ToolOrder { Tool = "goto", Lord = "lord_khamul", LordName = "Khamul", Party = "p_khamul", At = "town_dg", Realm = "dg" });
+            Check(Agents.Of("dg").Tools.ContainsKey(961) && !Agents.Of("orcs").Tools.ContainsKey(961), "a tool lives in its own agent's orders in force");
+            Runner.Ended(961, "test over");
+            Check(!Agents.Of("dg").Tools.ContainsKey(961), "and leaves them when it ends");
+
+            string loads = ReadIf(Path.Combine(Brain.Dir, "loads.jsonl"));
+            Check(loads.Contains("\"calls.jsonl@dg\"") && loads.Contains("\"calls.jsonl@orcs\"") && loads.Contains("warroom-dg"), "the load names each agent and marks its own war room's logs");
+
+            Settings.AgentFolders.Clear();
+            Settings.AgentDir = agentDir;
         }
 
         private static Snapshot ToolWorld(double hours, params PartyRow[] parties)

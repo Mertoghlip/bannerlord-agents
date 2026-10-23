@@ -725,3 +725,50 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** the smoke test passed in full, with 7 new checks. Two realms are each poked in their own folder, with their own report. Each report holds only what its own eyes saw. Each realm has its own poke file, hourly report and council briefing. A receipt goes to the channel its order came by, and nothing of it reaches the other realm's chronicle. A realm's orders in force list only its own lords. The war room's (50) and the dashboard's (27) self-tests passed. 512 game references, 0 missing. The installed DLL has sha256 `A766D8F10D995239…`.
 - **Also answered:** why the lords near Eastern Moria "keep wandering off" although under orders. They were not under orders. Ufza and Shagash had ridden in Naglur's army, whose members hold no order of their own. When it broke up from lost cohesion (Autumn 5, about 08:00), the game's own AI sent both at once to defend Skar-ghâsh, a raided village by Sirannon, towards Górli's host. The agent's poke at 10:00 was answered 21 s later, but the game ran 5 in-game hours meanwhile and was then paused. Its defend order and the next poke's garrison order were carried out together at 15:00, and from then on both stayed in Eastern Moria.
 - **Not yet seen in a game:** two agents at once.
+
+### 17:40 · Version 0.9.0: an agent is a folder; no agent is special; one script runs them all · commit (follow-up below) (installed 17:38)
+- **Why:** Mert asked how 0.8.0's two agents compare to "adding a new agent should only entail strapping on a new modular component with a new system prompt", with tools reused like function calls and no crossover between brains. The comparison found five gaps:
+  - the game-side pieces of an agent were kept in five places, each filtered by realm;
+  - the first agent was special;
+  - the mode and the obeying lords were shared by all agents;
+  - setup overwrote the prompts;
+  - adding one took a setup, a war room started by hand, and a naming convention for its logs.
+  Mert: "I like all of your change recommendations. You can implement all of them."
+- **What:**
+  - **An agent is a folder:**
+    - `agent.txt` holds `realm`, `mode` (off, shadow, live), `lords` and `channel`, beside its `warroom-system.md`, `chronicler-system.md`, `warroom.txt` (with `log_dir`), channel and memory;
+    - the bridge's settings list the folders (`agents = <folder>; <folder>`), and the settings of 0.8 still work without that list;
+    - a folder that cannot be used is named in the log and the self-check.
+  - **One bundle per agent in the game** (`RealmAgent`, made from its folder at each load by `Agents`):
+    - it holds its channel, chronicle, memory of sightings, orders in force (the runner keeps each agent's tools in it, not one list filtered by realm) and latest view;
+    - the Brain runs each agent's hour on its own realm's view;
+    - orders take the agent's own mode and obeying lords;
+    - an agent that is off gets nothing in its channel, while its realm's pokes are still kept.
+  - **No first agent:**
+    - the sight check and the daily recruitment summary run for every agent;
+    - the ids-shown file is per realm (`ids_shown.txt` was renamed for the realm it belonged to, the one listed first);
+    - each agent's war room logs are found from its own `warroom.txt`, and the load record names each agent with its log folder (`calls.jsonl@<realm>` offsets), which the dashboard reads.
+  - **`scripts\agents.ps1 start | stop | restart | status`** starts a war room for every listed folder, and the dashboard, each detached. `status` shows each agent's realm, process and last line.
+  - **`scripts\setup-agent.ps1`:**
+    - writes `agent.txt`, keeping values not given;
+    - installs the instructions only where the folder has none (`-Force` for fresh copies);
+    - gives a new agent another's `warroom.txt` with its own `log_dir`;
+    - adds the folder to `agents`.
+  - **Console:** `agents.agent [realm] off|shadow|live [lords]` changes one agent's mode at once and writes its `agent.txt`.
+- **Outside the repository:**
+  - `agent.txt` written in both agents' folders: `mistymountainorcs` and `dolguldur`, both live, all lords;
+  - their prompts and `warroom.txt` are unchanged (the same checksums before and after);
+  - `settings.txt`: `agents = C:\Users\karab\Projects\orc-war-council; C:\Users\karab\Projects\dolguldur-war-council`;
+  - the war rooms and the dashboard were stopped by the new script for the build, and started by it at 17:39.
+- **Checks:** the smoke test passed in full, with 9 new checks:
+  - an `agent.txt` read, its log folder from `warroom.txt`;
+  - the default channel and logs;
+  - a folder without `agent.txt` reported;
+  - the folders list making the agents in order;
+  - each agent's own mode;
+  - an agent that is off getting nothing in its channel;
+  - a tool living in its own agent's orders in force, and leaving them when it ends;
+  - the load naming each agent's log folder.
+
+  The war room's (50) and the dashboard's (27) self-tests passed. 512 game references, 0 missing. The installed DLL has sha256 `A691501CF37904FD…`.
+- **Not yet seen in a game.**

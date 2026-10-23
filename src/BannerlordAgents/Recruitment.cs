@@ -72,15 +72,54 @@ namespace BannerlordAgents
             }
         }
 
-        /// <summary>Game's thread, once a day (and on agents.recruits): measures the realm against the gates and hands the day to the worker.</summary>
+        /// <summary>One realm's day, measured on the game's thread and written on the worker.</summary>
+        private sealed class RealmDay
+        {
+            public string Realm, Date, Line;
+            public double Hours;
+            public object Summary;
+            public List<object> Lords, Places;
+            public HashSet<string> LordIds;
+        }
+
+        /// <summary>Game's thread, once a day (and on agents.recruits): measures every agent's realm against the gates and hands the day to the worker.</summary>
         public static string Daily(bool fromConsole = false)
         {
-            Kingdom k = Bridge.Watched;
-            if (k == null) return "No realm is under watch.";
-            double hours = CampaignTime.Now.ToHours;
-            HashSet<MobileParty> held = Orders.HeldParties();
+            List<Kingdom> realms = Bridge.Seats.ToList();
+            if (realms.Count == 0) return "No realm is under watch.";
             Dictionary<string, Taken> taken = _today;
             if (!fromConsole) _today = new Dictionary<string, Taken>();
+            List<RealmDay> days = realms.Select(k => Day(k, taken, fromConsole, realms.Count > 1)).ToList();
+            string line = string.Join("\n", days.Select(d => d.Line));
+            if (!fromConsole)
+            {
+                Background.Post("recruitment day", () =>
+                {
+                    var hoursAt = new Dictionary<string, int>(HoursAt);
+                    int counted = _hoursCounted;
+                    HoursAt.Clear();
+                    _hoursCounted = 0;
+                    var said = new List<string>();
+                    foreach (RealmDay d in days)
+                    {
+                        Dictionary<string, int> mine = hoursAt.Where(kv => d.LordIds.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+                        string full2 = d.Line + "; " + mine.Count + " of " + d.Lords.Count + " lords spent at least one of the last " + counted + " hours where they could recruit";
+                        Brain.WriteData("recruitment.jsonl", new { Type = "recruitment", d.Hours, d.Date, d.Realm, d.Summary, HoursCounted = counted, HoursWhereRecruiting = mine, d.Lords, d.Places });
+                        Diag.Event("recruitment", "day", new { realm = d.Realm, date = d.Date, summary = d.Summary, lords_in_recruiting_places = mine.Count, hours_counted = counted });
+                        Log.Line(full2);
+                        said.Add(full2);
+                    }
+                    LastSummary = string.Join("\n", said);
+                });
+            }
+            else LastSummary = line;
+            return line;
+        }
+
+        private static RealmDay Day(Kingdom k, Dictionary<string, Taken> taken, bool fromConsole, bool named)
+        {
+            double hours = CampaignTime.Now.ToHours;
+            HashSet<MobileParty> held = Orders.HeldParties();
             var lords = new List<object>();
             int count = 0, belowGold = 0, belowClan = 0, full = 0, starving = 0, noWage = 0, recruiters = 0, recruited = 0;
             double fill = 0;
@@ -150,28 +189,13 @@ namespace BannerlordAgents
                 places = places.Count
             };
             string date = Text.When(hours);
-            string realm = k.StringId;
-            string line = "recruitment, " + date + (fromConsole ? " (so far today)" : "") + ": " + count + " lords at " + Math.Round(100 * (count > 0 ? fill / count : 0)) + "% of their size limits on average; "
+            string line = "recruitment" + (named ? " in " + Names.Faction(k) : "") + ", " + date + (fromConsole ? " (so far today)" : "") + ": " + count + " lords at " + Math.Round(100 * (count > 0 ? fill / count : 0)) + "% of their size limits on average; "
                           + belowGold + " below the party-gold bar, " + belowClan + " below the clan-gold bar, " + noWage + " without wage room, " + full + " full, " + starving + " starving; "
                           + recruited + " men recruited by " + recruiters + " lords; " + waiting + " volunteers waiting in " + placesWithVolunteers + " of the realm's " + places.Count
                           + " towns and villages (" + rulerCould + " within what the ruler's relations allow)";
-            if (!fromConsole)
-            {
-                Background.Post("recruitment day", () =>
-                {
-                    var hoursAt = new Dictionary<string, int>(HoursAt);
-                    int counted = _hoursCounted;
-                    HoursAt.Clear();
-                    _hoursCounted = 0;
-                    string full2 =line + "; " + hoursAt.Count + " of " + lords.Count + " lords spent at least one of the last " + counted + " hours where they could recruit";
-                    Brain.WriteData("recruitment.jsonl", new { Type = "recruitment", Hours = hours, Date = date, Realm = realm, Summary = summary, HoursCounted = counted, HoursWhereRecruiting = hoursAt, Lords = lords, Places = places });
-                    Diag.Event("recruitment", "day", new { date, summary, lords_in_recruiting_places = hoursAt.Count, hours_counted = counted });
-                    Log.Line(full2);
-                    LastSummary = full2;
-                });
-            }
-            else LastSummary = line;
-            return line;
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (MobileParty p in MobileParty.AllLordParties) if (p != null && p.IsActive && p.MapFaction == k && p.LeaderHero != null) ids.Add(p.LeaderHero.StringId);
+            return new RealmDay { Realm = k.StringId, Date = date, Line = line, Hours = hours, Summary = summary, Lords = lords, Places = places, LordIds = ids };
         }
     }
 }

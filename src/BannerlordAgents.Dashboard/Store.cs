@@ -11,6 +11,8 @@ namespace BannerlordAgents.Dashboard
         public double LoadedAt = double.NaN;
         public List<long> Hours = new List<long>();
         public Dictionary<string, long> Offsets = new Dictionary<string, long>();
+        /// <summary>Each agent's war room log folder, by realm, as the load named it (since 0.9: an agent's warroom.txt says where).</summary>
+        public Dictionary<string, string> LogDirs = new Dictionary<string, string>();
         /// <summary>Where each record file stood when the next load began (the end of this load's lines), when there is one.</summary>
         public Dictionary<string, long> Ends = new Dictionary<string, long>();
     }
@@ -102,6 +104,9 @@ namespace BannerlordAgents.Dashboard
                     if (JsonNode.Parse(line) is not JsonObject o) continue;
                     var li = new LoadInfo { Campaign = campaign, LoadId = (string)o["load_id"], Wall = (string)o["wall"], Realm = (string)o["realm"] };
                     if (o["loaded_at"] is JsonValue la && la.TryGetValue(out double h)) li.LoadedAt = h;
+                    if (o["agents"] is JsonArray ags)
+                        foreach (JsonNode a in ags)
+                            if (a?["realm"] is JsonValue rv && rv.TryGetValue(out string ar) && a["log_dir"] is JsonValue lv && lv.TryGetValue(out string ld)) li.LogDirs[ar] = ld;
                     if (o["offsets"] is JsonObject off)
                         foreach (KeyValuePair<string, JsonNode> kv in off)
                             if (kv.Value is JsonValue v && v.TryGetValue(out long n)) li.Offsets[kv.Key] = n;

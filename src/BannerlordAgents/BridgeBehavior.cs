@@ -22,6 +22,9 @@ namespace BannerlordAgents
         /// </summary>
         public static List<Kingdom> Seats { get => _seats ?? (_seats = new List<Kingdom>()); set => _seats = value; }
         private static List<Kingdom> _seats;
+        /// <summary>The agents of this load, each realm resolved to its kingdom id (Agents.Configured), and what could not be used.</summary>
+        public static List<AgentConfig> Configs = new List<AgentConfig>();
+        public static readonly List<string> Unusable = new List<string>();
         public static bool Running;
         public static string CampaignId = "unknown";
         /// <summary>This load of the campaign (a new one each time a save is loaded), and the in-game hour of the save: the war room tells a reload by them.</summary>
@@ -50,7 +53,21 @@ namespace BannerlordAgents
             long t = Perf.Now();
             int warmed = Names.WarmUp();
             double warmMs = Perf.Ms(t);
-            Seats = Settings.WatchList().Select(Resolve).Where(k => k != null).Distinct().ToList();
+            // the agents of this load: each folder's agent.txt (or the settings of 0.8), each realm resolved; none is special
+            var configs = new List<AgentConfig>();
+            var seats = new List<Kingdom>();
+            Unusable.Clear();
+            foreach (AgentConfig c in Agents.Configured())
+            {
+                Kingdom k = c.Problem == null ? Resolve(c.Realm) : null;
+                if (k == null) { Unusable.Add(c.Problem ?? "no realm matches '" + c.Realm + "'" + (c.Workspace != null ? " (" + c.Workspace + ")" : "")); continue; }
+                if (seats.Contains(k)) { Unusable.Add(Names.Faction(k) + " has two agents; only the first plays it (" + c.Workspace + ")"); continue; }
+                c.Realm = k.StringId;
+                configs.Add(c);
+                seats.Add(k);
+            }
+            Configs = configs;
+            Seats = seats;
             Watched = Seats.FirstOrDefault();
             // the game's road distances, copied at load (a loading screen) rather than in the first hour's copy
             Capture.ResetRoads();
@@ -70,7 +87,7 @@ namespace BannerlordAgents
             List<string> realms = Seats.Select(k => k.StringId).ToList();
             double loadedAt = LoadedAt;
             Background.Start();
-            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, realms, histories));
+            Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories));
             AgentChannel.Start();
             GameHooks.Apply();
             MapExport.Start();
@@ -80,8 +97,10 @@ namespace BannerlordAgents
             Log.Line("watching: " + WatchedSummary());
             Log.Line("at load: " + Orders.FrozenAtLoad());
             Log.Line("files for this campaign: " + Paths.Data(id));
-            for (int i = 0; i < Seats.Count; i++) Log.Line("agent channel for " + Names.Faction(Seats[i]) + ": " + AgentChannel.ModeText() + " Folder: " + Settings.AgentFolderFor(Seats[i].StringId, i == 0));
-            Diag.Event("session", "campaign started", new { campaign = id, watched = Watched?.StringId, seats = realms, agent = Settings.Agent, detail = Settings.Detail });
+            for (int i = 0; i < configs.Count; i++)
+                Log.Line("agent for " + Names.Faction(Seats[i]) + ": " + AgentChannel.ModeText(configs[i].Mode, configs[i].Lords) + " Folder: " + (configs[i].Workspace ?? configs[i].ChannelDir));
+            foreach (string u in Unusable) Log.Line("agent not used: " + u);
+            Diag.Event("session", "campaign started", new { campaign = id, watched = Watched?.StringId, agents = configs.Select(c => new { c.Realm, c.Mode, c.Workspace }).ToList(), unusable = Unusable.ToList(), detail = Settings.Detail });
             SelfCheck.Run();
         }
 
@@ -91,6 +110,7 @@ namespace BannerlordAgents
             Live.CampaignRunning = false;
             Watched = null;
             Seats = new List<Kingdom>();
+            Configs = new List<AgentConfig>();
             Diag.Event("session", "campaign ended");
             Background.Post("flush", Files.FlushAll);
             Background.Post("summary", () => Diag.Summary(false));

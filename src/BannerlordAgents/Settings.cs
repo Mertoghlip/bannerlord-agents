@@ -18,6 +18,11 @@ namespace BannerlordAgents
         /// each with its own channel folder). The first is the main one: the console's views and the sight check are its.
         /// </summary>
         public static string Watch = "mistymountainorcs";
+        /// <summary>
+        /// The agents' folders (since 0.9), each with its own agent.txt (realm, mode, lords, channel): "agents = &lt;folder&gt;; &lt;folder&gt;".
+        /// When set, the agents are these, and watch, agent, agent_lords and agent_dir below are not used (Agents.Configured).
+        /// </summary>
+        public static readonly List<string> AgentFolders = new List<string>();
         /// <summary>Channel folders for the realms after the first ("agent_dir.&lt;realm id&gt; = path"); the first uses agent_dir.</summary>
         public static readonly Dictionary<string, string> AgentDirs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -111,6 +116,7 @@ namespace BannerlordAgents
                     string value = line.Substring(eq + 1).Trim();
                     seen.Add(key);
                     if (key.StartsWith("agent_dir.", StringComparison.Ordinal) && key.Length > 10) { AgentDirs[key.Substring(10)] = value; continue; }
+                    if (key == "agents") { AgentFolders.Clear(); AgentFolders.AddRange(value.Split(';').Select(x => x.Trim()).Where(x => x.Length > 0)); continue; }
                     switch (key)
                     {
                         case "watch": if (value.Length > 0) Watch = value; break;
@@ -156,6 +162,8 @@ namespace BannerlordAgents
             {
                 var sb = new StringBuilder();
                 sb.AppendLine("# Bannerlord Agents settings. One \"key = value\" per line; the console commands change these.");
+                sb.AppendLine("# the agents: their folders, each with its own agent.txt (realm, mode, lords); when set, watch, agent, agent_lords and agent_dir are not used");
+                sb.AppendLine("agents = " + string.Join("; ", AgentFolders));
                 sb.AppendLine("watch = " + Watch);
                 sb.AppendLine("bridge = " + (Bridge ? "on" : "off"));
                 sb.AppendLine("record = " + (Record ? "on" : "off"));

@@ -37,6 +37,8 @@ namespace BannerlordAgents.Tools
     internal sealed class ToolInstance
     {
         public int Id;
+        /// <summary>The agent whose lord holds it: the tool lives in its orders in force (RealmAgent.Tools, since 0.9).</summary>
+        public RealmAgent Owner;
         public ToolOrder Order;
         public ToolDef Def;
         public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -67,6 +69,7 @@ namespace BannerlordAgents.Tools
     /// </summary>
     internal static class Runner
     {
+        // every tool by id, whoever holds it, for the game's messages about one (ended, adjusted); each agent keeps its own in RealmAgent.Tools
         private static readonly Dictionary<int, ToolInstance> ById = new Dictionary<int, ToolInstance>();
         private static int _lastId;
 
@@ -115,16 +118,19 @@ namespace BannerlordAgents.Tools
             foreach (ToolInstance old in ById.Values.Where(t => t.Order.Party == o.Party && t.Id != id).ToList())
             {
                 ById.Remove(old.Id);
+                old.Owner?.Tools.Remove(old.Id);
                 StormSink(old.Order.Party, null);
                 Diag.Event("tool", "replaced", new { id = old.Id, by = id, lord = o.Lord, tool = old.Def.Name });
             }
-            var t = new ToolInstance { Id = id, Order = o, Def = def, Started = Diag.Hours };
+            RealmAgent owner = Agents.For(o.Realm);
+            var t = new ToolInstance { Id = id, Order = o, Def = def, Started = Diag.Hours, Owner = owner };
             foreach (SettingDef s in def.Settings.Values) t.Settings[s.Name] = o.Settings.TryGetValue(s.Name, out double v) ? Math.Max(s.Min, Math.Min(s.Max, v)) : s.Default;
             ById[id] = t;
+            owner.Tools[id] = t;
             Diag.Count("tool:started");
             Diag.Count("tool started:" + def.Name);
             Diag.Event("tool", "started", new { id, tool = def.Name, lord = o.Lord, party = o.Party, at = o.At, target = o.Target, lords = o.Lords.ToList(), settings = new Dictionary<string, double>(t.Settings), then = o.Then?.ToString(Newtonsoft.Json.Formatting.None), poke = o.Poke, source = o.Source });
-            Snapshot s0 = Brain.LatestFor(o.Realm);
+            Snapshot s0 = owner.Latest ?? Brain.LatestFor(o.Realm);
             if (s0 != null && s0.Watched != null)
             {
                 World w = WorldFor(s0);
@@ -137,6 +143,7 @@ namespace BannerlordAgents.Tools
         {
             if (!ById.TryGetValue(id, out ToolInstance t)) return;
             ById.Remove(id);
+            t.Owner?.Tools.Remove(id);
             StormSink(t.Order.Party, null);
             Diag.Count("tool:ended");
             Diag.Event("tool", "ended", new { id, tool = t.Def.Name, lord = t.Order.Lord, why, state = t.State, steps = t.Steps, hours = Math.Round(Diag.Hours - t.Started, 1) });
@@ -158,7 +165,7 @@ namespace BannerlordAgents.Tools
             }
             Diag.Event("tool", "adjusted", new { id, tool = t.Def.Name, lord = t.Order.Lord, settings = new Dictionary<string, double>(t.Settings) });
             // a move that takes a number from the settings (a patrol's radius) is made again with the new one
-            Snapshot s0 = Brain.LatestFor(t.Order.Realm);
+            Snapshot s0 = t.Owner?.Latest ?? Brain.LatestFor(t.Order.Realm);
             if (s0 != null && s0.Watched != null && t.Entered && !t.Finished && t.Shelter == null && t.SupplyAt == null && t.State != null && t.Def.States.TryGetValue(t.State, out StateDef cur) && cur.Do != null)
             {
                 World w0 = WorldFor(s0);
@@ -174,14 +181,13 @@ namespace BannerlordAgents.Tools
 
         // ---------- every in-game hour ----------
 
-        /// <summary>A watched realm's hour (s is its view): its tools take their steps. first: the first realm's, which also runs tools that name no realm.</summary>
-        public static void OnHour(Snapshot s, bool first = true)
+        /// <summary>An agent's hour (s is its realm's view): the tools its lords hold take their steps.</summary>
+        public static void OnHour(Snapshot s, RealmAgent agent)
         {
-            if (ById.Count == 0 || s.Watched == null) return;
+            if (agent == null || agent.Tools.Count == 0 || s.Watched == null) return;
             World w = WorldFor(s);
-            foreach (ToolInstance t in ById.Values.ToList())
+            foreach (ToolInstance t in agent.Tools.Values.ToList())
             {
-                if (!Of(t, s.Watched, first)) continue;
                 try { Step(t, w); }
                 catch (Exception e)
                 {
@@ -191,9 +197,8 @@ namespace BannerlordAgents.Tools
             }
         }
 
-        /// <summary>Is this tool held by a lord of that realm (a tool naming no realm counts as the first realm's)?</summary>
-        private static bool Of(ToolInstance t, string realm, bool first) => t.Order.Realm != null ? t.Order.Realm == realm : first;
-        private static bool Of(ToolInstance t, World w) => t.Order.Realm == null || w.Realm == null || t.Order.Realm == w.Realm;
+        /// <summary>The orders in force of the agent whose realm's view this world is (none for a realm without an agent).</summary>
+        private static IEnumerable<ToolInstance> InForceOf(World w) => Agents.Serving(w.Realm)?.Tools.Values ?? Enumerable.Empty<ToolInstance>();
 
         public static World WorldFor(Snapshot s) => new World(s, s.Watched, s.WatchedSees, Brain.Get(s.Watched).LastSeen);
 
@@ -530,8 +535,8 @@ namespace BannerlordAgents.Tools
         private static void Poke(ToolInstance t, string text, World w)
         {
             Diag.Count("tool:call-backs");
-            Brain.ToolNotice(text, t.Order.Party, w.Hours, t.Order.At, t.Order.Realm ?? w.Realm);
-            AgentChannel.Event(t.Order.Realm ?? w.Realm, "tool: " + text);
+            Brain.ToolNotice(text, t.Order.Party, w.Hours, t.Order.At, t.Owner?.Realm ?? t.Order.Realm ?? w.Realm);
+            (t.Owner?.Channel ?? AgentChannel.For(w.Realm)).Event("tool: " + text);
         }
 
         private static void Log(ToolInstance t, string from, string to, string why)
@@ -557,7 +562,7 @@ namespace BannerlordAgents.Tools
         /// <summary>The orders in force, for every poke: each lord's tool, where it stands, and its numbers if not the defaults.</summary>
         public static string InForce(World w)
         {
-            List<ToolInstance> mine = ById.Values.Where(t => Of(t, w)).ToList();
+            List<ToolInstance> mine = InForceOf(w).ToList();
             if (mine.Count == 0) return "- None. Every lord is led by the game's own AI.";
             var sb = new StringBuilder();
             foreach (ToolInstance t in mine.OrderBy(x => x.Order.LordName)) sb.AppendLine("- " + Describe(t, w));
@@ -568,8 +573,8 @@ namespace BannerlordAgents.Tools
         public static Dictionary<string, string> ByParty(World w)
         {
             var d = new Dictionary<string, string>();
-            foreach (ToolInstance t in ById.Values)
-                if (t.Order.Party != null && Of(t, w)) d[t.Order.Party] = Describe(t, w);
+            foreach (ToolInstance t in InForceOf(w))
+                if (t.Order.Party != null) d[t.Order.Party] = Describe(t, w);
             return d;
         }
 
@@ -606,9 +611,8 @@ namespace BannerlordAgents.Tools
         /// <summary>Every id the orders in force name, so the fog check knows the agent was shown them.</summary>
         public static IEnumerable<string> Ids(World w)
         {
-            foreach (ToolInstance t in ById.Values)
+            foreach (ToolInstance t in InForceOf(w))
             {
-                if (!Of(t, w)) continue;
                 yield return t.Order.Lord;
                 if (t.Order.At != null) yield return t.Order.At;
                 if (t.Order.Target != null) yield return w.Tag(t.Order.Target);

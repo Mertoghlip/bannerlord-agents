@@ -252,6 +252,10 @@ namespace BannerlordAgents
         [CommandLineFunctionality.CommandLineArgumentFunction("watch", "agents")]
         public static string Watch(List<string> args) => Cmd("watch", args, () =>
         {
+            // since 0.9 the realms watched are the agents' own (each folder's agent.txt)
+            if (Settings.AgentFolders.Count > 0)
+                return "Watching: " + (Bridge.Running ? Bridge.WatchedSummary() : string.Join(", ", Settings.AgentFolders))
+                       + "\nEach agent is a folder with its agent.txt; the list is 'agents' in settings.txt. Add one with scripts\\setup-agent.ps1, with the game closed.";
             if (args == null || args.Count == 0) return "Watching: " + (Bridge.Running ? Bridge.WatchedSummary() : Settings.Watch);
             string want = string.Join(" ", args);
             if (Campaign.Current == null) { Settings.Watch = want; Settings.Save(); return "Will watch '" + want + "' once a campaign is loaded."; }
@@ -294,6 +298,29 @@ namespace BannerlordAgents
         [CommandLineFunctionality.CommandLineArgumentFunction("agent", "agents")]
         public static string Agent(List<string> args) => Cmd("agent", args, () =>
         {
+            // since 0.9 each agent is a folder with its own agent.txt (realm, mode, lords): agents.agent [realm] off|shadow|live [lords]
+            if (Settings.AgentFolders.Count > 0)
+            {
+                List<RealmAgent> all = Agents.All;
+                string Line(RealmAgent a) => "  " + (a.Realm ?? "?") + ": " + a.Channel.ModeText() + " Folder: " + a.Config.Workspace;
+                if (args == null || args.Count == 0)
+                    return "Agents (each folder's agent.txt; the list is 'agents' in settings.txt):\n" + string.Join("\n", all.Select(Line))
+                           + "\n  usage: agents.agent [realm] off | shadow | live [lord, lord, ...]";
+                List<string> rest = args.ToList();
+                RealmAgent which = all.Count == 1 ? all[0] : null;
+                Kingdom named = Campaign.Current != null ? Bridge.Resolve(rest[0]) : null;
+                if (named != null && Agents.Of(named.StringId) != null) { which = Agents.Of(named.StringId); rest.RemoveAt(0); }
+                if (which == null) return "Name the agent's realm first: " + string.Join(", ", all.Select(a => a.Realm)) + ".";
+                string mode = rest.Count > 0 ? rest[0].ToLowerInvariant() : "";
+                if (mode != "off" && mode != "shadow" && mode != "live") return "Usage: agents.agent [realm] off | shadow | live [lord, lord, ...]";
+                which.Config.Mode = mode;
+                if (mode == "live") which.Config.Lords = rest.Count > 1 ? string.Join(" ", rest.Skip(1)) : "all";
+                try { which.Config.Save(); }
+                catch (Exception e) { return "The mode changed for this session, but agent.txt could not be written: " + e.Message; }
+                Log.Line("agent for " + which.Realm + " set: " + which.Config.Mode + ", lords " + which.Config.Lords);
+                AgentChannel.RequestScan();
+                return Line(which);
+            }
             string what = args != null && args.Count > 0 ? args[0].ToLowerInvariant() : "";
             switch (what)
             {
@@ -316,6 +343,9 @@ namespace BannerlordAgents
                     return "Usage: agents.agent off | shadow | live [lord, lord, ...] | dir <folder>";
             }
             Settings.Save();
+            // the settings of 0.8 describe every agent of this load: they all take the change now (the folder is the first one's)
+            foreach (RealmAgent a in Agents.All) { a.Config.Mode = Settings.Agent; a.Config.Lords = Settings.AgentLords; }
+            if (what == "dir") Agents.For(null).Config.ChannelDir = Settings.AgentFolder;
             Log.Line("agent channel set: " + Settings.Agent + ", lords " + Settings.AgentLords + ", folder " + Settings.AgentFolder);
             AgentChannel.RequestScan();
             return "Agent channel: " + AgentChannel.ModeText() + "\n  folder: " + Settings.AgentFolder;

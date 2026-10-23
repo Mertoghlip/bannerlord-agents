@@ -56,10 +56,20 @@ namespace BannerlordAgents.Dashboard
         {
             lock (_gate)
             {
-                // a realm after the first has a war room of its own, with its own logs (logswarroom-<realm>, since 0.8)
-                bool own = realm != null && load?.Realm != null && realm != load.Realm && Directory.Exists(_store.WarRoomLogsOf(realm));
-                string data = _store.DataDir(campaign), war = own ? _store.WarRoomLogsOf(realm) : _store.WarRoomLogs;
-                string keyOf(string f) => own ? "warroom-" + realm + "/" + f : f;
+                // each agent's war room logs where its warroom.txt says, and the load names the folder (since 0.9); a load of 0.8 kept a
+                // second agent's in logswarroom-<realm>, and earlier loads had one war room
+                string data = _store.DataDir(campaign), war = _store.WarRoomLogs;
+                Func<string, string> keyOf = f => f;
+                if (realm != null && load != null && load.LogDirs.TryGetValue(realm, out string named))
+                {
+                    war = named;
+                    keyOf = f => f + "@" + realm;
+                }
+                else if (realm != null && load?.Realm != null && realm != load.Realm && Directory.Exists(_store.WarRoomLogsOf(realm)))
+                {
+                    war = _store.WarRoomLogsOf(realm);
+                    keyOf = f => "warroom-" + realm + "/" + f;
+                }
                 DateTime since = DateTime.MinValue;
                 if (load?.Wall != null) DateTime.TryParse(load.Wall, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out since);
                 var all = new List<LogEntry>();

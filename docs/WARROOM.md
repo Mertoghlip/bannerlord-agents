@@ -39,19 +39,33 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 
 - **What it does:** it runs in that window until Ctrl+C. It answers the newest poke whenever one is newer than its last answer, and waits otherwise.
 - **Pokes that arrive during a call** are not lost: the next poke's WHAT CHANGED SINCE YOUR LAST ANSWER covers them.
-- **One-time setup:** `scripts\setup-agent.ps1 -Mode live` (or `shadow`). It makes the agent's folder, installs the instructions and the order library, and points the bridge at the channel.
+- **Setting up and starting:** `scripts\setup-agent.ps1` makes an agent's folder ([below](#agents-are-folders-since-09)). `scripts\agents.ps1 start` starts every agent's war room and the dashboard.
 - **The old agent chat:** close it. It watched the old channel folder, which the bridge no longer writes.
 
-### A second agent, for another realm (since 0.8)
+### Agents are folders (since 0.9)
 
-Each watched realm can have its own agent. The bridge's `watch` takes a list (`watch = mistymountainorcs, dolguldur`). Each realm after the first has its own channel folder (`agent_dir.<realm id>`), so it is poked about what its own eyes saw, numbers its own pokes, keeps its own chronicle, and an answer in its folder can order only its own lords. One war room runs per agent, each with `--dir` its own workspace and its own `log_dir`.
+An agent is a folder outside this repository. Adding one means making a folder with a system prompt and listing it, with no code changes. Every agent is made and treated the same way.
+
+| In the folder | What it is |
+|---|---|
+| `agent.txt` | who the agent is: `realm` (kingdom id), `mode` (off, shadow or live), `lords` (who obeys in live mode: all, or ids and names) and `channel` (its channel folder, `warroom`) |
+| `warroom-system.md` | its instructions (the system prompt), followed in each call by the order library from its channel |
+| `chronicler-system.md` | the instructions of its chronicler, who writes the story so far |
+| `warroom.txt` | its war room's settings ([below](#settings-warroomtxt-in-the-agents-folder)), including where its logs go (`log_dir`) |
+| `warroom\` | its channel: pokes, reports, the council briefing, look-ups, receipts, its chronicle, `tools.txt`, and `orders\` for its answers |
+| `memory\<campaign>\` | its memory: notes, the story so far ([MEMORY.md](MEMORY.md)) |
+
+- **The bridge:** `agents = <folder>; <folder>` in the bridge's `settings.txt` lists the agents. At every load, each folder's `agent.txt` makes one agent in the game. The agent holds its channel, chronicle, memory of sightings, orders in force and latest view together. Each is poked about what its own realm sees, and an answer in its folder can order only its own realm's lords. A folder that cannot be used (no `agent.txt`, no such realm, a realm listed twice) is named in the log and the self-check. Without `agents`, the settings of 0.8 and before (`watch`, `agent`, `agent_lords`, `agent_dir`, `agent_dir.<realm>`) describe the agents.
+- **The war rooms:** one per agent, each its own program running from its own folder, with its own Claude calls, memory and logs. They share nothing but the order library's code.
+- **Making one:** `scripts\setup-agent.ps1 -Workspace <folder> -Realm <id> -Mode live`. It writes `agent.txt`, installs the instructions from the templates only where the folder has none (`-Force` puts fresh copies in), gives a new agent a `warroom.txt` copied from another's with its own `log_dir`, and adds the folder to `agents`. For a new realm, `-RealmTitle`, `-RealmLine` and `-Theatre` rewrite the three lines of a fresh copy that name the realm.
 
 ```
-powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Mode live -Realm dolguldur -Workspace C:\Users\karab\Projects\dolguldur-war-council -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamûl, the Easterling" -Theatre Rhovanion
-WarRoom.exe run --dir C:\Users\karab\Projects\dolguldur-war-council
+powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\dolguldur-war-council -Realm dolguldur -Mode live -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamûl, the Easterling" -Theatre Rhovanion
+powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 ```
 
-The script copies the same instructions and rewrites only the three lines that name the realm: the title, the opening line and the goal's first line. It starts the second agent's `warroom.txt` from the first's, so both think alike, with `log_dir = %LOCALAPPDATA%\BannerlordAgents\logs\warroom-<realm>`. Both realms are set up at a load: change `watch` with the game closed. The console's `agents.view [realm]` and `agents.chronicle [n] [realm]` show either realm. The dashboard's log reads a second realm's war room logs from its own folder.
+- **Running them:** `scripts\agents.ps1 start | stop | restart | status` starts a war room for every listed folder, and the dashboard, each detached from the window. `stop` ends them all, and must come before a build. `status` shows each agent's realm, whether its war room runs, and its last line.
+- **In the game:** `agents.agent` lists the agents. `agents.agent <realm> off|shadow|live [lords]` changes one agent's mode at once and writes its `agent.txt`. `agents.view [realm]` and `agents.chronicle [n] [realm]` show any agent's realm. Agents are made at a load: add or remove one with the game closed.
 
 ## Settings (`warroom.txt` in the agent's folder)
 

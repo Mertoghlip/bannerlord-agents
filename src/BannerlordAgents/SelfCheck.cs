@@ -32,9 +32,8 @@ namespace BannerlordAgents
 
             Check("realm under watch", () =>
             {
-                if (Bridge.Watched == null) return "no realm matches '" + Settings.Watch + "'";
-                var bad = new List<string>();
-                foreach (string w in Settings.WatchList()) if (Bridge.Resolve(w) == null) bad.Add("no realm matches '" + w + "'");
+                var bad = new List<string>(Bridge.Unusable);
+                if (Bridge.Watched == null) return bad.Count > 0 ? "no agent can play: " + string.Join("; ", bad) : "no agent is set up (agents in settings.txt)";
                 foreach (Kingdom k in Bridge.Seats)
                     if (!MobileParty.AllLordParties.Any(p => p != null && p.IsActive && p.MapFaction == k)) bad.Add(Names.Faction(k) + " has no lords leading parties");
                 return bad.Count > 0 ? string.Join("; ", bad) : null;
@@ -92,15 +91,19 @@ namespace BannerlordAgents
             foreach (KeyValuePair<string, string> r in results.Where(r => r.Value != null))
                 Diag.Alarm("self_check", "Self-check: " + r.Key + ": " + r.Value + ".", r.Key == "realm under watch" || r.Key == "log folder");
 
-            // every watched realm's channel folder (since 0.8)
-            List<string> agentDirs = AgentChannel.On ? Bridge.Seats.Select((k, i) => Settings.AgentFolderFor(k.StringId, i == 0)).DefaultIfEmpty(Settings.AgentFolder).ToList() : null;
-            Background.Post("self-check (helper's half)", () => HelperHalf(agentDirs));
+            // every agent's folder whose channel is on (since 0.9 each agent is a folder)
+            List<AgentConfig> on = Bridge.Configs.Where(c => c.On).ToList();
+            List<string> agentDirs = on.Count > 0 ? on.Select(c => c.ChannelDir).ToList() : null;
+            List<string> prompts = on.Where(c => c.Workspace != null).Select(c => Path.Combine(c.Workspace, "warroom-system.md")).ToList();
+            Background.Post("self-check (helper's half)", () => HelperHalf(agentDirs, prompts));
         }
 
-        private static void HelperHalf(List<string> agentDirs)
+        private static void HelperHalf(List<string> agentDirs, List<string> prompts)
         {
             var problems = new List<string>();
             var notes = new List<string>();
+            foreach (string p in prompts ?? new List<string>())
+                if (!File.Exists(p)) problems.Add("an agent has no instructions: " + p + " is missing (scripts\\setup-agent.ps1 makes it)");
             foreach (string agentDir in agentDirs ?? new List<string>())
             {
                 try

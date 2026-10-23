@@ -593,7 +593,7 @@ namespace BannerlordAgents
                           + CountOf("sighting:far off") + ".");
             sb.AppendLine("Fog check: " + CountOf("fog:reports") + " reports checked, " + CountOf("fog:leaks") + " leaks. Sight check: " + CountOf("sight:runs")
                           + " runs, our rule agreed with the game on " + CountOf("sight:agree") + " of " + CountOf("sight:parties") + " parties.");
-            sb.AppendLine("Agent (" + Settings.Agent + "): " + CountOf("agent:files") + " answer files, " + CountOf("agent:orders") + " orders (" + CountOf("agent:applied")
+            sb.AppendLine("Agents (" + string.Join(", ", Agents.All.Select(a => (a.Realm ?? "?") + " " + a.Config.Mode)) + "): " + CountOf("agent:files") + " answer files, " + CountOf("agent:orders") + " orders (" + CountOf("agent:applied")
                           + " applied, " + CountOf("agent:checked") + " checked only, " + CountOf("agent:refused") + " refused); answer time " + SampleText("agent:answer seconds", "s", "0")
                           + "; answers to a poke already replaced " + CountOf("agent:outdated") + "; second answers to one poke " + CountOf("agent:duplicate")
                           + "; files set aside " + CountOf("agent:set aside") + "; answers from before a load " + CountOf("agent:before load")

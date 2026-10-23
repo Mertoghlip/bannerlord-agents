@@ -25,77 +25,28 @@ namespace BannerlordAgents
     /// </summary>
     internal static class Chronicle
     {
-        private static readonly object Gate = new object();
-        private static List<ChronicleBook> _books = new List<ChronicleBook>();
-        private static ChronicleBook _lone;
-        private static string _dataDir;
-        private static double _loadedAt = double.NaN;
+        /// <summary>A realm's chronicle: its agent's (the first agent's for null or a realm without one; Agents, since 0.9).</summary>
+        public static ChronicleBook For(string realm) => Agents.For(realm).Chronicle;
 
-        private static ChronicleBook Lone() => _lone ?? (_lone = new ChronicleBook(null));
-
-        /// <summary>A realm's chronicle (the first realm's for null or a realm without one).</summary>
-        public static ChronicleBook For(string realm)
-        {
-            lock (Gate)
-            {
-                if (_books.Count == 0) return Lone();
-                return (realm == null ? null : _books.FirstOrDefault(b => b.Realm == realm)) ?? _books[0];
-            }
-        }
-
-        /// <summary>The first realm's chronicle.</summary>
+        /// <summary>The first agent's chronicle.</summary>
         public static ChronicleBook Primary => For(null);
 
         /// <summary>Does this realm keep a chronicle that has been read (the report's RECENT HISTORY comes from it)?</summary>
-        public static bool Holds(string realm)
-        {
-            if (realm == null) return false;
-            lock (Gate) return (_books.Count == 0 ? new List<ChronicleBook> { Lone() } : _books).Any(b => b.Open && b.Realm == realm);
-        }
+        public static bool Holds(string realm) => realm != null && Agents.All.Any(a => a.Chronicle.Open && a.Chronicle.Realm == realm);
 
-        /// <summary>
-        /// A campaign was loaded (worker): one chronicle per watched realm, each read at its realm's first hourly copy (Ensure).
-        /// loadedAt is the in-game hour of the save; fromGame, the game's own history lines about each realm (GameHistory, game's thread).
-        /// </summary>
-        public static void Reset(string dataDir, double loadedAt, List<string> realms, Dictionary<string, List<ChronicleEntry>> fromGame)
-        {
-            var fresh = new List<ChronicleBook>();
-            if (realms == null || realms.Count == 0) fresh.Add(new ChronicleBook(null));
-            else foreach (string r in realms) fresh.Add(new ChronicleBook(r));
-            List<ChronicleBook> old;
-            lock (Gate) { old = _books; _books = fresh; _lone = null; _dataDir = dataDir; _loadedAt = loadedAt; }
-            foreach (ChronicleBook b in old) b.Close();
-            foreach (ChronicleBook b in fresh)
-                b.Reset(dataDir, loadedAt, b.Realm, fromGame != null && b.Realm != null && fromGame.TryGetValue(b.Realm, out List<ChronicleEntry> h) ? h : null);
-        }
-
-        /// <summary>The realm is known (each hourly copy): its chronicle is read the first time.</summary>
+        /// <summary>The realm is known (each hourly copy): its agent's chronicle is read the first time.</summary>
         public static void Ensure(string realm, string realmName, double now)
         {
             if (string.IsNullOrEmpty(realm)) return;
-            ChronicleBook book;
-            lock (Gate)
-            {
-                book = _books.FirstOrDefault(b => b.Realm == realm);
-                if (book == null)
-                {
-                    // a realm no chronicle was planned for (the smoke test's first copy): the planless one takes it, else a new one
-                    book = _books.FirstOrDefault(b => b.Realm == null && !b.Open);
-                    if (book == null) { book = new ChronicleBook(realm); book.Reset(_dataDir, _loadedAt, realm, null); _books.Add(book); }
-                }
-            }
-            book.Ensure(realm, realmName, now);
+            // an agent configured without a realm (the stand-in: the smoke test's first copy) takes the realm its first copy names
+            RealmAgent a = Agents.Of(realm) ?? Agents.All.FirstOrDefault(x => x.Realm == null && !x.Chronicle.Open);
+            a?.Chronicle.Ensure(realm, realmName, now);
         }
 
-        /// <summary>A notice (worker): into the chronicle of every realm it reached, unless it is kept quiet.</summary>
-        public static void FromNotice(Notice n)
-        {
-            List<ChronicleBook> books;
-            lock (Gate) books = _books.Count == 0 ? new List<ChronicleBook> { Lone() } : _books.ToList();
-            foreach (ChronicleBook b in books) b.FromNotice(n);
-        }
+        /// <summary>A notice (worker): into the chronicle of every agent's realm it reached, unless it is kept quiet.</summary>
+        public static void FromNotice(Notice n) { foreach (RealmAgent a in Agents.All) a.Chronicle.FromNotice(n); }
 
-        // the first realm's, for the console and the smoke test
+        // the first agent's, for the console and the smoke test
         public static string Realm => Primary.Realm;
         public static int Count => Primary.Count;
         public static void Line(double hours, string kind, string text, string place = null, string party = null) => Primary.Line(hours, kind, text, place, party);
@@ -124,6 +75,8 @@ namespace BannerlordAgents
         public bool Open => _open;
         public int Count { get { lock (Gate) return Entries.Count; } }
 
+        /// <summary>Is this realm's agent's channel on (each agent has its own mode)?</summary>
+        private bool ChannelOn => AgentChannel.For(_realm).On;
         private string ChannelText => Path.Combine(AgentChannel.For(_realm).Dir, "chronicle.txt");
         private string ChannelData => Path.Combine(AgentChannel.For(_realm).Dir, "chronicle.jsonl");
 
@@ -232,7 +185,7 @@ namespace BannerlordAgents
                 e.Date = Text.When(e.Hours);
                 Entries.Add(e);
                 Files.Append(_file, Json.Line(e));
-                if (AgentChannel.On)
+                if (ChannelOn)
                 {
                     Files.Append(ChannelData, Json.Line(new { e.Hours, e.Date, e.Kind, e.Text }));
                     Files.Append(ChannelText, Show(e));
@@ -260,7 +213,7 @@ namespace BannerlordAgents
                 if (Entries.Count == 0) return "The chronicle of " + _realmName + " is empty so far. It is kept in " + _file;
                 IEnumerable<string> lines = Entries.Skip(Math.Max(0, Entries.Count - n)).Select(Show);
                 return string.Join("\n", lines) + "\n(" + Entries.Count + " lines in all, " + Entries.Count(e => e.From == "game") + " of them from the game's own history log; kept in " + _file
-                       + (AgentChannel.On ? " and the agent's chronicle.txt" : "") + ")";
+                       + (ChannelOn ? " and the agent's chronicle.txt" : "") + ")";
             }
         }
 
@@ -269,7 +222,7 @@ namespace BannerlordAgents
         /// <summary>The whole chronicle into the agent channel: chronicle.txt to read, chronicle.jsonl for the war room.</summary>
         private void WriteChannel()
         {
-            if (!AgentChannel.On) return;
+            if (!ChannelOn) return;
             var text = new StringBuilder(64 * 1024);
             text.Append("THE CHRONICLE OF ").Append((_realmName ?? _realm ?? "YOUR REALM").ToUpperInvariant()).Append('\n');
             text.Append("Everything your realm has learned, oldest first: wars and peace, sieges, raids, holdings won and lost, battles and who won, "
