@@ -86,6 +86,8 @@ namespace BannerlordAgents
         /// picture of the world and of what each realm sees, for the dashboard and the agent's "ask the way" tool.
         /// </summary>
         public static bool Dashboard = true;
+        /// <summary>The lieutenant (0.10): the game's clock stops while the player types to it in the campaign map's chat box, and runs again when the box closes.</summary>
+        public static bool LieutenantPause = true;
         /// <summary>How many loads of a campaign keep their hourly pictures (for rewinding on the dashboard).</summary>
         public static int KeepLoads = 12;
 
@@ -141,6 +143,7 @@ namespace BannerlordAgents
                             break;
                         case "freeze_probe": FreezeProbe = On(value, FreezeProbe); break;
                         case "dashboard": Dashboard = On(value, Dashboard); break;
+                        case "lieutenant_pause": LieutenantPause = On(value, LieutenantPause); break;
                         case "keep_loads":
                             if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int kl) && kl >= 1) KeepLoads = kl;
                             else Unknown.Add(line);
@@ -149,7 +152,7 @@ namespace BannerlordAgents
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
-                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads" })
+                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -186,6 +189,8 @@ namespace BannerlordAgents
                 sb.AppendLine("# the dashboard (docs/DASHBOARD.md): the walking map, planned ways and the hourly pictures; keep_loads = loads of a campaign kept for rewinding");
                 sb.AppendLine("dashboard = " + (Dashboard ? "on" : "off"));
                 sb.AppendLine("keep_loads = " + KeepLoads.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("# the lieutenant (docs/LIEUTENANT.md): the game's clock stops while you type to it in the campaign map's chat box");
+                sb.AppendLine("lieutenant_pause = " + (LieutenantPause ? "on" : "off"));
                 File.WriteAllText(FilePath, sb.ToString());
             }
             catch (Exception e) { Log.Line("settings could not be saved: " + e.Message); }

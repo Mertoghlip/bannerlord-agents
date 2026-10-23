@@ -1414,7 +1414,58 @@ namespace SmokeTest
             Settings.AgentDirs.Remove("dg");
             Settings.AgentDir = agentDir;
             FolderAgentsTests(root, agentDir);
+            LieutenantTests(root, agentDir);
             SaveHistoryTests(agentDir);
+        }
+
+        /// <summary>
+        /// 0.10, the player's lieutenant: a folder of kind lieutenant for the player's realm; its hour (a report saying where the
+        /// player's party is, fresh look-ups, no pokes in its channel, the player's own record kept); the player's words written
+        /// for it; and the rule that it never acts unasked.
+        /// </summary>
+        private static void LieutenantTests(string root, string agentDir)
+        {
+            string orcs = Path.Combine(root, "agents", "orcs"), lt = Path.Combine(root, "agents", "lieutenant");
+            Directory.CreateDirectory(lt);
+            File.WriteAllText(Path.Combine(lt, "agent.txt"), "realm = player_k\nmode = live\nlords = all\nchannel = warroom\nkind = lieutenant\n");
+            AgentConfig lc = AgentConfig.Read(lt);
+            Check(lc.IsLieutenant && lc.Realm == "player_k" && lc.Problem == null && !AgentConfig.Read(orcs).IsLieutenant, "a folder's agent.txt says kind = lieutenant; every other agent is a realm's");
+            Settings.AgentFolders.Clear();
+            Settings.AgentFolders.AddRange(new[] { orcs, lt });
+            List<AgentConfig> configs = Agents.Configured();
+            Brain.Reset("smoketest6", double.NaN, configs, null);
+            var me = new PartyRow { Id = "main_party", Leader = "main_hero", Name = "Aragorn", Faction = "player_k", Kind = "lord", Men = 500, Strength = 900, X = 165, Y = 105, Doing = "Hold", Spottable = true };
+            var vassal = new PartyRow { Id = "p_vas", Leader = "lord_vas", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 300, Strength = 450, X = 168, Y = 100, Doing = "Hold", Spottable = true, InSettlement = "castle_men" };
+            var orc = new PartyRow { Id = "p_ug", Leader = "lord_ug", Name = "Ugluk", Faction = "orcs", Kind = "lord", Men = 400, Strength = 500, X = 150, Y = 104, Doing = "Hold", Spottable = true };
+            for (int h = 9000; h <= 9001; h++)
+            {
+                Snapshot s = ToolWorld(h, me, vassal, orc);
+                s.Seats = new List<SeatSight>
+                {
+                    new SeatSight { Realm = "orcs", Sees = s.WatchedSees, Inspected = s.InspectedByWatched, Hostile = s.HostileToWatched },
+                    new SeatSight { Realm = "player_k", Sees = new Dictionary<string, Sighting> { ["p_ug"] = new Sighting { Party = "p_ug", By = "Halbarad", Distance = 18f } },
+                                    Inspected = new HashSet<string> { "castle_men", "village_men" }, Hostile = new HashSet<string> { "orcs" } }
+                };
+                Brain.OnHour(s);
+            }
+            Files.FlushAll();
+            string channel = Path.Combine(lt, "warroom");
+            string report = ReadIf(Path.Combine(channel, "report.txt"));
+            Check(report.Contains("YOUR RULER (the player, whom you serve)") && report.Contains("Aragorn [main_party]: 500 men") && report.Contains("never give it orders")
+                  && report.Contains("Halbarad") && !report.Contains("- Aragorn [main_hero]"),
+                  "the lieutenant's hourly report says where the player's own party is, and lists the realm's lords without it");
+            Check(!File.Exists(Path.Combine(channel, "poke.txt")) && File.Exists(Path.Combine(Brain.Dir, "pokes_player_k.jsonl")) && File.Exists(Path.Combine(channel, "lookups", "lord_vas.txt")),
+                  "the lieutenant is never poked, though its realm's pokes are kept and its look-ups written every hour");
+            Check(ReadIf(Path.Combine(Brain.Dir, "record", "pokes_you.jsonl")).Contains("\"seat\":true"), "the record of the player's own play keeps the realm's pokes while it has a lieutenant");
+            Channel ch = Agents.Of("player_k").Channel;
+            ch.WriteChat(5, new { Number = 5, Said = "hold Goblin Town with dwarves", Pending = (object)null }, "hold Goblin Town with dwarves");
+            Check(ReadIf(Path.Combine(channel, "chat.json")).Contains("\"said\":\"hold Goblin Town with dwarves\"") && ch.LastChatNumber() == 5,
+                  "the player's words go into the lieutenant's channel (chat.json, chats.log), numbered on from the last");
+            Check(LieutenantRules.Gate(6, 6, true, 2, 0, false) == "carry" && LieutenantRules.Gate(null, -1, true, 2, 0, false) == "wait" && LieutenantRules.Gate(6, 5, true, 2, 0, false) == "wait"
+                  && LieutenantRules.Gate(null, -1, false, 0, 3, false) == "propose" && LieutenantRules.Gate(6, 6, false, 0, 0, true) == "drop" && LieutenantRules.Gate(6, 6, false, 0, 0, false) == "none",
+                  "the lieutenant carries out orders only when the player's words answered the proposal still waiting; any others wait for a yes");
+            Settings.AgentFolders.Clear();
+            Settings.AgentDir = agentDir;
         }
 
         /// <summary>

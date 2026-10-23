@@ -158,6 +158,12 @@ namespace BannerlordAgents
                 if (kv.Value.Lord != null) yield return kv.Value.Lord;
             }
             if (w != null) foreach (string id in Tools.Runner.Ids(w)) if (id != null) yield return id;
+            // the player's own party, in the player's realm's report (the lieutenant's, 0.10)
+            if (s.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow me) && me.Faction != null && me.Faction == s.Watched)
+            {
+                yield return me.Id;
+                if (me.Leader != null) yield return me.Leader;
+            }
         }
 
         /// <summary>What a realm remembers: an agent's realm's is its agent's (RealmAgent.Memory); any other's (the player's) is kept here.</summary>
@@ -243,9 +249,17 @@ namespace BannerlordAgents
                 if (ag.On)
                 {
                     Tools.World w = Tools.Runner.WorldFor(v);
-                    string report = Views.Report(watchedView, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true });
+                    // the lieutenant (0.10) serves the player: its report says where the player's own party is, and its look-ups are
+                    // kept fresh every hour, since it is never poked and answers whenever the player speaks
+                    bool lt = ag.Config.IsLieutenant;
+                    string report = Views.Report(watchedView, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true, Ruler = lt ? Views.RulerLine(v) : null });
                     Audit.CheckReport(watchedView, report, v.WatchedSees, v.InspectedByWatched, "hourly report", Known(v, v.WatchedSees, m, w));
                     ag.Channel.OnHour(v.Hours, report);
+                    if (lt)
+                    {
+                        try { ag.Channel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
+                        catch (Exception e) { Diag.Error("writing the lieutenant's look-up files", e); }
+                    }
                     try { ag.Channel.WriteCouncil(Facts.Council(w)); }
                     catch (Exception e) { Diag.Error("writing the council briefing", e); }
                 }
@@ -418,7 +432,9 @@ namespace BannerlordAgents
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
                 Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
-            if (ch.On)
+            // the player's lieutenant is never poked (0.10): it speaks when spoken to; what became of its orders goes into the chat box
+            if (ch.IsLieutenant) Lieutenant.Heard(triggers);
+            if (ch.On && !ch.IsLieutenant)
                 ch.OnPoke(number, s.Hours, triggers, report, new
                 {
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
@@ -448,7 +464,7 @@ namespace BannerlordAgents
             Log.Line("poke: " + line);
             RecentPokes.Add(line);
             if (RecentPokes.Count > 50) RecentPokes.RemoveAt(0);
-            if (Settings.Notify)
+            if (Settings.Notify && !ch.IsLieutenant)
             {
                 string say = v.FactionName + ": " + triggers[0].Text + (triggers.Count > 1 ? " (+" + (triggers.Count - 1) + ")" : "");
                 Background.ToMain.Enqueue(() => Ui.Say(say, Colors.Yellow));

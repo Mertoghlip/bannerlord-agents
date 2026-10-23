@@ -44,6 +44,7 @@ namespace BannerlordAgents
             Watchdog.NewCampaign();
             Orders.Reset();
             Purse.Reset();
+            Lieutenant.Reset();
             Notices.Reset();
             Recorder.Reset();
             PacReader.Reset();
@@ -130,6 +131,8 @@ namespace BannerlordAgents
         public static Kingdom Resolve(string watch)
         {
             if (string.IsNullOrWhiteSpace(watch) || Campaign.Current == null) return null;
+            // the lieutenant's realm (0.10): whichever realm the player's clan is in at this load
+            if (string.Equals(watch.Trim(), "player", StringComparison.OrdinalIgnoreCase)) return Clan.PlayerClan?.Kingdom is Kingdom pk && !pk.IsEliminated ? pk : null;
             List<Kingdom> all = Kingdom.All.Where(k => k != null && !k.IsEliminated).ToList();
             Kingdom k1 = all.FirstOrDefault(k => string.Equals(k.StringId, watch, StringComparison.OrdinalIgnoreCase));
             if (k1 != null) return k1;

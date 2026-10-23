@@ -45,7 +45,9 @@ namespace BannerlordAgents
         public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled;
         /// <summary>The money hooks (0.9.4, Purse): our loot-only sale for held lords, the game's prisoner sale measured, a won battle's takings.</summary>
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried;
+        /// <summary>The chat box's hooks for the lieutenant (0.10, ChatHook): its channel, its name, what is sent, the clock while typing.</summary>
+        public static bool ChatInstalled;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried;
         private static object _harmony;
 
         /// <summary>Game's thread: at start-up and whenever the settings change. Attaches what is wanted and not yet attached.</summary>
@@ -56,6 +58,7 @@ namespace BannerlordAgents
             bool wantKeep = !KeepHeldInstalled && !_keepHeldTried;
             bool wantStorm = !StormInstalled && !_stormTried;
             bool wantMoney = !_moneyTried;
+            bool wantChat = !_chatTried && Bridge.Configs.Any(c => c.IsLieutenant);
             if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep || wantStorm || wantMoney)
             {
                 try { InstallCore(wantWitness, wantReasons, wantKeep, wantStorm, wantMoney); }
@@ -65,6 +68,18 @@ namespace BannerlordAgents
                     Diag.Swallowed("game hooks", e);
                     Log.Line("game hooks: " + Status);
                 }
+            }
+            // the chat box's hooks only once a lieutenant is in the agents' settings, apart from the others
+            if (wantChat)
+            {
+                _chatTried = true;
+                try { InstallChat(); }
+                catch (Exception e)
+                {
+                    Parts["chat"] = "the lieutenant's chat box could not attach (" + e.GetType().Name + ": " + e.Message + ")";
+                    Diag.Swallowed("the chat box's hooks", e);
+                }
+                Log.Line("game hooks: " + Status);
             }
             Witness.Enabled = wantWitness && WitnessInstalled;
             Witness.Refresh();
@@ -163,6 +178,34 @@ namespace BannerlordAgents
             Log.Line("game hooks: " + Status);
             Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, storm_rule = StormInstalled,
                                                  loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
+        }
+
+        /// <summary>The chat box's hooks for the lieutenant (ChatHook): five members of the game's chat box view model.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void InstallChat()
+        {
+            var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
+            const BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            Type vm = typeof(TaleWorlds.MountAndBlade.ViewModelCollection.Multiplayer.MPChatVM);
+            var found = new Dictionary<string, MethodInfo>
+            {
+                ["channel"] = vm.GetProperty("ActiveChannelType", any)?.GetSetMethod(true),
+                ["name"] = vm.GetMethod("RefreshActiveChannelNameData", any, null, Type.EmptyTypes, null),
+                ["send"] = vm.GetMethod("SendMessageToChannel", any, null, new[] { typeof(TaleWorlds.MountAndBlade.Diamond.ChatChannelType), typeof(string) }, null),
+                ["start"] = vm.GetMethod("StartTyping", any, null, Type.EmptyTypes, null),
+                ["stop"] = vm.GetMethod("StopTyping", any, null, new[] { typeof(bool) }, null)
+            };
+            List<string> missing = found.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList();
+            if (missing.Count > 0) { Parts["chat"] = "the lieutenant's chat box: the game's chat box is not as expected (" + string.Join(", ", missing) + " not found), so it is off"; return; }
+            HarmonyLib.HarmonyMethod M(string n) => new HarmonyLib.HarmonyMethod(typeof(ChatHook).GetMethod(n, BindingFlags.Static | BindingFlags.NonPublic));
+            h.Patch(found["channel"], prefix: M("ChannelPrefix"));
+            h.Patch(found["name"], postfix: M("NamePostfix"));
+            h.Patch(found["send"], prefix: M("SendPrefix"));
+            h.Patch(found["start"], postfix: M("StartPostfix"));
+            h.Patch(found["stop"], postfix: M("StopPostfix"));
+            ChatInstalled = found.Values.All(Ours);
+            Parts["chat"] = "the lieutenant's chat box " + (ChatInstalled ? "attached" : "did not attach") + Others(found["send"]);
+            Diag.Event("hooks", "chat box", new { attached = ChatInstalled });
         }
 
         /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>

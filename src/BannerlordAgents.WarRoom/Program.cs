@@ -88,13 +88,23 @@ namespace BannerlordAgents.WarRoom
                             Console.WriteLine("A war room is already answering the pokes of " + c.AgentDir + "; this one stops, so no poke is answered twice.");
                             return 1;
                         }
-                        var room = new Room(c);
                         using var cts = new CancellationTokenSource();
                         Console.CancelKeyPress += (s, e) => { e.Cancel = true; cts.Cancel(); };
+                        // the player's lieutenant (0.10) answers the player's chat, not pokes
+                        if (c.IsLieutenant) return new LieutenantRoom(c).Run(cts.Token);
+                        var room = new Room(c);
                         return room.Run(cts.Token);
                     }
                 case "once":
                     {
+                        if (c.IsLieutenant)
+                        {
+                            // the lieutenant: the player's newest words in chat.json, answered now
+                            System.Text.Json.Nodes.JsonObject chat = LieutenantRoom.ReadChat(c.ChannelDir);
+                            if (chat == null) { Console.WriteLine("No chat.json in " + c.ChannelDir); return 1; }
+                            new LieutenantRoom(c).Answer(chat);
+                            return 0;
+                        }
                         var room = new Room(c);
                         string poke = Path.Combine(c.ChannelDir, "poke.txt");
                         if (!File.Exists(poke)) { Console.WriteLine("No poke in " + c.ChannelDir); return 1; }

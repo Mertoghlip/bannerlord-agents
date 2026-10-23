@@ -164,6 +164,7 @@ namespace BannerlordAgents.WarRoom
                   "the council's settings are written and read back");
 
             RouteToolTests(root, c);
+            LieutenantTests(root);
 
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
@@ -254,6 +255,33 @@ namespace BannerlordAgents.WarRoom
             Check(with.Contains("ask_the_way") && !without.Contains("ask_the_way") && without.Contains("## Rules"), "the instructions speak of the tool only in a call that has it");
             RouteTool.WriteRules(data, c.ChannelDir);
             Check(File.Exists(Path.Combine(c.ChannelDir, "marching.txt")) && File.ReadAllText(Path.Combine(c.ChannelDir, "marching.txt")).StartsWith("HOW MARCHING WORKS"), "marching.txt is written for the agent to read");
+        }
+
+        /// <summary>
+        /// Version 0.10, the lieutenant's war room without a call: its kind read from the folder's agent.txt, its message, its
+        /// answer read and written for the bridge (with the waiting proposal's number from chat.json, never the model's).
+        /// </summary>
+        private static void LieutenantTests(string root)
+        {
+            string dir = Path.Combine(root, "lieutenant");
+            string channel = Path.Combine(dir, "warroom");
+            Directory.CreateDirectory(channel);
+            File.WriteAllText(Path.Combine(dir, "agent.txt"), "realm = player\nmode = live\nlords = all\nchannel = warroom\nkind = lieutenant\n");
+            Check(Config.Load(dir).IsLieutenant, "a folder whose agent.txt says kind = lieutenant gets the lieutenant's war room");
+            var chat = (JsonObject)JsonNode.Parse("{\"number\":7,\"said\":\"yes, send them\",\"earlier\":[\"hold on\"],\"date\":\"Summer 3, 1087, 14:00\",\"campaign\":\"camp5\",\"realm\":\"new_kingdom\","
+                                                  + "\"pending\":{\"chat\":6,\"say\":\"Send Dain and Nori to Goblin Town?\",\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}]}}");
+            var history = new List<JsonObject> { (JsonObject)JsonNode.Parse("{\"date\":\"Summer 3, 1087, 13:00\",\"said\":\"hold Goblin Town\",\"say\":\"Send Dain and Nori to Goblin Town?\",\"proposed\":\"lord_dain defend town_gt\"}") };
+            string m = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string> { "order applied: lord_dain defend" });
+            Check(m.Contains("THE CONVERSATION SO FAR") && m.Contains("Ruler: hold Goblin Town") && m.Contains("[you proposed: lord_dain defend town_gt]") && m.Contains("YOUR PROPOSAL WAITING FOR YOUR RULER'S ANSWER (from message #6)")
+                  && m.IndexOf("REPORT FOR X", StringComparison.Ordinal) < m.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal) && m.Contains("(said just before) \"hold on\"") && m.TrimEnd().EndsWith("\"yes, send them\""),
+                  "the lieutenant's message: the conversation, what became of its orders, the waiting proposal, the realm, then the ruler's words");
+            string bad = LieutenantRoom.ExtractAnswer("{\"say\":\"ok\",\"orders\":[{\"lord\":\"x\"}]}", out JsonObject none);
+            string good = LieutenantRoom.ExtractAnswer("thinking it over... {\"say\":\"Riding out.\",\"carry_out\":true,\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}],\"pending_chat\":99}", out JsonObject ok);
+            Check(bad != null && none == null && good == null && ok != null, "an answer is read from the last JSON object with \"say\", and an order without \"do\" is refused (" + bad + ")");
+            LieutenantRoom.WriteAnswer(channel, 7, ok, 6);
+            var written = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(channel, "orders", "chat-7.json")));
+            Check((int)written["pending_chat"] == 6 && (int)written["chat"] == 7 && (bool)written["carry_out"] && LieutenantRoom.LastAnsweredOnDisk(channel) == 7,
+                  "the answer file carries the waiting proposal's number from chat.json, never the model's, and counts as answered");
         }
 
         private static Program.Trigger T(string kind, string text) => new Program.Trigger { Kind = kind, Text = text };

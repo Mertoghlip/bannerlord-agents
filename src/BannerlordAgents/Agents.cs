@@ -14,6 +14,8 @@ namespace BannerlordAgents
     ///   mode = off | shadow | live
     ///   lords = all | hero ids or names, comma-separated (who obeys it in live mode)
     ///   channel = warroom (the folder in it the bridge and the war room talk through)
+    ///   kind = realm | lieutenant (since 0.10: a lieutenant serves the player's own realm, "realm = player", through the
+    ///   campaign map's chat box, and is never poked: it answers the player, and acts only on the player's yes; Lieutenant)
     /// The bridge's settings list the folders (agents = &lt;folder&gt;; &lt;folder&gt;). Without that list, the settings of
     /// 0.8 and before (watch, agent, agent_lords, agent_dir, agent_dir.&lt;realm&gt;) describe the agents.
     /// </summary>
@@ -21,6 +23,9 @@ namespace BannerlordAgents
     {
         public string Realm, Workspace, ChannelDir, LogDir;
         public string Mode = "shadow", Lords = "all";
+        /// <summary>"realm" (an agent that plays a realm), or "lieutenant" (the player's own, since 0.10).</summary>
+        public string Kind = "realm";
+        public bool IsLieutenant => Kind == "lieutenant";
         /// <summary>What was wrong with the folder, for the self-check (null: nothing).</summary>
         public string Problem;
 
@@ -46,6 +51,7 @@ namespace BannerlordAgents
                             case "mode": c.Mode = Settings.Mode(kv.Value); break;
                             case "lords": c.Lords = kv.Value.Length > 0 ? kv.Value : "all"; break;
                             case "channel": if (kv.Value.Length > 0) channel = kv.Value; break;
+                            case "kind": c.Kind = kv.Value.Trim().ToLowerInvariant() == "lieutenant" ? "lieutenant" : "realm"; break;
                         }
             }
             catch (Exception e) { c.Problem = "agent.txt could not be read: " + e.Message; }
@@ -107,7 +113,9 @@ namespace BannerlordAgents
                 "# in live mode, who obeys: all, or hero ids or names, comma-separated",
                 "lords = " + Lords,
                 "# the folder in this one the bridge and the war room talk through",
-                "channel = " + Path.GetFileName(ChannelDir.TrimEnd('\\', '/'))
+                "channel = " + Path.GetFileName(ChannelDir.TrimEnd('\\', '/')),
+                "# realm (it plays a realm) or lieutenant (it serves the player's own realm through the campaign map's chat box)",
+                "kind = " + Kind
             });
         }
     }

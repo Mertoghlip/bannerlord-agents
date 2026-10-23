@@ -356,6 +356,22 @@ namespace BannerlordAgents
         public bool On => _agent.On;
         public string Mode => _agent.Config.Mode;
         public string ModeText() => AgentChannel.ModeText(_agent.Config.Mode, _agent.Config.Lords);
+        /// <summary>The player's lieutenant's channel (since 0.10): it gets the player's words (chat.json), never pokes.</summary>
+        public bool IsLieutenant => _agent.Config.IsLieutenant;
+
+        // ---------- the lieutenant's chat (0.10) ----------
+
+        /// <summary>The highest chat number in the channel's chats.log, so numbers carry on across loads (-1: none yet).</summary>
+        public int LastChatNumber() => AgentChannel.LastNumberIn(Path.Combine(Dir, "chats.log"), "#", true);
+
+        /// <summary>The player's words for the lieutenant: chat.json (swapped in whole), then a line in chats.log. Worker.</summary>
+        public void WriteChat(int n, object chat, string said)
+        {
+            Paths.Ensure(OrdersDir);
+            Files.Overwrite(Path.Combine(Dir, "chat.json"), Json.Line(chat));
+            Files.Append(Path.Combine(Dir, "chats.log"), "#" + n + " | " + DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " | you: " + said);
+            Files.FlushAll();
+        }
         private string OrdersDir => Path.Combine(Dir, "orders");
         /// <summary>In an alarm, which realm's channel (only when there is more than one).</summary>
         private string Whose => Realm != null && Agents.All.Count > 1 ? "(" + Realm + ") " : "";
@@ -612,6 +628,19 @@ namespace BannerlordAgents
             foreach (string f in Directory.GetFiles(OrdersDir, "*.json").OrderBy(System.IO.File.GetLastWriteTimeUtc))
             {
                 if ((DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(f)).TotalMilliseconds < 300) { fresh = true; continue; }   // still being written
+                // the lieutenant's answer to the player's words (0.10): its own path, through the game's thread
+                if (Path.GetFileName(f).StartsWith("chat-", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!Lieutenant.ReadAnswer(f, Realm, out string chatError))
+                    {
+                        Unreadable.TryGetValue(f, out int tries);
+                        if (++tries < 5) { Unreadable[f] = tries; fresh = true; continue; }
+                        Diag.Alarm("lieutenant_unreadable", "The lieutenant's answer " + Path.GetFileName(f) + " could not be read (" + chatError + ").");
+                    }
+                    Unreadable.Remove(f);
+                    MoveDone(f);
+                    continue;
+                }
                 if (!AgentChannel.Parse(f, out int poke, out List<AgentChannel.AgentOrder> orders, out string error))
                 {
                     Unreadable.TryGetValue(f, out int tries);

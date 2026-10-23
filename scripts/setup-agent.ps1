@@ -27,10 +27,16 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\dolguldur-war-council -Realm dolguldur -Mode live -RealmTitle "Dol Guldur" -RealmLine "Dol Guldur, the fortress-realm of the Necromancer in southern Mirkwood ruled by Khamul, the Easterling"
+
+.EXAMPLE
+  The player's lieutenant (0.10, docs/LIEUTENANT.md): its realm is always the player's, its instructions the lieutenant's, and
+  its war room answers the player's chat, quickly (effort medium, a small thinking cap, no council).
+  powershell -ExecutionPolicy Bypass -File scripts\setup-agent.ps1 -Workspace C:\Users\karab\Projects\lieutenant -Kind lieutenant -Mode live
 #>
 param(
     [string]$Workspace = 'C:\Users\karab\Projects\orc-war-council',
     [string]$Realm = '',
+    [ValidateSet('', 'realm', 'lieutenant')][string]$Kind = '',
     [ValidateSet('', 'off', 'shadow', 'live')][string]$Mode = '',
     [string]$Lords = '',
     [string]$RealmTitle = '',
@@ -61,6 +67,8 @@ $Workspace = (Resolve-Path $Workspace).Path
 # agent.txt: what is given here, else what the folder already says
 $agentFile = Join-Path $Workspace 'agent.txt'
 $had = Read-Pairs $agentFile
+if (-not $Kind) { $Kind = $(if ($had['kind']) { $had['kind'] } else { 'realm' }) }
+if ($Kind -eq 'lieutenant') { $Realm = 'player' }
 if (-not $Realm) { $Realm = $had['realm'] }
 if (-not $Realm) { Write-Host 'Name the realm: -Realm <kingdom id> (the folder has no agent.txt yet).' -ForegroundColor Red; exit 1 }
 if (-not $Mode) { $Mode = $(if ($had['mode']) { $had['mode'] } else { 'shadow' }) }
@@ -74,8 +82,10 @@ $channelName = $(if ($had['channel']) { $had['channel'] } else { 'warroom' })
     '# in live mode, who obeys: all, or hero ids or names, comma-separated',
     "lords = $Lords",
     '# the folder in this one the bridge and the war room talk through',
-    "channel = $channelName"), $utf8)
-Write-Host "agent.txt: realm $Realm, mode $Mode, lords $Lords, channel $channelName" -ForegroundColor Green
+    "channel = $channelName",
+    '# realm (it plays a realm) or lieutenant (it serves the player''s own realm through the campaign map''s chat box)',
+    "kind = $Kind"), $utf8)
+Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName" -ForegroundColor Green
 
 $channel = Join-Path $Workspace $channelName
 New-Item -ItemType Directory -Force (Join-Path $channel 'orders\done') | Out-Null
@@ -83,7 +93,10 @@ New-Item -ItemType Directory -Force (Join-Path $channel 'lookups') | Out-Null
 
 # the instructions: only where the folder has none (or with -Force), so the agent's own prompts are never lost
 $fresh = @()
-foreach ($pair in @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'))) {
+# a lieutenant's instructions are its own, and it has no chronicler
+if ($Kind -eq 'lieutenant') { $pairs = @(, @('lieutenant-system.template.md', 'warroom-system.md')) }
+else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md')) }
+foreach ($pair in $pairs) {
     $to = Join-Path $Workspace $pair[1]
     if ((Test-Path $to) -and -not $Force) { Write-Host "Kept the folder's own $($pair[1])."; continue }
     Copy-Item (Join-Path $template $pair[0]) $to -Force
@@ -108,9 +121,17 @@ if (-not (Test-Path $wr)) {
     if ((Test-Path $SettingsFrom) -and ((Resolve-Path $SettingsFrom).Path -ne $wr)) { $wl = @([System.IO.File]::ReadAllLines($SettingsFrom, $utf8)) }
     $logs = Join-Path $env:LOCALAPPDATA ('BannerlordAgents\logs\warroom-' + $Realm)
     $set = $false
+    if ($Kind -eq 'lieutenant') { $logs = Join-Path $env:LOCALAPPDATA 'BannerlordAgents\logs\warroom-lieutenant' }
     for ($i = 0; $i -lt $wl.Count; $i++) {
         if ($wl[$i] -match '^\s*log_dir\s*=') { $wl[$i] = "log_dir = $logs"; $set = $true }
         if ($wl[$i] -match '^\s*channel\s*=') { $wl[$i] = "channel = $channelName" }
+        # the lieutenant answers the player while they wait: a medium effort, a small thinking cap, no council
+        if ($Kind -eq 'lieutenant') {
+            if ($wl[$i] -match '^\s*effort\s*=') { $wl[$i] = 'effort = medium' }
+            if ($wl[$i] -match '^\s*thinking_cap\s*=') { $wl[$i] = 'thinking_cap = 2000' }
+            if ($wl[$i] -match '^\s*timeout_seconds\s*=') { $wl[$i] = 'timeout_seconds = 120' }
+            if ($wl[$i] -match '^\s*council\s*=') { $wl[$i] = 'council = off' }
+        }
     }
     if (-not $set) { $wl += "log_dir = $logs" }
     [System.IO.File]::WriteAllLines($wr, [string[]]$wl, $utf8)

@@ -64,6 +64,10 @@ namespace BannerlordAgents.WarRoom
         public int CouncilThinkingCap = 12000;
         public int CouncilTimeoutSeconds = 420;
 
+        /// <summary>What the folder's agent is (its agent.txt's kind, since 0.10): "realm" answers pokes; "lieutenant" answers the player's chat (LieutenantRoom).</summary>
+        public string Kind = "realm";
+        public bool IsLieutenant => Kind == "lieutenant";
+
         public string ChannelDir => Path.Combine(AgentDir, Channel);
         public string FilePath => Path.Combine(AgentDir, "warroom.txt");
         /// <summary>The single journal from before memory was kept per campaign; it becomes the first campaign's notes.</summary>
@@ -77,6 +81,16 @@ namespace BannerlordAgents.WarRoom
         {
             var c = new Config();
             if (!string.IsNullOrWhiteSpace(agentDir)) c.AgentDir = agentDir;
+            // the kind of agent, from the folder's agent.txt (the bridge's file; the war room only reads it)
+            string agentTxt = Path.Combine(c.AgentDir, "agent.txt");
+            if (File.Exists(agentTxt))
+                foreach (string raw in File.ReadAllLines(agentTxt))
+                {
+                    string l = raw.Trim();
+                    int e = l.IndexOf('=');
+                    if (e > 0 && !l.StartsWith("#") && l.Substring(0, e).Trim().Equals("kind", StringComparison.OrdinalIgnoreCase))
+                        c.Kind = l.Substring(e + 1).Trim().Equals("lieutenant", StringComparison.OrdinalIgnoreCase) ? "lieutenant" : "realm";
+                }
             if (!File.Exists(c.FilePath)) { c.Save(); return c; }
             foreach (string raw in File.ReadAllLines(c.FilePath))
             {

@@ -114,6 +114,8 @@ namespace BannerlordAgents
     internal sealed class ReportExtras
     {
         public string Since, InForce, Facts;
+        /// <summary>The lieutenant's report only (0.10): the player's own party, the ruler it serves.</summary>
+        public string Ruler;
         public int LastAnswered = -1;
         public bool Lookups;
     }
@@ -462,6 +464,7 @@ namespace BannerlordAgents
                           + ". A party is seen only within sight of your lords, castles and towns. Ids in [brackets] are what orders should name."
                           + (x != null && x.Lookups ? " More on any id: lookups/<id>.txt." : ""));
 
+            if (x?.Ruler != null) sb.AppendLine().AppendLine("YOUR RULER (the player, whom you serve)").AppendLine("- " + x.Ruler);
             if (triggers != null && triggers.Count > 0)
             {
                 sb.AppendLine().AppendLine("WHY YOU ARE ASKED NOW");
@@ -611,6 +614,17 @@ namespace BannerlordAgents
                 lines.Add(where + ": " + g.Count() + (g.Count() == 1 ? " lord" : " lords") + ": " + who + ".");
             }
             return lines;
+        }
+
+        /// <summary>The lieutenant's report (0.10): where the player's own party is and what it is doing, as the realm's own.</summary>
+        public static string RulerLine(Snapshot s)
+        {
+            if (s.PlayerParty == null || !s.PartyById.TryGetValue(s.PlayerParty, out PartyRow me)) return "Where your ruler's party is cannot be seen this hour.";
+            List<SettlementRow> own = s.Settlements.Where(h => h.Faction == me.Faction).ToList();
+            ViewParty p = Party(s, me, null, "own", own);
+            string size = p.ArmyMen > 0 ? "an army of " + Text.N(p.ArmyMen) + " men in " + p.ArmyParties + " parties" : Text.N(p.Men) + " men";
+            return p.Name + " [" + me.Id + "]: " + size + ", strength " + Text.N((int)p.Strength) + "; " + Where(p) + "; " + p.Doing
+                   + ". The ruler leads their own party: never give it orders.";
         }
 
         /// <summary>The player's realm, compactly, for each recorded decision.</summary>

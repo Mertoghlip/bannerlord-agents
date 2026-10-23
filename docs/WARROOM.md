@@ -66,6 +66,7 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 
 - **Running them:** `scripts\agents.ps1 start | stop | restart | status` starts a war room for every listed folder, and the dashboard, each detached from the window. `stop` ends them all, and must come before a build. `status` shows each agent's realm, whether its war room runs, and its last line.
 - **In the game:** `agents.agent` lists the agents. `agents.agent <realm> off|shadow|live [lords]` changes one agent's mode at once and writes its `agent.txt`. `agents.view [realm]` and `agents.chronicle [n] [realm]` show any agent's realm. Agents are made at a load: add or remove one with the game closed.
+- **The lieutenant (since 0.10, [LIEUTENANT.md](LIEUTENANT.md)):** a folder whose `agent.txt` says `kind = lieutenant` (and `realm = player`) gets the lieutenant's war room (`LieutenantRoom`): it answers the player's words from the campaign map's chat box (`chat.json`) instead of pokes, in `orders\chat-N.json`. `WarRoom once --dir <folder>` answers the newest `chat.json` now.
 
 ## Settings (`warroom.txt` in the agent's folder)
 

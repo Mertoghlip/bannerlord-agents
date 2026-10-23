@@ -190,8 +190,8 @@ namespace BannerlordAgents
             return "Order given: " + Describe(o) + ". Recorded as your decision. Release the lord with agents.release " + FirstWord(Names.Hero(lord)) + ".";
         }
 
-        /// <summary>One order from the agent's answer file (AgentChannel). Posts the receipt's status and reason.</summary>
-        public static void FromAgent(AgentChannel.AgentOrder a)
+        /// <summary>One order from the agent's answer file (AgentChannel). Posts the receipt's status and reason; told (the lieutenant's, 0.10) hears them too, at once.</summary>
+        public static void FromAgent(AgentChannel.AgentOrder a, Action<string, string> told = null)
         {
             string status = "refused", reason;
             try
@@ -211,6 +211,8 @@ namespace BannerlordAgents
                 reason = "it could not be carried out (" + e.Message + ")";
                 Diag.Error("carrying out an agent's order", e);
             }
+            try { told?.Invoke(status, reason); }
+            catch (Exception e) { Diag.Error("telling the lieutenant what became of an order", e); }
             if (status == "posted") return;   // the tool runner writes this one's receipt
             double hours = CampaignTime.Now.ToHours;
             string s = status, r = reason;
@@ -1546,7 +1548,8 @@ namespace BannerlordAgents
             // or was called into one by the agent's own order, goes into the chronicle without waking the agent
             Note(o, "ended", why, new { key, hours_held = Math.Round(CampaignTime.Now.ToHours - o.Since, 1), state = State(o.Party, o) }, quiet: key == "tool done",
                  recordOnly: (key == "joined an army" && o.Verb == "join") || key == "called to an army");
-            Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
+            // the lieutenant's orders end in its own words, in the chat box (Lieutenant.Heard)
+            if (!Lieutenant.IsRealm(o.Realm?.StringId)) Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
             if (stillOff)
                 Diag.Alarm("release_failed", Names.Hero(o.Lord) + "'s order ended, but the game's AI could not be switched back on for this lord.", true, new { id = o.Id });
             if (o.Party != null && o.Party.IsActive && o.Lord != null)
