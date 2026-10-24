@@ -1174,3 +1174,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Installed DLL sha256 `FCF324DE2CF03F6D…`, `WarRoom.dll` `D67C698333409FDD…`.
   - War rooms and dashboard stopped for the build, started again 20:25.
 - **Not yet seen in a game:** all of 0.11.3.
+
+### 20:46 · Arm C2 set for the second playerless run
+- Mert, Oct 23: "Lets do the other non-player run next." C2 (docs/RUNS.md): an agent rules his kingdom against the game's own AI, the orcs' and Dol Guldur's agents watching (they answer, give no order).
+- **Outside the repository** (`scripts\arm.ps1 -Arm C2`, logged in `runs\arms.log`): the orcs `C:\Users\karab\Projects\orc-war-council` and Dol Guldur `C:\Users\karab\Projects\dolguldur-war-council` live -> shadow; the kingdom's agent stays live, the lieutenant off. Read at the next load; the war rooms (started 20:25 on 0.11.3) keep running.
+- `scripts\arm.ps1`: its in-game steps for C1 and C2 now name `agents.run playerless` and `agents.run playerless go` (they still said to switch by hand with the character-switch mod and give gold and food), and the check names the arm set.

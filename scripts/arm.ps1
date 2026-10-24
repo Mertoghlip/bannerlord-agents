@@ -74,10 +74,10 @@ switch ($Arm) {
         "  2. Play as you always do. Enter opens your lieutenant. Type agents.run note <text> in the console (Alt + ~) for anything worth remembering."
     }
     { $_ -in 'C1', 'C2' } {
-        "  2. Before the clock runs: switch your character to a wanderer in a quiet town far from the wars (the character-switch mod),"
-        "     and give that character plenty of gold and food so it lasts 60 days."
-        "  3. Release the kingdom's lords holding your Party AI Controls orders (agents.run check lists them)."
-        "  4. agents.run check should say C1/C2 with the kingdom commanded by its agent. Then set the clock running and leave it."
+        "  2. Before the clock runs, in the console (Alt + ~): agents.run playerless shows the wanderer you would become,"
+        "     agents.run playerless go makes the switch (releases the lords holding Party AI Controls orders, 100,000 denars, 100 grain)."
+        "  3. In the town menu choose to wait there."
+        "  4. agents.run check should say $Arm with the kingdom commanded by its agent. Then set the clock running and leave it."
     }
 }
 "  At day 60 the game pauses itself and offers a save named 'TEST END <arm> <run>'."
