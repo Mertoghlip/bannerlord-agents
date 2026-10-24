@@ -1126,7 +1126,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Run `20261023-1802-C1` began 18:05:12, finished 19:25:43 (60 days, 1 h 20 min at about 80 s an in-game day, no stall or crash). The kingdom's agent ended +1 town, +3 castles, +12 villages, 154 enemy lords taken; the orcs −2 castles, −7 villages; Dol Guldur −1 town, −1 castle, −5 villages. About $276 at list price (orcs $106.69, Dol Guldur $84.79, the kingdom $84.97), no usage limit met. Report: `runs\20261023-1802-C1\report.md`.
 - Mert: "dive into the report and all things you flagged. Make all necessary fixes." Four investigations (the frozen lords; stuck and fought orders with the slowness alarms; the battle counts and the fog check; gold, the failed story, the first timeout and the votes) found what 0.11.3 fixes.
 
-### 20:25 · Version 0.11.3: what run C1 showed, fixed · commit COMMIT (built and installed 20:25)
+### 20:25 · Version 0.11.3: what run C1 showed, fixed · commit daf0ec7 (built and installed 20:25)
 - **Kingdom votes never settled in C1** (`Votes.cs`, new). The game's player clan is fixed (`Clan.PlayerClan` is `player_faction`), so after the playerless switch the kingdom was still the player's to the game. A due vote waits for the player (`KingdomDecision.NeedsPlayerResolution`), and the map opens the kingdom screen only when no menu is up.
   - In 60 days: 2 votes proposed (Bailiffs, the owner of Sirannon), 0 settled.
   - The game puts one holding's vote at a time, so none of the 6 castles and the town taken were given out. They stayed with the ruler's clan.
