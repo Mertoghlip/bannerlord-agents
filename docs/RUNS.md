@@ -44,6 +44,20 @@ Loading TEST START readies a run. It begins on the first in-game hour the clock 
 - `report [run]`: the run in full, `report.md` and `report.json` in its folder: where each side ended, the run's tally, the game's war tally over the run, the holdings that changed hands, the biggest battles, the lords killed, the agents' calls, times and tokens (and by in-game day in the JSON), their orders by status and kind with the commonest refusals, the pokes and their report sizes, your decisions, the lieutenant, the run's health, your notes.
 - `compare`: every run side by side, `runs\compare.md`.
 
+## Run C1 (Oct 23) and what it changed (0.11.3)
+
+The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $276 at list price. What its record and alarms showed, and what changed:
+- **Battles between lords were counted as 2; they were at least 109.** The game takes the losing lords from their parties before it tells of a battle's end, so the record counted none on the losing side. The record now counts each side at the battle's start (and from the lords among the men, the wounded and the dead). Runs.exe re-scores older runs: a battle the winner fought with lords counts when a lord of the losing realm was taken or killed within the hour. "Men lost" counts the killed, wounded and routed alike, and says so.
+- **The orcs' gold "fell" 10.6 million:** 8.9 of it was five hired clans leaving with their purses. The day lines now keep `hired_clans`, `hired_gold` and `sworn_gold`, and a clan joining or leaving is an event ("clan moved").
+- **The kingdom's votes never settled** (the player's clan is fixed, so the game waited for the player): no holding it took was given out, and no policy, war or peace vote could follow. `Votes` now settles them while the player is not the ruler, and a vote still open a day after its time is an alarm. Holdings given out within a realm are events ("holding given", with the clans).
+- **Recruiting at villages never worked** for ordered lords (they are never "inside" a village); fixed, so ordered lords now recruit at villages. Recruit trips choose their next stop by road, not as the crow flies.
+- **28 "still held after release" alarms** were TFAOMFixes' recruiting trip taking lords after our orders ended: named now, and our orders take a lord off it.
+- **The fog check's 70 flagged reports** were all false (spots of its own past watch posts; the holding of a siege seen by its camp). One small real leak behind them: a siege seen only by its camp showed the defenders' strength, the food and the storm's timing. Fixed.
+- **470 "stuck" and 136 "fought" alarms** were mostly lords on the move along bending roads, besiegers at their camps, and the village arrivals above. The stuck check now also needs the lord to have stood still. The defend order gives up a chase not closing in after 4 hours.
+- Smaller: the hourly copy's slowness limit is two frames (it alarmed every hour at 5 ms); an answer's orders spread over ticks; the look at answer folders goes before the worker's queue; answers with raw line breaks are read; the first look since a load gets the council's time.
+
+**For comparisons:** C1 was played with the village and vote faults; later runs are not. Its agent ruled a kingdom whose conquered holdings stayed with its ruler's clan, and its lords recruited only at towns and castles on their orders. C1 should be played again on 0.11.3 before its numbers stand beside A, B and C2.
+
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).

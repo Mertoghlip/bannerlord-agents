@@ -321,7 +321,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>The siege's clock in words, for the report: the camp's building, when a storm could come (by the agent's own rule when it set one), a storm begun now, the food.</summary>
-        public static string SiegeText(Snapshot s, SiegeRow g, SiegeClock c, bool ours, string stormNow = null)
+        public static string SiegeText(Snapshot s, SiegeRow g, SiegeClock c, bool ours, string stormNow = null, bool known = true)
         {
             var sb = new StringBuilder();
             sb.Append(g.Prep >= 1 ? "preparations done" : double.IsNaN(c.PrepDoneAt) ? "preparations not done within 10 days" : "preparations done in about " + HoursText(c.PrepDoneAt - c.Now) + " (" + Text.When(c.PrepDoneAt) + ")");
@@ -329,6 +329,13 @@ namespace BannerlordAgents
             if (built.Count > 0) sb.Append("; built: " + string.Join(", ", built));
             if (c.Engines.Count > 0) sb.Append("; next: " + string.Join(", ", c.Engines.Take(3).Select(e => EngineName(e.Key) + " in about " + HoursText(e.Value - c.Now))));
             sb.Append(". ");
+            if (!known)
+            {
+                // only the camp is in sight: the walls' defenders, the food and so the storm's timing are not (0.11.3)
+                sb.Append("The besiegers' strength is " + Text.N((int)Math.Round(g.Attackers)) + "; who defends the walls, and their food, cannot be seen from here, so neither can when a storm comes.");
+                if (!double.IsNaN(c.CohesionOutAt)) sb.Append(" The besieging army holds together about " + HoursText(c.CohesionOutAt - c.Now) + " more.");
+                return sb.ToString();
+            }
             if (c.Rule != null)
                 sb.Append("Your storm rule: " + c.Rule + "; by it the camp storms " + (double.IsNaN(c.RuleStormAt) ? "not within 10 days" : c.RuleStormAt <= c.Now + 0.2 ? "now" : "about " + Text.When(c.RuleStormAt)));
             else if (c.Within240 <= 0)

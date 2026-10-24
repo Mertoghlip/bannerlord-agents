@@ -163,6 +163,9 @@ namespace SmokeTest
             v.Forces.Add(new ViewParty { Id = "lord_bolg", Lord = "lord_bolg", Name = "Bolg", Faction = "orcs" });
             List<string> leaks = Audit.Fog(v, "- Bolg [lord_bolg]\n- ENEMY Someone [lord_hidden_1] far away", new Dictionary<string, Sighting>(), new HashSet<string>());
             Check(leaks.Count == 1 && leaks[0].Contains("lord_hidden_1"), "the fog check catches a planted leak: " + string.Join("; ", leaks));
+            // 0.11.3: a spot on the map is plain geography (its own watch posts in past orders were flagged 61 times in run C1)
+            List<string> spots = Audit.Fog(v, "- Autumn 3 Â· You ordered: Bolg [lord_bolg] keeps watch 23 south-east of Rad-nakh [p784_1118]", new Dictionary<string, Sighting>(), new HashSet<string>());
+            Check(spots.Count == 0, "a map spot in the realm's own past order is no leak: " + string.Join("; ", spots));
             Check(now.Contains("on the way to raid Orc Village"), "a lord marching to raid is not yet said to be raiding");
 
             // fewer pokes (docs/reports/2026-10-08-pokes.md): a small fight goes to the logs only; an enemy lord far
@@ -1070,6 +1073,10 @@ namespace SmokeTest
             Snapshot s3 = ToolWorld(7310);
             string t2 = Forecast.SiegeText(s3, g, c2, false);
             Check(t2.Contains("Your storm rule: do not storm; by it the camp storms not within 10 days"), "the siege line says the rule and what it means: " + t2);
+            // 0.11.3: a siege seen only by its camp tells nothing of what is inside the walls (run C1: a caravan's sight showed Khand's defenders)
+            string t3 = Forecast.SiegeText(s3, g, Forecast.Siege(g, g.StartHours, null), false, null, known: false);
+            Check(t3.Contains("cannot be seen from here") && !t3.Contains("against defenders") && !t3.Contains("Food") && !t3.Contains("A storm could come"),
+                  "a siege seen only by its camp shows the besiegers, not the defenders, the food or when a storm comes: " + t3);
 
             // a storm begun now: 2,000 besiegers against 194 defenders, as at Hollin Gate, takes days by the game's rules
             var hg = new SiegeRow { Settlement = "castle_orc", StartHours = 7300, WallLevel = 1, Prep = 1, Advantage = 3.55f, Defenders = 310, Attackers = 3456, AttackerMen = 2086, DefenderMen = 194, AttackerMorale = 60 };

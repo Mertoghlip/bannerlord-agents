@@ -277,6 +277,12 @@ namespace BannerlordAgents.WarRoom
                   && m.Contains("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER") && m.Contains("- The ruler declined your proposal of message #5")
                   && m.IndexOf("WHAT YOUR RULER DID", StringComparison.Ordinal) < m.IndexOf("YOUR PROPOSAL WAITING", StringComparison.Ordinal),
                   "the lieutenant's message: the conversation, what became of its orders, what the ruler did with the buttons, the waiting proposal, the realm, then the ruler's words");
+            // 0.11.3: raw line breaks typed inside a JSON string (the orcs' chronicler did it) are read, not thrown away
+            string broken = "{\"story\": \"First part.\n\nSecond part.\", \"lessons\": [\"one\"]}";
+            JsonObject fixedStory = JsonNode.Parse(Room.EscapeBreaks(broken)) as JsonObject;
+            string fine = LieutenantRoom.ExtractAnswer("{\"say\": \"Two lines:\nhere.\"}", out JsonObject twoLines);
+            Check(fixedStory != null && ((string)fixedStory["story"]).Contains("\n\nSecond part.") && fine == null && twoLines != null && ((string)twoLines["say"]).Contains("\nhere."),
+                  "line breaks typed raw inside an answer's text are kept as line breaks, and the answer is read");
             string bad = LieutenantRoom.ExtractAnswer("{\"say\":\"ok\",\"orders\":[{\"lord\":\"x\"}]}", out JsonObject none);
             string good = LieutenantRoom.ExtractAnswer("thinking it over... {\"say\":\"Riding out.\",\"carry_out\":true,\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}],\"pending_chat\":99}", out JsonObject ok);
             Check(bad != null && none == null && good == null && ok != null, "an answer is read from the last JSON object with \"say\", and an order without \"do\" is refused (" + bad + ")");

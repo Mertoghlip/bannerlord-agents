@@ -59,6 +59,10 @@ namespace BannerlordAgents
             public bool Arrived;
             public float BestDistance = float.MaxValue;
             public double LastProgressAt;
+            /// <summary>Where he last stood more than a unit from the place before, and when (the stuck check: he must also have stood still).</summary>
+            public bool HasLastSpot;
+            public float LastSpotX, LastSpotY;
+            public double LastMovedAt;
             public bool StuckAlarmed, FightAlarmed;
             /// <summary>A join order has seen its army (so an army missing later broke up, rather than not having formed yet).</summary>
             public bool JoinedSeen;
@@ -502,6 +506,7 @@ namespace BannerlordAgents
             };
             object before = State(party, null);
             ReplaceHeld(party, h.Id);
+            LordTours.Drop(party);   // off TFAOMFixes' recruiting trip: ours alone steers him now (0.11.3)
             Apply(h);
             Active.Add(h);
             AfterRelease.RemoveAll(r => r.Party == party);
@@ -1019,6 +1024,7 @@ namespace BannerlordAgents
             o.Id = ++_nextId;
             object before = State(o.Party, null);
             ReplaceHeld(o.Party, o.Id);
+            LordTours.Drop(o.Party);
             Apply(o);
             bool took = OnCourse(o);
             Active.Add(o);
@@ -1106,7 +1112,7 @@ namespace BannerlordAgents
                     if (o.Verb != "hold") { o.Verb = "hold"; Apply(o); }
                     continue;
                 }
-                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour") && p.CurrentSettlement == o.Place)
+                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour") && At(p, o.Place))
                 {
                     if (o.Verb == "recruit") RecruitTour.SweepAt(o, now);   // a refill stop buys the same way as a tour (0.9.2)
                     if (!o.Arrived)
@@ -1193,10 +1199,26 @@ namespace BannerlordAgents
             Diag.Count("order:kept held against Party AI Controls");
         }
 
-        /// <summary>Is he getting closer? No progress for 6 in-game hours, away from his target and out of battle, is an alarm.</summary>
+        /// <summary>
+        /// Is he getting closer? No progress for 6 in-game hours, away from his target and out of battle, is an alarm. Since 0.11.3
+        /// (run C1: 451 of 470 such alarms were lords on the move) "no progress" also needs him to have stood still: roads bend
+        /// (a quarter of the recruit trips' legs ran 1.4 times the straight line), so a lord walking the road round a hill is not
+        /// stuck; and a besieger at his siege camp, or a lord standing near his place, has arrived.
+        /// </summary>
         private static void Progress(HandOrder o, float? d, double now)
         {
             if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow" || o.Verb == "join" || o.Verb == "shadow") return;
+            MobileParty p = o.Party;
+            if (o.Verb == "besiege" && p.BesiegedSettlement == o.Place) return;
+            if (o.Verb == "near" && d.Value < 12f) return;
+            Vec2 at = p.Position.ToVec2();
+            if (!o.HasLastSpot || at.Distance(new Vec2(o.LastSpotX, o.LastSpotY)) > 1f)
+            {
+                o.HasLastSpot = true;
+                o.LastSpotX = at.x;
+                o.LastSpotY = at.y;
+                o.LastMovedAt = now;
+            }
             if (d.Value < o.BestDistance - 0.5f)
             {
                 o.BestDistance = d.Value;
@@ -1204,7 +1226,7 @@ namespace BannerlordAgents
                 o.StuckAlarmed = false;
                 return;
             }
-            if (d.Value > 4f && now - o.LastProgressAt >= StuckHours && !o.StuckAlarmed)
+            if (d.Value > 4f && now - o.LastProgressAt >= StuckHours && now - o.LastMovedAt >= StuckHours && !o.StuckAlarmed)
             {
                 o.StuckAlarmed = true;
                 Diag.Count("order:stuck");
@@ -1224,10 +1246,13 @@ namespace BannerlordAgents
                 if (p == null || !p.IsActive || p.LeaderHero != r.Lord) { AfterRelease.RemoveAt(i); continue; }
                 bool off = p.Ai.DoNotMakeNewDecisions;
                 string pac = off ? PacReader.OrderOf(r.Lord) : null;
+                // TFAOMFixes' recruiting trip takes a lord below half his ranks the hour after our order ends (0.11.3, LordTours)
+                Settlement tour = off && pac == null ? LordTours.TargetOf(p) : null;
                 Diag.Lord(Text.When(now) + "  " + Names.Hero(r.Lord) + " [" + r.Lord.StringId + "], " + Math.Round(now - r.At) + " h after release: " + Doing(p)
-                          + (off ? (pac != null ? "; held by Party AI Controls (" + pac + ")" : "; the game's AI is STILL switched off for this lord") : "; deciding for themselves") + ".");
-                Diag.Event("order", "after release", new { lord = r.Lord.StringId, hours = Math.Round(now - r.At, 1), doing = Doing(p), ai_off = off, held_by_pac = pac });
-                if (off && pac == null && !Active.Any(x => x.Party == p))
+                          + (off ? (pac != null ? "; held by Party AI Controls (" + pac + ")" : tour != null ? "; on TFAOMFixes' recruiting trip (to " + Names.Settlement(tour) + ")"
+                                                : "; the game's AI is STILL switched off for this lord") : "; deciding for themselves") + ".");
+                Diag.Event("order", "after release", new { lord = r.Lord.StringId, hours = Math.Round(now - r.At, 1), doing = Doing(p), ai_off = off, held_by_pac = pac, recruiting_trip = tour?.StringId });
+                if (off && pac == null && tour == null && !Active.Any(x => x.Party == p))
                 {
                     Diag.Count("order:held after release");
                     Diag.Alarm("held_after_release", Names.Hero(r.Lord) + " was released " + Math.Round(now - r.At) + " in-game hours ago, but the game's AI is still switched off, "
@@ -1442,7 +1467,7 @@ namespace BannerlordAgents
                 p.Ai.SetDoNotMakeNewDecisions(true);
                 Toggled.Add(p);
                 // a sell order for a lord already inside its place: the game sells only on entering, so the sale is made now (0.9.4)
-                if (o.Tool == "sell" && o.Verb == "enter" && o.Place != null && p.CurrentSettlement == o.Place) Purse.CashIn(p, o.Place);
+                if (o.Tool == "sell" && o.Verb == "enter" && o.Place != null && At(p, o.Place)) Purse.CashIn(p, o.Place);
             }
             finally { Witness.Ours = false; }
         }
@@ -1469,7 +1494,7 @@ namespace BannerlordAgents
                 case "garrison":
                 case "enter":
                 case "recruit":
-                case "tour": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
+                case "tour": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || At(p, o.Place);
                 // on the way to a spot close to the place (its target there), or standing close to it
                 case "near": return o.Place != null && ((b == AiBehavior.GoToPoint && p.TargetPosition.Distance(o.Place.GatePosition) < 12f)
                                                         || ((b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f));
@@ -1478,7 +1503,7 @@ namespace BannerlordAgents
                 case "shadow": return b == AiBehavior.GoToPoint || b == AiBehavior.Hold;
                 case "leave": return p.CurrentSettlement == null;
                 case "patrol": return o.Radius > 0f ? b == AiBehavior.GoToPoint || b == AiBehavior.Hold : b == AiBehavior.PatrolAroundPoint && p.TargetSettlement == o.Place;
-                case "defend": return (b == AiBehavior.DefendSettlement && p.TargetSettlement == o.Place) || p.CurrentSettlement == o.Place;
+                case "defend": return (b == AiBehavior.DefendSettlement && p.TargetSettlement == o.Place) || At(p, o.Place);
                 case "engage": return b == AiBehavior.EngageParty && p.TargetParty == o.Target;
                 case "follow": return b == AiBehavior.EscortParty && p.TargetParty == o.Target;
                 case "join": return b == AiBehavior.EscortParty && (p.TargetParty == o.Target || p.TargetParty == o.Target?.Army?.LeaderParty);
@@ -1582,7 +1607,8 @@ namespace BannerlordAgents
             if (!Lieutenant.IsRealm(o.Realm?.StringId)) Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
             if (stillOff)
                 Diag.Alarm("release_failed", Names.Hero(o.Lord) + "'s order ended, but the game's AI could not be switched back on for this lord.", true, new { id = o.Id });
-            if (o.Party != null && o.Party.IsActive && o.Lord != null)
+            // a lord who left the realm is no longer ours to watch (0.11.3)
+            if (o.Party != null && o.Party.IsActive && o.Lord != null && key != "left the realm")
                 AfterRelease.Add(new Released { Party = o.Party, Lord = o.Lord, At = CampaignTime.Now.ToHours });
             if (o.ToolId > 0)
             {
@@ -1608,6 +1634,16 @@ namespace BannerlordAgents
 
         /// <summary>The tool an order holding this party runs, in words (the lieutenant's view of Party AI Controls), or null.</summary>
         internal static string ToolOf(MobileParty p) => Active.FirstOrDefault(x => x.Party == p) is HandOrder o ? (o.ToolText ?? Describe(o)) : null;
+
+        /// <summary>
+        /// Where a party is as the game's AI reckons it (0.11.3): the holding it is inside, or a village it stands at. A lord the
+        /// game runs steps into a village and straight back out, left standing at it (EncounterManager.StartSettlementEncounter's
+        /// last step), so "inside" alone never saw him arrive: in run C1, 1,606 of 1,771 orders given again were lords standing
+        /// at their village, and recruit trips bought at 2 of 1,562 village stops. The game's own test is used.
+        /// </summary>
+        internal static Settlement Where(MobileParty p) => p == null ? null : Helpers.MobilePartyHelper.GetCurrentSettlementOfMobilePartyForAICalculation(p);
+
+        internal static bool At(MobileParty p, Settlement s) => s != null && p != null && (p.CurrentSettlement == s || Where(p) == s);
 
         internal static Settlement SettlementFor(string words, out string error) => FindSettlement(words, out error);
         internal static MobileParty PartyFor(string words, out string error) => FindParty(words, out error);

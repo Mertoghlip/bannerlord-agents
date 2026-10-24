@@ -177,6 +177,9 @@ namespace BannerlordAgents
                 if (kv.Value.Lord != null) yield return kv.Value.Lord;
             }
             if (w != null) foreach (string id in Tools.Runner.Ids(w)) if (id != null) yield return id;
+            // the holding of a siege or a battle the realm sees (0.11.3: a siege seen by its camp, the walls just beyond sight, flagged the place's id)
+            foreach (SiegeRow g in s.Sieges) if (g.Besieger != null && sees.ContainsKey(g.Besieger)) yield return g.Settlement;
+            foreach (BattleRow b in s.Battles) if (b.Settlement != null && b.Attackers.Parties.Concat(b.Defenders.Parties).Any(sees.ContainsKey)) yield return b.Settlement;
             // the player's own party, in the player's realm's report (the lieutenant's, 0.10)
             if (s.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow me) && me.Faction != null && me.Faction == s.Watched)
             {

@@ -6,6 +6,7 @@ using Helpers;
 using HarmonyLib;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.CampaignBehaviors;
+using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
@@ -73,7 +74,8 @@ namespace BannerlordAgents
             int limit = p.Party.PartySizeLimit;
             if (limit <= 0) return null;
             Func<CharacterObject, bool> lines = LinesOf(p);
-            Settlement here = p.CurrentSettlement;
+            // a village is entered and left at once: where he stands is the game's own reckoning (0.11.3, Orders.Where)
+            Settlement here = Orders.Where(p);
             if (here != null && MayRecruitHere(p, here) && !SweptWithin(o.Id, here, ResweepHours, now))
             {
                 Sweep(p, here, limit, lines);
@@ -98,7 +100,7 @@ namespace BannerlordAgents
         public static void SweepAt(Orders.HandOrder o, double now)
         {
             MobileParty p = o.Party;
-            Settlement here = p.CurrentSettlement;
+            Settlement here = Orders.Where(p);
             if (here == null || p.Party.PartySizeLimit <= 0 || !MayRecruitHere(p, here) || SweptWithin(o.Id, here, ResweepHours, now)) return;
             Sweep(p, here, p.Party.PartySizeLimit, LinesOf(p));
             Mark(o.Id, here, now);
@@ -160,17 +162,44 @@ namespace BannerlordAgents
             float reach = Campaign.Current.GetAverageDistanceBetweenClosestTwoTownsWithNavigationType(MobileParty.NavigationType.Default) * ReachInTownGaps;
             float reach2 = reach > 0 ? reach * reach : float.MaxValue;
             var places = new List<KeyValuePair<float, Settlement>>();
+            Settlement here = Orders.Where(p), entrance = EntranceOf(p);
+            MapDistanceModel model = Campaign.Current.Models.MapDistanceModel;
             foreach (Settlement s in Settlement.All)
             {
-                if (s == null || s == p.CurrentSettlement || (!s.IsTown && !s.IsCastle && !s.IsVillage)) continue;
+                if (s == null || s == here || (!s.IsTown && !s.IsCastle && !s.IsVillage)) continue;
                 float d2 = at.DistanceSquared(s.GetPosition2D);
                 if (d2 > reach2 || SweptWithin(o.Id, s, SweepMemoryHours, now)) continue;
-                places.Add(new KeyValuePair<float, Settlement>(d2, s));
+                // nearest by road, as the game reckons it, not as the crow flies (0.11.3: a tenth of run C1's legs ran 2.6 times the straight line)
+                places.Add(new KeyValuePair<float, Settlement>(RoadTo(p, at, s, entrance, model), s));
             }
             places.Sort((a, b) => a.Key.CompareTo(b.Key));
             foreach (var kv in places)
                 if (MayRecruitHere(p, kv.Value) && AnyOffer(p, kv.Value, limit, lines)) return kv.Value;
             return null;
+        }
+
+        /// <summary>The holding whose gate the game counts this party's road distances from, or null.</summary>
+        private static Settlement EntranceOf(MobileParty p)
+        {
+            try
+            {
+                PathFaceRecord face = p.CurrentNavigationFace;
+                return face.IsValid() ? Campaign.Current.Models.MapDistanceModel.GetClosestEntranceToFace(face, MobileParty.NavigationType.Default).Item1 : null;
+            }
+            catch (Exception e) { Diag.Swallowed("the game's closest entrance for a touring lord", e); return null; }
+        }
+
+        /// <summary>A party's way to a holding by road (Roads.To's rule, on the game's thread): through its entrance; the straight line when the game's table lacks it.</summary>
+        private static float RoadTo(MobileParty p, Vec2 at, Settlement s, Settlement entrance, MapDistanceModel model)
+        {
+            Vec2 gate = s.GatePosition.ToVec2();
+            float crow = at.Distance(gate);
+            if (entrance == null || entrance == s) return crow;
+            float road;
+            try { road = model.GetDistance(entrance, s, false, false, MobileParty.NavigationType.Default); }
+            catch (Exception e) { Diag.Swallowed("the game's road distance for a touring lord", e); return crow; }
+            if (road < 0 || road > 1e7f) return crow;
+            return Math.Max(crow, crow - entrance.GatePosition.ToVec2().Distance(gate) + road);
         }
 
         /// <summary>Is there a volunteer here he would take now, and could pay for?</summary>

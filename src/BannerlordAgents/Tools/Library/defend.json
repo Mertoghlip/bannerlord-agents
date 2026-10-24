@@ -1,7 +1,7 @@
 {
   "tool": "defend",
   "kind": "tool",
-  "about": "Guards one of your holdings: patrols within radius of it, strikes weaker enemy lords there, and breaks sieges it can break (counting the defenders inside when they would sally out). From forces too strong for it, it shelters inside the holding when its garrison, militia and your lords there, with this lord, would hold it (the game's own test for whether besiegers should assault, with the walls' worth); if they would not, in the nearest castle or town of yours or an ally's that would, so it is not trapped and taken with a place that falls. Refilling: when its ranks fall below the floor and it is not needed there (it is not in an army, the holding is not besieged, and no enemy lord or army is within twice its radius of the holding), it refills in the nearest town or village of yours or an ally's (castles give no recruits), then comes back; it breaks off when enemy lords come near the holding, and leaves a place that yields few recruits in 12 hours, trying again two days later. A lord leading an army never leaves to refill by itself.",
+  "about": "Guards one of your holdings: patrols within radius of it, strikes weaker enemy lords there (giving up a chase that has not closed in after 4 hours), and breaks sieges it can break (counting the defenders inside when they would sally out). From forces too strong for it, it shelters inside the holding when its garrison, militia and your lords there, with this lord, would hold it (the game's own test for whether besiegers should assault, with the walls' worth); if they would not, in the nearest castle or town of yours or an ally's that would, so it is not trapped and taken with a place that falls. Refilling: when its ranks fall below the floor and it is not needed there (it is not in an army, the holding is not besieged, and no enemy lord or army is within twice its radius of the holding), it refills in the nearest town or village of yours or an ally's (castles give no recruits), then comes back; it breaks off when enemy lords come near the holding, and leaves a place that yields few recruits in 12 hours, trying again two days later. A lord leading an army never leaves to refill by itself.",
   "calls_back": "a force too strong for it comes near the holding, the holding is besieged, it breaks or gives up a siege, it goes to refill, has refilled, broke off refilling or found few recruits, or the holding falls",
   "at": "own_holding",
   "settings": {
@@ -11,7 +11,7 @@
     "floor": [0.4, 0, 1, "go to refill when its ranks fall below this share of full, and only while it is not needed there (see above); 0: it never leaves to refill"],
     "stay_inside": [0, 0, 1, "1: always shelter inside the holding itself, even when it would not hold (if it falls, the lord is taken with it); 0: inside only when it would hold, else in the nearest castle or town that would"]
   },
-  "init": { "target": "none", "refuge": "pick(fort(at), at, nearest_fort())", "refill_at": "none", "refill_from": "ranks", "refill_check": "-1", "refill_again": "0" },
+  "init": { "target": "none", "refuge": "pick(fort(at), at, nearest_fort())", "refill_at": "none", "refill_from": "ranks", "refill_check": "-1", "refill_again": "0", "chase_gap": "0" },
   "start": "patrol",
   "states": {
     "patrol": { "about": "patrolling within {radius} of {at}", "do": "patrol at",
@@ -25,7 +25,7 @@
           "poke": "A strong force besieges {at}: strength {siege_strength(at)} against {me}'s {strength}. {me} is sheltering in {refuge}." },
         { "if": "threat_near(at, radius) >= strength * shelter_at", "go": "shelter", "set": { "refuge": "pick(stay_inside > 0 and fort(at), at, pick(refuge(at, radius) != none, refuge(at, radius), pick(fort(at), at, nearest_fort())))" },
           "poke": "Forces too strong for {me} are near {at}: strength {threat_near(at, radius)} against {strength}. {me} is sheltering in {refuge}." },
-        { "if": "weakest_enemy_near(at, radius) != none and strength_of(weakest_enemy_near(at, radius)) <= strength * strike_below", "go": "strike", "set": { "target": "weakest_enemy_near(at, radius)" } } ] },
+        { "if": "weakest_enemy_near(at, radius) != none and strength_of(weakest_enemy_near(at, radius)) <= strength * strike_below", "go": "strike", "set": { "target": "weakest_enemy_near(at, radius)", "chase_gap": "distance(me, weakest_enemy_near(at, radius))" } } ] },
     "shelter": { "about": "sheltering in {refuge}", "do": "enter refuge",
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
@@ -46,6 +46,7 @@
       "when": [
         { "if": "gone(target) or not in_view(target)", "go": "patrol" },
         { "if": "distance(target, at) > radius * 1.5", "go": "patrol" },
+        { "if": "hours_in_state >= 4 and distance(me, target) >= chase_gap", "go": "patrol" },
         { "if": "strength_of(target) > strength * strike_below * 1.5", "go": "patrol" },
         { "if": "besieged(at) and besieger(at) != target", "go": "patrol" },
         { "if": "threat_near(at, radius) >= strength * shelter_at", "go": "shelter", "set": { "refuge": "pick(stay_inside > 0 and fort(at), at, pick(refuge(at, radius) != none, refuge(at, radius), pick(fort(at), at, nearest_fort())))" },

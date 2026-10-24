@@ -50,6 +50,8 @@ namespace BannerlordAgents
             Notices.Reset();
             Recorder.Reset();
             PacReader.Reset();
+            LordTours.Reset();
+            Votes.Reset();
             Vision.Reset();
             LordWatch.Reset();
             Names.Clear();
@@ -206,7 +208,7 @@ namespace BannerlordAgents
         private int _pokesAtDayStart, _decisionsAtDayStart;
         private double _lastSightCheck = -1;
         private int _hoursThisSession;
-        private static readonly Diag.HookStat HourlyHook = Diag.Hook("hourly copy");
+        private static readonly Diag.HookStat HourlyHook = Diag.Hook("hourly copy", 33);
         private static readonly Diag.HookStat TickHook = Diag.Hook("per-tick work");
 
         public override void RegisterEvents()
@@ -237,6 +239,7 @@ namespace BannerlordAgents
             CampaignEvents.OnPartyJoinedArmyEvent.AddNonSerializedListener(this, OnPartyJoinedArmy);
             CampaignEvents.MobilePartyDestroyed.AddNonSerializedListener(this, OnPartyDestroyed);
             CampaignEvents.MapEventStarted.AddNonSerializedListener(this, OnBattleStarted);
+            CampaignEvents.OnClanChangedKingdomEvent.AddNonSerializedListener(this, OnClanChangedKingdom);
             CampaignEvents.MapEventEnded.AddNonSerializedListener(this, OnBattleEnded);
             CampaignEvents.HeroPrisonerTaken.AddNonSerializedListener(this, OnPrisonerTaken);
             CampaignEvents.KingdomDecisionAdded.AddNonSerializedListener(this, OnDecisionAdded);
@@ -292,6 +295,8 @@ namespace BannerlordAgents
                 }
                 Orders.Hourly();
                 Wages.Hourly();
+                try { Votes.Hourly(); }
+                catch (Exception e) { Diag.Error("the realms' votes", e); }
                 LordWatch.Refresh();
                 Recorder.PollVassalOrders();
                 Background.Post("hourly view and pokes", () => Brain.OnHour(snap));
@@ -410,8 +415,9 @@ namespace BannerlordAgents
         private void OnPartyJoinedArmy(MobileParty p) => Guard("army", () => Recorder.OnPartyJoinedArmy(p));
         private void OnPartyDestroyed(MobileParty p, PartyBase by) => Guard("party notice", () => Notices.OnPartyDestroyed(p, by));
 
-        private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); });
+        private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); Run.OnBattleStarted(me); });
         private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); });
+        private void OnClanChangedKingdom(Clan clan, Kingdom from, Kingdom to, TaleWorlds.CampaignSystem.Actions.ChangeKingdomAction.ChangeKingdomActionDetail detail, bool notify) => Guard("clan moved", () => Run.OnClanChangedKingdom(clan, from, to));
         private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () => { Notices.OnPrisonerTaken(capturer, h); Run.OnLordTaken(capturer, h); });
 
         private void OnDecisionAdded(KingdomDecision d, bool involved) => Guard("realm vote", () => { Notices.OnDecisionAdded(d, involved); Recorder.OnDecisionAdded(d, involved); });

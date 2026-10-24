@@ -65,6 +65,7 @@ namespace BannerlordAgents
             {
                 string id = m.Groups[1].Value;
                 if (id == "brackets") continue;   // the report's own Ids in [brackets] line
+                if (Tools.Spots.Is(id)) continue;   // a spot is a point on the map, plain geography (0.11.3: its own watch posts in its past orders flagged 61 reports in run C1)
                 if (!allowed.Contains(id)) problems.Add("an id it should not know, [" + id + "], in the line \"" + LineAt(report, m.Index) + "\"");
             }
             return problems;

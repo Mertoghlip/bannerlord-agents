@@ -1120,3 +1120,57 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Found, not guarded (Mert's call):** the game's player clan is fixed (`Clan.PlayerClan` is the clan `player_faction`, `Campaign.PlayerDefaultFaction`), so after the switch the kingdom's ruling clan is still the player's: its decisions wait for the player once due (`KingdomDecision.NeedsPlayerResolution`) and the map opens the kingdom screen for them. The ruler's choice itself goes to the AI (`IsPlayerChooser` reads `Leader.IsHumanPlayerCharacter`). The switch mod's "Party in combat! Switch?" pop-up (`NotifyWhenAttacked`, on by default) fires for battles of the player character's own clan, which the wanderer now is in. Party AI Controls may still give the clan's parties orders by itself (auto-recruit, backup orders).
 - **Checks:** smoke test, war room and dashboard self-tests passed; 652 game references, 0 missing; `PlayerSelectionSwitch.SwitchActions.SwitchPlayer(Hero)` is public static in the installed 1.0.3 (decompiled). Installed DLL sha256 `FBBD66715218D62A…`. War rooms and dashboard stopped for the build, started again 17:59.
 - **Not yet seen in a game:** the command.
+
+### 18:05–19:26 · Run C1 played (0.11.2), unattended
+- Mert, Oct 23: "Going to the driving range for a bit, so i want to start one of the playerless test saves as well." He loaded TEST START and typed `agents.run playerless` (it chose Marzuk ibn-Zayak in Damudûr, Âbanissa, 451 from the nearest war), then `agents.run playerless go` (4 lords released from Party AI Controls orders, the switch, 100,000 denars and 100 grain, into the town), and `agents.run check` (C1).
+- Run `20261023-1802-C1` began 18:05:12, finished 19:25:43 (60 days, 1 h 20 min at about 80 s an in-game day, no stall or crash). The kingdom's agent ended +1 town, +3 castles, +12 villages, 154 enemy lords taken; the orcs −2 castles, −7 villages; Dol Guldur −1 town, −1 castle, −5 villages. About $276 at list price (orcs $106.69, Dol Guldur $84.79, the kingdom $84.97), no usage limit met. Report: `runs\20261023-1802-C1\report.md`.
+- Mert: "dive into the report and all things you flagged. Make all necessary fixes." Four investigations (the frozen lords; stuck and fought orders with the slowness alarms; the battle counts and the fog check; gold, the failed story, the first timeout and the votes) found what 0.11.3 fixes.
+
+### 20:25 · Version 0.11.3: what run C1 showed, fixed · commit COMMIT (built and installed 20:25)
+- **Kingdom votes never settled in C1** (`Votes.cs`, new). The game's player clan is fixed (`Clan.PlayerClan` is `player_faction`), so after the playerless switch the kingdom was still the player's to the game. A due vote waits for the player (`KingdomDecision.NeedsPlayerResolution`), and the map opens the kingdom screen only when no menu is up.
+  - In 60 days: 2 votes proposed (Bailiffs, the owner of Sirannon), 0 settled.
+  - The game puts one holding's vote at a time, so none of the 6 castles and the town taken were given out. They stayed with the ruler's clan.
+  - Now, while the player's clan rules and the player is not its ruler, a due vote is settled as for a computer-run realm (`KingdomElection.StartElectionWithoutPlayer`).
+  - Any of our realms' votes still open a day after its time raises `vote_waiting`.
+- **Ordered lords never "arrived" at villages.** The game steps a lord into a village and straight back out (`EncounterManager.StartSettlementEncounter`), and our checks looked only at "inside".
+  - 1,606 of 1,771 orders given again in C1 were lords standing at their village.
+  - Recruit trips bought at 2 of 1,562 village stops, and bounced between places.
+  - `Orders.Where`/`At` now use the game's own test (`MobilePartyHelper.GetCurrentSettlementOfMobilePartyForAICalculation`), in the arrival check, on course, the trips' purchases and their next stop.
+  - The next stop is now the nearest by road, the game's distance through the lord's entrance; a tenth of C1's legs ran 2.6 times the straight line.
+- **The battle record missed the losing side's lords.** The game takes them before it tells of the battle's end.
+  - The record said 2 battles between lords; Runs.exe's re-score of C1 says 109.
+  - `Run.OnBattleStarted` now keeps each side's men, lords, leader and commander at the start, and lords are also found among the men, wounded and dead.
+  - Leaders are named through the party's owner.
+  - The report re-scores older runs with the same-hour capture test. "Men lost" now says killed, wounded or routed.
+- **28 "still held after release" alarms were TFAOMFixes' recruiting trip** (`LordRecruiting`), which takes a lord below half his ranks the hour after our order ends.
+  - `LordTours.cs` (new, by name, read and drop only) names the trip in the check instead of alarming.
+  - Any order of ours now takes a lord off a trip: the trip keeps a lord whose place matches ours, and could later switch his AI on under our order.
+  - Lords who left the realm are no longer watched after release.
+- **The fog check's 70 flagged reports were false.** There was one real leak behind them.
+  - The false ones: 61 were spots of the realm's own past watch posts, now skipped. 9 were the holding of a siege seen only by its camp, now known.
+  - The leak: such a siege's line showed the defenders' strength, the food and the storm's timing (`Forecast.SiegeText(known: false)`, `Views`). Now it shows only the besiegers.
+- **Gold:**
+  - The orcs' −10.6M was mostly five hired clans leaving with 8.9M. Day lines now have `hired_clans`, `hired_gold` and `sworn_gold`, and clans joining or leaving are run events ("clan moved", with gold).
+  - Holdings given out within a realm are events ("holding given", with the clans); holding events carry the clans.
+  - The 27 of 114 C1 prisoner hand-overs paid 0 (4,051 men) are the game's own rule, not a fault. An enemy lord handed to one's own realm's holding goes to its dungeon as a gift that earns the realm influence, and the game then pays for none of that hand-over, its soldiers included (`SellPrisonersAction`). Mert, Oct 23: "Lords can sometimes place prisoners in the dungeon instead of selling them. That's probably what happened."
+  - A split sale (soldiers apart from lords, written first) was rolled back: it would have paid the agents' sell order where the game's own lords get nothing. `Purse.CashIn` keeps the game's single hand-over, and the record now names these "prisoners given to a dungeon", with the lords counted.
+- **The alarms:**
+  - `order_stuck` (470) now needs the lord to have stood still for the 6 hours too. It skips a besieger at his camp and a lord near his place.
+  - `slow_call`: the hourly copy (10 to 18 ms, every hour) now alarms over 33 ms, other hooks still over 5 ms.
+  - An answer's orders spread over ticks (2 ms a tick); the 5 to 34 ms spikes were 8 orders at once.
+  - The look at the answer folders goes before the worker's queue (`Background.PostFirst`): `scan_stopped` came with 214 to 621 jobs queued, answers waiting up to 30 s.
+- **The defend order** gives up a chase that has not closed in after 4 hours (`chase_gap`), and its `about` says so. 88 C1 "stuck" alarms were chases of a faster enemy.
+- **War room:**
+  - Raw line breaks inside an answer's text are now read (`Room.EscapeBreaks`, in both rooms). The orcs' story was thrown away once for six of them.
+  - The first look since a load gets the council's time (420 s). The kingdom's first answer was stopped at 122 s of 120.
+- **For comparisons:** C1 was played with the vote and village faults, so it should be played again on 0.11.3 before it stands beside A, B and C2 (RUNS.md).
+- **Not changed (for Mert):**
+  - The rhythm of the agents' pokes: 86% of the orcs' answers answered a poke already replaced, and enemy-in-view pokes could be thinned.
+  - Party AI Controls' own orders for the clan's parties in C runs.
+- **Checks:**
+  - Smoke test passed in full: 242 checks, 2 new (a map spot in a past order is no leak; a siege seen only by its camp shows only the besiegers).
+  - War room self-test passed (new: raw line breaks read). Dashboard 27 of 27.
+  - 671 game references, 0 missing. Every TFAOMFixes and game member by name found in the installed DLLs and the 1.4.8 source.
+  - Installed DLL sha256 `FCF324DE2CF03F6D…`, `WarRoom.dll` `D67C698333409FDD…`.
+  - War rooms and dashboard stopped for the build, started again 20:25.
+- **Not yet seen in a game:** all of 0.11.3.

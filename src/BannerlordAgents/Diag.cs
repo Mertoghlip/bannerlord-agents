@@ -52,6 +52,8 @@ namespace BannerlordAgents
         {
             public string Name;
             public long Calls, Ticks, MaxTicks;
+            /// <summary>A single call over this raises slow_call (0.11.3: 5 ms, but two frames, 33 ms, for the once-an-hour copy, which took 10 to 18 ms in every hour of run C1 and so alarmed every hour).</summary>
+            public long LimitTicks = Stopwatch.Frequency / 200;
             /// <summary>The slowest call since the last health row; the helper reads and resets it.</summary>
             public long WindowMax;
             public long LastCalls, LastTicks;   // helper only: the totals at the previous health row
@@ -116,7 +118,6 @@ namespace BannerlordAgents
         private const long TraceCap = 200L * 1024 * 1024;
         private static long _lastScreen;
         private static int _ended, _drainQueued;
-        private static readonly long FiveMs = Stopwatch.Frequency / 200;
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
 
         // ---------- the launch ----------
@@ -333,10 +334,10 @@ namespace BannerlordAgents
         // ---------- time on the game's thread ----------
 
         /// <summary>The timer for one of our hooks. Game's thread only.</summary>
-        public static HookStat Hook(string name)
+        public static HookStat Hook(string name, double limitMs = 5)
         {
             if (HookByName.TryGetValue(name, out HookStat h)) return h;
-            h = new HookStat { Name = name };
+            h = new HookStat { Name = name, LimitTicks = (long)(Stopwatch.Frequency * limitMs / 1000.0) };
             HookByName[name] = h;
             var arr = new HookStat[_hooks.Length + 1];
             Array.Copy(_hooks, arr, _hooks.Length);
@@ -345,7 +346,7 @@ namespace BannerlordAgents
             return h;
         }
 
-        /// <summary>Adds one call's time; a single call over 5 ms is a pause a player can feel, so it raises an alarm.</summary>
+        /// <summary>Adds one call's time; a single call over its limit (5 ms for most) is a pause a player can feel, so it raises an alarm.</summary>
         public static void Took(HookStat h, long start, bool alarm = true)
         {
             long d = Stopwatch.GetTimestamp() - start;
@@ -353,7 +354,7 @@ namespace BannerlordAgents
             h.Ticks += d;
             if (d > h.MaxTicks) h.MaxTicks = d;
             if (d > Interlocked.Read(ref h.WindowMax)) Interlocked.Exchange(ref h.WindowMax, d);
-            if (alarm && d > FiveMs)
+            if (alarm && d > h.LimitTicks)
                 Alarm("slow_call", "One call of ours on the game's thread took " + Ms(d).ToString("0.0", CultureInfo.InvariantCulture) + " ms (" + h.Name
                                    + "). A pause that long can be felt.", false, new { hook = h.Name, ms = Math.Round(Ms(d), 2) });
         }

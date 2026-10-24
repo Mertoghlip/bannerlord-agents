@@ -288,10 +288,12 @@ namespace BannerlordAgents
                 StormRule rule = fid == s.Watched && g.BesiegerFaction == fid ? Tools.Runner.StormRuleFor(g.Besieger) : null;
                 Forecast.SiegeClock c = Forecast.Siege(g, s.Hours, rule);
                 List<Tuple<bool, int, double>> joiners = Joiners(s, fid, sees, g.Settlement, g.BesiegerFaction, h.Faction);
-                string stormNow = g.Storming ? null : Forecast.StormNow(s, g, theirs, joiners);
+                // a siege seen only by its camp: what is inside the walls (the defenders, the food, so when a storm comes) is not seen (0.11.3)
+                bool known = ours || theirs || inspected;
+                string stormNow = g.Storming || !known ? null : Forecast.StormNow(s, g, theirs, joiners);
                 lines.Add(h.Name + " [" + h.Id + "] (" + h.Kind + ", " + FactionName(s, h.Faction) + "), besieged by " + PartyName(g.Besieger) + LordTag(g.Besieger)
                           + " (" + FactionName(s, g.BesiegerFaction) + ") since " + Text.When(g.StartHours) + " (" + Math.Round(s.Hours - g.StartHours) + " hours)"
-                          + (g.Storming ? "; a storm is being fought now (below)" : "") + ": " + Forecast.SiegeText(s, g, c, ours, stormNow));
+                          + (g.Storming ? "; a storm is being fought now (below)" : "") + ": " + Forecast.SiegeText(s, g, c, ours, stormNow, known));
             }
             foreach (BattleRow b in s.Battles)
             {

@@ -64,12 +64,45 @@ namespace BannerlordAgents.Runs
             // the run's events
             List<JsonObject> run = r.Events.Where(e => Str(e, "k") == "run").ToList();
             o["holdings"] = new JsonArray(run.Where(e => Str(e, "w") == "holding").Select(e => e["d"].DeepClone()).ToArray());
-            List<JsonNode> battles = run.Where(e => Str(e, "w") == "battle").Select(e => e["d"]).ToList();
+            // battles between lords: lords on both sides by the record, or (the record before 0.11.3 counted no lord on the losing
+            // side, the game having taken them from their parties before it told of the battle's end) a lord of the losing realm
+            // taken or killed within the hour of a battle the winner fought with lords
+            List<JsonObject> battleEvents = run.Where(e => Str(e, "w") == "battle").ToList();
+            List<JsonObject> falls = run.Where(e => Str(e, "w") == "lord taken" || Str(e, "w") == "lord killed").ToList();
+            bool BetweenLords(JsonObject e)
+            {
+                JsonNode d = e["d"];
+                if (LordBattle(d)) return true;
+                string win = Str(d, "winner");
+                if (win != "attacker" && win != "defender") return false;
+                JsonNode ws = d[win], ls = d[win == "attacker" ? "defender" : "attacker"];
+                if (Lng(ws, "lords") <= 0) return false;
+                string lr = Str(ls, "realm");
+                double h = Dbl(e, "h");
+                return lr != null && falls.Any(x => Math.Abs(Dbl(x, "h") - h) <= 1.0 && Str(x["d"], "realm") == lr);
+            }
+            List<JsonObject> lordBattles = battleEvents.Where(BetweenLords).ToList();
+            List<JsonNode> battles = battleEvents.Select(e => e["d"]).ToList();
             o["battles"] = new JsonObject
             {
-                ["all"] = battles.Count, ["between_lords"] = battles.Count(LordBattle),
-                ["biggest"] = new JsonArray(battles.Where(LordBattle).OrderByDescending(d => Lng(d["attacker"], "men") + Lng(d["defender"], "men")).Take(12).Select(d => d.DeepClone()).ToArray())
+                ["all"] = battles.Count, ["between_lords"] = lordBattles.Count,
+                ["biggest"] = new JsonArray(lordBattles.Select(e => e["d"]).OrderByDescending(d => Lng(d["attacker"], "men") + Lng(d["defender"], "men")).Take(12).Select(d => d.DeepClone()).ToArray())
             };
+            foreach (JsonObject row in realms.OfType<JsonObject>())
+            {
+                string id = Str(row, "realm");
+                int won = 0, lost = 0;
+                foreach (JsonObject e in lordBattles)
+                {
+                    JsonNode d = e["d"];
+                    string win = Str(d, "winner");
+                    if (win != "attacker" && win != "defender") continue;
+                    string wr = Str(d[win], "realm"), lr = Str(d[win == "attacker" ? "defender" : "attacker"], "realm");
+                    if (wr == id) won++;
+                    else if (lr == id) lost++;
+                }
+                row["lord_battles"] = new JsonObject { ["won"] = won, ["lost"] = lost };
+            }
             o["lords_killed"] = new JsonArray(run.Where(e => Str(e, "w") == "lord killed").Select(e => e["d"].DeepClone()).ToArray());
             o["notes"] = new JsonArray(run.Where(e => Str(e, "w") == "note").Select(e => e["d"].DeepClone()).ToArray());
             // day by day
@@ -162,9 +195,9 @@ namespace BannerlordAgents.Runs
                 sb.AppendLine("| " + KeyWords[i] + " | " + string.Join(" | ", realms.Select(x => N(Lng(x[Keys[i]], "end")) + " (" + Signed(Lng(x[Keys[i]], "change")) + ")")) + " |");
             string[] tk = { "battles_won", "battles_lost", "lord_battles_won", "lord_battles_lost", "men_lost", "enemy_fallen", "sieges_begun", "towns_gained", "towns_lost", "castles_gained", "castles_lost",
                             "villages_gained", "villages_lost", "lords_captured", "lords_taken", "lords_killed", "lords_slain", "lords_freed", "villages_looted", "villages_sacked", "armies" };
-            string[] tw = { "battles won", "battles lost", "battles between lords won", "battles between lords lost", "men lost", "enemy men fallen", "sieges begun", "towns taken", "towns lost", "castles taken", "castles lost",
+            string[] tw = { "battles won", "battles lost", "battles between lords won", "battles between lords lost", "men lost (killed, wounded or routed)", "enemy men lost (killed, wounded or routed)", "sieges begun", "towns taken", "towns lost", "castles taken", "castles lost",
                             "villages taken", "villages lost", "own lords taken prisoner", "enemy lords taken", "own lords killed", "enemy lords killed", "own lords freed", "own villages looted", "villages it looted", "armies formed" };
-            for (int i = 0; i < tk.Length; i++) sb.AppendLine("| " + tw[i] + " | " + string.Join(" | ", realms.Select(x => N(Lng(x["tally"], tk[i])))) + " |");
+            for (int i = 0; i < tk.Length; i++) sb.AppendLine("| " + tw[i] + " | " + string.Join(" | ", realms.Select(x => N(tk[i] == "lord_battles_won" ? Lng(x["lord_battles"], "won") : tk[i] == "lord_battles_lost" ? Lng(x["lord_battles"], "lost") : Lng(x["tally"], tk[i])))) + " |");
             sb.AppendLine();
             sb.AppendLine("## The game's own war tally over the run");
             sb.AppendLine();
@@ -221,7 +254,7 @@ namespace BannerlordAgents.Runs
             var sb = new StringBuilder();
             sb.AppendLine("# The test runs side by side");
             sb.AppendLine();
-            sb.AppendLine("| run | arm | days | your kingdom: holdings | villages | men | lords held / taken | lord battles won-lost | men lost / enemy fallen | rivals: holdings | its tokens / list price | rivals' tokens / list price | marks |");
+            sb.AppendLine("| run | arm | days | your kingdom: holdings | villages | men | lords held / taken | lord battles won-lost | men lost / enemy lost | rivals: holdings | its tokens / list price | rivals' tokens / list price | marks |");
             sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
             foreach (string id in ids)
             {
@@ -236,7 +269,7 @@ namespace BannerlordAgents.Runs
                 bool Ours(JsonObject a) => Str(a, "agent") == r.Kingdom || Str(a, "agent") == "lieutenant";
                 string Tok(IEnumerable<JsonObject> xs) => K(xs.Sum(a => Lng(a["tokens"], "all"))) + " / $" + xs.Sum(a => Dbl(a, "list_price_usd")).ToString("0.00", Inv);
                 sb.AppendLine("| " + id + " | " + r.Arm + " | " + Str(j, "days_reached") + " | " + Signed(Ch(k, "towns") + Ch(k, "castles")) + " | " + Signed(Ch(k, "villages")) + " | " + Signed(Ch(k, "men"))
-                              + " | " + T(k, "lords_captured") + " / " + T(k, "lords_taken") + " | " + T(k, "lord_battles_won") + "-" + T(k, "lord_battles_lost") + " | " + N(T(k, "men_lost")) + " / " + N(T(k, "enemy_fallen"))
+                              + " | " + T(k, "lords_captured") + " / " + T(k, "lords_taken") + " | " + Lng(k?["lord_battles"], "won") + "-" + Lng(k?["lord_battles"], "lost") + " | " + N(T(k, "men_lost")) + " / " + N(T(k, "enemy_fallen"))
                               + " | " + Signed(rivals.Sum(x => Ch(x, "towns") + Ch(x, "castles"))) + " | " + Tok(ag.Where(Ours)) + " | " + Tok(ag.Where(a => !Ours(a))) + " | " + ((j["flags"] as JsonArray)?.Count ?? 0) + " |");
             }
             string path = Path.Combine(RunsDir, "compare.md");

@@ -168,6 +168,8 @@ namespace BannerlordAgents.Runs
                 switch (w)
                 {
                     case "holding": said.Add("  day " + Str(d, "day") + ": " + Str(d, "place") + " (" + Str(d, "kind") + ") passed from " + Str(d, "from") + " to " + Str(d, "to") + " (" + Str(d, "how") + ")"); break;
+                    case "holding given": said.Add("  day " + Str(d, "day") + ": " + Str(d, "place") + " (" + Str(d, "kind") + ") given to " + Str(d, "to_clan") + " in " + Str(d, "realm") + " (" + Str(d, "how") + ")"); break;
+                    case "clan moved": said.Add("  day " + Str(d, "day") + ": the clan " + Str(d, "clan") + (Str(d, "hired") == "true" ? " (hired)" : "") + " left " + (Str(d, "from") ?? "no realm") + " for " + (Str(d, "to") ?? "no realm") + ", with " + Str(d, "gold") + " gold"); break;
                     case "battle": if (Text.LordBattle(d)) said.Add("  day " + Str(d, "day") + ": " + Text.Battle(d)); break;
                     case "siege began": case "siege ended": said.Add("  day " + Str(d, "day") + ": " + w + " at " + Str(d, "place") + " (" + Str(d, "by") + " against " + Str(d, "of") + ")"); break;
                     case "lord killed": said.Add("  day " + Str(d, "day") + ": " + Str(d, "lord") + " (" + Str(d, "realm") + ") was killed" + (Str(d, "killer") != null ? " by " + Str(d, "killer") : "")); break;

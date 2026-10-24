@@ -141,7 +141,9 @@ namespace BannerlordAgents.WarRoom
             int cap = thinkingCap ?? (urgent ? _c.UrgentThinkingCap : _c.ThinkingCap);
             Say("Poke #" + number + " (" + when + ")" + (urgent ? ", urgent" : "") + ": asking " + _c.Model + " at effort " + effort + ", thinking up to " + cap + " tokens"
                 + (conversation ? (resume ? ", in its conversation (" + _mem.SessionTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens so far)" : ", in a new conversation") : "") + "...");
-            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, _c.TimeoutSeconds, cap, sessionId, resume, tools: routes);
+            // the first look since a load reads the realm whole, often with no story yet: it gets the council's time (0.11.3: the kingdom's first answer was stopped at 122 s of 120)
+            int timeout = why.IndexOf("First look", StringComparison.OrdinalIgnoreCase) >= 0 ? Math.Max(_c.TimeoutSeconds, _c.CouncilTimeoutSeconds) : _c.TimeoutSeconds;
+            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, timeout, cap, sessionId, resume, tools: routes);
             if (r.HandshakeLate) Say("Poke #" + number + ": Claude Code took over 30 s to answer the tools' handshake; the message went anyway.");
             bool stallRetry = false;
             if (!r.Ok && (r.Stalled || r.Runaway))
@@ -152,7 +154,7 @@ namespace BannerlordAgents.WarRoom
                 double lost = r.Seconds;
                 stallRetry = true;
                 if (conversation && !resume) sessionId = _mem.SessionId = Guid.NewGuid().ToString();   // the first call of a conversation is begun again under a new id
-                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, _c.TimeoutSeconds, cap, sessionId, resume, tools: routes);
+                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, timeout, cap, sessionId, resume, tools: routes);
                 r.Seconds += lost;
             }
             if (conversation && r.Ok)
@@ -933,6 +935,35 @@ namespace BannerlordAgents.WarRoom
             return null;
         }
 
+        /// <summary>
+        /// Line breaks and tabs typed raw inside a JSON string, which the reader refuses, written as escapes (0.11.3: the orcs'
+        /// chronicler put six real line breaks into its story's text, and the whole story was thrown away; an answer's orders
+        /// would go the same way).
+        /// </summary>
+        internal static string EscapeBreaks(string json)
+        {
+            if (json.IndexOf('\n') < 0 && json.IndexOf('\r') < 0 && json.IndexOf('\t') < 0) return json;
+            var sb = new StringBuilder(json.Length + 16);
+            bool inString = false, escape = false;
+            foreach (char c in json)
+            {
+                if (inString)
+                {
+                    if (escape) { escape = false; sb.Append(c); continue; }
+                    if (c == '\\') { escape = true; sb.Append(c); continue; }
+                    if (c == '"') { inString = false; sb.Append(c); continue; }
+                    if (c == '\n') { sb.Append("\\n"); continue; }
+                    if (c == '\r') { sb.Append("\\r"); continue; }
+                    if (c == '\t') { sb.Append("\\t"); continue; }
+                    sb.Append(c);
+                    continue;
+                }
+                if (c == '"') inString = true;
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
         /// <summary>The balanced { ... } spans at the top level of a text, quotes and escapes respected.</summary>
         private static IEnumerable<string> Objects(string text)
         {
@@ -953,7 +984,7 @@ namespace BannerlordAgents.WarRoom
                 else if (c == '}' && depth > 0)
                 {
                     depth--;
-                    if (depth == 0 && start >= 0) { yield return text.Substring(start, i - start + 1); start = -1; }
+                    if (depth == 0 && start >= 0) { yield return Room.EscapeBreaks(text.Substring(start, i - start + 1)); start = -1; }
                 }
             }
         }

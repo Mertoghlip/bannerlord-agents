@@ -619,7 +619,7 @@ namespace BannerlordAgents
         {
             if (!On || !Live.CampaignRunning) return;
             if (Interlocked.Exchange(ref _scanQueued, 1) == 1) return;
-            Background.Post("agent orders folder", () =>
+            Background.PostFirst("agent orders folder", () =>
             {
                 try { Scan(); }
                 finally { Interlocked.Exchange(ref _scanQueued, 0); }

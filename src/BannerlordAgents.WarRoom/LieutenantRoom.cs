@@ -331,7 +331,7 @@ namespace BannerlordAgents.WarRoom
                 else if (c == '}' && depth > 0)
                 {
                     depth--;
-                    if (depth == 0 && start >= 0) { yield return text.Substring(start, i - start + 1); start = -1; }
+                    if (depth == 0 && start >= 0) { yield return Room.EscapeBreaks(text.Substring(start, i - start + 1)); start = -1; }
                 }
             }
         }

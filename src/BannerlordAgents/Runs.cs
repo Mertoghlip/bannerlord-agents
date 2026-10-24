@@ -7,6 +7,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
+using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.CampaignSystem.Siege;
 using TaleWorlds.Library;
@@ -51,6 +52,7 @@ namespace BannerlordAgents
             _last = null;
             EventsFile = null;
             Recruits.Clear();
+            Battles.Begun.Clear();
             _trueSightFlagged = _cheatFlagged = false;
             RunState open = RunFiles.ReadOpen();
             string wall = Now();
@@ -226,6 +228,19 @@ namespace BannerlordAgents
             return "Test run " + id + " stopped. Its files stay in runs\\" + id + ".";
         }
 
+        /// <summary>A clan joining or leaving one of the run's realms, with its purse (0.11.3: hired clans leaving took millions out of the orcs' count).</summary>
+        public static void OnClanChangedKingdom(Clan clan, Kingdom oldKingdom, Kingdom newKingdom)
+        {
+            if (!Active || clan == null) return;
+            string from = oldKingdom?.StringId, to = newKingdom?.StringId;
+            if (!Realms.Contains(from ?? "") && !Realms.Contains(to ?? "")) return;
+            Diag.Event("run", "clan moved", new
+            {
+                run = _run.Id, day = Day(), clan = Names.Faction(clan), id = clan.StringId, from, to, hired = clan.IsUnderMercenaryService, gold = clan.Gold,
+                lords = clan.Heroes.Count(h => h != null && h.IsLord && h.IsAlive)
+            });
+        }
+
         /// <summary>What was done to set the run up before its clock ran (the playerless switch, 0.11.2), kept in run.json.</summary>
         public static void SetUp(string text)
         {
@@ -265,14 +280,54 @@ namespace BannerlordAgents
             Recruits[f] = n + amount;
         }
 
+        /// <summary>
+        /// A battle's sides as it began (0.11.3): by the time the game says a battle has ended, the losing lords are already taken
+        /// from their parties (MapEvent.CaptureDefeatedPartyMembers runs before FinalizeEvent raises MapEventEnded), so run C1's
+        /// record counted the loser's lords as 0 in 1,131 of 1,132 decided battles, and named him by his party. Kept per battle
+        /// until its end; a party that joins later is counted at the end.
+        /// </summary>
+        private sealed class BattleStart
+        {
+            public int AMen, DMen, ALords, DLords;
+            public string ALeader, DLeader, ABy, DBy;
+        }
+
+        // kept apart from Run's own fields: a field of a game type would make the smoke test, which runs without the game, load the game (Diag reads Run.EventsFile)
+        private static class Battles
+        {
+            public static readonly Dictionary<MapEvent, BattleStart> Begun = new Dictionary<MapEvent, BattleStart>();
+        }
+
+        public static void OnBattleStarted(MapEvent me)
+        {
+            if (!Active || me == null || me.AttackerSide == null || me.DefenderSide == null) return;
+            string a = me.AttackerSide.MapFaction?.StringId, d = me.DefenderSide.MapFaction?.StringId;
+            if (!Realms.Contains(a ?? "") && !Realms.Contains(d ?? "")) return;
+            if (Battles.Begun.Count > 500) Battles.Begun.Clear();   // battles whose end never came (a load in between)
+            Battles.Begun[me] = new BattleStart
+            {
+                AMen = Men(me.AttackerSide), DMen = Men(me.DefenderSide), ALords = Lords(me.AttackerSide), DLords = Lords(me.DefenderSide),
+                ALeader = Leader(me.AttackerSide), DLeader = Leader(me.DefenderSide), ABy = CommandedBy(me.AttackerSide), DBy = CommandedBy(me.DefenderSide)
+            };
+        }
+
+        private static int Men(MapEventSide side)
+        {
+            int n = 0;
+            foreach (MapEventParty mp in side.Parties) n += mp.Party?.NumberOfHealthyMembers ?? 0;
+            return n;
+        }
+
         public static void OnBattleEnded(MapEvent me)
         {
             if (!Active || me == null) return;
             string a = me.AttackerSide?.MapFaction?.StringId, d = me.DefenderSide?.MapFaction?.StringId;
+            Battles.Begun.TryGetValue(me, out BattleStart b0);
+            Battles.Begun.Remove(me);
             if (!Realms.Contains(a ?? "") && !Realms.Contains(d ?? "")) return;
-            int aMen = me.AttackerSide.HealthyTroopCountAtMapEventStart, dMen = me.DefenderSide.HealthyTroopCountAtMapEventStart;
+            int aMen = Math.Max(me.AttackerSide.HealthyTroopCountAtMapEventStart, b0?.AMen ?? 0), dMen = Math.Max(me.DefenderSide.HealthyTroopCountAtMapEventStart, b0?.DMen ?? 0);
             int aLost = me.AttackerSide.TroopCasualties, dLost = me.DefenderSide.TroopCasualties;
-            int aLords = Lords(me.AttackerSide), dLords = Lords(me.DefenderSide);
+            int aLords = Math.Max(Lords(me.AttackerSide), b0?.ALords ?? 0), dLords = Math.Max(Lords(me.DefenderSide), b0?.DLords ?? 0);
             string winner = !me.HasWinner ? "none" : me.WinningSide == TaleWorlds.Core.BattleSideEnum.Attacker ? "attacker" : "defender";
             string kind = me.IsSiegeAssault ? "storm" : me.IsSallyOut ? "sally" : me.IsRaid ? "raid" : me.IsSiegeOutside ? "siege outside" : "field";
             if (winner != "none")
@@ -289,8 +344,8 @@ namespace BannerlordAgents
             Diag.Event("run", "battle", new
             {
                 run = _run.Id, day = RunRules.Day(CampaignTime.Now.ToHours, _run.H0), kind, place = me.MapEventSettlement != null ? Names.Settlement(me.MapEventSettlement) : null, winner,
-                attacker = new { realm = a, leader = Leader(me.AttackerSide), by = CommandedBy(me.AttackerSide), men = aMen, lost = aLost, lords = aLords },
-                defender = new { realm = d, leader = Leader(me.DefenderSide), by = CommandedBy(me.DefenderSide), men = dMen, lost = dLost, lords = dLords },
+                attacker = new { realm = a, leader = b0?.ALeader ?? Leader(me.AttackerSide), by = b0?.ABy ?? CommandedBy(me.AttackerSide), men = aMen, lost = aLost, lords = aLords },
+                defender = new { realm = d, leader = b0?.DLeader ?? Leader(me.DefenderSide), by = b0?.DBy ?? CommandedBy(me.DefenderSide), men = dMen, lost = dLost, lords = dLords },
                 you_fought = MobileParty.MainParty != null && MobileParty.MainParty.MapEvent == me
             });
         }
@@ -299,11 +354,20 @@ namespace BannerlordAgents
         {
             if (!Active || s == null) return;
             string to = newOwner?.MapFaction?.StringId, from = oldOwner?.MapFaction?.StringId;
-            if (to == from || (!Realms.Contains(to ?? "") && !Realms.Contains(from ?? ""))) return;
+            if (!Realms.Contains(to ?? "") && !Realms.Contains(from ?? "")) return;
             string kind = s.IsTown ? "town" : s.IsCastle ? "castle" : s.IsVillage ? "village" : "other";
+            // the owning clans too (0.11.3): a holding taken goes to the ruler's clan until a vote gives it out, and that vote is a
+            // holding given within the realm, which run C1's record could not show
+            string toClan = newOwner?.Clan != null ? Names.Faction(newOwner.Clan) : null, fromClan = oldOwner?.Clan != null ? Names.Faction(oldOwner.Clan) : null;
+            if (to == from)
+            {
+                if (s.IsVillage) return;   // a castle's or town's villages follow it
+                Diag.Event("run", "holding given", new { run = _run.Id, day = Day(), place = Names.Settlement(s), id = s.StringId, kind, realm = to, from_clan = fromClan, to_clan = toClan, how = how.ToString() });
+                return;
+            }
             Tally(to).Gained(kind);
             Tally(from).Lost(kind);
-            Diag.Event("run", "holding", new { run = _run.Id, day = Day(), place = Names.Settlement(s), id = s.StringId, kind, from, to, how = how.ToString() });
+            Diag.Event("run", "holding", new { run = _run.Id, day = Day(), place = Names.Settlement(s), id = s.StringId, kind, from, to, from_clan = fromClan, to_clan = toClan, how = how.ToString() });
         }
 
         public static void OnSiege(SiegeEvent se, bool began)
@@ -417,6 +481,8 @@ namespace BannerlordAgents
                     if (c == null || c.IsEliminated) continue;
                     x.Clans++;
                     x.ClansGold += c.Gold;
+                    // hired clans come and go with their purses (0.11.3: five left the orcs in run C1, 8.9 of the 10.6 million their gold fell)
+                    if (c.IsUnderMercenaryService) { x.HiredClans++; x.HiredGold += c.Gold; }
                     try { x.ClansDaily += (int)Math.Round(Campaign.Current.Models.ClanFinanceModel.CalculateClanGoldChange(c, false, false, false).ResultNumber); }
                     catch (Exception e) { Diag.Swallowed("a clan's day for the run", e); }
                 }
@@ -555,19 +621,40 @@ namespace BannerlordAgents
 
         private static int Day() => RunRules.Day(CampaignTime.Now.ToHours, _run.H0);
 
+        /// <summary>The side's lord parties that had a lord in the battle: its leader, or a lord among its men, its wounded or its dead (the game empties the leader's place of a lord taken).</summary>
         private static int Lords(MapEventSide side)
         {
             int n = 0;
             foreach (MapEventParty mp in side.Parties)
-                if (mp.Party?.MobileParty != null && mp.Party.MobileParty.IsLordParty && mp.Party.LeaderHero != null) n++;
+                if (mp.Party?.MobileParty != null && mp.Party.MobileParty.IsLordParty && HadLord(mp)) n++;
             return n;
+        }
+
+        private static bool HadLord(MapEventParty mp)
+        {
+            if (mp.Party.LeaderHero != null && mp.Party.LeaderHero.IsLord) return true;
+            foreach (FlattenedTroopRosterElement t in mp.Troops)
+                if (t.Troop != null && t.Troop.IsHero && t.Troop.HeroObject != null && t.Troop.HeroObject.IsLord) return true;
+            return HasLord(mp.WoundedInBattle) || HasLord(mp.DiedInBattle);
+        }
+
+        private static bool HasLord(TroopRoster r)
+        {
+            if (r == null) return false;
+            for (int i = 0; i < r.Count; i++)
+            {
+                CharacterObject c = r.GetCharacterAtIndex(i);
+                if (c != null && c.IsHero && c.HeroObject != null && c.HeroObject.IsLord) return true;
+            }
+            return false;
         }
 
         private static string Leader(MapEventSide side)
         {
             PartyBase p = side?.LeaderParty;
             if (p == null) return null;
-            if (p.LeaderHero != null) return Names.Hero(p.LeaderHero);
+            Hero h = p.LeaderHero ?? (p.IsMobile && p.MobileParty.IsLordParty ? p.Owner : null);
+            if (h != null) return Names.Hero(h);
             return p.IsSettlement ? Names.Settlement(p.Settlement) : Names.Party(p.MobileParty);
         }
 
@@ -582,8 +669,9 @@ namespace BannerlordAgents
             // with you ruling, the only agent giving your lords orders is your lieutenant, and only with your yes
             if (src == "agent") return _run.Lieutenant && m.MapFaction?.StringId == _run.Kingdom ? "lieutenant" : "agent";
             if (src != null) return src == "you" ? "you" : "hand";
-            if (m.LeaderHero != null && PacReader.KeyOf(m.LeaderHero) is string key)
-                return PacLink.IsOurs(m.LeaderHero.StringId, key) ? "lieutenant (Party AI Controls)" : "you (Party AI Controls)";
+            Hero lord = m.LeaderHero ?? (m.IsLordParty ? m.Owner : null);
+            if (lord != null && PacReader.KeyOf(lord) is string key)
+                return PacLink.IsOurs(lord.StringId, key) ? "lieutenant (Party AI Controls)" : "you (Party AI Controls)";
             return "game";
         }
 
@@ -665,7 +753,7 @@ namespace BannerlordAgents
                     Lords = lords.Count, Men = lords.Sum(r => r.Men), Wounded = lords.Sum(r => r.Wounded), Strength = (int)Math.Round(lords.Sum(r => r.Strength)),
                     Armies = armies.Count, ArmyMen = armies.Sum(r => r.ArmyMen),
                     Loot = lords.Sum(r => r.Loot), Prisoners = lords.Sum(r => r.Prisoners), Ransom = lords.Sum(r => r.Ransom),
-                    x.LordsAlive, x.LordsCaptive, x.EnemyLordsHeld, x.Clans, x.ClansGold, x.ClansDaily, x.Influence,
+                    x.LordsAlive, x.LordsCaptive, x.EnemyLordsHeld, x.Clans, x.ClansGold, x.ClansDaily, x.HiredClans, x.HiredGold, SwornGold = x.ClansGold - x.HiredGold, x.Influence,
                     RecruitedToday = rec, Tally = t
                 });
             }
@@ -852,7 +940,7 @@ namespace BannerlordAgents
     internal sealed class RealmExtras
     {
         public string Realm;
-        public int Clans, ClansGold, ClansDaily, LordsAlive, LordsCaptive, EnemyLordsHeld, Influence;
+        public int Clans, ClansGold, ClansDaily, HiredClans, HiredGold, LordsAlive, LordsCaptive, EnemyLordsHeld, Influence;
     }
 
     internal sealed class WarRow

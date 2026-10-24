@@ -185,14 +185,20 @@ namespace BannerlordAgents
         }
 
         /// <summary>The game handed his prisoners over on entering (PartiesSellPrisonerCampaignBehavior): what it brought, for the sell order's word.</summary>
-        public static void NoteRansom(MobileParty p, Settlement s, int gold, int sold)
+        /// <summary>
+        /// Prisoners handed over at a holding: sold, or (0.11.3) with lords among them given to the dungeon of one's own realm's
+        /// holding, a gift the game pays nothing for, the soldiers with them included, while the realm gains influence for the lords.
+        /// </summary>
+        public static void NoteRansom(MobileParty p, Settlement s, int gold, int sold, int lords = 0)
         {
             if (sold <= 0) return;
             Sale sale = SaleAt(p, s);
             sale.RansomGold += Math.Max(0, gold);
             sale.Sold += sold;
             Diag.Count("purse:prisoners sold", sold);
-            Diag.Event("purse", "prisoners sold", new { lord = p.LeaderHero?.StringId, place = s.StringId, sold, gold });
+            bool gift = lords > 0 && gold <= 0 && s.MapFaction == p.MapFaction;
+            if (gift) Diag.Count("purse:prisoners given to a dungeon", sold);
+            Diag.Event("purse", gift ? "prisoners given to a dungeon" : "prisoners sold", new { lord = p.LeaderHero?.StringId, place = s.StringId, sold, gold, lords });
         }
 
         /// <summary>
@@ -209,9 +215,12 @@ namespace BannerlordAgents
                 if (e.Character != null && (!e.Character.IsHero || (!e.Character.IsPlayerCharacter && e.Character.HeroObject.MapFaction.IsAtWarWith(s.MapFaction))))
                     sell.Add(e);
             if (sell.TotalManCount <= 0) return;
-            int gold = p.PartyTradeGold, before = p.PrisonRoster.TotalManCount;
+            // in one hand-over, as the game's own lords make it on entering (with an enemy lord in it, to one's own realm's holding,
+            // the lord goes to the dungeon as a gift that earns the realm influence, and the game pays for none of it: 0.11.3 looked
+            // into run C1's 27 hand-overs paid 0 and keeps the game's rule)
+            int gold = p.PartyTradeGold, before = p.PrisonRoster.TotalManCount, lordsBefore = p.PrisonRoster.TotalHeroes;
             SellPrisonersAction.ApplyForSelectedPrisoners(p.Party, s.Party, sell);
-            NoteRansom(p, s, p.PartyTradeGold - gold, before - p.PrisonRoster.TotalManCount);
+            NoteRansom(p, s, p.PartyTradeGold - gold, before - p.PrisonRoster.TotalManCount, lordsBefore - p.PrisonRoster.TotalHeroes);
         }
 
         // ---------- the clans' purses ----------
@@ -370,7 +379,7 @@ namespace BannerlordAgents
     {
         internal sealed class Before
         {
-            public int Gold, Prisoners;
+            public int Gold, Prisoners, Lords;
         }
 
         private static void Prefix(MobileParty mobileParty, out Before __state)
@@ -379,7 +388,7 @@ namespace BannerlordAgents
             try
             {
                 if (mobileParty == null || !mobileParty.IsLordParty || mobileParty.IsMainParty || !Orders.Holds(mobileParty)) return;
-                __state = new Before { Gold = mobileParty.PartyTradeGold, Prisoners = mobileParty.PrisonRoster.TotalManCount };
+                __state = new Before { Gold = mobileParty.PartyTradeGold, Prisoners = mobileParty.PrisonRoster.TotalManCount, Lords = mobileParty.PrisonRoster.TotalHeroes };
             }
             catch (Exception e) { Diag.Swallowed("measuring a prisoner sale (before)", e); }
         }
@@ -387,7 +396,7 @@ namespace BannerlordAgents
         private static void Postfix(MobileParty mobileParty, Settlement settlement, Before __state)
         {
             if (__state == null) return;
-            try { Purse.NoteRansom(mobileParty, settlement, mobileParty.PartyTradeGold - __state.Gold, __state.Prisoners - mobileParty.PrisonRoster.TotalManCount); }
+            try { Purse.NoteRansom(mobileParty, settlement, mobileParty.PartyTradeGold - __state.Gold, __state.Prisoners - mobileParty.PrisonRoster.TotalManCount, __state.Lords - mobileParty.PrisonRoster.TotalHeroes); }
             catch (Exception e) { Diag.Swallowed("measuring a prisoner sale", e); }
         }
     }
