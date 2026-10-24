@@ -1212,3 +1212,21 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Installed DLL sha256 `3BCF6C85749079C1…`; `WarRoom.dll` unchanged (`20C913C4C4819064…`).
   - War rooms and dashboard stopped for the build, started again 21:56.
 - **Not yet seen in a game:** all of 0.11.4.
+
+### 22:11 · The agents' instructions: one main effort, the other fronts held
+- **Mert, Oct 23:** "We should also design the agent's system prompt to have it be more focused in its strategy. It is better to mass an overwhelming force in one front to destroy enemies one by one, whilst moving smaller but still sizeable and adequate forces defensively to other fronts to keep the stalemate there, than looking at each front equally."
+- Written as a general principle in the doctrine's own words, the same for every realm agent, not as Mert's sentence and with nothing of this war's fronts, armies or places (his rule: "I don't want to give it the strategy that I just gave you word for word"). The design and its grounding: docs/DOCTRINE.md, "Principle 5 rewritten (Oct 23)".
+- **What changed** (`agent/warroom-system.template.md`):
+  - **Principle 5,** "Concentrate", is now "One main effort; hold the other fronts":
+    - one front's army is sized to beat the strongest enemy army that can reach it by a wide margin, destroys the enemy's armies there one after another, then turns to the next front;
+    - every other front gets a smaller holding force, enough to keep its castles and drive off its raiders;
+    - every army is sized against the strongest enemy army within a few days' reach, and two armies in reach of one stronger enemy army join or keep out of its reach.
+  - **Who you are:** a ninth line, weight on one front and the others held with less (Edward III, 1346: Crécy, while Aiguillon held and Neville's Cross was won).
+  - **The council of war:** step 2 names the main effort and the held fronts. Step 3, "Give every lord a part in it", is now "Fill the main army first", then the holding forces, then the rest. Step 4 writes them into the plan.
+  - **Time:** what a front's holding force can meet is met from its own lords, with the main army kept on its task; an enemy army stronger than any of the realm's, or able to reach the main army, is answered for the whole realm.
+- **Outside the repository:**
+  - Each realm agent's `warroom-system.md` was rewritten from the new template: `C:\Users\karab\Projects\orc-war-council`, `dolguldur-war-council` and `kingdom-war-council`. Each keeps its own name and opening line, and is otherwise word for word the template.
+  - Backups are `warroom-system.md.bak-20261023-before-main-effort`.
+  - The war rooms read the file at each call, so it holds from their next answer, with no restart.
+  - The lieutenant's instructions have no doctrine and are unchanged.
+- **For comparisons:** C1 and the stopped C2 were played on the old instructions; the runs still to be played (A, B, C1 and C2 again) are on these.
