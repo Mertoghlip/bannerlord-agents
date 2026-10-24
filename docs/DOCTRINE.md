@@ -69,7 +69,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 | 2 | A siege is a clock: relieve with a stronger force, or let it go (or strike the enemy's lands to pull the besiegers home). | Lincoln 1217 and Orléans 1429, relieved; Calais 1347, where the relief looked at the English works and left; *On Skirmishing* 20 (invade back to pull the besiegers home); Nicopolis 1396 (besiegers caught by a relief army). | The game's sally rule: the garrison and the lords inside join a relief only above 1.5 times the besiegers' strength ([TOOLS.md](TOOLS.md)). A weak relief dies alone. |
 | 3 | Battle on your terms; the side time works against must seek it. | Vegetius III.26 ("Good generals never engage in a general engagement except when opportunity offers, or under great necessity"), III.9 (a battle is settled "in two or three hours"; when superior, "let him be not slow"); the debate above. | Strength is shown everywhere (reports, facts, muster); the agent can weigh it. |
 | 4 | Squeeze an invader you cannot yet fight: follow it, pick off its parties. | Vegetius III.3 (if they gather they starve, if they disperse they are beaten in detail); *On Skirmishing* 22; Normandy 1054, Jerusalem 1183, France 1373 (Gaunt's raid followed, never fought, wrecked by hunger). | Hunt, screen and defend tools; armies in the game starve and lose cohesion. |
-| 5 | One main effort, overwhelming where it strikes; the other fronts held by smaller forces; every army sized against the strongest enemy army in reach; march apart, meet at one place on one day. (rewritten Oct 23) | Edward III in 1346: Crécy won by the king's own army while Aiguillon held against John of Normandy and the northern lords won at Neville's Cross; Mongols 1241 (Legnica and Mohi two days apart; separate columns meeting at set places and times, May 2015); Hattin as the warning against stripping every garrison. | gather, and join for far-off lords (0.6); the muster table shows what could be where, and when. |
+| 5 | Overwhelm where you can win: all you can spare, not only enough; every other front keeps enough to hold, never less; blows on several fronts, one or none, by the enemies' strength; every army sized against the strongest enemy army in reach; march apart, meet at one place on one day. (rewritten Oct 23, softened Oct 24) | Edward III in 1346: while the king's own army campaigned to Crécy, the forces he had left held Aiguillon against John of Normandy and won at Neville's Cross; Mongols 1241 (Legnica and Mohi two days apart; separate columns meeting at set places and times, May 2015); Hattin as the warning against stripping every garrison. | gather, and join for far-off lords (0.6); the muster table shows what could be where, and when. |
 | 6 | Strike the divided enemy. | Mortemer 1054, Varaville 1057, Pontvallain 1370 (after the English captains quarrelled and split), Alnwick 1174, Bouvines 1214. | Enemy lords and armies in view and last seen; engage, hunt. |
 | 7 | Raiders on their way home. | *On Skirmishing* 4 ("never let them return home unscathed"); Leo VI, *Taktika* 18.128; Leo Phokas, 950. | Rohan's small lords raid the orcs' western villages; hunt and screen. |
 | 8 | Armies live on food and purpose; idle armies break up. | Vegetius III.3 ("hunger is more savage than the sword"), III.26 ("improved by work, enfeebled by inactivity"), III.1 (over-large armies beaten by their own size); a Third Crusade death list (14 of 98 recorded as drowned, captured or killed; Gillingham); forty-day service; Saladin's army going home from Tyre. | The game breaks up an army idle about two days, out of cohesion, or half starving; every order carries a food rule. |
@@ -147,9 +147,9 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 - **March apart, strike together, armies before castles:** Legnica (9 April 1241) and Mohi (11 April); "The Mongols preferred to deal with all field armies before moving deep into enemy territory" (May 2015).
 - **Strike where the enemy is absent:** Ain Jalut, 3 September 1260, after Hülegü left with most of the army (Amitai).
 - **Exploit, and leave no base:** Saladin after Hattin, and Tyre (Gibb, Baldwin).
-- **A ninth line since Oct 23, weight on one front and the others held with less:** 1346, below.
+- **A ninth line since Oct 23, reworded Oct 24, all that can be spared brought to the blow and each other front left enough to hold:** 1346, below.
 
-## Principle 5 rewritten (Oct 23): one main effort
+## Principle 5 rewritten (Oct 23): one main effort (softened Oct 24, below)
 
 **Mert, Oct 23**, after run C2: "We should also design the agent's system prompt to have it be more focused in its strategy." In C2 the kingdom's agent ran five to eight armies at once and lost three of them piecemeal to Dol Guldur's one army of 20 lords. Mert's reason was a general rule of war: one front gets the weight of the realm, the others are held with less, rather than every front treated alike. It is written in the doctrine's own words, the same for every agent, and nothing in it names this war's fronts, armies or places.
 
@@ -183,10 +183,36 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 - The main army stays on its task when raiders appear on another front.
 - No army of the realm is met alone by a bigger enemy army.
 
+## Principle 5 softened (Oct 24): overwhelm where you can win
+
+**Mert, Oct 24**, on the Oct 23 wording: "I don't like the wording on principle 5. It should be less strong, telling the agent to strategize such that, if it can win in a front with overwhelming force, it should concentrate overwhelming force there instead of just an adequate one, without taking away so much from the other fronts to make their forces inadequate. This might work for multiple fronts, just one, or none, based on the relative strength of its enemies." As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
+
+**What changed** (`agent/warroom-system.template.md`, and each realm agent's `warroom-system.md`):
+- **Principle 5,** now "Overwhelm where you can win; keep enough everywhere else":
+  - Where an enemy army can be beaten, the agent brings all it can spare, not only enough to win, so the battle is won by a wide margin, costs few men, leaves the enemy little to rally and the army whole for the next blow.
+  - What it can spare is what the other fronts do not need. Each keeps enough to hold its places and turn back the enemies that can reach it, and is never taken below that: "a front stripped to feed another's battle is the next one lost".
+  - No set number of blows: on several fronts against weak enemies, perhaps one against strong ones, none against enemies stronger everywhere, and then it holds and waits for its chance (principles 4, 6 and 17).
+  - Kept from Oct 23: every army sized against the strongest enemy army within a few days' reach; two armies in reach of one stronger enemy army join, or keep out of its reach; march apart and meet on one day; never strip every garrison.
+  - Gone: "choose one front for your main effort", the "holding force" whose task is "to keep that front as it is, not to win there", and "strength shared evenly between fronts is too weak to win on any of them".
+- **Who you are:** the ninth line is now "You bring all you can spare to the blow, and leave each other front enough to hold", with 1346 told as the fronts that held while the king's army campaigned.
+- **The council of war:**
+  - Step 2 names what each front needs to hold and who holds it, and where a blow can be won, if anywhere, and with which army.
+  - Step 3 is "Give every lord a part in it" again, in an order: first what each front needs to hold, then all that can be spared to the blows, then lesser tasks for any lords left.
+  - Step 4 writes the held fronts and the blows into the plan.
+- **Time:** a front's own lords meet what they can; striking armies stay on their tasks. An enemy army stronger than the lords facing it, or one that can reach one of the realm's armies, is answered for the whole realm, as a council would.
+
+**What it rests on:** the 1346 account above, now cited only for the fronts that held. Crécy itself was won by the smaller army on ground of its choosing, so it is not cited as a blow struck with overwhelming force. That a wide win costs fewer men is the common rule of war; it was not checked against the game's own battle sums.
+
+**What would show it working:**
+- A council's plan says what each front holds with, and where it strikes, if anywhere.
+- An army sent to strike is far stronger than what it meets, not just stronger.
+- No front is left too weak to keep its places for another front's battle.
+- Against enemies stronger everywhere, the agent holds and waits rather than forcing a blow.
+
 ## What was left out on purpose
 
 - **This war's plan, as Mert described it:** mass one great army, beat Aragorn's host, take the places that hold the most captured orc lords to free them, rebuild, then counter-attack with everyone.
-  - The doctrine states the general principles Mert now explicitly wants available: no doomed castle needs a hopeless defence; one main effort, with the other fronts held (since Oct 23); win with the edge; exploit; retake.
+  - The doctrine states the general principles Mert now explicitly wants available: no doomed castle needs a hopeless defence; overwhelming force where a win is open, with enough kept on every other front (since Oct 23, softened Oct 24); win with the edge; exploit; retake.
   - Whether, when and against whom to do any of it is the agent's to decide.
 - **Freeing one's own captured lords by taking the place that holds them,** although the third research pass recommended it (Guy freed for Ascalon; Prince Leon's ransom paid in forts). It is part of the plan above. The agent sees where its captured lords are held, grouped by place; what it does with that is the test.
 - **Diplomacy maxims** (sow discord among allies, accept peace on good terms, Kekaumenos on paying tribute): the agent has no diplomatic orders yet. They come with the coalition (plan, week 3).

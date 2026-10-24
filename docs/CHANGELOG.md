@@ -1230,3 +1230,23 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The war rooms read the file at each call, so it holds from their next answer, with no restart.
   - The lieutenant's instructions have no doctrine and are unchanged.
 - **For comparisons:** C1 and the stopped C2 were played on the old instructions; the runs still to be played (A, B, C1 and C2 again) are on these.
+
+## Saturday, October 24
+
+### 14:05 · The agents' instructions: principle 5 softened, overwhelm where a win is open
+- **Mert, Oct 24:** "I don't like the wording on principle 5. It should be less strong, telling the agent to strategize such that, if it can win in a front with overwhelming force, it should concentrate overwhelming force there instead of just an adequate one, without taking away so much from the other fronts to make their forces inadequate. This might work for multiple fronts, just one, or none, based on the relative strength of its enemies."
+- Again a general principle in the doctrine's own words, the same for every realm agent, with nothing of this war in it. The design: docs/DOCTRINE.md, "Principle 5 softened (Oct 24)".
+- **What changed** (`agent/warroom-system.template.md`):
+  - **Principle 5** is now "Overwhelm where you can win; keep enough everywhere else":
+    - where an enemy army can be beaten, bring all the strength you can spare, not only enough, so the win is by a wide margin and the army stays whole for the next blow;
+    - what can be spared is what the other fronts do not need: each keeps enough to hold its places and turn back the enemies that can reach it, never less;
+    - such blows on several fronts against weak enemies, perhaps one against strong ones, none against enemies stronger everywhere (then hold and wait, principles 4, 6 and 17);
+    - kept: every army sized against the strongest enemy army in reach, march apart and meet, never strip every garrison. Gone: one chosen main effort and "holding forces" told not to win.
+  - **Who you are:** the ninth line is now "You bring all you can spare to the blow, and leave each other front enough to hold" (1346, cited for the fronts that held, not for Crécy).
+  - **The council of war:** step 2 names what each front needs and where a blow can be won, if anywhere; step 3 is "Give every lord a part in it" again: the fronts' needs first, then all that can be spared to the blows, then lesser tasks; step 4 writes both into the plan.
+  - **Time:** a front's own lords meet what they can and striking armies stay on their tasks; an enemy army stronger than the lords facing it, or able to reach one of the realm's armies, is answered for the whole realm.
+- **Outside the repository:**
+  - Each realm agent's `warroom-system.md` (orc, Dol Guldur and kingdom war councils) rewritten from the new template, each keeping its own name and opening line, otherwise word for word the template.
+  - Backups are `warroom-system.md.bak-20261024-before-softer-5`.
+  - In force from their next answer, no restart. The lieutenant's instructions are unchanged.
+- **For comparisons:** no run was played on the Oct 23 wording; the runs still to be played are on this one.
