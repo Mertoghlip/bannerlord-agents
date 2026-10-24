@@ -1193,7 +1193,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Not changed.
 - Mert: "We are going to have to run this test again some other time, from the start. What killed it was one bug that forced our troops out of a castle they should have defended. We should focus on fixing that bug, and then try again. In the ideal world, our agents should easily beat the raw game's strategy."
 
-### 21:56 · Version 0.11.4: the game's sally kept from our sheltering lords · commit COMMIT (built and installed 21:56)
+### 21:56 · Version 0.11.4: the game's sally kept from our sheltering lords · commit 9066778 (built and installed 21:56)
 - **The sally rule** (`SallyGate.cs`, new; a prefix on `SallyOutsCampaignBehavior.CheckSallyOut`, by name):
   - While a lord one of our orders holds is inside a besieged castle or town, the game's own test does not send the defenders out, as it spares a defence the player leads from inside.
   - They still join a relief's battle at the camp by the game's bar (1.5 times), which the relieve and defend orders count on.
