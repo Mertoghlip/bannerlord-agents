@@ -511,7 +511,7 @@ namespace BannerlordAgents
             Files.Overwrite(Path.Combine(Dir, "poke.json"), Json.Line(meta ?? new { Number = n, Hours = hours, Date = Text.When(hours) }));
             string head = "POKE #" + n + ", " + Text.When(hours) + "\n"
                           + "Answer with one orders file in orders\\ that says \"poke\": " + n + ".\n"
-                          + "Your orders right now: " + AgentChannel.ModeText() + "\n\n";
+                          + "Your orders right now: " + ModeText() + "\n\n";
             Files.Overwrite(Path.Combine(Dir, "poke.txt"), head + report);
             string first = triggers.Count > 0 ? triggers[0].Text : "";
             Files.Append(Path.Combine(Dir, "pokes.log"), "#" + n + " | " + Text.When(hours) + " | " + first + (triggers.Count > 1 ? " (and " + (triggers.Count - 1) + " more)" : ""));
@@ -523,7 +523,7 @@ namespace BannerlordAgents
         {
             string head = "SITUATION AT " + Text.When(hours) + " (refreshed every in-game hour"
                           + (_lastPoke >= 0 ? "; the latest poke is #" + _lastPoke : "") + ")\n"
-                          + "Your orders right now: " + AgentChannel.ModeText() + "\n\n";
+                          + "Your orders right now: " + ModeText() + "\n\n";
             Files.Overwrite(Path.Combine(Dir, "report.txt"), head + report);
             RememberIds(report);
         }

@@ -431,7 +431,7 @@ namespace BannerlordAgents
             Diag.Event("run", formed ? "army formed" : "army dispersed", new
             {
                 run = _run.Id, day = Day(), realm = f, leader = a.LeaderParty.LeaderHero != null ? Names.Hero(a.LeaderParty.LeaderHero) : Names.Party(a.LeaderParty),
-                by = CommandedBy(a.LeaderParty), parties = a.Parties.Count, men = a.TotalManCount, why
+                by = formed && Orders.FormingBy != null ? BySource(Orders.FormingBy, a.LeaderParty) : CommandedBy(a.LeaderParty), parties = a.Parties.Count, men = a.TotalManCount, why
             });
         }
 
@@ -518,7 +518,7 @@ namespace BannerlordAgents
                     if (st == null) continue;
                     rows.Add(new WarRow
                     {
-                        A = a.StringId, B = b.StringId, AtWar = st.IsAtWar,
+                        A = a.StringId, B = b.StringId, AtWar = FactionManager.IsAtWarAgainstFaction(a, b),
                         CasualtiesA = st.GetCasualties(a), CasualtiesB = st.GetCasualties(b), SiegesA = st.GetSuccessfulSieges(a), SiegesB = st.GetSuccessfulSieges(b),
                         TownSiegesA = st.GetSuccessfulTownSieges(a), TownSiegesB = st.GetSuccessfulTownSieges(b), RaidsA = st.GetSuccessfulRaids(a), RaidsB = st.GetSuccessfulRaids(b),
                         TributeA = st.GetTotalTributePaid(a), TributeB = st.GetTotalTributePaid(b)
@@ -661,14 +661,19 @@ namespace BannerlordAgents
         private static string CommandedBy(MapEventSide side) => CommandedBy(side?.LeaderParty?.MobileParty);
 
         /// <summary>Who had the say over a party: you (your own party, or an order of yours), agent (an agent's order), game (the game's AI).</summary>
+        private static string BySource(string src, MobileParty m)
+        {
+            // with you ruling, the only agent giving your lords orders is your lieutenant, and only with your yes
+            if (src == "agent") return _run.Lieutenant && m?.MapFaction?.StringId == _run.Kingdom ? "lieutenant" : "agent";
+            return src == "you" ? "you" : "hand";
+        }
+
         private static string CommandedBy(MobileParty m)
         {
             if (m == null) return "holding";
             if (m == MobileParty.MainParty) return "you";
             string src = Orders.SourceOf(m);
-            // with you ruling, the only agent giving your lords orders is your lieutenant, and only with your yes
-            if (src == "agent") return _run.Lieutenant && m.MapFaction?.StringId == _run.Kingdom ? "lieutenant" : "agent";
-            if (src != null) return src == "you" ? "you" : "hand";
+            if (src != null) return BySource(src, m);
             Hero lord = m.LeaderHero ?? (m.IsLordParty ? m.Owner : null);
             if (lord != null && PacReader.KeyOf(lord) is string key)
                 return PacLink.IsOurs(lord.StringId, key) ? "lieutenant (Party AI Controls)" : "you (Party AI Controls)";

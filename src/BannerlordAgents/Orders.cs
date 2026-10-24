@@ -102,6 +102,8 @@ namespace BannerlordAgents
         private static readonly List<HandOrder> Active = new List<HandOrder>();
         /// <summary>The meeting place of an army being formed by an order, for the army's notice (the game fires it before the place is set).</summary>
         internal static Settlement FormingAt;
+        /// <summary>Who gave that order (agent, you, hand), for a test run's record of the army (it read the leader's order, not yet in force: 0.11.4).</summary>
+        internal static string FormingBy;
         private static readonly List<Released> AfterRelease = new List<Released>();
         private static readonly HashSet<MobileParty> Toggled = new HashSet<MobileParty>();
         private static readonly Dictionary<string, string> LastCulprit = new Dictionary<string, string>();
@@ -702,11 +704,13 @@ namespace BannerlordAgents
             Army.ArmyTypes type = ArmyTypeFor(o.Then);
             Witness.Ours = true;
             FormingAt = place;
+            FormingBy = o.Source;
             try { realm.CreateArmy(lord, place, type, new MBList<MobileParty>(members)); }
             finally
             {
                 Witness.Ours = false;
                 FormingAt = null;
+                FormingBy = null;
             }
             Army army = lp.Army;
             if (army == null) return "the game did not form the army (no reason given)";

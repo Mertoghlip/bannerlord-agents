@@ -1711,6 +1711,18 @@ namespace SmokeTest
             string loads = ReadIf(Path.Combine(Brain.Dir, "loads.jsonl"));
             Check(loads.Contains("\"calls.jsonl@dg\"") && loads.Contains("\"calls.jsonl@orcs\"") && loads.Contains("warroom-dg"), "the load names each agent and marks its own war room's logs");
 
+            // 0.11.4: each agent's poke and report name its own mode (run C2, Oct 23: the kingdom's agent, live, read "SHADOW ... none
+            // is carried out" in every poke, the mode of the orcs, listed first)
+            File.WriteAllText(Path.Combine(orcs, "agent.txt"), "# the orcs\nrealm = orcs\nmode = shadow\nlords = all\n");
+            File.WriteAllText(Path.Combine(dg, "agent.txt"), "realm = dg\nmode = live\nlords = lord_khamul\nchannel = channel\n");
+            Brain.Reset("smoketest3b", double.NaN, Agents.Configured(), null);
+            Brain.OnHour(s);
+            Files.FlushAll();
+            string dgPoke = ReadIf(Path.Combine(dg, "channel", "poke.txt")), orcPoke = ReadIf(Path.Combine(orcs, "warroom", "poke.txt"));
+            Check(dgPoke.Contains("Your orders right now: LIVE") && !dgPoke.Contains("SHADOW") && orcPoke.Contains("Your orders right now: SHADOW"),
+                  "each agent's poke names its own mode, not the first agent's");
+            Check(ReadIf(Path.Combine(dg, "channel", "report.txt")).Contains("Your orders right now: LIVE"), "and so does its hourly report");
+
             Settings.AgentFolders.Clear();
             Settings.AgentDir = agentDir;
         }

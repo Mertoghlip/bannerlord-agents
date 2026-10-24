@@ -168,7 +168,9 @@ namespace BannerlordAgents
                         if (inside.HasValue)
                             sb.AppendLine("- Inside " + h.Name + ": the garrison and your lords there, strength " + Text.N((int)inside.Value)
                                           + ". They sally out to join a relief only when they and the relief together are more than 1.5 times the besiegers' strength ("
-                                          + Text.N((int)(w.SiegeStrength(h) ?? 0)) + "); militia never sally.");
+                                          + Text.N((int)(w.SiegeStrength(h) ?? 0)) + "); militia never sally. While a lord holding your order is inside, they never go out"
+                                          + " on their own; with none inside, the game sends the garrison and the lords there out by itself when it counts them more than"
+                                          + " twice the besiegers at their camp (it looks every 4 hours), to fight in the open.");
                     }
                     if (!mustered)
                     {

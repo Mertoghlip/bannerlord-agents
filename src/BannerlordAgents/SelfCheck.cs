@@ -14,8 +14,34 @@ namespace BannerlordAgents
     /// </summary>
     internal static class SelfCheck
     {
+        private static bool _warsDue;
+
+        /// <summary>
+        /// Game's thread, each hour: once per load, at the first hour, are the realms with agents at war with you? Not at the start:
+        /// TFAOMFixes fills in the War of the Ring's enemies for your realm in the same moment, after this mod (Oct 23: Dol Guldur
+        /// read as at peace at every load, at war by the next hour).
+        /// </summary>
+        public static void FirstHour()
+        {
+            if (!_warsDue) return;
+            _warsDue = false;
+            string problem;
+            try
+            {
+                IFaction mine = Clan.PlayerClan?.MapFaction;
+                // your own realm (the lieutenant's, or its agent's) is never at war with you (0.11.1)
+                List<string> peace = mine == null ? new List<string>() : Bridge.Seats.Where(k => k != mine && !FactionManager.IsAtWarAgainstFaction(k, mine)).Select(Names.Faction).ToList();
+                problem = peace.Count == 0 ? null : string.Join(", ", peace) + (peace.Count == 1 ? " is" : " are") + " at peace with you now";
+            }
+            catch (Exception e) { problem = "the check itself failed (" + e.GetType().Name + ": " + e.Message + ")"; Diag.Swallowed("self-check: at war with you", e); }
+            Log.Line("self-check, the first hour: at war with you: " + (problem ?? "passed") + ".");
+            Diag.Event("self_check", "first hour", new { check = "at war with you", problem });
+            if (problem != null) Diag.Alarm("self_check", "Self-check: at war with you: " + problem + ".", false);
+        }
+
         public static void Run()
         {
+            _warsDue = true;
             var results = new List<KeyValuePair<string, string>>();
 
             void Check(string name, Func<string> test)
@@ -37,14 +63,6 @@ namespace BannerlordAgents
                 foreach (Kingdom k in Bridge.Seats)
                     if (!MobileParty.AllLordParties.Any(p => p != null && p.IsActive && p.MapFaction == k)) bad.Add(Names.Faction(k) + " has no lords leading parties");
                 return bad.Count > 0 ? string.Join("; ", bad) : null;
-            });
-            Check("at war with you", () =>
-            {
-                IFaction mine = Clan.PlayerClan?.MapFaction;
-                if (mine == null) return null;
-                // your own realm (the lieutenant's, or its agent's) is never at war with you (0.11.1)
-                List<string> peace = Bridge.Seats.Where(k => k != mine && !FactionManager.IsAtWarAgainstFaction(k, mine)).Select(Names.Faction).ToList();
-                return peace.Count == 0 ? null : string.Join(", ", peace) + (peace.Count == 1 ? " is" : " are") + " at peace with you now";
             });
             Check("calendar", () =>
             {

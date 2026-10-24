@@ -1179,3 +1179,36 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Mert, Oct 23: "Lets do the other non-player run next." C2 (docs/RUNS.md): an agent rules his kingdom against the game's own AI, the orcs' and Dol Guldur's agents watching (they answer, give no order).
 - **Outside the repository** (`scripts\arm.ps1 -Arm C2`, logged in `runs\arms.log`): the orcs `C:\Users\karab\Projects\orc-war-council` and Dol Guldur `C:\Users\karab\Projects\dolguldur-war-council` live -> shadow; the kingdom's agent stays live, the lieutenant off. Read at the next load; the war rooms (started 20:25 on 0.11.3) keep running.
 - `scripts\arm.ps1`: its in-game steps for C1 and C2 now name `agents.run playerless` and `agents.run playerless go` (they still said to switch by hand with the character-switch mod and give gold and food), and the check names the arm set.
+
+### 20:55–21:45 · Run C2 played (0.11.3), stopped at day 31
+- Mert, Oct 23: "Lets do the other non-player run next." He first loaded `TEST C1`, a save of C1's from its setting up, which readies no run (C1 being finished); no run began, and the watch said so. He loaded `TEST START`, typed `agents.run playerless go` (Marzuk ibn-Zayak in Damudûr again) and let the clock run.
+- Run `20261023-2101-C2` began 21:01:27 and was left at day 31 (Winter 9, 1087) when the game closed at 21:45. The kingdom's agent ended +1 town (Nanduhirion), −1 castle, +2 villages, 74 enemy lords taken against 76 of its own; Dol Guldur +2 castles; the orcs −1 town, −2 castles, −9 villages. About $106 at list price (the kingdom's agent $39.59, Dol Guldur's $34.41, the orcs' $32.13). Report: `runs\20261023-2101-C2\report.md`.
+- **Day 9-11, Imnagath:** Aragorn's and Imák's armies sheltered in the castle on the agent's orders from Lorgath's army (20 lords, 10,302 men, strength 22.6k). The game sent everyone inside (5,938 men, 20 lords) out the hour the siege began (`SallyOutsCampaignBehavior.CheckSallyOut`); 46 hours later all were lost (Lorgath lost 4,103) and the castle fell. Read in the 1.4.8 source, the installed game, TAOM's and Improved Garrisons' code: the game's own rule, which no mod touches; our orders cannot order a sally. Why the game counted so little of Lorgath (it needs the inside above twice the enemies within 3 of the camp) is not known.
+- Days 21 and 24: Alenon's army (8 lords) and Val's (10 lords) were each destroyed in the open, by Lorgath and by Gundabad's Mauhur. Day 23: Stein destroyed Naglur's orc army (1,677 of 1,686 men).
+- A read of C1 and C2 for Mert's question, "why did such large armies never come about in our agents' runs?" (a helper agent, read only):
+  - The agents spread their lords over five to eight armies sized to what is in front of each (C2 day 9: 6 armies, 16,478 men, about 2,750 each, against Lorgath's one of 10,302).
+  - The news of the big enemy army is buried between answers (all three Lorgath pokes went unanswered while the agent answered raiders).
+  - In C1 the rival agents held nearly all their lords, which the game's own army-building passes over.
+  - The call-up order refuses when the clan cannot pay every lord at once; the game needs 100 influence and lets the clan go into debt.
+  - Not changed.
+- Mert: "We are going to have to run this test again some other time, from the start. What killed it was one bug that forced our troops out of a castle they should have defended. We should focus on fixing that bug, and then try again. In the ideal world, our agents should easily beat the raw game's strategy."
+
+### 21:56 · Version 0.11.4: the game's sally kept from our sheltering lords · commit COMMIT (built and installed 21:56)
+- **The sally rule** (`SallyGate.cs`, new; a prefix on `SallyOutsCampaignBehavior.CheckSallyOut`, by name):
+  - While a lord one of our orders holds is inside a besieged castle or town, the game's own test does not send the defenders out, as it spares a defence the player leads from inside.
+  - They still join a relief's battle at the camp by the game's bar (1.5 times), which the relieve and defend orders count on.
+  - Every other holding keeps the game's test untouched.
+  - For the holdings of the realms with agents, every test is recorded with the game's own numbers, a "sally" event in the trace: inside, friends and enemies as it counts them, the whole camp, and each besieging party it did not count, with its distance, aggressiveness and whether attached. The bridge log names each change of decision.
+- **Each agent's poke and report name its own mode** (`Channel.ModeText`). They named the first agent's (`AgentChannel.ModeText()`), so in C2 the kingdom's live agent read "SHADOW ... none is carried out" in every poke (arm B too).
+- **The facts on a besieged holding** say the defenders never go out on their own while a lord holding your order is inside, and that otherwise the game sends them out by itself above twice the besiegers at their camp (every 4 hours).
+- **Labels:**
+  - The run's war tally reads the game's full test (`FactionManager.IsAtWarAgainstFaction`), not the stance alone: C2's record had Dol Guldur and the kingdom at peace.
+  - The self-check "at war with you" runs at the first in-game hour, not at the load: TFAOMFixes fills in the War of the Ring's enemies for the player's realm just after this mod, so every load warned of peace with Dol Guldur.
+  - Armies formed by our gather are recorded as the order's giver's (`Orders.FormingBy`); they read "the game's".
+- **Checks:**
+  - Smoke test passed in full (244 checks; 2 new: each agent's poke and report name its own mode, shown to fail on 0.11.3's line).
+  - War room and dashboard self-tests passed.
+  - 679 game references, 0 missing; `CheckSallyOut(Settlement, bool, out bool)` confirmed by name in the installed `TaleWorlds.CampaignSystem.dll`.
+  - Installed DLL sha256 `3BCF6C85749079C1…`; `WarRoom.dll` unchanged (`20C913C4C4819064…`).
+  - War rooms and dashboard stopped for the build, started again 21:56.
+- **Not yet seen in a game:** all of 0.11.4.

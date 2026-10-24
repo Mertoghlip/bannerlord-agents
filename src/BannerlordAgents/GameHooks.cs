@@ -34,6 +34,9 @@ namespace BannerlordAgents
     ///   of the game's roll (StormGate); every other siege is untouched.
     /// - Money (always on since 0.9.4, Purse): for a lord holding one of our orders, the game's sale on entering a town is
     ///   replaced by ours, which sells loot only; the game's prisoner sale is measured; a won battle's takings are recorded.
+    /// - The sally rule (always on since 0.11.4; SallyGate). The game's own sally test for a besieged castle or town keeps the
+    ///   defenders inside while a lord one of our orders holds is there (they still join a relief's battle by the game's bar),
+    ///   and records the game's numbers for the holdings of the realms with agents. Every other holding is untouched.
     /// Harmony 2.4.2 comes from TAOM.Dependencies. Only InstallCore touches it, so a missing Harmony disables these
     /// pieces and nothing else.
     /// </summary>
@@ -42,12 +45,12 @@ namespace BannerlordAgents
         private const string Owner = "bannerlordagents.logs";
         private static readonly Dictionary<string, string> Parts = new Dictionary<string, string>();
         public static string Status => Parts.Count == 0 ? "not attached" : string.Join("; ", Parts.Values);
-        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled, PacEntryInstalled;
+        public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled, PacEntryInstalled, SallyInstalled;
         /// <summary>The money hooks (0.9.4, Purse): our loot-only sale for held lords, the game's prisoner sale measured, a won battle's takings.</summary>
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried;
         private static object _harmony;
 
         /// <summary>Game's thread: at start-up and whenever the settings change. Attaches what is wanted and not yet attached.</summary>
@@ -58,10 +61,11 @@ namespace BannerlordAgents
             bool wantKeep = !KeepHeldInstalled && !_keepHeldTried;
             bool wantStorm = !StormInstalled && !_stormTried;
             bool wantMoney = !_moneyTried;
+            bool wantSally = !SallyInstalled && !_sallyTried;
             bool wantChat = !_chatTried && Bridge.Configs.Any(c => c.IsLieutenant);
-            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep || wantStorm || wantMoney)
+            if ((wantWitness && !WitnessInstalled) || (wantReasons && !ReasonsInstalled) || wantKeep || wantStorm || wantMoney || wantSally)
             {
-                try { InstallCore(wantWitness, wantReasons, wantKeep, wantStorm, wantMoney); }
+                try { InstallCore(wantWitness, wantReasons, wantKeep, wantStorm, wantMoney, wantSally); }
                 catch (Exception e)
                 {
                     Parts["error"] = "could not attach (" + e.GetType().Name + ": " + e.Message + ")";
@@ -87,7 +91,7 @@ namespace BannerlordAgents
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void InstallCore(bool witness, bool reasons, bool keep, bool storm, bool money)
+        private static void InstallCore(bool witness, bool reasons, bool keep, bool storm, bool money, bool sally)
         {
             var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
             Parts.Remove("error");
@@ -152,6 +156,18 @@ namespace BannerlordAgents
                     Parts["storm"] = "the storm rule " + (StormInstalled ? "attached" : "did not attach") + Others(target);
                 }
             }
+            if (sally && !SallyInstalled)
+            {
+                _sallyTried = true;
+                MethodInfo target = typeof(TaleWorlds.CampaignSystem.CampaignBehaviors.SallyOutsCampaignBehavior).GetMethod("CheckSallyOut", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (target == null) Parts["sally"] = "the sally rule: the game's sally test was not found, so the game sends defenders out by its own test, our lords inside or not";
+                else
+                {
+                    h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(SallyPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    SallyInstalled = Ours(target);
+                    Parts["sally"] = "the sally rule " + (SallyInstalled ? "attached" : "did not attach") + Others(target);
+                }
+            }
             if (money)
             {
                 _moneyTried = true;
@@ -185,7 +201,7 @@ namespace BannerlordAgents
                 }
             }
             Log.Line("game hooks: " + Status);
-            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, pac_entry = PacEntryInstalled, storm_rule = StormInstalled,
+            Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, pac_entry = PacEntryInstalled, storm_rule = StormInstalled, sally_rule = SallyInstalled,
                                                  loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
         }
 
@@ -236,6 +252,22 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("the storm rule", e); return true; }
             if (d == null) return true;
             __result = d.Value;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The sally rule (0.11.4): in front of the game's sally test for one besieged holding (SallyOutsCampaignBehavior.CheckSallyOut,
+    /// every 4th hour and beside a relief's battle), the defenders stay inside while a lord one of our orders holds is there
+    /// (SallyGate). A large private method, not inlined.
+    /// </summary>
+    internal static class SallyPatch
+    {
+        private static bool Prefix(Settlement settlement, bool checkForNavalSallyOut, ref bool salliedOut)
+        {
+            try { if (SallyGate.Allow(settlement, checkForNavalSallyOut)) return true; }
+            catch (Exception e) { Diag.Swallowed("the sally rule", e); return true; }
+            salliedOut = false;
             return false;
         }
     }

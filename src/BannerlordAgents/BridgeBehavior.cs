@@ -52,6 +52,7 @@ namespace BannerlordAgents
             PacReader.Reset();
             LordTours.Reset();
             Votes.Reset();
+            SallyGate.Reset();
             Vision.Reset();
             LordWatch.Reset();
             Names.Clear();
@@ -295,6 +296,7 @@ namespace BannerlordAgents
                 }
                 Orders.Hourly();
                 Wages.Hourly();
+                SelfCheck.FirstHour();
                 try { Votes.Hourly(); }
                 catch (Exception e) { Diag.Error("the realms' votes", e); }
                 LordWatch.Refresh();
