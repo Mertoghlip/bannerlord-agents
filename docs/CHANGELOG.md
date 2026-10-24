@@ -1250,3 +1250,10 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Backups are `warroom-system.md.bak-20261024-before-softer-5`.
   - In force from their next answer, no restart. The lieutenant's instructions are unchanged.
 - **For comparisons:** no run was played on the Oct 23 wording; the runs still to be played are on this one.
+
+### 14:40 · The pack's "calls for aid" pop-ups switched off for the test runs (outside the repository)
+- **Mert, Oct 24:** "Looks like the only pop-ups that jeopardize the test are the notifications saying 'x is besieged, will you answer the call for aid?'. Can you figure out a way to disable them so we can run the test smoothly?"
+- **What they are:** TAOM's own siege-defence events (`TAOM.Features.Siege.SiegeDefenseService`, read from TAOM.dll). When a town of the player's realm is besieged, it shows an inquiry ("Gondor Calls For Aid!", from `ModuleData\siege\siege_defense_config.json`) with "For Gondor!" and "Ignore"; answering and reaching the town in 3 days gives the player +10 influence and +5 relation with the realm's ruler. Towns only, the player's realm only; nothing in it moves a lord or an army, or changes what any AI does.
+- **The switch:** the pack's own Mod Options setting "Enable Siege Defense Events" (TAOM, group "Siege Defense", `EnableSiegeDefenseEvents`, on by default). The pack's settings had never been saved, so the file was written new with only that setting: `Documents\Mount and Blade II Bannerlord\Configs\ModSettings\Global\TAOM\TAOM.json`, `{"EnableSiegeDefenseEvents": false}`. Every other setting of the pack keeps its default. Written with the game closed.
+- It is global: off for every campaign and every arm until switched back on in Mod Options. Mert to confirm the box is unticked in Mod Options before loading TEST START.
+- **For comparisons:** C1 and the stopped C2 were played with the pop-ups on; every run from the C2 replay on has them off.
