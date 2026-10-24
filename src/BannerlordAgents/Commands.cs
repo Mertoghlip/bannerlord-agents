@@ -36,6 +36,7 @@ namespace BannerlordAgents
             "Bannerlord Agents commands:\n" +
             "  agents.status                    what the module is doing, and where its files are\n" +
             "  agents.run [check|note <text>|stop]  the test run (docs/RUNS.md): where it stands; who commands what now; a note of yours; end it early\n" +
+            "  agents.run playerless [go] [name]  for a run an agent plays without you: shows the wanderer it would make you; go does it (gold, food, your lords released)\n" +
             "  agents.health                    alarms so far and the state right now (the logs' own view)\n" +
             "  agents.view                      the watched realm's report as of now (and the file it is in)\n" +
             "  agents.pokes [n]                 the watched realm's last pokes\n" +
@@ -102,10 +103,11 @@ namespace BannerlordAgents
                 case "": return Run.Status();
                 case "check": return Run.CheckText();
                 case "stop": return Run.Stop();
+                case "playerless": return Playerless.Command(args);
                 case "note":
                     string text = string.Join(" ", args.Skip(1)).Trim();
                     return text.Length == 0 ? "Usage: agents.run note <what you want kept, with today's day of the run>" : Run.Note(text);
-                default: return "Usage: agents.run [check|note <text>|stop]";
+                default: return "Usage: agents.run [check|note <text>|stop|playerless [go] [wanderer]]\n" + Playerless.Usage;
             }
         });
 

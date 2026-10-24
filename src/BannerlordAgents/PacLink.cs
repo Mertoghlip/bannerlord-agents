@@ -469,6 +469,44 @@ namespace BannerlordAgents
             StrippedAdded.Clear();
         }
 
+        // ---------- the playerless switch (Playerless) ----------
+
+        /// <summary>Has this lord a Party AI Controls order or queue now? (Never makes an entry.)</summary>
+        public static bool HasOrders(Hero h)
+        {
+            object s = Existing(h);
+            return s != null && (Active(Prop(s, "Order")) || (Queue(s)?.Count ?? 0) > 0);
+        }
+
+        /// <summary>
+        /// "Act as you see fit", for the runs without the player: his Party AI Controls order, queue and backup order cleared, off
+        /// TFAOMFixes' commanded list, the game's AI on unless an order of ours holds him. True when anything was cleared.
+        /// </summary>
+        public static bool Release(Hero h)
+        {
+            if (h == null || !Resolve()) return false;
+            bool any = false;
+            object s = Existing(h);
+            try
+            {
+                if (s != null)
+                {
+                    if (Prop(s, "Order") != null) { SetOrder(s, null); any = true; }
+                    IList q = Queue(s);
+                    if (q != null && q.Count > 0) { q.Clear(); any = true; }
+                    if (Prop(s, "FallbackOrder") != null) { SetProp(s, "FallbackOrder", null); any = true; }
+                }
+                if (_commanded != null && _commanded.Remove(h.StringId)) any = true;
+            }
+            catch (Exception e) { Diag.Error("releasing a lord from Party AI Controls", e); }
+            MobileParty p = h.PartyBelongedTo;
+            if (any && p != null && p.LeaderHero == h && !Orders.Holds(p)) p.Ai.SetDoNotMakeNewDecisions(false);
+            Ours.Remove(h.StringId);
+            Standing.Remove(h.StringId);
+            if (any) Diag.Event("pac", "released", new { lord = h.StringId });
+            return any;
+        }
+
         // ---------- who gave it (the recorder, the runs) ----------
 
         /// <summary>Is this Party AI Controls order (PacReader's "Kind|target id") the lieutenant's?</summary>

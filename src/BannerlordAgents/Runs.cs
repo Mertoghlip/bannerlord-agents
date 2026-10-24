@@ -226,6 +226,14 @@ namespace BannerlordAgents
             return "Test run " + id + " stopped. Its files stay in runs\\" + id + ".";
         }
 
+        /// <summary>What was done to set the run up before its clock ran (the playerless switch, 0.11.2), kept in run.json.</summary>
+        public static void SetUp(string text)
+        {
+            if (_run == null) return;
+            _run.SetUp.Add(Now() + " " + text);
+            RunFiles.Write(_run);
+        }
+
         /// <summary>agents.run note (text): a line of your own in the run, with its day.</summary>
         public static string Note(string text)
         {
@@ -795,6 +803,8 @@ namespace BannerlordAgents
         public int Days = 60, LastDay;
         public List<RunSegment> Segments = new List<RunSegment>();
         public List<string> Saves = new List<string>();
+        /// <summary>What was done to set it up before its clock ran (the playerless switch).</summary>
+        public List<string> SetUp = new List<string>();
         public List<RunFlag> Flags = new List<RunFlag>();
         public Dictionary<string, RunTally> Tally = new Dictionary<string, RunTally>();
         public List<WarRow> WarAtStart = new List<WarRow>();
