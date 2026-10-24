@@ -68,6 +68,17 @@ The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $27
 - **Not changed, for Mert:** the agents spread their lords over five to eight armies sized to what is in front of each, while the game's AI massed one army of 20 lords. The news of the big enemy army is often buried under raids and sightings between answers, and the call-up order is stricter about influence than the game's own (it refuses when the clan cannot pay all at once; the game needs 100 and lets the clan go into debt).
 - **C2 is to be played again from the start**, on 0.11.4 or later.
 
+## Run C2 replayed (Oct 24), finished
+
+`20261024-1530-C2`, on 0.11.4 with the softened principle 5 and the pack's siege pop-ups off: 60 days in 1 h 20 min, about $236 at list price (the kingdom's agent $92.49, the orcs' $82.12, Dol Guldur's $61.86), no errors, freezes or failed calls. Report: `runs\20261024-1530-C2\report.md`.
+- **The ending, from day 0:** the kingdom +1 town (Nanduhirion), ±0 castles (Sirannon and Imnagath taken; Imnagath and Torech Emel lost), +4 villages, men +828; 180 enemy lords taken against 22 of its own, battles between lords won 94 and lost 27. The orcs −1 town, −2 castles, −9 villages (Starkmoore to Rohan). Dol Guldur +1 castle, +2 villages, but men −4,721 and strength −14,718 (its great army destroyed).
+- **What went right:** the agent let Imnagath go to Dol Guldur's 24k host on day 11 rather than shelter in it (the stopped C2's loss); it destroyed Naglur's army (day 15), broke the siege of Torech Emel with a sally beside the relief (day 17), and mass-struck raiders at small losses. The sally gate kept Legolas and Gárjan inside Lasgalor on every check while the game's test counted about a tenth of the besiegers.
+- **What went wrong:**
+  - **Lasgalor (days 15-40):** the plan to mass about 30k against Thrurg's camp never came together: its two main armies stayed on a raider swarm for days, a gather set off with 253 men (4 lords never came), its notes kept a stale "8 men an hour" while the defenders lost 120 an hour, the castle starved from day 26, and the relief came in pieces. The storm turned into a battle at the siege camp (Thrurg attacking, 53 of our lords and the holding defending) that our side won on day 40 at 17,565 men lost (killed, wounded or routed) against 10,327. The likely cause, not yet confirmed in the game's code: our lords left to the game's AI rode in one at a time to defend Lasgalor; a party breaking in to a besieged holding makes a battle outside the walls, and the parties inside fight in it, so the sally gate (which only answers the game's sally test) does not cover it.
+  - **Slow exploitation:** with Dol Guldur's field army gone on day 40, the first siege of its holdings began on day 51 (Imnagath, taken day 55); Torech Emel fell to a Dol Guldur storm on day 59.
+  - Small lone parties were taken again and again (22 lords captured over the run).
+- **For comparisons:** the stopped C2 (0.11.3) had lost two armies and Imnagath by day 31; this one, at day 31, had lost no army and was up a town and a castle.
+
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).

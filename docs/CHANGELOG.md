@@ -1257,3 +1257,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The switch:** the pack's own Mod Options setting "Enable Siege Defense Events" (TAOM, group "Siege Defense", `EnableSiegeDefenseEvents`, on by default). The pack's settings had never been saved, so the file was written new with only that setting: `Documents\Mount and Blade II Bannerlord\Configs\ModSettings\Global\TAOM\TAOM.json`, `{"EnableSiegeDefenseEvents": false}`. Every other setting of the pack keeps its default. Written with the game closed.
 - It is global: off for every campaign and every arm until switched back on in Mod Options. Mert to confirm the box is unticked in Mod Options before loading TEST START.
 - **For comparisons:** C1 and the stopped C2 were played with the pop-ups on; every run from the C2 replay on has them off.
+
+### 15:30–16:52 · Run C2 replayed (0.11.4), finished
+- `20261024-1530-C2`: the kingdom's agent live against the game's AI, the orcs' and Dol Guldur's agents watching; the softened principle 5 and the pack's siege pop-ups off. War rooms and dashboard restarted 14:29 before it (`scripts\agents.ps1 restart`).
+- 60 days in 1 h 20 min; about $236 at list price; no errors, freezes, fog leaks or failed calls; one mark (cheat mode during setting up, expected).
+- The kingdom ended +1 town, ±0 castles, +4 villages, with 180 enemy lords taken; Dol Guldur's great army was destroyed at Lasgalor on day 40, at 17,565 of our men lost. Findings in docs/RUNS.md, "Run C2 replayed (Oct 24)".
