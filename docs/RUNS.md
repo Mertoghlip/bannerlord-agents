@@ -80,6 +80,24 @@ The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $27
   - Small lone parties were taken again and again (22 lords captured over the run).
 - **For comparisons:** the stopped C2 (0.11.3) had lost two armies and Imnagath by day 31; this one, at day 31, had lost no army and was up a town and a castle.
 
+## Run C2 again (Oct 24, evening), on 0.11.5, finished
+
+`20261024-2110-C2`, the first run with the council fix (0.11.5), the same instructions as the replay (files' hashes unchanged), the siege pop-ups off and the game no longer stopping behind other windows: 60 days in 1 h 20 min, about $307 at list price (the kingdom's agent $108.23, the orcs' $118.97, Dol Guldur's $79.82), no errors, freezes or failed calls. Report: `runs\20261024-2110-C2\report.md`.
+- **The council fix worked:** the kingdom's councils sat 45 times in 60 days (the replay: 20), about once a game day and at once after each big event (a holding besieged, taken or lost). They now sit almost back to back: a council takes 35 to 135 s, about a game day at this speed. The cost went up with them: the kingdom's agent $108 against $92.
+- **The ending, from day 0:** the kingdom +1 town (Eastern Moria), −1 castle (Caradhras, Hollin Gate and Sirannon taken; Imnagath, Framsburg, Dûglarshun and Torech Emel lost; Lasgalor and Bagbûrz each lost and retaken; Imnagath taken back once and lost again), +4 villages, men −2,688; 183 enemy lords taken against 52 of its own, battles between lords won 109 and lost 34. The orcs −1 town, −3 castles, −11 villages, 20 of their lords held. Dol Guldur +4 castles, +7 villages, men −5,642, strength −15,664 (its great army destroyed on day 51).
+- **What went right:**
+  - Lasgalor's first siege broken in two days (day 15, a sally beside the relief: Khamûl's 2,349 destroyed); the replay's Lasgalor starved for 14 days.
+  - Faster gains in the north: Caradhras day 12, Hollin Gate day 19, Eastern Moria and Sirannon day 27; Stein broke the orcs' field army on day 21 and took 13 lords.
+  - The plans massed before fighting Dol Guldur's great army ("we fight him only once all four have joined"), let holdings go rather than feed lords to it (Framsburg, Dûglarshun), and the agent wrote its own lesson that free lords riding one by one to a besieged castle are beaten one by one.
+  - After the day-42 loss it waited to mass; Galyk's 4,641 destroyed Lorgath's remnant (2,984) on day 51 and took 17 lords, Lorgath among them.
+- **What went wrong:**
+  - **Day 42, the worst battle of all the runs:** Gárjan's army (7,915 men) was to get into Bagbûrz about 6 to 8 hours before Lorgath (16.7k strength) and hold it while three armies came to relieve it. Lorgath caught it in the field 2 short of the walls. The agent then sent the lords sheltering in Bagbûrz (Dáin, Hauk) and others into the running battle, on battle_odds readings that went within a game hour from "wins even alone" to "loses alone, wins once they join" to "going against us". They arrived one by one and were taken with him: 7,915 men lost (Lorgath lost 4,801 of 6,980) and 19 lords taken.
+  - **Lasgalor lost on day 20 to 753 men:** the council judged Lugmor "too weak to storm it soon" and sent the lords bound for it to Elladan at Imnagath; the garrison had most likely been worn down by the day-15 sally.
+  - **A siege that never began:** Ask's army was ordered to besiege Nanduhirion for about 10 days and no siege began; the agent itself suspected the order.
+  - Small lone parties were caught all run long (52 lords taken, the replay 22), many on the agent's own orders.
+- **For comparisons:** about level with the replay in holdings (±0 net against +1) and villages (+4 both), better in battles between lords (109-34 against 94-27) and enemy men lost (63,353 against 58,954), worse in men (−2,688 against +828) and lords lost (52 against 22). One run each, so luck and the fix cannot be told apart yet.
+- **To look into:** how battle_odds reads a battle already being fought (and whether it counts lords still on the road as if they were in it); why Ask's siege of Nanduhirion never began; whether the agent should ever send sheltering lords out of a besieged holding's walls into a field battle.
+
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).
