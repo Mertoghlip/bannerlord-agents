@@ -141,7 +141,11 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("checking " + Path.GetFileName(path), e); return false; }
         }
 
-        /// <summary>Replaces a whole file at once: written as (name).new, then swapped in (retried if a reader holds it).</summary>
+        /// <summary>
+        /// Replaces a whole file at once: written as (name).new, then swapped in. A swap refused (a reader, or the virus scanner,
+        /// holding the file) is tried once more at once, then the file is written in place: since 0.12.0 without the 15 ms
+        /// sleeps, up to four a file, that held the helper while the game ran on (run 20261025-1417-C2).
+        /// </summary>
         public static void Overwrite(string path, string text)
         {
             string tmp = path + ".new";
@@ -153,8 +157,8 @@ namespace BannerlordAgents
                 for (int i = 0; ; i++)
                 {
                     try { File.Replace(tmp, path, null, true); return; }
-                    catch (IOException) when (i < 4) { Thread.Sleep(15); }
-                    catch (UnauthorizedAccessException) when (i < 4) { Thread.Sleep(15); }
+                    catch (IOException) when (i < 1) { Diag.Count("files:swap tried again"); Thread.Yield(); }
+                    catch (UnauthorizedAccessException) when (i < 1) { Diag.Count("files:swap tried again"); Thread.Yield(); }
                 }
             }
             catch (Exception e)
@@ -169,6 +173,35 @@ namespace BannerlordAgents
                 try { if (File.Exists(tmp)) File.Delete(tmp); } catch (Exception e3) { Diag.Swallowed("removing " + Path.GetFileName(tmp), e3); }
             }
         }
+
+        // what each file written by WriteIfChanged last held, so an unchanged one is left alone
+        private static readonly Dictionary<string, string> LastText = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Writes a small file in place, only when its text changed since this launch last wrote it (0.12.0, the look-up files);
+        /// true when written. A file someone else changed or removed meanwhile is written again.
+        /// </summary>
+        public static bool WriteIfChanged(string path, string text)
+        {
+            text = text ?? "";
+            if (LastText.TryGetValue(path, out string last) && string.Equals(last, text, StringComparison.Ordinal) && File.Exists(path)) return false;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, text, Utf8);
+                LastText[path] = text;
+                return true;
+            }
+            catch (Exception e)
+            {
+                LastText.Remove(path);
+                Diag.Error("writing " + Path.GetFileName(path), e);
+                return false;
+            }
+        }
+
+        /// <summary>A file WriteIfChanged wrote was removed: it is written whole next time.</summary>
+        public static void Forget(string path) => LastText.Remove(path);
 
         public static void FlushAll()
         {

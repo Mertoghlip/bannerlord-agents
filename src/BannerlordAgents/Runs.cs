@@ -462,7 +462,7 @@ namespace BannerlordAgents
             var header = new RunDayHeader
             {
                 Run = _run.Id, Arm = _run.Arm, Day = day, Hours = h, Date = Text.When(h), Wall = Now(), RealSeconds = day == 0 ? 0 : Math.Round(seconds, 1), Speed = Watchdog.Speed,
-                Who = new Dictionary<string, string>(_run.Who)
+                Who = new Dictionary<string, string>(_run.Who), Helper = Background.TakeDay()
             };
             var tally = _run.Tally.ToDictionary(kv => kv.Key, kv => kv.Value.Copy());
             string kingdom = _run.Kingdom;
@@ -765,7 +765,7 @@ namespace BannerlordAgents
             PartyRow me = s != null && s.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow p) ? p : null;
             return new
             {
-                Type = "day", head.Run, head.Arm, head.Day, Hours = Math.Round(head.Hours, 2), head.Date, head.Wall, head.RealSeconds, head.Speed, Realms = rows, Wars = wars,
+                Type = "day", head.Run, head.Arm, head.Day, Hours = Math.Round(head.Hours, 2), head.Date, head.Wall, head.RealSeconds, head.Speed, head.Helper, Realms = rows, Wars = wars,
                 You = me == null ? null : new { Party = me.Name, me.Faction, me.Men, Strength = (int)Math.Round(me.Strength), me.ArmyMen, Doing = me.Doing }
             };
         }
@@ -961,6 +961,8 @@ namespace BannerlordAgents
         public int Day;
         public double Hours, RealSeconds;
         public Dictionary<string, string> Who = new Dictionary<string, string>();
+        /// <summary>The background helper's day (0.12.0): the most the lords' orders and the agents' reports were behind the game.</summary>
+        public HelperDay Helper;
     }
 
     internal sealed class RunSetup

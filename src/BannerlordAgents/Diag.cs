@@ -663,7 +663,13 @@ namespace BannerlordAgents
                                                             .Select(h => h.Name + " " + Ms(h.Ticks).ToString("0.0", inv) + " ms over " + h.Calls + " calls")));
             double eff = Background.EfficientShare;
             sb.AppendLine("Background helper: " + Background.Ran + " jobs, " + Background.Dropped + " dropped, " + Background.Failed + " failed; "
-                          + (double.IsNaN(eff) ? "" : (eff * 100).ToString("0", inv) + "% of its work on the efficiency cores; ") + Background.Placement + ".");
+                          + (double.IsNaN(eff) ? "" : (eff * 100).ToString("0", inv) + "% of its work on the efficiency cores; ") + Background.Placement + "; urgent work " + Cpu.UrgentPlacement + ".");
+            // its hour since 0.12.0: the urgent part (the order rules and the look) and the reports of the newest hour, apart
+            sb.AppendLine("  each hour's orders and look: " + SampleText("helper:orders ms", "ms", "0.0") + "; report rounds: " + SampleText("helper:reports ms", "ms", "0.0")
+                          + "; hours folded into a later report " + CountOf("reports:hours folded") + "; council briefings: " + SampleText("helper:briefing ms", "ms", "0.0") + ".");
+            sb.AppendLine("  look-up files written " + CountOf("files:look-ups written") + ", left alone unchanged " + CountOf("files:look-ups unchanged")
+                          + "; swaps tried again " + CountOf("files:swap tried again") + ", files written in place " + CountOf("files:rewritten in place")
+                          + "; same order kept as it was " + CountOf("order:kept as it was") + ".");
             List<AlarmState> alarms = Alarms.Values.OrderByDescending(a => a.Serious).ThenByDescending(a => a.Count).ToList();
             sb.AppendLine("Alarms: " + (alarms.Count == 0 ? "none." : ""));
             foreach (AlarmState a in alarms) sb.AppendLine("  " + (a.Serious ? "SERIOUS " : "") + a.Code + " x" + a.Count + ", last at " + a.Last.ToString("HH:mm:ss") + ": " + a.LastText);

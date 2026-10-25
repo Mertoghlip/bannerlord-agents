@@ -20,7 +20,8 @@ namespace BannerlordAgents
     ///   Poke numbers carry on across loads, so a number never means two different pokes.
     /// - poke.txt: the latest poke, written (swapped in whole) before its line appears in pokes.log: which number to
     ///   answer, the mode, and the full report with the reasons for the poke.
-    /// - report.txt: the situation now, refreshed every in-game hour.
+    /// - report.txt and council.txt: the situation now and the council's briefing, written when the war room puts a
+    ///   council-request*.json in orders\ as a council sits (0.12.0); the lieutenant's report.txt every in-game hour.
     /// - receipts.log: one line per order the agent gave (applied, checked in shadow mode, or refused and why), how long
     ///   the answer took after its poke, and later what became of each order. When the game's clock is stopped, a file
     ///   is acknowledged at once as RECEIVED and its orders answered when the clock runs again.
@@ -353,6 +354,9 @@ namespace BannerlordAgents
 
         public Channel(RealmAgent agent) { _agent = agent; }
 
+        /// <summary>The war room's request for its council's briefing, in the orders folder (0.12.0): council-request*.json.</summary>
+        public const string BriefingRequest = "council-request";
+
         /// <summary>The realm (null: the stand-in agent before a campaign, or in the smoke test).</summary>
         public string Realm => _agent.Realm;
         public string Dir => _agent.Config.ChannelDir;
@@ -500,7 +504,7 @@ namespace BannerlordAgents
         /// A poke for the agent: poke.json (for the war room: the number, the in-game hour, the campaign, the realm and
         /// this load, by which it tells a reloaded save), then poke.txt, then its line in pokes.log, each swapped in whole.
         /// </summary>
-        public void OnPoke(int n, double hours, List<Trigger> triggers, string report, object meta = null)
+        public void OnPoke(int n, double hours, List<Trigger> triggers, string report, object meta = null, string stale = null)
         {
             _lastPoke = n;
             Pokes[n] = new PokeInfo { Wall = DateTime.Now, Hours = hours };
@@ -511,7 +515,7 @@ namespace BannerlordAgents
             Files.Overwrite(Path.Combine(Dir, "poke.json"), Json.Line(meta ?? new { Number = n, Hours = hours, Date = Text.When(hours) }));
             string head = "POKE #" + n + ", " + Text.When(hours) + "\n"
                           + "Answer with one orders file in orders\\ that says \"poke\": " + n + ".\n"
-                          + "Your orders right now: " + ModeText() + "\n\n";
+                          + "Your orders right now: " + ModeText() + "\n" + (stale ?? "") + "\n";
             Files.Overwrite(Path.Combine(Dir, "poke.txt"), head + report);
             string first = triggers.Count > 0 ? triggers[0].Text : "";
             Files.Append(Path.Combine(Dir, "pokes.log"), "#" + n + " | " + Text.When(hours) + " | " + first + (triggers.Count > 1 ? " (and " + (triggers.Count - 1) + " more)" : ""));
@@ -519,16 +523,17 @@ namespace BannerlordAgents
             RememberIds(report);
         }
 
+        /// <summary>The situation report (report.txt): the lieutenant's every in-game hour, a realm agent's when its war room asks for its council (0.12.0).</summary>
         public void OnHour(double hours, string report)
         {
-            string head = "SITUATION AT " + Text.When(hours) + " (refreshed every in-game hour"
+            string head = "SITUATION AT " + Text.When(hours) + " (" + (IsLieutenant ? "refreshed every in-game hour" : "written for your council of war")
                           + (_lastPoke >= 0 ? "; the latest poke is #" + _lastPoke : "") + ")\n"
                           + "Your orders right now: " + ModeText() + "\n\n";
             Files.Overwrite(Path.Combine(Dir, "report.txt"), head + report);
             RememberIds(report);
         }
 
-        /// <summary>The briefing for a council of war (Facts.Council), rewritten every in-game hour: the war room reads it for a review.</summary>
+        /// <summary>The briefing for a council of war (Facts.Council), written when the war room asks as a council sits (0.12.0; every in-game hour before).</summary>
         public void WriteCouncil(string text)
         {
             Files.Overwrite(Path.Combine(Dir, "council.txt"), text);
@@ -550,24 +555,43 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("keeping the ids shown to the agent", e); }
         }
 
-        /// <summary>The look-up files, one per id, for details on request; files no longer written are removed.</summary>
-        public void WriteLookups(Dictionary<string, string> files)
+        /// <summary>Look-up files written, and left alone because nothing in them changed.</summary>
+        internal sealed class LookupCount
         {
-            if (!On || files == null) return;
+            public int Written, Unchanged;
+        }
+
+        /// <summary>
+        /// The look-up files, one per id, for details on request; files no longer written are removed. Since 0.12.0 only the files
+        /// whose text changed are written, and in place: written beside the old one and swapped in, 216 of them took 1.2 s with the
+        /// virus scanner holding each new file (run 20261025-1417-C2), and a look-up is one small file the agent reads whole.
+        /// </summary>
+        public LookupCount WriteLookups(Dictionary<string, string> files)
+        {
+            if (!On || files == null) return null;
             string dir = Paths.Ensure(Path.Combine(Dir, "lookups"));
+            var count = new LookupCount();
             var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (KeyValuePair<string, string> kv in files)
             {
                 string name = Safe(kv.Key) + ".txt";
                 keep.Add(name);
-                Files.Overwrite(Path.Combine(dir, name), kv.Value);
+                if (Files.WriteIfChanged(Path.Combine(dir, name), kv.Value)) count.Written++;
+                else count.Unchanged++;
             }
             try
             {
                 foreach (string f in Directory.GetFiles(dir, "*.txt"))
-                    if (!keep.Contains(Path.GetFileName(f))) System.IO.File.Delete(f);
+                    if (!keep.Contains(Path.GetFileName(f)))
+                    {
+                        System.IO.File.Delete(f);
+                        Files.Forget(f);
+                    }
             }
             catch (Exception e) { Diag.Swallowed("tidying the look-up files", e); }
+            Diag.Count("files:look-ups written", count.Written);
+            Diag.Count("files:look-ups unchanged", count.Unchanged);
+            return count;
         }
 
         private static string Safe(string id)
@@ -635,6 +659,15 @@ namespace BannerlordAgents
             bool fresh = false;
             foreach (string f in Directory.GetFiles(OrdersDir, "*.json").OrderBy(System.IO.File.GetLastWriteTimeUtc))
             {
+                // the war room asks for its council's briefing (0.12.0): written now from the newest hour (it moves the request in whole)
+                if (Path.GetFileName(f).StartsWith(BriefingRequest, StringComparison.OrdinalIgnoreCase))
+                {
+                    try { System.IO.File.Delete(f); }
+                    catch (Exception e) { Diag.Swallowed("removing the war room's request for a briefing", e); }
+                    try { Brain.Briefing(_agent); }
+                    catch (Exception e) { Diag.Error("writing the council's briefing", e); }
+                    continue;
+                }
                 if ((DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(f)).TotalMilliseconds < 300) { fresh = true; continue; }   // still being written
                 // the lieutenant's answer to the player's words (0.10): its own path, through the game's thread
                 if (Path.GetFileName(f).StartsWith("chat-", StringComparison.OrdinalIgnoreCase))

@@ -32,6 +32,15 @@ namespace BannerlordAgents.Tools
         public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         public JObject Then;
         public int Poke = -1;
+
+        /// <summary>The order's every part (its tool, place, target, lords, settings and next order), to tell the same order given again (0.12.0).</summary>
+        public string Signature()
+        {
+            string lords = string.Join(",", Lords.OrderBy(x => x, StringComparer.Ordinal));
+            string settings = string.Join(",", Settings.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                                                       .Select(kv => kv.Key.ToLowerInvariant() + "=" + kv.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+            return string.Join("|", Tool, At ?? "", Target ?? "", lords, settings, Then?.ToString(Newtonsoft.Json.Formatting.None) ?? "");
+        }
     }
 
     internal sealed class ToolInstance

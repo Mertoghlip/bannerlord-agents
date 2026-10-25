@@ -112,6 +112,32 @@ namespace BannerlordAgents
             return string.Join(", ", notes);
         }
 
+        /// <summary>What urgent work runs as (0.12.0), for the log.</summary>
+        public static string UrgentPlacement = "normal priority, out of efficiency mode, on the same cores";
+        private static bool _urgentRefused;
+
+        /// <summary>
+        /// The helper's urgent lane (0.12.0, Background): an order's start and each hour's order rules run at normal priority and
+        /// out of Windows' efficiency mode, which slows a thread's clock; still on the efficiency cores. false: back to background work.
+        /// </summary>
+        public static void SetCurrentThreadUrgent(bool urgent)
+        {
+            if (_urgentRefused) return;
+            try
+            {
+                Thread.CurrentThread.Priority = urgent ? ThreadPriority.Normal : ThreadPriority.BelowNormal;
+                var state = new ThreadPowerThrottlingState { Version = 1, ControlMask = 1, StateMask = urgent ? 0u : 1u };
+                if (!SetThreadInformation(GetCurrentThread(), 3, ref state, (uint)Marshal.SizeOf(typeof(ThreadPowerThrottlingState))) && urgent)
+                    UrgentPlacement = "normal priority (efficiency mode could not be switched off: " + Marshal.GetLastWin32Error() + ")";
+            }
+            catch (Exception e)
+            {
+                _urgentRefused = true;
+                UrgentPlacement = "as background work (the switch failed: " + e.Message + ")";
+                Diag.Swallowed("switching the helper to urgent work", e);
+            }
+        }
+
         private static bool _noProcessorNumber;
 
         public static int CurrentProcessor()

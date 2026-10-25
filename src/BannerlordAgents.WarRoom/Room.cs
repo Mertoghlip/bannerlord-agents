@@ -560,15 +560,45 @@ namespace BannerlordAgents.WarRoom
             return SitCouncil(why) ? 0 : 1;
         }
 
-        /// <summary>The bridge's briefing and situation are recent (the game is running): written within the last ten minutes.</summary>
+        /// <summary>The game is running: its latest poke was written within the last ten minutes (0.12.0: the briefing is written only when asked for).</summary>
         private bool Fresh(out string why)
         {
-            string briefing = Path.Combine(_c.ChannelDir, "council.txt"), situation = Path.Combine(_c.ChannelDir, "report.txt");
-            why = !File.Exists(briefing) ? "no council briefing from the game yet (council.txt)" : !File.Exists(situation) ? "no situation report yet (report.txt)" : null;
+            string poke = Path.Combine(_c.ChannelDir, "poke.json");
+            why = !File.Exists(poke) ? "no poke from the game yet (poke.json)" : null;
             if (why != null) return false;
-            double age = (DateTime.Now - File.GetLastWriteTime(briefing)).TotalMinutes;
-            if (age > 10) { why = "the council briefing is " + Math.Round(age) + " minutes old: the game is closed or long paused"; return false; }
+            double age = (DateTime.Now - File.GetLastWriteTime(poke)).TotalMinutes;
+            if (age > 10) { why = "the latest poke is " + Math.Round(age) + " minutes old: the game is closed or long paused"; return false; }
             return true;
+        }
+
+        /// <summary>The name the bridge looks for in the orders folder (its Channel.BriefingRequest), and how long a council waits for the briefing.</summary>
+        internal const string BriefingRequest = "council-request";
+        internal static TimeSpan BriefingWait = TimeSpan.FromSeconds(20);
+
+        /// <summary>
+        /// Asks the bridge for the council's briefing and situation report from its newest hour (0.12.0: it wrote both every in-game
+        /// hour for every agent, a large part of what made it fall behind the game), and waits for council.txt to be written. True
+        /// when it came; false after BriefingWait, when the last one written is used, if any.
+        /// </summary>
+        internal bool RequestBriefing(out string note)
+        {
+            note = null;
+            string orders = Path.Combine(_c.ChannelDir, "orders"), briefing = Path.Combine(_c.ChannelDir, "council.txt");
+            Directory.CreateDirectory(orders);
+            DateTime asked = DateTime.UtcNow;
+            string name = BriefingRequest + "-" + asked.ToString("HHmmssfff", CultureInfo.InvariantCulture) + ".json";
+            string tmp = Path.Combine(_c.ChannelDir, name + ".part");
+            File.WriteAllText(tmp, "{\"asked\":\"" + asked.ToString("o", CultureInfo.InvariantCulture) + "\"}");
+            File.Move(tmp, Path.Combine(orders, name));
+            var wait = System.Diagnostics.Stopwatch.StartNew();
+            while (wait.Elapsed < BriefingWait)
+            {
+                if (File.Exists(briefing) && File.GetLastWriteTimeUtc(briefing) >= asked) return true;
+                Thread.Sleep(100);
+            }
+            note = "the game did not write a fresh briefing within " + (int)BriefingWait.TotalSeconds + " s";
+            try { File.Delete(Path.Combine(orders, name)); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            return false;
         }
 
         /// <summary>A council sits now (also "WarRoom council"): the reason given; true when its answer was read and written.</summary>
@@ -578,6 +608,12 @@ namespace BannerlordAgents.WarRoom
             PokeMeta meta = ReadMeta(-1);
             if (meta == null || _mem == null) { Say("Council of war: no poke yet in this run, so it waits."); return false; }
             int number = meta.Number;
+            // the briefing from the game's newest hour, written for this council (0.12.0)
+            if (!RequestBriefing(out string late))
+            {
+                if (!File.Exists(Path.Combine(_c.ChannelDir, "council.txt"))) { Say("Council of war: " + late + ", and there is none from before, so it waits."); return false; }
+                Say("Council of war: " + late + "; the last one written is used.");
+            }
             string briefing = ReadShared(Path.Combine(_c.ChannelDir, "council.txt")) ?? "";
             string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
             string council = CouncilText(why, meta, number, briefing, situation);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using TaleWorlds.Library;
@@ -39,6 +40,8 @@ namespace BannerlordAgents
             /// <summary>Each enemy army's trail, by party id (Trails).</summary>
             public readonly Dictionary<string, ViewTrail> Trails = new Dictionary<string, ViewTrail>();
             public int Pokes, PokedHoursRunning;
+            /// <summary>What the hourly look found to poke about (sightings, the first look), waiting for the next report round (0.12.0).</summary>
+            public readonly List<Trigger> Waiting = new List<Trigger>();
         }
 
         /// <summary>An enemy army's trail: a new point after this many map units marched, or this many hours; kept two days, at most 12 points.</summary>
@@ -88,6 +91,12 @@ namespace BannerlordAgents
             RecentDecisions.Clear();
             RecentPokes.Clear();
             Latest = null;
+            Steps.Clear();
+            RoundViews.Clear();
+            SeatsNewest.Clear();
+            SeatsReported.Clear();
+            _publishedOf = null;
+            _publishedHours = double.NaN;
             DecisionsWritten = PokesWatched = PokesPlayer = 0;
             _dir = Paths.Data(campaign);
             MarkLoad(loadedAt, agents);
@@ -226,15 +235,32 @@ namespace BannerlordAgents
             }
         }
 
+        /// <summary>
+        /// The whole hour at once (the smoke test, and anything outside the bridge): its order rules and look (Decide), then
+        /// every report step of the hour (NextStep). The bridge runs the two apart since 0.12.0: Decide on the helper's urgent
+        /// lane every hour, the reports on its reporting lane for the newest hour only (Background).
+        /// </summary>
         public static void OnHour(Snapshot s)
         {
+            Decide(s);
+            for (Action step = NextStep(); step != null; step = NextStep()) step();
+        }
+
+        /// <summary>
+        /// The urgent part of an hour (0.12.0), every hour: the order rules of each agent's lords (their call-backs become notices
+        /// for the next report), and what each realm sees (sightings, trails, the last-seen list), so nothing seen in an hour is
+        /// lost when its report is folded into a later one. Kept short: it is what an order's lord waits on.
+        /// </summary>
+        public static void Decide(Snapshot s)
+        {
+            long began = Stopwatch.GetTimestamp();
+            var ms = new Dictionary<string, double>();
+            double lagMs = s.Wall > 0 ? (DateTime.UtcNow.Ticks - s.Wall) / 10000.0 : -1;
+            double behind = Background.OrdersBehind;
             Latest = s;
             Roads.Known = s.Roads != null;
-            double lagMs = s.Wall > 0 ? (DateTime.UtcNow.Ticks - s.Wall) / 10000.0 : -1;
-            Diag.Event("hour", Text.When(s.Hours), new { parties = s.Parties.Count, settlements = s.Settlements.Count, worker_lag_ms = Math.Round(lagMs, 1), parts_ms = s.PartsMs?.Select(x => Math.Round(x, 3)).ToArray() });
-            Audit.CheckSnapshot(s);
-            Forecast.Calibrate(s);
-            if (s.Sight != null) Audit.PlayerSight(s.Sight, s.Hours);
+            Timed(ms, "calibrate", () => Forecast.Calibrate(s));
+            if (s.Sight != null) Timed(ms, "sight check", () => Audit.PlayerSight(s.Sight, s.Hours));
             // each agent's own hour, on its realm's view of the copy (since 0.9 every agent the same way)
             var seats = new List<KeyValuePair<RealmAgent, Snapshot>>();
             foreach (Snapshot v in s.SeatViews().Where(x => x.Watched != null))
@@ -243,55 +269,174 @@ namespace BannerlordAgents
                 if (ag == null) continue;
                 ag.Latest = v;
                 seats.Add(new KeyValuePair<RealmAgent, Snapshot>(ag, v));
+                SeatsNewest[v.Watched] = new KeyValuePair<RealmAgent, Snapshot>(ag, v);
             }
             foreach (KeyValuePair<RealmAgent, Snapshot> kv in seats)
             {
                 RealmAgent ag = kv.Key;
                 Snapshot v = kv.Value;
-                Audit.Sight(v);
                 Chronicle.Ensure(v.Watched, Views.FactionName(v, v.Watched), v.Hours);
-                // the tools first: their call-backs of this hour go out with this hour's poke
-                if (v.WatchedSees != null) Tools.Runner.OnHour(v, ag);
-                if (v.WatchedSees != null)
-                    Process(v, v.Watched, v.WatchedSees, v.HostileToWatched, false);
+                if (v.WatchedSees == null) continue;
+                // the tools first: their call-backs of this hour go out with the next poke
+                Timed(ms, "orders", () => Tools.Runner.OnHour(v, ag));
+                Timed(ms, "look", () => Observe(v, v.Watched, v.WatchedSees, v.HostileToWatched, false));
             }
             if (s.PlayerFaction != null && !seats.Any(kv => kv.Value.Watched == s.PlayerFaction))
-                Process(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true);
+                Timed(ms, "look", () => Observe(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true));
             DropOrphanNotices(s);
-            var views = new List<KeyValuePair<Snapshot, View>>();
-            foreach (KeyValuePair<RealmAgent, Snapshot> kv in seats)
+            Timed(ms, "recruitment", () => { foreach (KeyValuePair<RealmAgent, Snapshot> kv in seats) Recruitment.OnHour(kv.Value); });
+            Background.DecidedHours = s.Hours;
+            double total = Took(began);
+            LastOrdersMs = ms;
+            Diag.Sample("helper:orders ms", total);
+            Diag.Event("hour", Text.When(s.Hours), new
             {
-                RealmAgent ag = kv.Key;
-                Snapshot v = kv.Value;
-                if ((!ag.On && !Settings.Dashboard) || v.WatchedSees == null) continue;
-                // one view of the hour: the agent's hourly report is written from it, and the dashboard shows the same one
-                Memory m = Get(v.Watched);
-                View watchedView = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
-                views.Add(new KeyValuePair<Snapshot, View>(v, watchedView));
-                if (ag.On)
-                {
-                    Tools.World w = Tools.Runner.WorldFor(v);
-                    // the lieutenant (0.10) serves the player: its report says where the player's own party is, and its look-ups are
-                    // kept fresh every hour, since it is never poked and answers whenever the player speaks
-                    bool lt = ag.Config.IsLieutenant;
-                    string report = Views.Report(watchedView, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true, Ruler = lt ? Views.RulerLine(v) : null });
-                    Audit.CheckReport(watchedView, report, v.WatchedSees, v.InspectedByWatched, "hourly report", Known(v, v.Watched, v.WatchedSees, m, w));
-                    ag.Channel.OnHour(v.Hours, report);
-                    if (lt)
-                    {
-                        try { ag.Channel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
-                        catch (Exception e) { Diag.Error("writing the lieutenant's look-up files", e); }
-                    }
-                    try { ag.Channel.WriteCouncil(Facts.Council(w)); }
-                    catch (Exception e) { Diag.Error("writing the council briefing", e); }
-                }
-            }
-            if (Settings.Dashboard)
+                parties = s.Parties.Count, settlements = s.Settlements.Count, worker_lag_ms = Math.Round(lagMs, 1), behind_hours = Math.Round(behind, 1),
+                parts_ms = s.PartsMs?.Select(x => Math.Round(x, 3)).ToArray(), orders_ms = Round(ms), orders_total_ms = Math.Round(total, 1)
+            });
+            PerfRecord.Maybe(s);
+        }
+
+        // ---------- the reporting lane (0.12.0) ----------
+
+        private static readonly Queue<Action> Steps = new Queue<Action>();
+        private static readonly List<KeyValuePair<Snapshot, View>> RoundViews = new List<KeyValuePair<Snapshot, View>>();
+        // each watched realm's newest hour (its agent and its view of it), and the one last reported
+        private static readonly Dictionary<string, KeyValuePair<RealmAgent, Snapshot>> SeatsNewest = new Dictionary<string, KeyValuePair<RealmAgent, Snapshot>>();
+        private static readonly Dictionary<string, Snapshot> SeatsReported = new Dictionary<string, Snapshot>();
+        private static Snapshot _publishedOf;
+        private static double _publishedHours = double.NaN;
+        /// <summary>The parts of the latest hour's orders and look, and of the latest report round, in ms (the speed test reads them).</summary>
+        public static Dictionary<string, double> LastOrdersMs = new Dictionary<string, double>(), LastRoundMs = new Dictionary<string, double>();
+
+        /// <summary>
+        /// The next report step, or null when the newest hour is reported (Background's reporting lane). A round reports the
+        /// newest hour only: the checks, then each agent in a step of its own (its view, its poke with everything waiting since
+        /// its last one, its look-ups), then the dashboard's picture. Hours that came while a round ran are folded into the next.
+        /// </summary>
+        public static Action NextStep()
+        {
+            if (Steps.Count == 0)
             {
-                try { DashboardHour(s, views); }
-                catch (Exception e) { Diag.Error("writing the dashboard's hourly picture", e); }
+                Snapshot s = Latest;
+                if (s == null || ReferenceEquals(s, _publishedOf)) return null;
+                BeginRound(s);
             }
-            foreach (KeyValuePair<RealmAgent, Snapshot> kv in seats) Recruitment.OnHour(kv.Value);
+            return Steps.Count > 0 ? Steps.Dequeue() : null;
+        }
+
+        private static void BeginRound(Snapshot s)
+        {
+            _publishedOf = s;
+            RoundViews.Clear();
+            int folded = double.IsNaN(_publishedHours) ? 0 : Math.Max(0, (int)Math.Round(s.Hours - _publishedHours) - 1);
+            var ms = new Dictionary<string, double>();
+            var files = new FileTally();
+            long began = Stopwatch.GetTimestamp();
+            Steps.Enqueue(() => Timed(ms, "checks", () => Audit.CheckSnapshot(s)));
+            foreach (string realm in SeatsNewest.Keys.ToList())
+            {
+                string r = realm;
+                Steps.Enqueue(() => Guarded("the report of " + r, () => PublishSeat(r, ms, files)));
+            }
+            if (Settings.Dashboard) Steps.Enqueue(() => Guarded("writing the dashboard's hourly picture", () => Timed(ms, "dashboard", () => DashboardHour(s, RoundViews.ToList()))));
+            Steps.Enqueue(() => EndRound(s, folded, ms, files, began));
+        }
+
+        private static void EndRound(Snapshot s, int folded, Dictionary<string, double> ms, FileTally files, long began)
+        {
+            _publishedHours = s.Hours;
+            Background.PublishedHours = s.Hours;
+            Background.NoteRound(folded);
+            LastRoundMs = ms;
+            double work = ms.Values.Sum();
+            Diag.Sample("helper:reports ms", work);
+            if (folded > 0) Diag.Count("reports:hours folded", folded);
+            Diag.Event("reports", Text.When(s.Hours), new
+            {
+                folded, behind_hours = Math.Round(Background.ReportsBehind, 1), ms = Round(ms), work_ms = Math.Round(work, 1), wall_ms = Math.Round(Took(began), 1),
+                files_written = files.Written, files_unchanged = files.Unchanged
+            });
+        }
+
+        /// <summary>One watched realm's report of its newest hour: its view, its poke if anything waits, the lieutenant's hourly report.</summary>
+        private static void PublishSeat(string realm, Dictionary<string, double> ms, FileTally files)
+        {
+            if (!SeatsNewest.TryGetValue(realm, out KeyValuePair<RealmAgent, Snapshot> seat)) return;
+            RealmAgent ag = seat.Key;
+            Snapshot v = seat.Value;
+            if (v == null || v.Watched == null || v.WatchedSees == null || (SeatsReported.TryGetValue(realm, out Snapshot done) && ReferenceEquals(done, v))) return;
+            SeatsReported[realm] = v;
+            Memory m = Get(v.Watched);
+            Timed(ms, "sight", () => Audit.Sight(v));
+            List<Trigger> triggers = TakeTriggers(v, m);
+            View view = null;
+            if (triggers.Count > 0 || ag.On || Settings.Dashboard) Timed(ms, "view", () => view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m));
+            if (triggers.Count > 0) Poke(v, v.Watched, v.WatchedSees, v.HostileToWatched, m, view, triggers, ms, files);
+            if (view != null && (ag.On || Settings.Dashboard)) RoundViews.Add(new KeyValuePair<Snapshot, View>(v, view));
+            // the lieutenant (0.10) serves the player: its report says where the player's own party is, and its look-ups are kept
+            // fresh every hour, since it is never poked and answers whenever the player speaks. A realm agent's situation report
+            // and council briefing are written when its war room asks, for the council (0.12.0, Briefing).
+            if (ag.On && ag.Config.IsLieutenant && view != null)
+            {
+                Tools.World w = Tools.Runner.WorldFor(v);
+                string report = null;
+                Timed(ms, "report", () => report = Views.Report(view, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true, Ruler = Views.RulerLine(v) }));
+                Timed(ms, "fog check", () => Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "hourly report", Known(v, v.Watched, v.WatchedSees, m, w)));
+                Timed(ms, "files", () => ag.Channel.OnHour(v.Hours, report));
+                Dictionary<string, string> lookups = null;
+                Timed(ms, "look-ups", () => lookups = Facts.Lookups(w, m.LastSeen, m.Trails));
+                Timed(ms, "look-up files", () => files.Add(ag.Channel.WriteLookups(lookups)));
+            }
+        }
+
+        /// <summary>
+        /// A realm agent's situation report (report.txt) and council briefing (council.txt), from its newest hour, written when its
+        /// war room asks for them as a council sits (0.12.0: they were rewritten every hour for every agent, and read only then).
+        /// </summary>
+        public static void Briefing(RealmAgent ag)
+        {
+            Snapshot v = ag?.Latest;
+            if (v == null || v.Watched == null || v.WatchedSees == null)
+            {
+                Diag.Event("agent", "briefing not written", new { realm = ag?.Realm, why = "no hour copied yet" });
+                return;
+            }
+            long began = Stopwatch.GetTimestamp();
+            Memory m = Get(v.Watched);
+            Tools.World w = Tools.Runner.WorldFor(v);
+            View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
+            string report = Views.Report(view, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true });
+            Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", Known(v, v.Watched, v.WatchedSees, m, w));
+            ag.Channel.OnHour(v.Hours, report);
+            ag.Channel.WriteCouncil(Facts.Council(w));
+            double took = Took(began);
+            Diag.Sample("helper:briefing ms", took);
+            Diag.Event("agent", "briefing written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), ms = Math.Round(took, 1) });
+        }
+
+        private static void Guarded(string what, Action a)
+        {
+            try { a(); }
+            catch (Exception e) { Diag.Error(what, e); }
+        }
+
+        private static void Timed(Dictionary<string, double> ms, string part, Action a)
+        {
+            long t = Stopwatch.GetTimestamp();
+            try { a(); }
+            finally { ms[part] = (ms.TryGetValue(part, out double before) ? before : 0) + Took(t); }
+        }
+
+        private static double Took(long since) => (Stopwatch.GetTimestamp() - since) * 1000.0 / Stopwatch.Frequency;
+
+        private static Dictionary<string, double> Round(Dictionary<string, double> ms) => ms.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value, 1));
+
+        /// <summary>Files a round wrote, and those left alone because nothing in them changed.</summary>
+        internal sealed class FileTally
+        {
+            public int Written, Unchanged;
+            public void Add(Channel.LookupCount c) { if (c == null) return; Written += c.Written; Unchanged += c.Unchanged; }
         }
 
         /// <summary>The dashboard's frame of this hour (LiveMap): each watched realm's view, the player's, and each agent's view file for the "ask the way" tool.</summary>
@@ -341,7 +486,12 @@ namespace BannerlordAgents
             return sees;
         }
 
-        private static void Process(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> hostile, bool isPlayer)
+        /// <summary>
+        /// A realm's hourly look (urgent lane, every hour, 0.12.0): who is in view and close enough to poke for, what it saw for the
+        /// last-seen list and the trails. What it finds waits in Memory.Waiting for the realm's next report (TakeTriggers). The
+        /// player's own realm (isPlayer) is only recorded, at once.
+        /// </summary>
+        private static void Observe(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> hostile, bool isPlayer)
         {
             Memory m = Get(fid);
             var triggers = new List<Trigger>();
@@ -401,7 +551,32 @@ namespace BannerlordAgents
             foreach (string id in m.LastSeen.Where(x => s.Hours - x.Value.SeenHours > ForgetHours).Select(x => x.Key).ToList())
                 m.LastSeen.Remove(id);
             if (!isPlayer) Trails(m, s, sees, hostile, own);
+            if (!isPlayer)
+            {
+                m.Waiting.AddRange(triggers);
+                return;
+            }
 
+            // the player's own realm: no report to write, so its record is kept now
+            List<Trigger> mine = TakeTriggers(s, m, triggers);
+            if (mine.Count == 0) return;
+            PokesPlayer++;
+            Files.Append(Path.Combine(Dir, "record", "pokes_you.jsonl"),
+                Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = mine, Seat = false }));
+        }
+
+        /// <summary>
+        /// Everything a realm's next poke is about (0.12.0): what its hourly looks found since its last report (folded hours
+        /// included), its ruler's notices, or a quiet day; none when there is nothing. The memory notes the poke.
+        /// </summary>
+        private static List<Trigger> TakeTriggers(Snapshot s, Memory m, List<Trigger> found = null)
+        {
+            var triggers = found ?? new List<Trigger>();
+            if (found == null)
+            {
+                triggers.AddRange(m.Waiting);
+                m.Waiting.Clear();
+            }
             foreach (Notice n in m.Pending)
                 triggers.Add(new Trigger { Hours = n.Hours, Kind = n.Kind, Text = n.Text, Party = n.Party, Place = n.Place, Notice = n.Id });
             m.Pending.Clear();
@@ -415,55 +590,73 @@ namespace BannerlordAgents
             if (triggers.Count == 0)
             {
                 m.PokedHoursRunning = 0;
-                return;
+                return triggers;
             }
 
             m.LastPoke = s.Hours;
             m.Pokes++;
             m.Recent.AddRange(triggers);
             m.Recent.RemoveAll(t => s.Hours - t.Hours > 24);
+            return triggers;
+        }
 
+        /// <summary>A watched realm's poke (reporting lane): its report, fog-checked, its look-ups, and the files the agent reads.</summary>
+        private static void Poke(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> hostile, Memory m, View v, List<Trigger> triggers,
+                                 Dictionary<string, double> ms, FileTally files)
+        {
             // the record of the player's own play keeps its pokes when the player's realm has an agent of its own (the
             // lieutenant), which then takes the place of the player's pass above (Oct 22)
-            if (isPlayer || fid == s.PlayerFaction)
+            if (fid == s.PlayerFaction)
             {
                 PokesPlayer++;
                 Files.Append(Path.Combine(Dir, "record", "pokes_you.jsonl"),
-                    Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = triggers, Seat = !isPlayer }));
-                if (isPlayer) return;
+                    Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = triggers, Seat = true }));
             }
 
             PokesWatched++;
             Channel ch = AgentChannel.For(fid);
             int number = ch.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
-            View v = Views.Build(s, fid, sees, hostile, m);
             Tools.World w = Tools.Runner.WorldFor(s);
-            var extras = new ReportExtras
+            ReportExtras extras = null;
+            Timed(ms, "facts", () => extras = new ReportExtras
             {
                 Since = ch.On ? ch.SinceLastAnswer(number) : null, LastAnswered = ch.LastAnswered,
                 InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On
-            };
-            string report = Views.Report(v, triggers, extras);
-            Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, Known(s, fid, sees, m, w, triggers));
+            });
+            string report = null;
+            Timed(ms, "report", () => report = Views.Report(v, triggers, extras));
+            Timed(ms, "fog check", () => Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, Known(s, fid, sees, m, w, triggers)));
             if (ch.On)
             {
                 // the look-ups go out before the poke, so they are there when the agent wakes
-                try { ch.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
+                try
+                {
+                    Dictionary<string, string> lookups = null;
+                    Timed(ms, "look-ups", () => lookups = Facts.Lookups(w, m.LastSeen, m.Trails));
+                    Timed(ms, "look-up files", () => files.Add(ch.WriteLookups(lookups)));
+                }
                 catch (Exception e) { Diag.Error("writing the look-up files", e); }
             }
+            // a report folded from hours the helper fell behind on says how old it is (0.12.0)
+            double behind = Background.PostedHours - s.Hours;
+            string stale = !double.IsNaN(behind) && behind >= 2
+                ? "This picture is " + Math.Round(behind) + " in-game hours old: the game has moved on since. Your lords' orders still run on the newest hour.\n"
+                : null;
+            long filesBegan = Stopwatch.GetTimestamp();
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
                 Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
             // the player's lieutenant is never poked (0.10): it speaks when spoken to; what became of its orders goes into the chat box
             if (ch.IsLieutenant) Lieutenant.Heard(triggers);
             if (ch.On && !ch.IsLieutenant)
-                ch.OnPoke(number, s.Hours, triggers, report, new
+                ch.OnPoke(number, s.Hours, triggers, report, stale: stale, meta: new
                 {
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
                     LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count,
                     History = History.ForAgent()
                 });
+            ms["files"] = (ms.TryGetValue("files", out double filesBefore) ? filesBefore : 0) + Took(filesBegan);
 
             Dictionary<string, int> sizes = Audit.Sizes(report, out int tokens);
             Diag.Count("pokes");

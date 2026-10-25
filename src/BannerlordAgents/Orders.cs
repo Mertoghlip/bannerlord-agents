@@ -53,6 +53,8 @@ namespace BannerlordAgents
             public int ToolId;
             public string Tool;
             public string ToolText;
+            /// <summary>The tool order's every part (ToolOrder.Signature), to keep it when the very same order comes again (0.12.0).</summary>
+            public string Signature;
             public double Since;
             public double ArrivedAt = -1;
             public int Reissued;
@@ -292,7 +294,7 @@ namespace BannerlordAgents
                 if (!live) return NotYours(lord);
                 int id = held.ToolId;
                 var settings = new Dictionary<string, double>(a.Settings, StringComparer.OrdinalIgnoreCase);
-                Background.Post("tool adjust", () => Runner.Adjust(id, settings, a));
+                Background.PostFirst("tool adjust", () => Runner.Adjust(id, settings, a));
                 status = "posted";
                 return null;
             }
@@ -315,6 +317,17 @@ namespace BannerlordAgents
                 return "valid: " + text + Notes(notes) + " (shadow mode: not carried out)";
             }
             if (!live) return NotYours(lord);
+            // the very same order again keeps the one already running (0.12.0, run 20261025-1417-C2: Beleg's attack was given four
+            // times while the first waited to start, and each new copy started the wait over)
+            string sig = o.Signature();
+            HandOrder same = Active.FirstOrDefault(x => x.Party == party && x.ToolId > 0 && x.Signature == sig);
+            if (same != null)
+            {
+                status = "applied";
+                Diag.Count("order:kept as it was");
+                Diag.Event("order", "kept", new { id = same.Id, source, poke = a.Poke, lord = lord.StringId, tool = def.Name });
+                return name + " already holds this very order (" + same.ToolText + "): it goes on as it was, not started again";
+            }
             string shown = StartTool(lord, party, def, o, realm, words);
             status = "applied";
             return text + Notes(notes) + shown;
@@ -504,7 +517,7 @@ namespace BannerlordAgents
             var h = new HandOrder
             {
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = o.Source, Poke = o.Poke, Verb = "hold",
-                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours
+                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours, Signature = o.Signature()
             };
             object before = State(party, null);
             ReplaceHeld(party, h.Id);
@@ -518,7 +531,7 @@ namespace BannerlordAgents
             Diag.Count("order source:" + h.Source);
             Note(h, "issued", h.ToolText, new { words, before, tool = def.Name, at = o.At, target = o.Target, lords = o.Lords, settings = o.Settings, then = o.Then?.ToString(Newtonsoft.Json.Formatting.None) });
             Say("Order: " + h.ToolText + ".", Colors.Cyan);
-            Background.Post("tool start", () => Runner.Start(id, o));
+            Background.PostFirst("tool start", () => Runner.Start(id, o));
             string shown = null;
             try { shown = PacLink.OnOrderStarted(h.Id, lord, party, h.Source, realm, def.Name, o.At, o.Target); }
             catch (Exception e) { Diag.Error("showing an order in Party AI Controls", e); }
@@ -536,7 +549,7 @@ namespace BannerlordAgents
                 if (old.ToolId > 0)
                 {
                     int tid = old.ToolId;
-                    Background.Post("tool replaced", () => Runner.Ended(tid, "replaced by a new order"));
+                    Background.PostFirst("tool replaced", () => Runner.Ended(tid, "replaced by a new order"));
                 }
             }
         }
@@ -1618,7 +1631,7 @@ namespace BannerlordAgents
             {
                 int tid = o.ToolId;
                 string w = why;
-                Background.Post("tool ended", () => Runner.Ended(tid, w));
+                Background.PostFirst("tool ended", () => Runner.Ended(tid, w));
             }
             // the lieutenant's order comes off Party AI Controls' panel, and his next order there starts (PacLink)
             try { PacLink.OnOrderEnded(o.Party, o.Id, key); }

@@ -109,6 +109,7 @@ namespace BannerlordAgents.Runs
             o["days"] = new JsonArray(r.Days.Select(d => (JsonNode)new JsonObject
             {
                 ["day"] = Int(d, "day"), ["date"] = Str(d, "date"), ["real_seconds"] = Dbl(d, "real_seconds"),
+                ["helper"] = d["helper"]?.DeepClone(),
                 ["realms"] = new JsonArray(r.Realms.Select(id => Realm(d, id)).Where(x => x != null).Select(x => (JsonNode)new JsonObject
                 {
                     ["realm"] = Str(x, "realm"), ["holdings"] = Lng(x, "towns") + Lng(x, "castles"), ["villages"] = Lng(x, "villages"), ["men"] = Lng(x, "men"), ["strength"] = Lng(x, "strength"),
@@ -172,6 +173,18 @@ namespace BannerlordAgents.Runs
                 ["fog_leaks"] = r.Events.Count(e => Str(e, "k") == "fog" && Str(e, "w") == "leak"),
                 ["sight_agreement"] = total > 0 ? Math.Round(100.0 * agree / total, 2) : (double?)null
             };
+            // the background helper (0.12.0): the most it was behind the game with the lords' orders and with the agents' reports
+            List<JsonObject> helper = r.Days.Select(d => d["helper"] as JsonObject).Where(h => h != null).ToList();
+            if (helper.Count > 0)
+            {
+                JsonObject worstOrders = helper.OrderByDescending(h => Dbl(h, "orders_behind_most")).First(), worstReports = helper.OrderByDescending(h => Dbl(h, "reports_behind_most")).First();
+                o["helper"] = new JsonObject
+                {
+                    ["orders_behind_most_hours"] = Dbl(worstOrders, "orders_behind_most"), ["orders_worst_day"] = r.Days.First(d => d["helper"] == (JsonNode)worstOrders)["day"]?.DeepClone(),
+                    ["reports_behind_most_hours"] = Dbl(worstReports, "reports_behind_most"), ["reports_worst_day"] = r.Days.First(d => d["helper"] == (JsonNode)worstReports)["day"]?.DeepClone(),
+                    ["hours_folded"] = helper.Sum(h => Lng(h, "hours_folded")), ["report_rounds"] = helper.Sum(h => Lng(h, "rounds"))
+                };
+            }
             return o;
         }
 
@@ -242,6 +255,10 @@ namespace BannerlordAgents.Runs
             JsonNode hl = j["health"];
             sb.AppendLine("- errors " + Str(hl, "errors") + ", freezes (outside loading) " + Str(hl, "freezes") + ", fog leaks " + Str(hl, "fog_leaks") + ", sight check agreement " + (Str(hl, "sight_agreement") ?? "-") + "%");
             sb.AppendLine("- alarms: " + string.Join(", ", (hl["alarms"] as JsonObject).Select(kv => kv.Key + " " + kv.Value)));
+            if (j["helper"] is JsonObject hp)
+                sb.AppendLine("- the background helper: the lords' orders at most " + Str(hp, "orders_behind_most_hours") + " in-game hours behind the game (day " + Str(hp, "orders_worst_day") + "), the agents' reports at most "
+                              + Str(hp, "reports_behind_most_hours") + " (day " + Str(hp, "reports_worst_day") + "); " + Str(hp, "hours_folded") + " hours folded into a later report over " + Str(hp, "report_rounds") + " report rounds");
+            else sb.AppendLine("- the background helper: not recorded (runs before 0.12.0)");
             foreach (JsonNode n in j["notes"] as JsonArray) sb.AppendLine("- your note, day " + Str(n, "day") + ": " + Str(n, "text"));
             return sb.ToString();
         }

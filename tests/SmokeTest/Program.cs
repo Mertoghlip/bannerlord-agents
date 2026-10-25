@@ -30,6 +30,7 @@ namespace SmokeTest
         {
             if (args.Length > 0 && args[0] == "--spin") return Spin();
             if (args.Length > 1 && args[0] == "--library") return ExportLibrary(args[1]);
+            if (args.Length > 0 && args[0] == "--perf") return Perf(args);
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-smoketest");
             try { Directory.Delete(root, true); } catch { /* first run */ }
             Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
@@ -109,7 +110,12 @@ namespace SmokeTest
             Check(pokesLog.Contains("#58 |") && pokesLog.Contains("#60 |") && !pokesLog.Contains("#1 |"), "poke numbers carry on after a load (#58 to #60, not #1 again)");
             string pokeTxt = Read(Path.Combine(agentDir, "poke.txt"));
             Check(pokeTxt.StartsWith("POKE #60") && pokeTxt.Contains("SHADOW") && pokeTxt.Contains("WHY YOU ARE ASKED NOW"), "poke.txt carries the number, the mode and the reasons");
-            Check(File.Exists(Path.Combine(agentDir, "report.txt")), "report.txt is refreshed every hour");
+            // 0.12.0: a realm agent's situation report and council briefing are written when its war room asks, as a council sits
+            Check(!File.Exists(Path.Combine(agentDir, "report.txt")) && !File.Exists(Path.Combine(agentDir, "council.txt")), "a realm agent's report.txt and council.txt are not rewritten every hour any more");
+            AskBriefing(AgentChannel.For("orcs"), agentDir);
+            Check(ReadIf(Path.Combine(agentDir, "report.txt")).Contains("(written for your council of war") && ReadIf(Path.Combine(agentDir, "council.txt")).StartsWith("COUNCIL BRIEFING")
+                  && !Directory.GetFiles(Path.Combine(agentDir, "orders"), Channel.BriefingRequest + "*").Any(),
+                  "the war room's request brings the situation report and the briefing at once, and the request is taken away");
             Check(!Directory.GetFiles(agentDir, "*.new").Any(), "whole files are swapped in, with nothing half-written left behind");
 
             // answers: an old file is set aside; an answer to a poke from before the load is refused; a fresh one is
@@ -219,6 +225,7 @@ namespace SmokeTest
             Check(Read(Path.Combine(dir, "chronicle_orcs.jsonl")).Contains("Theoden"), "but the campaign's own file keeps every line, for the saves whose history it is (0.9.1)");
 
             TwoRealmsTests(root, agentDir);
+            HelperTests(root, agentDir);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");
@@ -502,8 +509,9 @@ namespace SmokeTest
                   && council.Contains("Influence of your other clans") && council.Contains("Mauhur [lord_ldr]: 300") && council.Contains("clan Mauhur's clan, influence 120")
                   && council.Contains("MUSTER AT EACH OF YOUR CASTLES AND TOWNS") && council.Contains("YOUR CAPTURED LORDS (3, by where they are held)"),
                   "the council's briefing: the purse, every lord, the muster at each castle and town, the captured lords");
-            Files.FlushAll();
-            Check(File.Exists(Path.Combine(agentDir, "council.txt")) && Read(Path.Combine(agentDir, "council.txt")).StartsWith("COUNCIL BRIEFING"), "the briefing is written into the channel every hour");
+            File.Delete(Path.Combine(agentDir, "council.txt"));
+            AskBriefing(AgentChannel.For("orcs"), agentDir);
+            Check(File.Exists(Path.Combine(agentDir, "council.txt")) && Read(Path.Combine(agentDir, "council.txt")).StartsWith("COUNCIL BRIEFING"), "the briefing is written into the channel when the war room asks");
             Runner.Ended(905, "test over");
             Runner.Ended(907, "test over");
         }
@@ -1500,8 +1508,10 @@ namespace SmokeTest
             Check(dgPoke.Contains("Haldir") && !orcPoke.Contains("Haldir") && orcPoke.Contains("Elessar") && !dgPoke.Contains("Elessar"),
                   "each realm's report holds only what its own eyes saw");
             Check(File.Exists(Path.Combine(Brain.Dir, "pokes_orcs.jsonl")) && File.Exists(Path.Combine(Brain.Dir, "pokes_dg.jsonl")), "each realm's pokes are kept in its own file");
-            Check(File.Exists(Path.Combine(orcDir, "report.txt")) && File.Exists(Path.Combine(dgDir, "report.txt")) && File.Exists(Path.Combine(dgDir, "council.txt")),
-                  "each realm gets its own hourly report and council briefing");
+            AskBriefing(AgentChannel.For("orcs"), orcDir);
+            AskBriefing(AgentChannel.For("dg"), dgDir);
+            Check(ReadIf(Path.Combine(orcDir, "report.txt")).Contains("MISTY MOUNTAIN ORCS") && ReadIf(Path.Combine(dgDir, "report.txt")).Contains("DOL GULDUR") && File.Exists(Path.Combine(dgDir, "council.txt")),
+                  "each realm's war room gets its own situation report and council briefing when it asks");
 
             // an answer in Dol Guldur's folder is Dol Guldur's: its receipt is written there, not in the orcs' folder
             AgentChannel.Receipt(new AgentChannel.AgentOrder { File = "a.json", Index = 1, Poke = 1, Lord = "lord_khamul", Do = "hold", Realm = "dg", Received = DateTime.Now },
@@ -1750,10 +1760,305 @@ namespace SmokeTest
             string dgPoke = ReadIf(Path.Combine(dg, "channel", "poke.txt")), orcPoke = ReadIf(Path.Combine(orcs, "warroom", "poke.txt"));
             Check(dgPoke.Contains("Your orders right now: LIVE") && !dgPoke.Contains("SHADOW") && orcPoke.Contains("Your orders right now: SHADOW"),
                   "each agent's poke names its own mode, not the first agent's");
-            Check(ReadIf(Path.Combine(dg, "channel", "report.txt")).Contains("Your orders right now: LIVE"), "and so does its hourly report");
+            AskBriefing(Agents.Of("dg").Channel, Path.Combine(dg, "channel"));
+            Check(ReadIf(Path.Combine(dg, "channel", "report.txt")).Contains("Your orders right now: LIVE"), "and so does its situation report");
 
             Settings.AgentFolders.Clear();
             Settings.AgentDir = agentDir;
+        }
+
+        /// <summary>The war room's request for a council's briefing (0.12.0), served at once as the bridge's helper would.</summary>
+        private static void AskBriefing(Channel ch, string channelDir)
+        {
+            string orders = Path.Combine(channelDir, "orders");
+            Directory.CreateDirectory(orders);
+            File.WriteAllText(Path.Combine(orders, Channel.BriefingRequest + "-test.json"), "{\"asked\":\"now\"}");
+            ch.Scan();
+            Files.FlushAll();
+        }
+
+        /// <summary>
+        /// Version 0.12.0, the helper on time (run 20261025-1417-C2: up to 142 s behind the game, every order a game day late): the
+        /// urgent lane runs before regular work; hours the reports fell behind on are folded into one poke with all they saw; an
+        /// old picture says so; the same order given again is told apart from a changed one; look-ups are written only when changed;
+        /// an hour saved for the speed test reads back whole; and the speed test runs on saved hours.
+        /// </summary>
+        private static void HelperTests(string root, string agentDir)
+        {
+            // the urgent lane: an order's job runs before regular work queued ahead of it
+            var order = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            var gate = new ManualResetEventSlim(false);
+            Background.Post("test: slow", () => { gate.Wait(2000); order.Enqueue("slow"); });
+            Background.Post("test: regular", () => order.Enqueue("regular"));
+            Background.PostFirst("test: urgent", () => order.Enqueue("urgent"));
+            gate.Set();
+            for (int i = 0; i < 150 && order.Count < 3; i++) Thread.Sleep(20);
+            List<string> ran = order.ToList();
+            Check(ran.Count == 3 && ran.IndexOf("urgent") < ran.IndexOf("regular"), "the helper's urgent lane runs before regular work queued ahead of it (" + string.Join(", ", ran) + ")");
+
+            // three hours whose reports fell behind: one poke, with the lord seen in the first hour only and the raid of the second
+            string hDir = Path.Combine(root, "helper-agent");
+            Settings.AgentDir = hDir;
+            Brain.Reset("smoketest-helper", double.NaN, "orcs", null);
+            string pokes = Path.Combine(Brain.Dir, "pokes_orcs.jsonl");
+            Brain.OnHour(ToolWorld(20000));
+            Files.FlushAll();
+            int before = ReadIf(pokes).Split('\n').Count(l => l.Trim().Length > 0);
+            var comer = new PartyRow { Id = "p_comer", Leader = "lord_comer", Name = "Elladan", Faction = "player_k", Kind = "lord", Men = 600, Strength = 900, Speed = 4, X = 108, Y = 100, Doing = "GoToSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            Brain.Decide(ToolWorld(20001, comer));
+            Brain.OnNotice(new Notice { Id = 9001, Hours = 20001.5, Kind = "raided", Text = "Orc Village is being raided by Elladan (Kingdom of Arnor and Gondor).", Factions = { "orcs" }, Party = "p_comer" });
+            Brain.Decide(ToolWorld(20002));
+            Brain.Decide(ToolWorld(20003));
+            for (Action a = Brain.NextStep(); a != null; a = Brain.NextStep()) a();
+            Files.FlushAll();
+            List<string> fresh = ReadIf(pokes).Split('\n').Where(l => l.Trim().Length > 0).Skip(before).ToList();
+            Check(fresh.Count == 1 && fresh[0].Contains("\"enemy_in_view\"") && fresh[0].Contains("\"raided\"") && fresh[0].Contains("\"hours\":20003"),
+                  "hours folded into one report: one poke, for the newest hour, with what each hour saw and the ruler's notice (" + fresh.Count + " pokes)");
+            Check(Brain.NextStep() == null, "and nothing is left to report once the newest hour is");
+
+            // a picture the game has moved on from says how old it is
+            Background.PostHour(20010, () => { });
+            Brain.OnNotice(new Notice { Id = 9002, Hours = 20004, Kind = "raided", Text = "Orc Village is being raided again.", Factions = { "orcs" }, Party = "p_comer" });
+            Brain.OnHour(ToolWorld(20004));
+            Files.FlushAll();
+            Check(ReadIf(Path.Combine(hDir, "poke.txt")).Contains("This picture is 6 in-game hours old"), "a poke from an hour the game has moved on from says how old its picture is");
+            Background.PostHour(double.NaN, () => { });
+
+            // the same order given again, told apart from a changed one
+            ToolOrder Engage() { var o = new ToolOrder { Tool = "engage", Lord = "lord_b", Party = "p_b", Target = "p_n" }; o.Settings["caution"] = 0; return o; }
+            ToolOrder warier = Engage();
+            warier.Settings["caution"] = 1.3;
+            ToolOrder chained = Engage();
+            chained.Then = JObject.Parse("{\"do\":\"garrison\",\"at\":\"castle_M3\"}");
+            Check(Engage().Signature() == Engage().Signature() && Engage().Signature() != warier.Signature() && Engage().Signature() != chained.Signature(),
+                  "the very same order is told apart from one with a changed setting or next order, so the same one given again keeps the running one");
+
+            // look-ups written only when changed
+            string lf = Path.Combine(root, "lookup-test.txt");
+            bool w1 = Files.WriteIfChanged(lf, "a"), w2 = Files.WriteIfChanged(lf, "a"), w3 = Files.WriteIfChanged(lf, "b");
+            File.Delete(lf);
+            bool w4 = Files.WriteIfChanged(lf, "b");
+            Check(w1 && !w2 && w3 && w4 && File.ReadAllText(lf) == "b", "a look-up file is written only when its text changed, and again when it went missing");
+
+            // an hour saved for the speed test reads back whole
+            string pf = Path.Combine(root, "perf-test");
+            Snapshot Seated(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                s.LoadId = "test";
+                s.Seats = new List<SeatSight> { new SeatSight { Realm = "orcs", Sees = s.WatchedSees, Inspected = s.InspectedByWatched, Hostile = s.HostileToWatched } };
+                s.Roads = new RoadBook();
+                s.Roads.Set("castle_orc", "castle_two", 41.5f);
+                return s;
+            }
+            PerfRecord.Save(Seated(20021, comer), pf);
+            PerfRecord.Save(Seated(20020, comer), pf);
+            List<Snapshot> back = PerfRecord.Load(pf);
+            Check(back.Count == 2 && back[0].Hours == 20020 && back[0].PartyById.ContainsKey("p_comer") && back[0].PartyById["p_comer"].Men == 600 && back[0].SettlementById.ContainsKey("castle_orc")
+                  && back[0].Roads != null && back[0].Roads.TryGet("castle_two", "castle_orc", out float rd) && rd == 41.5f && back[0].Seats.Count == 1 && back[0].Seats[0].Sees.ContainsKey("p_comer"),
+                  "an hour saved for the speed test reads back whole: its parties, holdings, road table and each realm's sight, oldest first");
+
+            // the speed test on those hours: each hour's orders and look, and its report round, timed by part
+            PerfResult pr = PerfReplay(back, Path.Combine(root, "perf-run"), placed: false, quiet: true);
+            Check(pr.Hours == 2 && pr.Orders.Count == 2 && pr.Reports.Count == 2 && pr.Parts.ContainsKey("view") && pr.Parts.ContainsKey("look"),
+                  "the speed test runs the helper's hour on saved hours and times each part (" + string.Join(", ", pr.Parts.Keys) + ")");
+
+            Settings.AgentFolders.Clear();
+            Settings.AgentDir = agentDir;
+        }
+
+        internal sealed class PerfResult
+        {
+            public int Hours;
+            public readonly List<double> Orders = new List<double>(), Reports = new List<double>();
+            public readonly Dictionary<string, double> Parts = new Dictionary<string, double>();
+            public long LookupsWritten, LookupsUnchanged;
+        }
+
+        /// <summary>
+        /// "SmokeTest --perf [folder] [--budget ms]" (0.12.0): the helper's whole hour, its orders and look then its report round,
+        /// on hours the game saved (PerfRecord, perf\snapshots\...) or, with no folder, on a big made-up world, with one watching
+        /// agent per watched realm as in a run, on the helper's own cores and priority. Fails when the slowest hours (the 95th in
+        /// a hundred) take more than the budget (1,000 ms: a third of a game hour at the runs' speed).
+        /// </summary>
+        private static int Perf(string[] args)
+        {
+            string folder = args.Length > 1 && !args[1].StartsWith("--") ? args[1] : null;
+            double budget = 1000;
+            int bi = Array.IndexOf(args, "--budget");
+            if (bi > 0 && bi + 1 < args.Length) double.TryParse(args[bi + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out budget);
+            string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-perf");
+            try { Directory.Delete(root, true); } catch { /* first run */ }
+            Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
+            return PerfMain(root, folder, budget);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int PerfMain(string root, string folder, double budget)
+        {
+            Diag.StartLaunch();
+            Cpu.Detect();
+            List<Snapshot> hours = folder != null ? PerfRecord.Load(folder) : BigWorld(24);
+            if (hours.Count == 0) { Console.WriteLine("No saved hours in " + folder); return 1; }
+            Console.WriteLine("SPEED TEST of the helper's hour: " + hours.Count + " hours " + (folder != null ? "saved in " + folder : "of a big made-up world")
+                              + ", " + hours[0].Parties.Count + " parties, " + hours[0].Settlements.Count + " holdings, " + Math.Max(1, hours[0].Seats.Count) + " watched realms; on " + Cpu.Description);
+            PerfResult r = PerfReplay(hours, Path.Combine(root, "agents"), placed: true, quiet: false);
+            List<double> total = r.Orders.Zip(r.Reports, (a, b) => a + b).OrderBy(x => x).ToList();
+            double p95 = total[(int)Math.Min(total.Count - 1, Math.Ceiling(total.Count * 0.95) - 1)];
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            Console.WriteLine("each hour's orders and look: median " + Median(r.Orders).ToString("0.0", inv) + " ms, most " + r.Orders.Max().ToString("0.0", inv)
+                              + " ms; report round: median " + Median(r.Reports).ToString("0.0", inv) + " ms, most " + r.Reports.Max().ToString("0.0", inv) + " ms");
+            Console.WriteLine("the whole hour: median " + Median(total).ToString("0.0", inv) + " ms, 95th of a hundred " + p95.ToString("0.0", inv) + " ms, most " + total.Max().ToString("0.0", inv) + " ms; budget " + budget.ToString("0", inv) + " ms");
+            Console.WriteLine("by part, over all hours: " + string.Join("; ", r.Parts.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value.ToString("0", inv) + " ms")));
+            Console.WriteLine("look-up files written " + r.LookupsWritten + ", left alone unchanged " + r.LookupsUnchanged);
+            bool ok = p95 <= budget;
+            Console.WriteLine(ok ? "WITHIN BUDGET" : "OVER BUDGET");
+            Diag.EndLaunch("the speed test ended");
+            return ok ? 0 : 1;
+        }
+
+        private static double Median(List<double> xs) { List<double> s = xs.OrderBy(x => x).ToList(); return s.Count == 0 ? 0 : s[s.Count / 2]; }
+
+        /// <summary>Runs the hours through the helper's two parts with a watching agent per watched realm (placed: on the helper's cores and priority).</summary>
+        private static PerfResult PerfReplay(List<Snapshot> hours, string agentsRoot, bool placed, bool quiet)
+        {
+            Settings.Notify = false;
+            Settings.Dashboard = true;
+            Settings.PerfRecordHours = 0;
+            Live.CampaignRunning = true;
+            List<string> realms = hours[0].Seats.Count > 0 ? hours[0].Seats.Select(x => x.Realm).ToList() : new List<string> { hours[0].Watched };
+            Settings.AgentFolders.Clear();
+            foreach (string realm in realms)
+            {
+                string f = Path.Combine(agentsRoot, realm);
+                Directory.CreateDirectory(f);
+                File.WriteAllText(Path.Combine(f, "agent.txt"), "realm = " + realm + "\nmode = shadow\nlords = all\nchannel = warroom\n");
+                Settings.AgentFolders.Add(f);
+            }
+            Brain.Reset(hours[0].Campaign ?? "perf", double.NaN, Agents.Configured(), null);
+            var r = new PerfResult();
+            long written0 = Diag.CountOf("files:look-ups written"), unchanged0 = Diag.CountOf("files:look-ups unchanged");
+            void Work()
+            {
+                if (placed) Cpu.MakeCurrentThreadBackground();
+                foreach (Snapshot s in hours)
+                {
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    if (placed) Cpu.SetCurrentThreadUrgent(true);
+                    Brain.Decide(s);
+                    if (placed) Cpu.SetCurrentThreadUrgent(false);
+                    long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    for (Action a = Brain.NextStep(); a != null; a = Brain.NextStep()) a();
+                    Files.FlushAll();
+                    long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    double orders = (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency, reports = (t2 - t1) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    r.Hours++;
+                    r.Orders.Add(orders);
+                    r.Reports.Add(reports);
+                    foreach (KeyValuePair<string, double> kv in Brain.LastOrdersMs.Concat(Brain.LastRoundMs))
+                        r.Parts[kv.Key] = (r.Parts.TryGetValue(kv.Key, out double p) ? p : 0) + kv.Value;
+                    if (!quiet) Console.WriteLine("  " + Text.When(s.Hours) + ": orders and look " + orders.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+                                                  + " ms, report round " + reports.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " ms");
+                }
+            }
+            if (placed)
+            {
+                var th = new Thread(Work) { IsBackground = true, Name = "speed test (as the helper)" };
+                th.Start();
+                th.Join();
+            }
+            else Work();
+            r.LookupsWritten = Diag.CountOf("files:look-ups written") - written0;
+            r.LookupsUnchanged = Diag.CountOf("files:look-ups unchanged") - unchanged0;
+            return r;
+        }
+
+        /// <summary>A big made-up world for the speed test with no saved hours: nine realms, three of them watched, 828 holdings, about 3,400 parties moving a little each hour.</summary>
+        private static List<Snapshot> BigWorld(int count)
+        {
+            var rnd = new Random(42);
+            string[] realms = { "orcs", "dg", "kingdom", "rohan", "dunland", "rhun", "harad", "gundabad", "elves" };
+            string[] watched = { "orcs", "dg", "kingdom" };
+            var war = new Dictionary<string, string[]>
+            {
+                ["orcs"] = new[] { "kingdom", "rohan", "elves" }, ["dg"] = new[] { "kingdom", "elves", "rohan" }, ["kingdom"] = new[] { "orcs", "dg", "dunland", "gundabad", "rhun" },
+                ["rohan"] = new[] { "orcs", "dg", "dunland" }, ["dunland"] = new[] { "kingdom", "rohan" }, ["rhun"] = new[] { "kingdom" }, ["harad"] = new string[0],
+                ["gundabad"] = new[] { "kingdom", "elves" }, ["elves"] = new[] { "orcs", "dg", "gundabad" }
+            };
+            var centre = new Dictionary<string, float[]>();
+            for (int i = 0; i < realms.Length; i++) centre[realms[i]] = new[] { 170f + 330 * (i % 3), 170f + 330 * (i / 3) };
+            float Near(float c) => c + (float)(rnd.NextDouble() * 300 - 150);
+            var holdings = new List<SettlementRow>();
+            foreach (string realm in realms)
+                for (int k = 0; k < 92; k++)
+                {
+                    string kind = k < 6 ? "town" : k < 26 ? "castle" : "village";
+                    float x = Near(centre[realm][0]), y = Near(centre[realm][1]);
+                    holdings.Add(new SettlementRow
+                    {
+                        Id = kind + "_" + realm + "_" + k, Name = realm + " " + kind + " " + k, Kind = kind, Faction = realm, X = x, Y = y, Gx = x, Gy = y + 1,
+                        Garrison = kind == "village" ? 0 : 300, GarrisonStrength = kind == "village" ? 0 : 450, Militia = 100, WallLevel = kind == "village" ? 0 : 1 + k % 3,
+                        VillageState = kind == "village" ? "Normal" : null, Bound = kind == "village" ? "castle_" + realm + "_" + (6 + k % 20) : null
+                    });
+                }
+            var start = new List<PartyRow>();
+            foreach (string realm in realms)
+            {
+                int lords = realm == "kingdom" ? 76 : realm == "orcs" ? 58 : realm == "dg" ? 48 : 110;
+                for (int k = 0; k < lords; k++)
+                    start.Add(new PartyRow { Id = "p_" + realm + "_" + k, Leader = "lord_" + realm + "_" + k, Name = realm + " lord " + k, Faction = realm, Kind = "lord", Men = 100 + rnd.Next(600), SizeLimit = 800,
+                                             Strength = 200 + rnd.Next(1200), Speed = 3 + (float)rnd.NextDouble() * 2, FoodDays = 10, X = Near(centre[realm][0]), Y = Near(centre[realm][1]), Doing = k % 3 == 0 ? "PatrolAroundPoint" : "Hold", Spottable = true });
+                for (int k = 0; k < 66; k++)
+                    start.Add(new PartyRow { Id = "car_" + realm + "_" + k, Name = "Caravan " + k, Faction = realm, Kind = "caravan", Men = 30, Strength = 40, Speed = 4, X = Near(centre[realm][0]), Y = Near(centre[realm][1]), Doing = "GoToSettlement", Spottable = true });
+                for (int k = 0; k < 90; k++)
+                    start.Add(new PartyRow { Id = "vil_" + realm + "_" + k, Name = "Villagers " + k, Faction = realm, Kind = "villager", Men = 20, Strength = 15, Speed = 3, X = Near(centre[realm][0]), Y = Near(centre[realm][1]), Doing = "GoToSettlement", Spottable = true });
+            }
+            for (int k = 0; k < 700; k++)
+                start.Add(new PartyRow { Id = "band_" + k, Name = "Looters " + k, Faction = "looters", Kind = "bandit", Men = 15 + rnd.Next(60), Strength = 20 + rnd.Next(80), Speed = 4, X = (float)rnd.NextDouble() * 1000, Y = (float)rnd.NextDouble() * 1000, Doing = "Hold", Spottable = true });
+            var list = new List<Snapshot>();
+            for (int h = 0; h < count; h++)
+            {
+                var s = new Snapshot { Campaign = "perf", LoadId = "big", Hours = 30000 + h, Date = "Autumn 1, 1087", PlayerFaction = "kingdom", Watched = "orcs" };
+                foreach (string realm in realms)
+                {
+                    s.Factions[realm] = new FactionRow { Id = realm, Name = realm, Ruler = "lord_" + realm + "_0", Lords = 110 };
+                    s.Factions[realm].AtWar.AddRange(war[realm]);
+                    s.FactionNames[realm] = realm;
+                }
+                s.FactionNames["looters"] = "Looters";
+                foreach (SettlementRow x in holdings) Add(s, x);
+                foreach (PartyRow p in start)
+                {
+                    float dx = (float)(rnd.NextDouble() * 4 - 2), dy = (float)(rnd.NextDouble() * 4 - 2);
+                    Add(s, new PartyRow { Id = p.Id, Leader = p.Leader, Name = p.Name, Faction = p.Faction, Kind = p.Kind, Men = p.Men, SizeLimit = p.SizeLimit, Strength = p.Strength, Speed = p.Speed,
+                                          FoodDays = p.FoodDays, X = p.X + dx * h * 0.25f, Y = p.Y + dy * h * 0.25f, Doing = p.Doing, Spottable = true });
+                }
+                foreach (string realm in watched)
+                {
+                    var hostile = new HashSet<string>(war[realm]);
+                    var eyes = s.Parties.Where(p => p.Faction == realm && p.Kind == "lord").Select(p => new[] { p.X, p.Y })
+                                        .Concat(s.Settlements.Where(x => x.Faction == realm && x.Kind != "village").Select(x => new[] { x.X, x.Y })).ToList();
+                    var sees = new Dictionary<string, Sighting>();
+                    var inspected = new HashSet<string>();
+                    foreach (PartyRow p in s.Parties)
+                    {
+                        if (p.Faction == realm) continue;
+                        foreach (float[] e in eyes)
+                        {
+                            float d = (float)Math.Sqrt((p.X - e[0]) * (p.X - e[0]) + (p.Y - e[1]) * (p.Y - e[1]));
+                            if (d <= 40) { sees[p.Id] = new Sighting { Party = p.Id, By = realm, Distance = d }; break; }
+                        }
+                    }
+                    foreach (SettlementRow x in s.Settlements)
+                        if (x.Faction == realm || eyes.Any(e => Math.Abs(x.X - e[0]) < 40 && Math.Abs(x.Y - e[1]) < 40)) inspected.Add(x.Id);
+                    s.Seats.Add(new SeatSight { Realm = realm, Sees = sees, Inspected = inspected, Hostile = hostile });
+                }
+                s.WatchedSees = s.Seats[0].Sees;
+                s.InspectedByWatched = s.Seats[0].Inspected;
+                s.HostileToWatched = s.Seats[0].Hostile;
+                list.Add(s);
+            }
+            return list;
         }
 
         private static Snapshot ToolWorld(double hours, params PartyRow[] parties)

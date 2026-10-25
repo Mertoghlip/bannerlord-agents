@@ -301,7 +301,9 @@ namespace BannerlordAgents
                 catch (Exception e) { Diag.Error("the realms' votes", e); }
                 LordWatch.Refresh();
                 Recorder.PollVassalOrders();
-                Background.Post("hourly view and pokes", () => Brain.OnHour(snap));
+                // the hour's order rules go first; its reports follow on the reporting lane, newest hour only (0.12.0)
+                Background.Publisher = Brain.NextStep;
+                Background.PostHour(snap.Hours, () => Brain.Decide(snap));
                 try { Run.OnHour(snap); }
                 catch (Exception e) { Diag.Error("the test run's hour", e); }
                 if (++_hoursThisSession == 6 && Reasons.Active && Diag.CountOf("ai:thoughts") == 0 && LordWatch.Count > 0)

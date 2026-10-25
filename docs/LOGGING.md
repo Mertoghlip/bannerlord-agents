@@ -147,12 +147,45 @@ These are the only two pieces that hook into the game's code instead of reading 
 ## What runs where
 
 - **The game's own thread** only copies numbers and stamps heartbeats. It never writes a file, and it never waits on the disk.
-- **Everything else** runs on two low-priority threads that Windows keeps on the efficiency cores:
-  - the background helper: all writing, checks and formatting;
-  - the watchdog.
+- **Everything else** runs on two threads that Windows keeps on the efficiency cores:
+  - the background helper: all writing, checks and formatting, at low priority in efficiency mode, except its urgent work (orders and each hour's order rules), which runs at normal priority out of efficiency mode (since 0.12.0, [below](#the-helper-on-time-since-0120));
+  - the watchdog, at low priority.
 - **The freeze probe** is a separate program, started only when the game freezes.
 - **The graphics card** is not used: logging is small branching work, and moving it there and back would cost more than doing it. The card's spare room is kept for the small model in November.
 - **Folder watching:** the agent's orders folder is watched by Windows (no polling); a slow check every 10 seconds is the safety net.
+
+## The helper on time (since 0.12.0)
+
+**Why:** in run 20261025-1417-C2 the background helper fell up to 142 s behind the game, about two game days at the runs' speed (an in-game hour every 3.3 s). Every order, every shelter and every poke landed that late: Beleg's four attack orders each waited about 49 s to start, and the agent's order to go inside Lasgalor landed after Thrurg had caught Aragorn. Mert: "The helper needs to be able to be on time, every time."
+- **What was found:**
+  - Last night's run had already needed a median 2.85 s of the helper's time per game hour when it was backed up, against the 3.3 s the game gives; that run was behind for 26% of its hours. This one needed 3.47 s and was behind for 86%.
+  - A probe of the helper caught it writing look-up files in 10 samples out of 10. 216 to 339 files per agent were rewritten for each poke, each written beside the old one and swapped in. That took 1,179 ms for 216 files, against 75 ms written plainly. A swap refused while the virus scanner held the file slept 15 ms, up to four times a file.
+  - Every hour, for every agent, it also rebuilt the realm's view twice and wrote the situation report and the council briefing, which only a council reads.
+  - New orders started in the same first-come queue as all of that.
+  - The backlog alarm (up to 2,051 of 4,096 jobs waiting, 174 times) was not marked serious, so no watch saw it.
+- **The three lanes** (Background; one thread still does everything, so nothing it keeps is shared between threads):
+  - **urgent:** the agents' answers, an order's start, change and end, and each hour's order rules and look (`Brain.Decide`: the tools, what each realm sees, the trails, the recruitment log). Always first, at normal priority and out of Windows' efficiency mode, on the same efficiency cores;
+  - **regular:** logs and records, first come first served, as before;
+  - **reporting:** the views, pokes, look-ups and the dashboard's picture of the newest hour only (`Brain.NextStep`), one step at a time and only when nothing else waits: the snapshot checks, then each watched realm, then the dashboard. Hours that come while a round runs are folded into the next. What each hour saw waits in the realm's memory (`Memory.Waiting`), with its ruler's notices, so the next poke carries all of it.
+- **Less work:**
+  - look-up files are written in place, and only when their text changed (`Files.WriteIfChanged`);
+  - swaps no longer sleep: one more try at once, then the file is written in place;
+  - one view per realm and hour serves both its poke and the dashboard;
+  - a realm agent's situation report and council briefing are written when its war room asks (`Brain.Briefing`, [WARROOM.md](WARROOM.md#the-council-of-war));
+  - the very same order given again keeps the one already running ("already holds this very order ... not started again").
+- **What it records:**
+  - **Each hour's `hour` event:** `behind_hours` (how far the order rules were behind the game), `orders_ms` (calibrate, orders, look, recruitment) and `orders_total_ms`.
+  - **Each report round's `reports` event:** `folded` hours, `behind_hours`, `ms` by part (checks, sight, view, facts, report, fog check, look-ups, look-up files, files, dashboard), and look-up files written and left unchanged.
+  - **`agent` / `briefing written`** with its ms.
+  - **summary.txt:** each hour's orders and look, the report rounds and the briefings (median, average, largest), hours folded, look-up files written and left unchanged, swaps tried again, files written in place, and orders kept as they were.
+  - **The run's day lines:** `helper` (the most the orders and the reports were behind that day, report rounds, hours folded); the run report has the worst of the run.
+  - **A poke folded from hours the game has moved on from** (two hours or more) says so in its head.
+- **Alarms, all serious:**
+  - `helper_late`: the order rules 2 or more in-game hours behind the game while the clock runs;
+  - `helper_reports_late`: the reports 6 or more;
+  - `helper_backlog`: over 1,000 jobs waiting;
+  - `helper_dropped`: work dropped because the queue was full.
+- **The speed test** (`tests\SmokeTest\bin\Release\SmokeTest.exe --perf [folder] [--budget ms]`): the helper's whole hour, its orders and look and then its report round, with a watching agent per watched realm, on the helper's own cores and priority, timed by part. It fails when the 95th slowest hour in a hundred takes more than the budget (1,000 ms, a third of a game hour). With no folder it uses a big made-up world (nine realms, three watched, 828 holdings, about 2,950 parties): on 0.12.0, median 62 ms an hour, 95th 67 ms, most 615 ms (the first look). The real test is hours the game saved: each launch saves `perf_record_hours` (12) consecutive hourly copies of the world from `perf_record_after` (24) in-game hours into a load, to `perf\snapshots\<campaign>-<load>\` (`PerfRecord`, on the regular lane).
 
 ## Detail levels
 

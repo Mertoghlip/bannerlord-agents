@@ -165,6 +165,7 @@ namespace BannerlordAgents.WarRoom
 
             RouteToolTests(root, c);
             LieutenantTests(root);
+            BriefingTests(c, Path.Combine(root, "logs"));
 
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
@@ -306,6 +307,44 @@ namespace BannerlordAgents.WarRoom
         }
 
         private static Program.Trigger T(string kind, string text) => new Program.Trigger { Kind = kind, Text = text };
+
+        /// <summary>
+        /// Version 0.12.0: a council asks the game for its briefing (a request in the orders folder), and has it when the game writes
+        /// council.txt; with no game to answer, it gives up after its wait, says so and takes the request back. A stand-in thread
+        /// plays the bridge.
+        /// </summary>
+        private static void BriefingTests(Config c, string logs)
+        {
+            var room = new Room(c, logs);
+            string orders = Path.Combine(c.ChannelDir, "orders");
+            TimeSpan wait = Room.BriefingWait;
+            Room.BriefingWait = TimeSpan.FromSeconds(5);
+            Task<bool> bridge = Task.Run(() =>
+            {
+                for (int i = 0; i < 100; i++)
+                {
+                    string[] asked = Directory.Exists(orders) ? Directory.GetFiles(orders, Room.BriefingRequest + "*.json") : new string[0];
+                    if (asked.Length > 0)
+                    {
+                        File.Delete(asked[0]);
+                        File.WriteAllText(Path.Combine(c.ChannelDir, "report.txt"), "SITUATION AT Summer 9, 1087, 09:00");
+                        File.WriteAllText(Path.Combine(c.ChannelDir, "council.txt"), "COUNCIL BRIEFING FOR THE ORCS");
+                        return true;
+                    }
+                    Thread.Sleep(30);
+                }
+                return false;
+            });
+            bool came = room.RequestBriefing(out string note1);
+            Check(came && bridge.Result && note1 == null && !Directory.GetFiles(orders, Room.BriefingRequest + "*").Any(),
+                  "a council asks the game for its briefing in the orders folder, and has it when the game writes it");
+            Thread.Sleep(100);
+            Room.BriefingWait = TimeSpan.FromMilliseconds(400);
+            bool none = room.RequestBriefing(out string note2);
+            Check(!none && note2 != null && note2.Contains("did not write a fresh briefing") && !Directory.GetFiles(orders, Room.BriefingRequest + "*").Any(),
+                  "with no game to answer, it gives up after its wait, says so, and takes its request back: " + note2);
+            Room.BriefingWait = wait;
+        }
 
         private static void Check(bool ok, string what)
         {

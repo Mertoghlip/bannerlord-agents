@@ -260,14 +260,27 @@ namespace BannerlordAgents
                 Diag.Alarm("helper_stuck", "Our background helper has been on one piece of work for " + (int)Seconds(js) + " s (" + (Background.CurrentJob ?? "?")
                                            + "). Logs, pokes and reports wait until it finishes.", true, null, true);
             }
-            if (Background.Queued > 2000) Diag.Alarm("helper_backlog", "Our background helper has " + Background.Queued + " pieces of work waiting.");
+            // since 0.12.0 the helper must be on time: an order's rules no later than the next in-game hour, the reports within a few
+            // (run 20261025-1417-C2: 142 s behind the game, every order and shelter a game day late, and these were only counted)
+            Background.NoteBehind();
+            double orders = Background.OrdersBehind, reports = Background.ReportsBehind;
+            if (ClockRunning && orders >= OrdersLateHours)
+                Diag.Alarm("helper_late", "Our background helper is " + Math.Round(orders) + " in-game hours behind the game with the lords' orders (busy with: "
+                                          + (Background.CurrentJob ?? "nothing") + "). Orders and shelters land late.", true, new { orders_behind = Math.Round(orders, 1), reports_behind = Math.Round(reports, 1) });
+            else if (ClockRunning && reports >= ReportsLateHours)
+                Diag.Alarm("helper_reports_late", "Our background helper is " + Math.Round(reports) + " in-game hours behind the game with the agents' reports (busy with: "
+                                                  + (Background.CurrentJob ?? "nothing") + "). The agents see an old picture.", true, new { orders_behind = Math.Round(orders, 1), reports_behind = Math.Round(reports, 1) });
+            if (Background.Queued > 1000) Diag.Alarm("helper_backlog", "Our background helper has " + Background.Queued + " pieces of work waiting.", true);
             long dropped = Interlocked.Read(ref Background.Dropped);
             if (dropped > _lastDropped)
             {
-                Diag.Alarm("helper_dropped", (dropped - _lastDropped) + " pieces of background work were dropped because the queue was full.");
+                Diag.Alarm("helper_dropped", (dropped - _lastDropped) + " pieces of background work were dropped because the queue was full.", true);
                 _lastDropped = dropped;
             }
         }
+
+        /// <summary>How far behind the game the helper may fall, in in-game hours, before it is a serious alarm (0.12.0).</summary>
+        private const double OrdersLateHours = 2, ReportsLateHours = 6;
 
         /// <summary>Runs the freeze probe (at most five times a launch). Also used by agents.probe.</summary>
         public static string RunProbe(string why)

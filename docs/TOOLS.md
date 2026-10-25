@@ -276,7 +276,7 @@ The defend tool, shortened:
   - one per enemy the realm knows of: where it is or was last seen, its strength, the lords who can reach it soonest.
 
   Travel hours are rough: straight-line distance over the lord's speed. The calling range is checked the same way, so it is a little generous: the game measures along the way.
-- **The council's briefing** (`council.txt`, since 0.6, every in-game hour): the whole realm at once for the war room's council of war ([WARROOM.md](WARROOM.md#the-council-of-war)): the purse (the ruler's clan's gold and influence, every other clan's influence), every lord with ranks, food, speed, what it is doing, whose judgment it follows and its clan's influence, the muster at each castle and town, and the captured lords.
+- **The council's briefing** (`council.txt`, since 0.6; every in-game hour until 0.12.0, since then when the war room asks as a council sits, from the newest hour, [WARROOM.md](WARROOM.md#the-council-of-war)): the whole realm at once for the war room's council of war ([WARROOM.md](WARROOM.md#the-council-of-war)): the purse (the ruler's clan's gold and influence, every other clan's influence), every lord with ranks, food, speed, what it is doing, whose judgment it follows and its clan's influence, the muster at each castle and town, and the captured lords.
 - **Its memory** (since 0.5, [MEMORY.md](MEMORY.md)): the story so far, its own notes, and its chronicle, of which the report's last section shows the last two days. A tool's call-backs and endings go into the chronicle, so the story remembers which orders worked.
 
 ## Testing by hand

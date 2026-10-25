@@ -91,6 +91,12 @@ namespace BannerlordAgents
         /// <summary>How many loads of a campaign keep their hourly pictures (for rewinding on the dashboard).</summary>
         public static int KeepLoads = 12;
         /// <summary>
+        /// The helper's speed test (0.12.0, PerfRecord): how many hourly copies of the world each launch saves, from how many
+        /// in-game hours into a load, for "SmokeTest --perf". 0 hours: none.
+        /// </summary>
+        public static int PerfRecordHours = 12;
+        public static int PerfRecordAfter = 24;
+        /// <summary>
         /// Test runs (0.11, docs/RUNS.md): the save a run starts from, how many in-game days it lasts, the rival realms it keeps
         /// numbers for, and the kingdom whose commander is tested (empty: the player's realm when the run's save is loaded).
         /// </summary>
@@ -156,6 +162,14 @@ namespace BannerlordAgents
                             if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int kl) && kl >= 1) KeepLoads = kl;
                             else Unknown.Add(line);
                             break;
+                        case "perf_record_hours":
+                            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ph) && ph >= 0) PerfRecordHours = ph;
+                            else Unknown.Add(line);
+                            break;
+                        case "perf_record_after":
+                            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int pa) && pa >= 0) PerfRecordAfter = pa;
+                            else Unknown.Add(line);
+                            break;
                         case "run_save": if (value.Length > 0) RunSave = value; break;
                         case "run_days":
                             if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int rd) && rd >= 1) RunDays = rd;
@@ -168,7 +182,7 @@ namespace BannerlordAgents
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
                 foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause",
-                                             "run_save", "run_days", "run_rivals", "run_kingdom" })
+                                             "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -207,6 +221,9 @@ namespace BannerlordAgents
                 sb.AppendLine("keep_loads = " + KeepLoads.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("# the lieutenant (docs/LIEUTENANT.md): the game's clock stops while you type to it in the campaign map's chat box");
                 sb.AppendLine("lieutenant_pause = " + (LieutenantPause ? "on" : "off"));
+                sb.AppendLine("# the helper's speed test (docs/LOGGING.md): hourly copies of the world each launch saves for SmokeTest --perf, from this many in-game hours into a load (0 hours: none)");
+                sb.AppendLine("perf_record_hours = " + PerfRecordHours.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("perf_record_after = " + PerfRecordAfter.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("# test runs (docs/RUNS.md): the save a run starts from, its length in in-game days, the rival realms it keeps numbers for, and the kingdom tested (empty: yours at the save)");
                 sb.AppendLine("run_save = " + RunSave);
                 sb.AppendLine("run_days = " + RunDays.ToString(CultureInfo.InvariantCulture));

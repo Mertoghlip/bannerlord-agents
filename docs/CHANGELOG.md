@@ -1335,3 +1335,48 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Installed with `scripts\deploy.ps1` at 13:39, the game closed: `BannerlordAgents.dll` sha256 `3F9E86946DBC7C2F…` (the new defend text found inside it), `WarRoom.dll` `FEDA8570E3A216DA…`. War rooms and dashboard stopped for the build and started again 13:40 (each reports "War room 0.11.6.0"). Each agent's `tools.txt` is rewritten by the game at the next campaign load.
 - **Not yet seen in a game:** all of 0.11.6.
 - **For comparisons:** every run so far had the old defend and the old wording.
+
+### 14:18–14:43 · Run C2 on 0.11.6, stopped on day 16 (does not count)
+- `20261025-1417-C2`: the kingdom's agent live against the game's AI, the orcs' and Dol Guldur's agents watching; the first run with principle 18. Game closed on day 16 by Mert after the lords kept failing to follow their orders.
+- **Why:** the bridge's background helper fell further behind the game all run: 31 s at 14:25, 83 s at 14:38, 142 s at the end. Every order, shelter and poke landed late. Beleg's four attack orders on Naglur each waited about 49 s to start, and each new copy replaced the one waiting. Thalion's shelter in Lasgalor was decided 14 game hours before Thrurg came and landed about a day later. Aragorn's landed half an hour after Thrurg caught him.
+- Record and what principle 18 showed: docs/RUNS.md, "Run C2 on 0.11.6 (Oct 25)". To be played again from TEST START on 0.12.0.
+
+### 14:45–15:05 · Why the helper fell behind (a read of the stopped run)
+- **Mert, Oct 25:** "Why did beleg not end up engaging naglur even though he was ordered to?", then "Why is this issue where lords fail to follow orders happening continuously?", and "The helper needs to be able to be on time, every time. Please go in and diagnose the issue and come back to me with a fix plan."
+- **Found** (the session's trace, the freeze probe on the helper's thread, the run's perf log, a scratch benchmark):
+  - The game gave an in-game hour every 3.3 s in both runs. The helper, when backed up, needed a median 2.85 s per hour last night (behind 26% of hours, worst 41 s) and 3.47 s today (behind 86%, worst 142 s).
+  - All 10 probe samples were in file calls inside `Channel.WriteLookups`. 216 to 339 look-up files per agent were rewritten for each poke, each written beside the old one and swapped in: 1,179 ms for 216 files in the benchmark, against 75 ms written plainly. A swap refused while the virus scanner held the new file slept 15 ms, up to four times.
+  - Every hour, for every agent: the realm's view built twice, the situation report and the council briefing rewritten (only a council reads them), the dashboard's map picture (about 400 KB compressed).
+  - New orders' starts went into the same first-come queue (`Orders.StartTool` posted `Runner.Start` behind every hourly job).
+  - The queue reached 2,051 of its 4,096 jobs; past that, work is dropped. The `helper_backlog` alarm (174 times) was not serious, so the 10-minute watch never showed it.
+- Mert, on the plan: "SOunds good. Implement all fixes." (kept on the efficiency cores, urgent work out of efficiency mode; no virus-scanner exclusion).
+
+### 15:16 · Version 0.12.0: the helper on time · commit (this entry's) (installed 15:16)
+- **Three lanes on the helper's one thread** (`Background`; one thread, so nothing it keeps is shared):
+  - **urgent** (`PostFirst`): the agents' answers, every order's start, change and end (`Orders`), and each hour's order rules and look (`Background.PostHour` → `Brain.Decide`: the tools, what each realm sees, the trails, the recruitment log). It runs at normal priority, out of Windows' efficiency mode, on the same efficiency cores (`Cpu.SetCurrentThreadUrgent`);
+  - **regular** (`Post`): logs and records, as before;
+  - **reporting** (`Background.Publisher = Brain.NextStep`): the newest hour only, one step at a time when nothing else waits. The steps are the snapshot checks, each watched realm (`PublishSeat`), then the dashboard. Hours that came meanwhile are folded in: what each hour saw waits in `Memory.Waiting` with the ruler's notices.
+  - `Brain.OnHour` (the smoke test's) is the two run back to back.
+- **Less work:**
+  - Look-up files are written in place, and only when changed (`Files.WriteIfChanged`).
+  - A refused swap is tried again at once, then written in place, with no sleeps.
+  - One view per realm and hour serves its poke and the dashboard.
+  - A realm agent's `report.txt` and `council.txt` are written when its war room asks (`orders\council-request-*.json`; `Brain.Briefing` on the urgent lane). The war room (`Room.RequestBriefing`) waits up to 20 s, else uses the last one; "is the game running" is now `poke.json` within ten minutes. The lieutenant's hourly report stays.
+- **The very same order given again keeps the running one** (`ToolOrder.Signature`, `HandOrder.Signature`): the receipt says "already holds this very order ... it goes on as it was, not started again". Gather orders are not compared.
+- **A poke from an hour the game has moved on from by 2 or more** says "This picture is N in-game hours old ..." in its head.
+- **Measured and alarmed:**
+  - The `hour` event: `behind_hours`, `orders_ms` by part. A `reports` event per round: folded hours, behind, ms by part, look-up files written and unchanged. `agent` / `briefing written`.
+  - summary.txt: the helper's hour, rounds and briefings; files written, unchanged, swaps tried again, written in place; orders kept as they were.
+  - The run's day lines: `helper` (most behind with orders and reports, rounds, hours folded); the run report: the worst of the run.
+  - Serious alarms: `helper_late` (order rules 2+ in-game hours behind), `helper_reports_late` (6+), `helper_backlog` (over 1,000 jobs), `helper_dropped`.
+- **The speed test** (`SmokeTest --perf [folder] [--budget ms]`): the helper's whole hour with a watching agent per realm, on its cores, timed by part; it fails when the 95th slowest hour in a hundred exceeds the budget (1,000 ms).
+  - On the big made-up world (9 realms, 3 watched, 828 holdings, 2,946 parties): median 62.5 ms an hour, 95th 67.3 ms, most 614.8 ms (the first look).
+  - Each launch now saves 12 real hourly copies of the world from 24 in-game hours into a load (`PerfRecord`; settings `perf_record_hours`, `perf_record_after`) to `perf\snapshots\`, for the real test.
+- Versions: `BannerlordAgents.csproj`, `BannerlordAgents.WarRoom.csproj` and `module/SubModule.xml` set to 0.12.0.
+- **Checks:**
+  - Build with no warnings. Smoke test passed in full (255 checks). Changed: the situation report and the briefing come on request (4 checks rewritten). New: the urgent lane runs before regular work queued ahead of it; three hours folded into one poke with what each saw and the ruler's notice; the stale-picture line; an order told apart from a changed one; look-ups written only when changed; a saved hour read back whole; the speed test on saved hours.
+  - War room self-test passed (67; 2 new: the briefing asked for and had; no game, given up and the request taken back). Dashboard self-test passed (27).
+  - 688 game references, 0 missing.
+  - Installed with `scripts\deploy.ps1` at 15:16, the game closed: `BannerlordAgents.dll` sha256 `C4F9E163D081B2D9…`, `WarRoom.dll` `7B839AEE539D1697…`. War rooms and dashboard stopped for the build and started again 15:17 ("War room 0.12.0.0").
+- **Not yet seen in a game:** all of 0.12.0. Before the next counted run: a short soak in the game at run speed with all three agents (no helper alarms, its `behind_hours` under 1 throughout), then `SmokeTest --perf` on the hours it saved.
+- **For comparisons:** every run before this had the helper falling behind at busy times; their orders and pokes were late by up to its delay. The runs' day lines now record it.
