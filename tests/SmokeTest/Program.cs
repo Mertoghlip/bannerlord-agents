@@ -669,6 +669,33 @@ namespace SmokeTest
             much.WatchedSees.Remove("p_shadow");
             double recent = Runner.WorldFor(later).ThreatStrength("castle_orc", 20), stale = Runner.WorldFor(much).ThreatStrength("castle_orc", 20);
             Check(recent == 2000 && stale == 0, "an army out of sight counts where it was last seen for six hours (" + recent + " two hours on, " + stale + " eight hours on)");
+
+            // 0.11.6, Bagbûrz (run 20261024-2110-C2): a slow army told to defend from inside (stay_inside 1, caution 0, radius 8)
+            // patrolled outside the walls and went in only once the stronger host was within 8, and was caught 5 from the gate.
+            // Now it goes in as soon as a force too strong for it is due before it could ride back from its patrol's edge...
+            PartyRow Slow(string id) { PartyRow r = Lord(id, 107, 1000, 1100, 1200); r.Speed = 1.2f; return r; }
+            ToolOrder Hold(int id, string party)
+            {
+                var o = new ToolOrder { Tool = "defend", Lord = "lord_" + party, LordName = party, Party = party, At = "castle_orc" };
+                o.Settings["radius"] = 8; o.Settings["shelter_at"] = 1; o.Settings["strike_below"] = 0.7; o.Settings["floor"] = 0; o.Settings["stay_inside"] = 1; o.Settings["caution"] = 0;
+                return o;
+            }
+            var anvil = Slow("p_anvil");
+            var hostNear = new PartyRow { Id = "p_hn", Leader = "lord_hn", Name = "Lorgath", Faction = "player_k", Kind = "lord", Men = 1300, Strength = 1700, Speed = 1.2f, X = 91, Y = 100, Doing = "BesiegeSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            Brain.OnHour(ToolWorld(5060, anvil, hostNear));
+            moves.Clear();
+            Runner.Start(942, Hold(942, "p_anvil"));
+            bool wentIn = moves.Any(m => m.Key == 942 && m.Value.Verb == "enter" && m.Value.Place == "castle_orc");
+            Runner.Ended(942, "test over");
+            // ... and not when the host is still far off (due long after it could get back), so it keeps patrolling
+            var anvil2 = Slow("p_anvil2");
+            var hostFar = new PartyRow { Id = "p_hf", Leader = "lord_hf", Name = "Lorgath", Faction = "player_k", Kind = "lord", Men = 1300, Strength = 1700, Speed = 1.2f, X = 60, Y = 100, Doing = "BesiegeSettlement", TargetSettlement = "castle_orc", Spottable = true };
+            Brain.OnHour(ToolWorld(5061, anvil2, hostFar));
+            moves.Clear();
+            Runner.Start(943, Hold(943, "p_anvil2"));
+            bool stayedOut = !moves.Any(m => m.Key == 943 && m.Value.Verb == "enter") && moves.Any(m => m.Key == 943 && m.Value.Verb == "patrol");
+            Runner.Ended(943, "test over");
+            Check(wentIn && stayedOut, "defend with stay_inside 1 goes inside ahead of a stronger force due before it could ride back from its patrol, even with caution 0, and not while that force is far off");
         }
 
         /// <summary>
@@ -1101,6 +1128,8 @@ namespace SmokeTest
             string facts = Facts.ForPoke(Runner.WorldFor(s4), new List<Trigger> { new Trigger { Kind = "enemy_in_view", Party = "p_foe", Text = "Halbarad in view" } });
             Check(facts.Contains("If they fought in the field, by the game's battle rules") && facts.Contains("Ugluk alone (500 men) would beat it"),
                   "the facts give a fight with the enemy by the game's battle rules: " + facts.Replace("\n", " | "));
+            // 0.11.6: and what the loser keeps of what it brought
+            Check(System.Text.RegularExpressions.Regex.IsMatch(facts, @"still standing and (none|[\d,]+) of its [\d,]+ left"), "the fight in the facts says what the beaten enemy has left of its men");
         }
 
         /// <summary>

@@ -526,8 +526,12 @@ namespace BannerlordAgents
                 if (o.Winner == null) return head + " would still be fighting after 5 days";
                 bool win = o.Winner == "attackers";
                 string how = o.How == "rout" ? (win ? ", its morale breaking" : ", yours breaking") : o.How == "retreat" ? (win ? ", it retreating" : ", yours retreating") : "";
+                // what the loser keeps (0.11.6), and that a side which retreats gets away with its lords
+                int loserLeft = win ? o.DefendersLeft : o.AttackersLeft;
+                string rest = (loserLeft > 0 ? Text.N(loserLeft) : "none") + (win ? " of its " + Text.N(men) : " of your " + Text.N((int)mine.Men)) + " left"
+                              + (o.How == "retreat" ? (win ? " (it gets away with its lords)" : " (they get away)") : "");
                 return head + (win ? " would beat it" : " would lose to it") + how + " in " + GameBattle.HoursRange(runs) + ", " + Text.N(win ? o.AttackersLeft : o.DefendersLeft)
-                       + (win ? " of yours" : " of its men") + " still standing";
+                       + (win ? " of yours" : " of its men") + " still standing and " + rest;
             }
             var parts = new List<string>();
             string first = One(soonest.Take(1).ToList());

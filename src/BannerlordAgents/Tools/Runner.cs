@@ -670,6 +670,8 @@ namespace BannerlordAgents.Tools
                     case "ranks": return me != null && me.SizeLimit > 0 ? (double)me.Men / me.SizeLimit : 1.0;
                     case "wounded": return me != null && me.Men + me.Wounded > 0 ? (double)me.Wounded / (me.Men + me.Wounded) : 0.0;
                     case "food_days": return me != null && me.FoodDays >= 0 ? (double)me.FoodDays : (object)null;
+                    // map units an hour over a day, night counted, by the game's marching rules (0.11.6: defend's early shelter)
+                    case "pace": return me != null ? _w.PerHour(me) : (object)null;
                     case "hours_in_state": return _w.Hours - _t.StateSince;
                     case "hours_running": return _w.Hours - _t.Started;
                     case "in_army": return me?.ArmyLeader != null;

@@ -141,7 +141,7 @@ namespace BannerlordAgents.WarRoom
                 lines.Add("- A storm is one round an hour. The besiegers' blows grow only with the defenders' number: " + sA + " a round now; the defenders strike " + sD + " a round with the walls' worth "
                           + worth.ToString("0.0", CultureInfo.InvariantCulture) + " (once a ram is built; each further engine lowers it). At first the besiegers lose about " + Words.N(o.AttackerLossPerHour)
                           + " men an hour, the defenders about " + Words.N(o.DefenderLossPerHour) + ".");
-                lines.Add("- Run ahead: " + Outcome(o, "the besiegers", "the defenders", runs, "besiegers", "defenders") + ". Nobody can leave a battle once in it.");
+                lines.Add("- Run ahead: " + Outcome(o, runs, "the besiegers", "the defenders", "the besiegers'", "the defenders'", besiegers.Men, walls.Men) + ". Nobody can leave a battle once in it.");
                 // what a win would bring in (0.9.4): storming, the defenders who fall; defending, the besiegers who fall
                 if (weStorm && o.Winner == "attackers") lines.Add(TakingsLine(view, walls.Men - o.DefendersLeft));
                 else if (!weStorm && o.Winner == "defenders") lines.Add(TakingsLine(view, besiegers.Men - o.AttackersLeft));
@@ -158,7 +158,7 @@ namespace BannerlordAgents.WarRoom
                           + Words.N(enemy.Men * enemy.Power) + ", morale not known to you.");
                 lines.Add("- In the open: two rounds an hour, each side's blows growing with its own men: yours " + sA + " a round, theirs " + sD + ". At first you lose about "
                           + Words.N(o.AttackerLossPerHour) + " men an hour, they about " + Words.N(o.DefenderLossPerHour) + ".");
-                lines.Add("- Run ahead: " + Outcome(o, "you", "they", runs, "of yours", "of theirs") + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat (nothing is captured then).");
+                lines.Add("- Run ahead: " + Outcome(o, runs, "you", "they", "your", "their", mine.Men, enemy.Men) + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat.");
                 if (o.Winner == "attackers") lines.Add(TakingsLine(view, enemy.Men - o.DefendersLeft));
             }
             Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, ours = oursQ, theirs = theirsQ, place = atQ, lines });
@@ -181,12 +181,22 @@ namespace BannerlordAgents.WarRoom
                    + Words.N(prisoners) + " prisoners worth about " + Words.N(ransom) + " in ransom, into the winning lords' purses once sold (loot in a town, prisoners in a castle or town).";
         }
 
-        private static string Outcome(BattleOutcome o, string a, string d, BattleOutcome[] runs, string aOf, string dOf)
+        /// <summary>
+        /// The run's end in words: who wins, in how long, and what each side has left of what it brought (0.11.6: the losing
+        /// side's remnant too, so a win that leaves the enemy a third of his army reads as such; and that a side which retreats
+        /// gets away with its lords).
+        /// </summary>
+        private static string Outcome(BattleOutcome o, BattleOutcome[] runs, string a, string d, string aOf, string dOf, double aMen, double dMen)
         {
-            if (o.Winner == null) return "after 5 days it has not ended (" + Words.N(o.AttackersLeft) + " " + aOf + " and " + Words.N(o.DefendersLeft) + " " + dOf + " still standing)";
+            if (o.Winner == null) return "after 5 days it has not ended (about " + Words.N(o.AttackersLeft) + " of " + aOf + " " + Words.N(aMen) + " and " + Words.N(o.DefendersLeft) + " of " + dOf + " " + Words.N(dMen) + " still standing)";
             bool aWins = o.Winner == "attackers";
-            string how = o.How == "rout" ? (aWins ? d : a) + " break" : o.How == "retreat" ? (aWins ? d : a) + " retreat" : (aWins ? d : a) + " are all down";
-            return (aWins ? a : d) + " win, " + how + ", in " + GameBattle.HoursRange(runs) + ", with about " + Words.N(aWins ? o.AttackersLeft : o.DefendersLeft) + " " + (aWins ? aOf : dOf) + " still standing";
+            string loser = aWins ? d : a, loserOf = aWins ? dOf : aOf;
+            double loserLeft = aWins ? o.DefendersLeft : o.AttackersLeft, loserMen = aWins ? dMen : aMen;
+            string how = o.How == "rout" ? loser + " break with about " + Words.N(loserLeft) + " of " + loserOf + " " + Words.N(loserMen) + " left"
+                       : o.How == "retreat" ? loser + " retreat with about " + Words.N(loserLeft) + " of " + loserOf + " " + Words.N(loserMen) + " (a side that retreats gets away with its lords, and nothing is captured)"
+                       : "all " + Words.N(loserMen) + " of " + loserOf + " men are down";
+            return (aWins ? a : d) + " win in " + GameBattle.HoursRange(runs) + ", with about " + Words.N(aWins ? o.AttackersLeft : o.DefendersLeft) + " of " + (aWins ? aOf : dOf) + " "
+                   + Words.N(aWins ? aMen : dMen) + " still standing; " + how;
         }
 
         /// <summary>Lords the realm saw marching to the place (heading for it, with the hour they get there), joining their own side.</summary>

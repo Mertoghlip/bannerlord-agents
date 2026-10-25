@@ -333,9 +333,11 @@ namespace BannerlordAgents
                 string runAhead = c.Measured ? "Run ahead at those rates" : "Run ahead";
                 if (!double.IsNaN(c.EndsAt))
                     sb.Append(runAhead).Append(", the ").Append(c.Winner).Append(" win")
-                      .Append(c.How == "rout" ? " when the other side's morale breaks" : c.How == "retreat" ? " when the other side retreats (nothing is captured then)" : " when the other side is all down")
+                      .Append(c.How == "rout" ? " when the other side's morale breaks" : c.How == "retreat" ? " when the other side retreats (it gets away with its lords; nothing is captured)" : " when the other side is all down")
                       .Append(", in ").Append(hours).Append(" (").Append(Text.When(c.EndsAt)).Append(c.Measured ? "), " : " at middling morale), ")
-                      .Append(Text.N(c.Winner == "attackers" ? c.AttackersLeft : c.DefendersLeft)).Append(" of them still standing.");
+                      .Append(Text.N(c.Winner == "attackers" ? c.AttackersLeft : c.DefendersLeft)).Append(" of them still standing")
+                      // what the other side keeps (0.11.6)
+                      .Append((c.Winner == "attackers" ? c.DefendersLeft : c.AttackersLeft) > 0 ? " and about " + Text.N(c.Winner == "attackers" ? c.DefendersLeft : c.AttackersLeft) + " of the other side left." : ".");
                 else sb.Append(runAhead).Append(" five days, it has not ended (").Append(Text.N(c.AttackersLeft)).Append(" attackers, ").Append(Text.N(c.DefendersLeft)).Append(" defenders left).");
                 if (joiners.Count > 0)
                 {

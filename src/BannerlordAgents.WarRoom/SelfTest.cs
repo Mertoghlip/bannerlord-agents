@@ -242,6 +242,10 @@ namespace BannerlordAgents.WarRoom
             string o3 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"theirs\":[\"lord_sc\"]}");
             Check(o3 != null && o3.Contains("you win") && o3.Contains("What a win would bring in, by your realm's 4 won battles on record: about 30 of theirs fall, leaving about 600 in loot and 12 prisoners worth about 240 in ransom"),
                   "a field battle won says what the win would bring in, by the realm's own battles: " + o3?.Replace("\n", " | "));
+            // 0.11.6: the run's end says what each side has left of what it brought, the loser too
+            Check(o3 != null && System.Text.RegularExpressions.Regex.IsMatch(o3, @"you win in about [^;]*, with about [\d,]+ of your [\d,]+ still standing; (they (break|retreat) with about [\d,]+ of their [\d,]+|all [\d,]+ of their men are down)")
+                  && o1 != null && System.Text.RegularExpressions.Regex.IsMatch(o1, @"they win in about [^;]*, with about [\d,]+ of their [\d,]+ still standing; (you (break|retreat) with about [\d,]+ of your [\d,]+|all [\d,]+ of your men are down)"),
+                  "the run ahead says what the winner and the loser each have left of what they brought: " + o3?.Replace("\n", " | "));
             string o2 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"at\":\"castle_e\"}");
             Check(o2 != null && o2.StartsWith("BATTLE ODDS: Bolg [lord_bolg] storming Edoras [castle_e]") && System.Text.RegularExpressions.Regex.IsMatch(o2, @"preparations, about \d+ hours for 300 men")
                   && o2.Contains("grow only with the defenders' number") && o2.Contains("Run ahead:"),

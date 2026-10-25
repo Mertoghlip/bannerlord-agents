@@ -72,7 +72,7 @@ namespace BannerlordAgents.Tools
         /// <summary>Built-in names every tool can read.</summary>
         public static readonly HashSet<string> BuiltIns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "me", "strength", "men", "ranks", "wounded", "food_days", "hours_in_state", "hours_running", "in_army", "leads_army",
+            "me", "strength", "men", "ranks", "wounded", "food_days", "pace", "hours_in_state", "hours_running", "in_army", "leads_army",
             "army_lords", "army_coming", "army_complete", "army_joining", "in_settlement", "besieging", "in_battle", "at", "target", "caution", "danger_radius", "now"
         };
 
