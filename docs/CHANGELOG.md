@@ -1263,7 +1263,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - 60 days in 1 h 20 min; about $236 at list price; no errors, freezes, fog leaks or failed calls; one mark (cheat mode during setting up, expected).
 - The kingdom ended +1 town, ±0 castles, +4 villages, with 180 enemy lords taken; Dol Guldur's great army was destroyed at Lasgalor on day 40, at 17,565 of our men lost. Findings in docs/RUNS.md, "Run C2 replayed (Oct 24)".
 
-### 17:26 · Version 0.11.5: the council of war sits on time in a busy realm (built and installed 17:26)
+### 17:26 · Version 0.11.5: the council of war sits on time in a busy realm · commit e2f0ef6 (built and installed 17:26)
 - **Mert, Oct 24:** "Can you try to diagnose why the agent wasn't as aggressive in pressing its advantage after its large victory at lasgalor against dol guldur?" Then: "Yes, build and install the fix please."
 - **What was found** (the kingdom war room's log and calls in run C2):
   - The war room looked for a due council only when no poke was waiting (`Room.Run`). The kingdom's pokes came every few seconds against answers of 10 to 30 s, so its war room was idle 44 times in the run's 80 minutes; the two watching agents' war rooms, with fewer pokes, idled often.
