@@ -1274,3 +1274,9 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Versions: `BannerlordAgents.WarRoom.csproj`, `BannerlordAgents.csproj` and `module/SubModule.xml` set to 0.11.5 (the module's code is unchanged; the version marks the runs played with the fix).
 - **Checks:** build with no warnings; smoke test, war room self-test and dashboard self-test passed. The loop itself makes calls and has no self-test: the next run's councils, one at least every in-game day, will show it. `WarRoom.dll` sha256 `14436EDCE3DE5495…`, installed `BannerlordAgents.dll` `153EA7BA7FE78D83…`. War rooms and dashboard stopped for the build and started again 17:26 (each reports "War room 0.11.5.0").
 - **For comparisons:** C1 and both C2 runs were played with councils starved in the busiest realm; expect more councils, and more council tokens, from now on.
+
+### 21:06 · The game no longer stops when its window is not in front (outside the repository)
+- **Mert, Oct 24:** "The game currently pauses itself when I switch to a different tab. Can you disable that so I can do other stuff as a test runs?"
+- **The switch:** the game's own option "Stop game on focus lost" (Options, gameplay), saved as `StopGameOnFocusLost` in `Documents\Mount and Blade II Bannerlord\Configs\BannerlordConfig.txt` (the Documents folder is `OneDrive\Belgeler`). Set from `True` to `False`; that one line changed, nothing else in the file. Written with the game closed (it had last saved the file at 21:05, on exit).
+- Nothing of ours, the pack's or the agents' changed; the setting is global, for every campaign and arm, until switched back in Options.
+- **For comparisons:** only when the clock runs changes, not what happens in a game day; earlier runs stopped whenever another window was in front. docs/RUNS.md notes it beside the pop-ups.
