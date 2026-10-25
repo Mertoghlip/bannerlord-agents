@@ -63,6 +63,9 @@ namespace BannerlordAgents.Tools
         public double AsideSince;
         public int Steps;
         public string LastStep;
+        /// <summary>Where and since when the lord has stood still on his way (NaN: moving, or not on his way), and the stand already told.</summary>
+        public float StillX, StillY;
+        public double StillSince = double.NaN, StallTold = double.NaN;
     }
 
     /// <summary>
@@ -243,6 +246,7 @@ namespace BannerlordAgents.Tools
                     t.Pending = Resolve(t, live.Do, scope, w);
                     t.HasPending = true;
                 }
+                if (!t.Finished && t.Shelter == null && t.SupplyAt == null) Stalled(t, me, w, scope);
             }
             Issue(t, w);
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t));
@@ -301,6 +305,46 @@ namespace BannerlordAgents.Tools
             if (st.End != null) { Finish(t, st.End, w); return; }
             t.Pending = Resolve(t, st.Do, scope, w);
             t.HasPending = true;
+        }
+
+        /// <summary>A lord this many in-game hours standing still on his way to a place, still farther from it than StallNear, is stuck.</summary>
+        public const double StallHours = 6, StallNear = 6;
+
+        /// <summary>
+        /// A march that stopped short (0.12.1): a lord whose move takes him to a place (near, goto, enter, post, toward) and who
+        /// has not moved for StallHours while still far from it is called back once (run 20261025-1524-C2: three sieges stood
+        /// still outside their castles for up to 15 days and the agent was never told). The order is kept: the lord holds where
+        /// he is until the agent gives another.
+        /// </summary>
+        private static void Stalled(ToolInstance t, PartyRow me, World w, Scope scope)
+        {
+            string verb = t.HasCurrent ? t.Current.Verb : null;
+            bool toPlace = verb == "near" || verb == "goto" || verb == "enter";
+            bool toSpot = verb == "post" || verb == "toward";
+            double d = double.NaN;
+            if ((toPlace || toSpot) && !me.InBattle && me.InSettlement == null && me.Besieging == null)
+                d = toPlace ? w.Near(me.Id, t.Current.Place) : Math.Sqrt((me.X - t.Current.X) * (me.X - t.Current.X) + (me.Y - t.Current.Y) * (me.Y - t.Current.Y));
+            if (double.IsNaN(d) || d <= (toPlace ? StallNear : 3))
+            {
+                t.StillSince = double.NaN;
+                return;
+            }
+            double dx = me.X - t.StillX, dy = me.Y - t.StillY;
+            if (double.IsNaN(t.StillSince) || t.StillSince < t.StateSince || dx * dx + dy * dy > 1)
+            {
+                t.StillSince = w.Hours;
+                t.StillX = me.X;
+                t.StillY = me.Y;
+                return;
+            }
+            if (w.Hours - t.StillSince < StallHours || t.StallTold == t.StillSince) return;
+            t.StallTold = t.StillSince;
+            string about = t.Def.States.TryGetValue(t.State, out StateDef st) && st.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : t.Def.Name;
+            string where = toPlace ? w.Name(t.Current.Place) : Spots.Describe(w.S, t.Current.X, t.Current.Y);
+            Diag.Count("tool:stalled");
+            Diag.Event("tool", "stalled", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, state = t.State, move = t.Current.ToString(), distance = Math.Round(d, 1), hours = Math.Round(w.Hours - t.StillSince, 1) });
+            Poke(t, t.Order.LordName + " has not moved for " + Math.Round(w.Hours - t.StillSince) + " hours while " + about + ", still " + Text.D((float)d) + " from " + where
+                    + ": he may be stuck on the map. The order is kept and he holds where he is; give him another order if he should go elsewhere.", w);
         }
 
         /// <summary>The move a state makes, worked out now: a holding, a party, or the point a party was last seen at.</summary>
@@ -708,7 +752,7 @@ namespace BannerlordAgents.Tools
                     case "distance": return Nan(_w.Distance(Id(a[0]), Id(a[1])));
                     case "hours_to": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return double.IsNaN(d) ? null : (object)(d / _w.PerHour(me)); }
                     case "inside": return me != null && Id(a[0]) != null && me.InSettlement == Id(a[0]);
-                    case "within": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return !double.IsNaN(d) && d <= Expr.Number(a[1]); }
+                    case "within": { double d = _w.Near(_t.Order.Party, Id(a[0])); return !double.IsNaN(d) && d <= Expr.Number(a[1]); }
                     case "besieged": return _w.Besieged(H(a[0]));
                     case "siege_strength": return _w.SiegeStrength(H(a[0]));
                     case "inside_strength": return _w.InsideStrength(H(a[0]), me?.Id);

@@ -1449,7 +1449,8 @@ namespace BannerlordAgents
                     case "recruit":
                     case "tour": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
                     case "near":
-                        p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, 6f, 3f), p.NavigationCapability);
+                        // 2 to 5 from the gate: inside the tools' "within 6" with room to spare (0.12.1; it was 3 to 6, measured against the centre)
+                        p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, 5f, 2f), p.NavigationCapability);
                         break;
                     case "toward":
                         p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(new CampaignVec2(new Vec2(o.X, o.Y), true), nav, 2f), p.NavigationCapability);

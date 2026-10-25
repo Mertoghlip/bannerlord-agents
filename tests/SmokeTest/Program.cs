@@ -396,6 +396,7 @@ namespace SmokeTest
             WatchShadowTests(dir, moves, released);
             SiegeReliefTests(dir);
             SiegeControlTests(dir, moves, released, thens);
+            ArrivalTests(dir, moves);
             MoneyTests(dir, moves, released);
             FieldLessonsTests(dir, moves);
             GameClockTests(dir);
@@ -1048,6 +1049,87 @@ namespace SmokeTest
             string lib = Library.Text();
             Check(Library.Get("sell")?.At == "friendly_fort" && lib.Contains("never food, horses, pack animals, herds, books or banners") && lib.Contains("**wages** (cap, or target \"none\" or \"game\"; lords)"),
                   "the library has the sell order (loot only, never food or horses) and the wages order");
+        }
+
+        /// <summary>
+        /// Version 0.12.1 (run 20261025-1524-C2, Mert: "Why are oropherion and gorli simply outside caradhras but not besieging
+        /// it?"): a lord sent close to a holding stands by its gate, and the gate of a castle or town is about 3 from its centre
+        /// (Caradhras 3.3). The tools measured "within" from the centre, so Górli (4.3 from the gate, 6.8 from the centre) and
+        /// Oropherion (4.7 and 7.8) waited 15 days for "within 6" and never besieged, and a watch at a gate over 3 from the centre
+        /// never began. Now "within" a holding is the nearer of its centre and gate, and a lord standing still on his way, still
+        /// far from his place, is called back once.
+        /// </summary>
+        private static void ArrivalTests(string dir, List<KeyValuePair<int, Move>> moves)
+        {
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            // Fornost laid out as Caradhras: the gate 1.9 west and 2.7 north of the centre
+            Snapshot Gated(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                s.SettlementById["castle_men"].Gx = 168.1f;
+                s.SettlementById["castle_men"].Gy = 102.7f;
+                return s;
+            }
+            PartyRow Orc(string id, string name, float x, float y) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "orcs", Kind = "lord", Men = 500, SizeLimit = 600, Strength = 800, Speed = 3,
+                FoodDays = 40, X = x, Y = y, Doing = "Hold", Spottable = true
+            };
+            var gorli = Orc("gorl", "Gorli", 150, 106.8f);
+            Brain.OnHour(Gated(7400, gorli));
+            moves.Clear();
+            Runner.Start(1201, new ToolOrder { Tool = "besiege", Lord = "lord_gorl", LordName = "Gorli", Party = "p_gorl", At = "castle_men" });
+            Check(moves.Any(m => m.Key == 1201 && m.Value.Verb == "near" && m.Value.Place == "castle_men"), "besiege marches close to Fornost first");
+            gorli.X = 169.3f;   // where Gorli stood at Caradhras: 4.3 from the gate, 6.8 from the centre
+            Brain.OnHour(Gated(7401, gorli));
+            Check(moves.Any(m => m.Key == 1201 && m.Value.Verb == "besiege" && m.Value.Place == "castle_men"),
+                  "standing 4.3 from the gate (6.8 from the centre), it has arrived and besieges (it waited 15 days at Caradhras)");
+            Runner.Ended(1201, "test over");
+
+            var orop = Orc("orop", "Oropherion", 150, 107.4f);
+            Brain.OnHour(Gated(7402, orop));
+            Runner.Start(1202, new ToolOrder { Tool = "goto", Lord = "lord_orop", LordName = "Oropherion", Party = "p_orop", At = "castle_men" });
+            orop.X = 167.5f;   // 4.7 from the gate, 7.8 from the centre
+            Brain.OnHour(Gated(7403, orop));
+            Check(Notices().Contains("Oropherion reached Fornost."), "goto close to an enemy castle arrives 4.7 from its gate (7.8 from its centre)");
+            Runner.Ended(1202, "test over");
+
+            var scout = Orc("sct", "Ugluk", 150, 102.7f);
+            Brain.OnHour(Gated(7404, scout));
+            moves.Clear();
+            Runner.Start(1203, new ToolOrder { Tool = "watch", Lord = "lord_sct", LordName = "Ugluk", Party = "p_sct", At = "castle_men" });
+            Check(moves.Any(m => m.Key == 1203 && m.Value.Verb == "post" && Math.Abs(m.Value.X - 168.1f) < 0.01f), "a watch at a castle posts at its gate");
+            scout.X = 168.1f;
+            Brain.OnHour(Gated(7405, scout));
+            Check(Notices().Contains("Ugluk has taken up the watch at Fornost"), "standing at a gate 3.3 from the centre, the watch begins");
+            Runner.Ended(1203, "test over");
+
+            // a march that stops short: told once after 6 hours standing still, far from the place; the order is kept
+            string Stuck() => System.Text.RegularExpressions.Regex.Matches(Notices(), "Lugdush has not moved for").Count.ToString();
+            var lug = Orc("lug", "Lugdush", 120, 100);
+            Brain.OnHour(Gated(7410, lug));
+            Runner.Start(1204, new ToolOrder { Tool = "goto", Lord = "lord_lug", LordName = "Lugdush", Party = "p_lug", At = "castle_men" });
+            for (int h = 7411; h <= 7416; h++) Brain.OnHour(Gated(h, lug));
+            Check(Stuck() == "0", "five hours standing still is not yet a stall");
+            Brain.OnHour(Gated(7417, lug));
+            Check(Stuck() == "1" && Notices().Contains("Lugdush has not moved for 6 hours while going close to Fornost, still 48.2 from Fornost: he may be stuck on the map"),
+                  "a lord standing still for 6 hours, 48 from where he goes, is called back (" + Stuck() + ")");
+            for (int h = 7418; h <= 7421; h++) Brain.OnHour(Gated(h, lug));
+            Check(Stuck() == "1" && Runner.ForParty("p_lug") != null, "once: the same stand is not told again, and the order is kept");
+            lug.X = 130;
+            for (int h = 7422; h <= 7424; h++) Brain.OnHour(Gated(h, lug));
+            Check(Stuck() == "1", "moving on clears it (3 hours still since: not yet)");
+            Runner.Ended(1204, "test over");
+
+            // a lord held up by a battle on his way is not stuck
+            var fighter = Orc("ftr", "Mauhur", 120, 100);
+            fighter.InBattle = true;
+            Brain.OnHour(Gated(7430, fighter));
+            Runner.Start(1205, new ToolOrder { Tool = "goto", Lord = "lord_ftr", LordName = "Mauhur", Party = "p_ftr", At = "castle_men" });
+            for (int h = 7431; h <= 7440; h++) Brain.OnHour(Gated(h, fighter));
+            Check(!Notices().Contains("Mauhur has not moved for"), "ten hours in a battle on the way is not a stall");
+            Runner.Ended(1205, "test over");
+            moves.Clear();
         }
 
         private static void SiegeControlTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released, List<KeyValuePair<int, JObject>> thens)

@@ -507,6 +507,40 @@ namespace BannerlordAgents
             return any;
         }
 
+        /// <summary>
+        /// Party AI Controls' own refill switched off for every lord it has settings for, and in its defaults for new ones (0.12.1;
+        /// run 20261025-1524-C2: after the battle with Naglur on day 14 it sent Aragorn to fill his ranks and held him there to the
+        /// run's end, and the kingdom's agent could not command him. Mert: "Switch it off at setup, and make sure it is off for
+        /// everyone else as well."). Only settings that exist are changed. How many lords had it on; defaults: it was on there.
+        /// </summary>
+        public static int AutoRecruitOff(out bool defaults)
+        {
+            defaults = false;
+            if (!Resolve()) return 0;
+            int n = 0;
+            try
+            {
+                if (_table.GetValue(_mgr) is IDictionary d)
+                    foreach (DictionaryEntry e in d)
+                    {
+                        if (e.Value == null || !(Prop(e.Value, "AutoRecruitment") is bool on) || !on) continue;
+                        SetProp(e.Value, "AutoRecruitment", false);
+                        n++;
+                        Diag.Event("pac", "auto-recruit off", new { lord = (e.Key as Hero)?.StringId });
+                    }
+                foreach (FieldInfo f in new[] { _defaultsClan, _defaultsKingdom })
+                {
+                    object s = f?.GetValue(_mgr);
+                    if (s == null || !(Prop(s, "AutoRecruitment") is bool on) || !on) continue;
+                    SetProp(s, "AutoRecruitment", false);
+                    defaults = true;
+                    Diag.Event("pac", "auto-recruit off", new { defaults = f.Name });
+                }
+            }
+            catch (Exception e) { Diag.Error("switching off Party AI Controls' auto-recruit", e); }
+            return n;
+        }
+
         // ---------- who gave it (the recorder, the runs) ----------
 
         /// <summary>Is this Party AI Controls order (PacReader's "Kind|target id") the lieutenant's?</summary>

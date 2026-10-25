@@ -28,6 +28,8 @@ namespace BannerlordAgents
     /// - you become him through the switch mod's own switch (PlayerSelectionSwitch.SwitchActions.SwitchPlayer, by name);
     /// - your old character's party, which that switch holds where it stands (the game's AI off, a Party AI Controls order to stay),
     ///   is let go to the game's AI, so your kingdom's agent can command it too;
+    /// - Party AI Controls' auto-recruit is switched off for every lord it has settings for, and in its defaults (0.12.1: it held
+    ///   Aragorn on a refill from day 14 to the end of run 20261025-1524-C2, where the agent could not command him);
     /// - the wanderer gets gold and grain, and goes into the town; you then choose to wait there and set the clock running.
     /// Nothing guards against pop-ups for now (Mert: "if something does end up blocking us, we'll respond after"). Game's thread.
     /// </summary>
@@ -74,7 +76,8 @@ namespace BannerlordAgents
                        + "Next quietest: " + Listing(picks.Skip(1).Take(4)) + ".\n"
                        + "It would: release " + (held.Count == 0 ? "no lord (none holds a Party AI Controls order)" : held.Count + " lords' Party AI Controls orders (" + string.Join(", ", held.Take(8).Select(Names.Hero)) + (held.Count > 8 ? ", ..." : "") + ")")
                        + "; take " + Names.Hero(pick.Hero) + " into your clan as a companion and make you him (the switch mod's own switch); let "
-                       + Names.Hero(Hero.MainHero) + "'s party go to the game's AI for your kingdom's agent to command; give " + Text.N(Gold) + " denars and " + Grain + " grain; and take him into " + Names.Settlement(pick.Town) + ".\n"
+                       + Names.Hero(Hero.MainHero) + "'s party go to the game's AI for your kingdom's agent to command; switch off Party AI Controls' auto-recruit for every lord; give "
+                       + Text.N(Gold) + " denars and " + Grain + " grain; and take him into " + Names.Settlement(pick.Town) + ".\n"
                        + "Type agents.run playerless go" + (name.Length > 0 ? " " + name : "") + " to do it, with the game paused.";
 
             if (Mission.Current != null) return "Leave the battle or scene first.";
@@ -111,6 +114,11 @@ namespace BannerlordAgents
                 if (oldParty != null && oldParty.IsActive) oldParty.Ai.SetDoNotMakeNewDecisions(false);
                 done.Add(Names.Hero(old) + "'s party is led by the game's AI now, for your kingdom's agent to command");
             }
+
+            // 4b. Party AI Controls' own refill off for every lord, so only the agent sends them to recruit (0.12.1)
+            int refillOff = PacLink.AutoRecruitOff(out bool defaultsOff);
+            if (refillOff > 0 || defaultsOff)
+                done.Add("switched off Party AI Controls' auto-recruit for " + refillOff + (refillOff == 1 ? " lord" : " lords") + (defaultsOff ? " and for new parties" : ""));
 
             // 5. gold and food; 6. into the town
             GiveGoldAction.ApplyBetweenCharacters(null, w, Gold, true);

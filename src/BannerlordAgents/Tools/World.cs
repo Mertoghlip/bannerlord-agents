@@ -79,6 +79,21 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
+        /// How near something is to a place (0.12.1): to a holding, the nearer of its centre and its gate, since a lord sent
+        /// close to it stands by its gate. On a mountain castle the gate is over 3 from the centre (Caradhras 3.3, Sirannon 3.4,
+        /// Nanduhirion 3.5): in run 20261025-1524-C2 three sieges stood 4.3 to 4.7 from Caradhras' gate, 6.8 and 7.8 from its
+        /// centre, for up to 15 days, waiting for "within 6" of the centre.
+        /// </summary>
+        public double Near(string a, string place)
+        {
+            double d = Distance(a, place);
+            SettlementRow h = Holding(place);
+            if (h == null || (h.Gx == 0 && h.Gy == 0) || !Where(a, out float ax, out float ay)) return d;
+            double g = Math.Sqrt((ax - h.Gx) * (ax - h.Gx) + (ay - h.Gy) * (ay - h.Gy));
+            return double.IsNaN(d) ? g : Math.Min(d, g);
+        }
+
+        /// <summary>
         /// The distance by road between two things the realm knows of, as the game reckons a march (Roads): holdings by the
         /// game's own table, a party through the entrance of the ground it stands on (an enemy seen earlier, through where it
         /// was seen). NaN when the game's table lacks the way, or for a spot (no entrance known).

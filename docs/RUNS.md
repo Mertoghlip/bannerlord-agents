@@ -114,6 +114,16 @@ The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $27
   - Still: Imnagath let go, a plan to hit Thrurg's siege camp at Lasgalor rather than meet him in the field, and a first army formed with 11 of the 20 lords it called (nine were already in the two armies its first answer had formed).
 - **Where it stood at day 16:** the kingdom −1 castle (Imnagath), −2 villages, 17 enemy lords held, men −1,548. Beleg's 2,000 had destroyed Naglur's remnant and taken him with 12 orc lords on day 15.
 
+## Run C2 on 0.12.0 (Oct 25), stopped on day 20: does not count
+
+`20261025-1524-C2`, from TEST START, played 15:24 to 15:52. The first run with the helper on time: the lords' orders were never more than the hour just handed over behind the game, no hour was folded into a later report (480 rounds), answers were picked up within 0.74 s and carried out within 0.3 s. **It does not count:** the kingdom's sieges never began, and Mert stopped it to replay with the fix ("I'd rather start a new test with the fix"). Fixed in 0.12.1 (docs/TOOLS.md, "Arriving at a castle").
+- **The sieges that never began:** Górli stood 4.3 from Caradhras' gate, 6.8 from its centre, for 15 days, and Oropherion's army 4.7 (7.8) for 14, each in besiege's first step waiting for "within 6" of the centre. Val stood 6.2 off Sirannon. Nothing changed, so the agent was never told; its plan still had them "take Caradhras".
+- **Aragorn taken from the agent:** after the battle with Naglur (day 14), Party AI Controls' own refill sent Aragorn to fill his ranks and kept him at it to the end; the bridge refused the agent's three orders to him, since it never overrides a Party AI Controls order. The playerless switch now turns that refill off for every lord.
+- **What went well:** Naglur's orc army was destroyed on day 14 (Elrohir's battle: 2,022 of Naglur's 2,026 lost) with 13 orc lords taken that day; Gundabad's raiders were broken on days 11 to 13 (Mauhur, Grisha, Kralza, Wruk, Muzgur and six more); 46 enemy lords taken against 9 of its own; lord battles 30-7. The plan named Thrurg (8,800, strength 20,000) as Dol Guldur's main army from the day it was seen and chose to break Naglur first, then gather all five armies to meet him.
+- **What went badly:** Thalion (day 9) and Girda (day 15) were caught alone by Gundabad lords that came together (the danger rule weighs one enemy lord at a time; Thalion had trailed Hrakgar a mile behind for 40 hours, since the attack order never gives up on a chase it cannot close); Imnagath fell to Thrurg on day 20.
+- **Where it stood at day 20:** the kingdom −1 castle, −2 villages, men −841, 32 enemy lords held. The three agents' list price $98.68.
+- **To look into:** the danger rule counting enemy lords near each other together, and an attack order that ends when its chase is not closing.
+
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).

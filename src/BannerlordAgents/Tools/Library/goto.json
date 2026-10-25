@@ -12,7 +12,7 @@
     "go_in": { "about": "going to {at}", "do": "goto at",
       "when": [ { "if": "inside(at)", "go": "there", "poke": "{me} reached {at}." } ] },
     "go_near": { "about": "going close to {at}", "do": "near at",
-      "when": [ { "if": "within(at, 4)", "go": "there", "poke": "{me} reached {at}." } ] },
+      "when": [ { "if": "within(at, 6)", "go": "there", "poke": "{me} reached {at}." } ] },
     "there": { "about": "at {at}", "end": "hold" }
   }
 }
