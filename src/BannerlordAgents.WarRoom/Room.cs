@@ -97,6 +97,9 @@ namespace BannerlordAgents.WarRoom
                 {
                     Answer(newest, when, text);
                     _lastAnswered = newest;
+                    // a council due sits now, beside the next answers: a realm whose pokes never stop never has a quiet moment
+                    // (0.11.4, run C2: the kingdom's council asked for in 12 hours sat 8.7 days later, after the victory at Lasgalor)
+                    CouncilIfDue(stop);
                     continue;
                 }
                 StoryIfDue(stop);

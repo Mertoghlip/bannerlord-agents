@@ -120,6 +120,7 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
   - when its time has come: `council_every_hours` after the last council, or sooner if the last council asked for it (`council_in`, 4 to 72 hours);
   - once in each run of the war room, even with no event;
   - never sooner than `council_gap_hours` after the last one (except after the first look), never two at once, and only while the game is running (the bridge's briefing less than ten minutes old). A council that fails waits five minutes.
+  - **Looked for after every answer as well as in a quiet moment** (since 0.11.5). Until then it was looked for only when no poke was waiting, and a busy realm's pokes never stop: in run C2 (Oct 24) the kingdom's war room, with a poke every few seconds and answers of 10 to 30 s, was idle 44 times in 80 minutes, so about 20 councils sat in 60 days, some 95 to 208 in-game hours after the last, and the one asked for 12 hours after the victory at Lasgalor sat 8.7 days later.
 - **What it sees:** the same written memory as a poke (the story so far, the notes, the chronicle not in the story yet), then:
   - COUNCIL OF WAR, with why it sits now;
   - the bridge's **briefing** (`council.txt`, rewritten every in-game hour, [TOOLS.md](TOOLS.md#what-the-agent-reads-besides-the-tools)): the purse, every lord in detail, the muster at each castle and town, the captured lords;
