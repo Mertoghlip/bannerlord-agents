@@ -1351,7 +1351,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The queue reached 2,051 of its 4,096 jobs; past that, work is dropped. The `helper_backlog` alarm (174 times) was not serious, so the 10-minute watch never showed it.
 - Mert, on the plan: "SOunds good. Implement all fixes." (kept on the efficiency cores, urgent work out of efficiency mode; no virus-scanner exclusion).
 
-### 15:16 · Version 0.12.0: the helper on time · commit (this entry's) (installed 15:16)
+### 15:16 · Version 0.12.0: the helper on time · commit 44f2b66 (installed 15:16)
 - **Three lanes on the helper's one thread** (`Background`; one thread, so nothing it keeps is shared):
   - **urgent** (`PostFirst`): the agents' answers, every order's start, change and end (`Orders`), and each hour's order rules and look (`Background.PostHour` → `Brain.Decide`: the tools, what each realm sees, the trails, the recruitment log). It runs at normal priority, out of Windows' efficiency mode, on the same efficiency cores (`Cpu.SetCurrentThreadUrgent`);
   - **regular** (`Post`): logs and records, as before;
