@@ -1,18 +1,21 @@
 {
   "tool": "engage",
   "kind": "move",
-  "about": "Attacks an enemy lord or army; if it slips out of view, goes to where it was last seen.",
+  "about": "Attacks an enemy lord or army; if it slips out of view, goes to where it was last seen. It gives up a chase that has not closed in for 8 hours (a target as fast as the lord is caught only when it stops), and its next order, if any, starts.",
   "target": "enemy_lord",
+  "init": { "best_gap": "9999", "best_at": "now" },
   "start": "chase",
   "states": {
     "chase": { "about": "attacking {target}", "do": "engage target",
       "when": [
         { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
-        { "if": "not in_view(target)", "go": "search" } ] },
+        { "if": "not in_view(target)", "go": "search" },
+        { "if": "not in_battle and now - best_at >= 8", "go": "over", "poke": "{me} gave up the chase of {target}: no closer in 8 hours ({distance(me, target)} away), so {target} is as fast as {me} or faster." },
+        { "if": "distance(me, target) < best_gap - 1", "go": "chase", "set": { "best_gap": "distance(me, target)", "best_at": "now" } } ] },
     "search": { "about": "looking for {target} where it was last seen", "do": "toward target",
       "when": [
         { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
-        { "if": "in_view(target)", "go": "chase" },
+        { "if": "in_view(target)", "go": "chase", "set": { "best_gap": "9999", "best_at": "now" } },
         { "if": "seen_ago(target) > 6", "go": "over", "poke": "{me} lost track of {target}." } ] },
     "over": { "about": "done", "end": "free" }
   }

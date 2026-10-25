@@ -397,6 +397,7 @@ namespace SmokeTest
             SiegeReliefTests(dir);
             SiegeControlTests(dir, moves, released, thens);
             ArrivalTests(dir, moves);
+            GroupDangerTests(dir, moves, released);
             MoneyTests(dir, moves, released);
             FieldLessonsTests(dir, moves);
             GameClockTests(dir);
@@ -1130,6 +1131,142 @@ namespace SmokeTest
             Check(!Notices().Contains("Mauhur has not moved for"), "ten hours in a battle on the way is not a stall");
             Runner.Ended(1205, "test over");
             moves.Clear();
+        }
+
+        /// <summary>
+        /// Version 0.12.2 (run 20261025-1609-C2, Mert: "I think its something about our defend order's calculation of an enemy
+        /// host's strength - the enemy was dispersed in a couple of different parties"): Alenon (strength 8,505) guarding Torech
+        /// Emel struck Narsha (1,751), one of a dozen lords marching to join Thrurg, chased her 33 hours out of his area into
+        /// them, and lost his army of 13 lords. Thalion and Girda (run 20261025-1524-C2) were caught by lords that came
+        /// together, each too weak alone to make them shelter. Now: danger is counted as a group with the hosts lords march
+        /// with; a strike weighs its target's company; a strike keeps to its area and gives up a chase not closing; engage
+        /// gives up a chase not closing in 8 hours; a lord leaves shelter only once the area and half as far beyond are clear.
+        /// </summary>
+        private static void GroupDangerTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released)
+        {
+            string Notices() { Files.FlushAll(); return Read(Path.Combine(dir, "notices.jsonl")); }
+            PartyRow Orc(string id, string name, float x, float y, float strength) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "orcs", Kind = "lord", Men = (int)(strength * 0.6f), SizeLimit = (int)strength, Strength = strength, Speed = 4,
+                FoodDays = 40, X = x, Y = y, Doing = "Hold", Spottable = true
+            };
+            PartyRow Foe(string id, string name, float x, float y, float strength, string follows = null) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "player_k", Kind = "lord", Men = (int)(strength * 0.5f), Strength = strength, Speed = 4,
+                X = x, Y = y, Doing = follows != null ? "EscortParty" : "Hold", TargetParty = follows, Spottable = true
+            };
+            ToolOrder Guard(string id, string name, double radius)
+            {
+                var o = new ToolOrder { Tool = "defend", Lord = "lord_" + id, LordName = name, Party = "p_" + id, At = "castle_orc" };
+                o.Settings["radius"] = radius; o.Settings["strike_below"] = 1; o.Settings["shelter_at"] = 1.5; o.Settings["floor"] = 0;
+                return o;
+            }
+
+            // 1. a strike picks the enemy whose company is weakest: never one lord out of a gathering host
+            var alenon = Orc("alen", "Alenon", 102, 100, 8505);
+            var thrurg = Foe("thr", "Thrurg", 135, 100, 900);
+            thrurg.ArmyLeader = "p_thr"; thrurg.ArmyMen = 2800; thrurg.ArmyParties = 6; thrurg.ArmyStrength = 5600;
+            var narsha = Foe("nar", "Narsha", 124, 100, 1751, "p_thr");
+            var rukmash = Foe("ruk", "Rukmash", 127, 104, 1477, "p_thr");
+            var gralzuk = Foe("gra", "Gralzuk", 128, 97, 906, "p_thr");
+            Brain.OnHour(ToolWorld(7600, alenon, thrurg, narsha, rukmash, gralzuk));
+            moves.Clear();
+            Runner.Start(1301, Guard("alen", "Alenon", 30));
+            Brain.OnHour(ToolWorld(7601, alenon, thrurg, narsha, rukmash, gralzuk));
+            World w1 = Runner.WorldFor(ToolWorld(7601, alenon, thrurg, narsha, rukmash, gralzuk));
+            Check(Math.Abs(w1.CompanyStrength("p_gra", 8) - 9734) < 1 && !moves.Any(m => m.Key == 1301 && m.Value.Verb == "engage"),
+                  "Gralzuk (906) alone is weak, but with the host she marches to join (Thrurg's army and two more lords) she is 9,734 against Alenon's 8,505: no strike (" + w1.CompanyStrength("p_gra", 8) + ")");
+            var drub = Foe("drb", "Drubnash", 112, 112, 651);
+            drub.Doing = "RaidSettlement";
+            Brain.OnHour(ToolWorld(7602, alenon, thrurg, narsha, rukmash, gralzuk, drub));
+            Check(moves.Any(m => m.Key == 1301 && m.Value.Verb == "engage" && m.Value.Party == "p_drb"), "a raider on its own (651) is struck instead");
+            Runner.Ended(1301, "test over");
+
+            // 2. the safety rule counts the enemies near the lord together: three lords, none strong enough alone
+            var thalion = Orc("thal", "Thalion", 150, 130, 600);
+            var hrak = Foe("hrk", "Hrakgar", 151, 130, 300);
+            var grisha = Foe("gsh", "Grisha", 155, 133, 500);
+            var muzgur = Foe("mzg", "Muzgur", 153, 126, 480);
+            Brain.OnHour(ToolWorld(7610, thalion, hrak));
+            Runner.Start(1302, new ToolOrder { Tool = "engage", Lord = "lord_thal", LordName = "Thalion", Party = "p_thal", Target = "p_hrk" });
+            Brain.OnHour(ToolWorld(7611, thalion, hrak, grisha, muzgur));
+            Check(System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Thalion is (sheltering in|falling back)[^""]*Grisha and 1 more with it \(strength 980 together against 600\)"),
+                  "Grisha (500) and Muzgur (480) near Thalion (600), each under 1.5 times him, are 980 together: he shelters or falls back from both");
+            Runner.Ended(1302, "test over");
+
+            // 3. ... and the host of the lord he is told to attack: Hrakgar marching to join an army 15 away
+            var thal2 = Orc("thl2", "Thalion II", 150, 160, 600);
+            var hrak2 = Foe("hk2", "Hrakgar II", 152, 160, 300, "p_ar2");
+            var host2 = Foe("ar2", "Mauhur", 166, 165, 400);
+            host2.ArmyLeader = "p_ar2"; host2.ArmyMen = 700; host2.ArmyParties = 3; host2.ArmyStrength = 1200;
+            Brain.OnHour(ToolWorld(7620, thal2, hrak2, host2));
+            Runner.Start(1303, new ToolOrder { Tool = "engage", Lord = "lord_thl2", LordName = "Thalion II", Party = "p_thl2", Target = "p_hk2" });
+            Brain.OnHour(ToolWorld(7621, thal2, hrak2, host2));
+            Check(System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Thalion II is (sheltering in|falling back)[^""]*Mauhur \(strength 1,200 against 600\)"),
+                  "his target is spared, but the army it marches to join (1,200, 15 away) is a danger: he does not ride into it");
+            Runner.Ended(1303, "test over");
+
+            // 4. a guard's strike keeps to its area: the chase stops at its edge
+            var g2 = Orc("gd2", "Faldira", 100, 100, 1000);
+            var lone = Foe("lon", "Shagrat", 115, 100, 300);
+            Brain.OnHour(ToolWorld(7630, g2, lone));
+            moves.Clear();
+            Runner.Start(1304, Guard("gd2", "Faldira", 20));
+            Check(moves.Any(m => m.Key == 1304 && m.Value.Verb == "engage" && m.Value.Party == "p_lon"), "a guard strikes a lone weak lord in its area");
+            g2.X = 121; lone.X = 118;
+            Brain.OnHour(ToolWorld(7631, g2, lone));
+            Check(Notices().Contains("Faldira broke off the chase of Shagrat: it would have led Faldira out of the area it guards (21 from Orc Castle)") && moves.Last(m => m.Key == 1304).Value.Verb == "patrol",
+                  "21 from its castle with an area of 20, it breaks off and patrols again");
+            g2.X = 112;
+            for (int h = 7632; h <= 7636; h++) Brain.OnHour(ToolWorld(h, g2, lone));
+            Check(moves.Last(m => m.Key == 1304).Value.Verb == "patrol", "back in its area, it leaves Shagrat be for 6 hours (before 0.12.2 a broken-off strike began again the same hour)");
+            Brain.OnHour(ToolWorld(7637, g2, lone));
+            Check(moves.Last(m => m.Key == 1304).Value.Verb == "engage", "and strikes him again after them");
+            Runner.Ended(1304, "test over");
+
+            // 5. ... and gives up a chase that has not closed in for 6 hours
+            var g3 = Orc("gd3", "Lek", 100, 120, 1000);
+            var runner = Foe("rnr", "Gorbag", 110, 120, 300);
+            Brain.OnHour(ToolWorld(7640, g3, runner));
+            moves.Clear();
+            Runner.Start(1305, Guard("gd3", "Lek", 30));
+            for (int i = 1; i <= 5; i++) { g3.X = 100 + i; runner.X = 110 + i; Brain.OnHour(ToolWorld(7640 + i, g3, runner)); }
+            Check(!Notices().Contains("Lek gave up the chase"), "five hours at the same gap: still chasing");
+            g3.X = 106; runner.X = 116;
+            Brain.OnHour(ToolWorld(7646, g3, runner));
+            Check(Notices().Contains("Lek gave up the chase of Gorbag: no closer in 6 hours (10 away). Back to patrolling around Orc Castle; it leaves Gorbag be for 6 hours."), "six hours no closer: it gives up and patrols again");
+            Runner.Ended(1305, "test over");
+
+            // 6. engage gives up a chase that has not closed in for 8 hours (Thalion trailed Hrakgar a mile behind for 40), then its next order starts
+            var chaser = Orc("chs", "Nili", 50, 150, 1000);
+            var quarry = Foe("qry", "Ufthak", 51.2f, 150, 300);
+            released.Clear();
+            Brain.OnHour(ToolWorld(7700, chaser, quarry));
+            Runner.Start(1306, new ToolOrder { Tool = "engage", Lord = "lord_chs", LordName = "Nili", Party = "p_chs", Target = "p_qry" });
+            for (int i = 1; i <= 7; i++) { chaser.X = 50 + i; quarry.X = 51.2f + i; Brain.OnHour(ToolWorld(7700 + i, chaser, quarry)); }
+            Check(!released.Contains(1306), "seven hours a mile behind: still chasing");
+            chaser.X = 58; quarry.X = 59.2f;
+            Brain.OnHour(ToolWorld(7708, chaser, quarry));
+            Check(released.Contains(1306) && Notices().Contains("Nili gave up the chase of Ufthak: no closer in 8 hours (1.2 away)"), "eight hours no closer: engage gives up and the lord is let go");
+
+            // 7. a guard comes out of shelter only once its area and half as far beyond are clear
+            var g4 = Orc("gd4", "Malthorn", 100, 100, 1000);
+            var big = Foe("big", "Lugbur", 112, 100, 2000);
+            Brain.OnHour(ToolWorld(7720, g4, big));
+            moves.Clear();
+            Runner.Start(1307, Guard("gd4", "Malthorn", 20));
+            Check(moves.Any(m => m.Key == 1307 && m.Value.Verb == "enter"), "a force twice its strength in its area: it shelters");
+            string refuge = moves.Last(m => m.Key == 1307 && m.Value.Verb == "enter").Value.Place;
+            g4.InSettlement = refuge;
+            big.X = 127;   // 27 off: outside its area of 20, inside 30
+            for (int h = 7721; h <= 7725; h++) Brain.OnHour(ToolWorld(h, g4, big));
+            Check(!moves.Any(m => m.Key == 1307 && m.Value.Verb == "patrol"), "the force parked 27 off, just outside its area: it stays inside");
+            big.X = 140;
+            Brain.OnHour(ToolWorld(7726, g4, big));
+            Check(moves.Any(m => m.Key == 1307 && m.Value.Verb == "patrol"), "40 off: it comes out and patrols again");
+            Runner.Ended(1307, "test over");
+            moves.Clear();
+            released.Clear();
         }
 
         private static void SiegeControlTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released, List<KeyValuePair<int, JObject>> thens)

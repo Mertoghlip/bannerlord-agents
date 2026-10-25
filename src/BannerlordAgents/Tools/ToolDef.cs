@@ -83,6 +83,7 @@ namespace BannerlordAgents.Tools
             ["besieged"] = 1, ["siege_strength"] = 1, ["inside_strength"] = 1, ["relief_strength"] = 1, ["besieger"] = 1, ["raided"] = 1, ["looted"] = 1,
             ["ours"] = 1, ["hostile"] = 1, ["friendly"] = 1,
             ["enemies_near"] = 2, ["enemy_strength_near"] = 2, ["strongest_enemy_near"] = 2, ["weakest_enemy_near"] = 2, ["nearest_enemy"] = 2, ["army_near"] = 2,
+            ["company"] = 1, ["easiest_enemy_near"] = 2,
             ["threat_near"] = 2, ["enemy_threat_near"] = 2, ["other_fort"] = 1, ["refuge"] = 2, ["would_hold"] = 2,
             ["strength_of"] = 1, ["men_of"] = 1, ["in_view"] = 1, ["seen_ago"] = 1, ["gone"] = 1,
             ["nearest_fort"] = 0, ["nearest_supply"] = 0, ["next_village"] = 2, ["fort"] = 1,
@@ -282,7 +283,7 @@ namespace BannerlordAgents.Tools
         private static readonly object Gate = new object();
 
         /// <summary>The safety rule every tool and move carries unless it opts out.</summary>
-        public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when an enemy lord, army or band of bandits this many times stronger comes close, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against that enemy and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
+        public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when the enemy lords, armies and bandits close to the lord, counted together with the hosts those lords march with or to join, are this many times stronger, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against them and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
         public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "how close counts as close for caution, in map units" };
 
         public static Dictionary<string, ToolDef> All

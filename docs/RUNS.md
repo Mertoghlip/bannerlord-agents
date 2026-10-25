@@ -124,6 +124,12 @@ The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $27
 - **Where it stood at day 20:** the kingdom −1 castle, −2 villages, men −841, 32 enemy lords held. The three agents' list price $98.68.
 - **To look into:** the danger rule counting enemy lords near each other together, and an attack order that ends when its chase is not closing.
 
+## Run C2 on 0.12.1 (Oct 25), stopped on day 10: does not count
+
+`20261025-1609-C2`, from TEST START, played 16:10 to about 16:30. The setup switched off Party AI Controls' auto-recruit (Aragorn, one more lord, both defaults), every siege went from marching to besieging (Sirannon besieged on day 7 and taken on day 10; Caradhras besieged from day 7), no stall call-back, the helper on time (0 hours folded over 240 rounds). **It does not count:** on day 10 Alenon's army of 13 lords was destroyed near Torech Emel, and Mert stopped the run to fix the cause ("I've stopped the run. Please make the fix to our tooling.").
+- **How Alenon's army was lost:** his guard order (radius 30) struck Narsha (1,751 against his 8,505), one of a dozen lords marching to join Thrurg's army, and chased her 33 hours out of his area into them; it turned for home only when the lords within 30 of the castle came to 1.5 times his strength, 26 from the walls, and was caught 5 hours later by Bolga and 17 more parties (10,306 men against 3,587). Taken: Alenon, Imák, Oropherion, Orophin, Dáin II, Anairë, Amarië, Galyk, Lek, Faldira, Valkava, Calathiel and Malthorn. The safety rule, weighing each enemy party alone, never fired. The agent's last change (radius 20, `stay_inside` 1) came while he was already in the battle. Fixed in 0.12.2 (docs/TOOLS.md, "A host split into many parties counts as one").
+- **Where it stood at day 10:** the kingdom +1 castle (Sirannon), +3 villages, men −1,923, 14 of its lords taken against 8 enemy lords; the three agents' list price $41.23.
+
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).

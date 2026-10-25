@@ -73,9 +73,9 @@ namespace BannerlordAgents.Tools
     /// after the hourly copy, each lord's rules are checked against the realm's own view (World) and its move changed
     /// when a rule fires. The moves are made on the game's thread (Orders.ToolMove); the call-backs become notices,
     /// so they reach the agent with the next poke. Two rules hold for every order:
-    /// - safety: a held lord does not flee by itself (the game switches its quick reactions off), so when an enemy
-    ///   caution times stronger comes within danger_radius, it shelters in the nearest friendly castle or town and
-    ///   resumes when the danger has passed;
+    /// - safety: a held lord does not flee by itself (the game switches its quick reactions off), so when the enemies
+    ///   within danger_radius, with the hosts they march with (counted together since 0.12.2), are caution times
+    ///   stronger, it shelters in the nearest friendly castle or town and resumes when the danger has passed;
     /// - food: with under two days of food it goes to the nearest friendly town or village to buy more, then resumes.
     /// Worker thread only (docs/TOOLS.md).
     /// </summary>
@@ -469,9 +469,20 @@ namespace BannerlordAgents.Tools
             string siege = t.Current.Verb == "engage" ? w.Party(t.Current.Party)?.Besieging : null;
             // a shadow keeps its own distance from its target, but a target that turns to chase it is a danger like any other
             bool shadowing = t.Current.Verb == "shadow";
-            bool Spared(PartyRow e) => (spare.Contains(e.Id) && !(shadowing && e.Doing == "EngageParty" && e.TargetParty == me.Id)) || (siege != null && e.Besieging == siege);
-            PartyRow Danger(double within) => w.ThreatsInView(me.Id, within).Where(e => !Spared(e) && World.StrengthOf(e) >= caution * Math.Max(1, mine))
-                                                 .OrderByDescending(World.StrengthOf).FirstOrDefault();
+            // ... and so are the lords marching with the army it shadows (0.12.2, the danger counted with hosts), unless they chase it
+            string shadowed = shadowing ? w.HeadOf(w.Party(t.Current.Party))?.Id : null;
+            bool Chasing(PartyRow e) => e.Doing == "EngageParty" && e.TargetParty == me.Id;
+            bool Spared(PartyRow e) => (spare.Contains(e.Id) && !(shadowing && Chasing(e))) || (siege != null && e.Besieging == siege)
+                                       || (shadowed != null && w.HeadOf(e)?.Id == shadowed && !Chasing(e));
+            // the danger counted as a group (0.12.2): everything in view within reach of the lord and the hosts those lords march
+            // with, together (World.DangerAround); the strongest of them stands for where it is and how fast it comes
+            Danger Find(double within)
+            {
+                List<PartyRow> g = w.DangerAround(me.Id, within, Spared);
+                double sum = g.Sum(World.StrengthOf);
+                if (g.Count == 0 || sum < caution * Math.Max(1, mine)) return null;
+                return new Danger { Lead = g.OrderByDescending(World.StrengthOf).First(), Strength = sum, Count = g.Count, Ids = new HashSet<string>(g.Select(x => x.Id)) };
+            }
             // the order's own holding: always the shelter with stay_inside 1 (garrison's default); tried first, and kept only
             // if it would hold, with stay_inside 0 (defend's default)
             SettlementRow own = w.Holding(t.Order.At);
@@ -480,7 +491,7 @@ namespace BannerlordAgents.Tools
             string preferred = hasStay && World.IsFort(own) ? own.Id : null;
             if (t.Shelter != null)
             {
-                PartyRow still = caution > 0 ? Danger(radius * 1.5) : null;
+                Danger still = caution > 0 ? Find(radius * 1.5) : null;
                 if (still == null && w.Hours - t.AsideSince >= 2)
                 {
                     string was = t.Shelter;
@@ -499,14 +510,27 @@ namespace BannerlordAgents.Tools
             if (caution <= 0 || me.InBattle || me.Besieging != null) return false;
             SettlementRow inside = w.Holding(me.InSettlement);
             if (inside != null && World.IsFort(inside) && w.Besieged(inside)) return false;   // inside a besieged place: it cannot leave
-            PartyRow danger = Danger(radius);
+            Danger danger = Find(radius);
             if (danger == null) return false;
             if (inside != null && World.IsFort(inside))
             {
                 // inside a castle or town: stay if it would hold (or the order is told to stay in its own holding); else run
-                if ((alwaysOwn && inside.Id == own.Id) || w.Holds(inside, me.Id, World.StrengthOf(danger) + w.ThreatStrength(inside.Id, World.HoldRadius, danger.Id))) return false;
+                if ((alwaysOwn && inside.Id == own.Id) || w.Holds(inside, me.Id, danger.Strength + w.ThreatStrength(inside.Id, World.HoldRadius, danger.Ids))) return false;
             }
             return Shelter(t, me, w, danger, mine, alwaysOwn ? own : null, preferred, again: false);
+        }
+
+        /// <summary>A danger to a lord, counted as a group (0.12.2): its strongest party, and all of it together.</summary>
+        private sealed class Danger
+        {
+            public PartyRow Lead;
+            public double Strength;
+            public int Count;
+            public HashSet<string> Ids;
+
+            /// <summary>"Bolga and 11 more with it (strength 13,000 together" or "Bolga (strength 1,094"; the caller closes it.</summary>
+            public string Say(World w) => w.Name(Lead.Id) + (Count > 1 ? " and " + (Count - 1) + " more with it (strength " + Text.N((int)Math.Round(Strength)) + " together"
+                                                                         : " (strength " + Text.N((int)Math.Round(Strength)));
         }
 
         /// <summary>
@@ -514,10 +538,11 @@ namespace BannerlordAgents.Tools
         /// reach whose defenders, with it, would hold against the danger and every force near that place; if none would,
         /// toward the nearest one that takes it farther from the danger, stopping outside. The agent is told which, and why.
         /// </summary>
-        private static bool Shelter(ToolInstance t, PartyRow me, World w, PartyRow danger, double mine, SettlementRow forced, string preferred, bool again)
+        private static bool Shelter(ToolInstance t, PartyRow me, World w, Danger group, double mine, SettlementRow forced, string preferred, bool again)
         {
+            PartyRow danger = group.Lead;
             bool holds = forced != null, running = false;
-            SettlementRow fort = forced ?? w.ChooseRefuge(me.Id, preferred, World.HoldRadius, danger, out holds, out running);
+            SettlementRow fort = forced ?? w.ChooseRefuge(me.Id, preferred, World.HoldRadius, danger, out holds, out running, group.Strength, group.Ids);
             if (fort == null)
             {
                 // nowhere it can reach before the danger: straight away from it, twice the danger radius, again each hour
@@ -534,7 +559,7 @@ namespace BannerlordAgents.Tools
                 if (first)
                 {
                     Diag.Count("tool:ran");
-                    Poke(t, t.Order.LordName + " is falling back, away from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against " + Text.N((int)mine)
+                    Poke(t, t.Order.LordName + " is falling back, away from " + group.Say(w) + " against " + Text.N((int)mine)
                             + "): no castle or town it can reach before the enemy would hold against it, so it keeps out of reach in the open. The order resumes once the danger has passed.", w);
                     Log(t, t.State, "running", "no refuge it could reach before the danger");
                 }
@@ -548,15 +573,15 @@ namespace BannerlordAgents.Tools
             t.Pending = new Move { Verb = running ? "near" : "enter", Place = fort.Id };
             t.HasPending = true;
             Diag.Count(running ? "tool:ran" : "tool:sheltered");
-            double opposing = World.StrengthOf(danger) + w.ThreatStrength(fort.Id, World.HoldRadius, danger.Id);
+            double opposing = group.Strength + w.ThreatStrength(fort.Id, World.HoldRadius, group.Ids);
             string why = running
-                ? t.Order.LordName + " is falling back toward " + w.Name(fort.Id) + ", away from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against "
+                ? t.Order.LordName + " is falling back toward " + w.Name(fort.Id) + ", away from " + group.Say(w) + " against "
                   + Text.N((int)mine) + "): no castle or town it could reach first would hold against it, so it stays out of reach rather than be trapped inside."
-                : t.Order.LordName + " is sheltering in " + w.Name(fort.Id) + " from " + w.Name(danger.Id) + " (strength " + Text.N((int)World.StrengthOf(danger)) + " against "
+                : t.Order.LordName + " is sheltering in " + w.Name(fort.Id) + " from " + group.Say(w) + " against "
                   + Text.N((int)mine) + "): " + (forced != null ? "its order keeps it inside." : "its defenders with " + t.Order.LordName + ", strength " + Text.N((int)w.DefenceStrength(fort, me.Id))
                   + " behind walls worth " + ToolDef.Num(Math.Round(World.WallFactor(fort), 1)) + " times that, would hold against " + Text.N((int)opposing) + ".");
             Poke(t, why + " The order resumes once the danger has passed.", w);
-            Log(t, t.State, running ? "running" : "sheltering", "an enemy stronger than its caution allows, within its danger radius");
+            Log(t, t.State, running ? "running" : "sheltering", "enemies within its danger radius, with their hosts, stronger together than its caution allows");
             return true;
         }
 
@@ -697,6 +722,9 @@ namespace BannerlordAgents.Tools
 
             private PartyRow Me => _w.Party(_t.Order.Party);
 
+            /// <summary>How near counts as with a party, for its company: the order's danger radius.</summary>
+            private double Near => _t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
+
             private string Id(object v) => v as string;
             private SettlementRow H(object v) => _w.Holding(v as string);
 
@@ -778,6 +806,9 @@ namespace BannerlordAgents.Tools
                     case "would_hold": { SettlementRow h = H(a[0]); return h != null && World.IsFort(h) && _w.Holds(h, _t.Order.Party, _w.ThreatStrength(h.Id, Expr.Number(a[1]))); }
                     case "strongest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     case "weakest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
+                    // a party with what it would be fought with: its host and every enemy near it (0.12.2, World.Company)
+                    case "company": return _w.CompanyStrength(Id(a[0]), Near);
+                    case "easiest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(e => _w.CompanyStrength(e.Id, Near)).FirstOrDefault()?.Id;
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;
                     case "army_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     // enemy lords and armies near a place or heading for it, counted together (0.7.2): their strength, and who they are

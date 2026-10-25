@@ -233,22 +233,106 @@ namespace BannerlordAgents.Tools
         /// and hostile lords and armies seen there within the last RecentHours, at the place they were last seen (an army
         /// that walked out of sight an hour ago has not gone away). A party known gone is not counted.
         /// </summary>
-        public double ThreatStrength(string place, double r, string except = null) => Threat(place, r, except, true);
+        public double ThreatStrength(string place, double r, string except = null) => Threat(place, r, except != null ? new HashSet<string> { except } : null, true);
+
+        /// <summary>The same, leaving out a whole group already counted (a danger counted as a group).</summary>
+        public double ThreatStrength(string place, double r, ICollection<string> except) => Threat(place, r, except, true);
 
         /// <summary>The same without bandits: hostile lords and armies only, the forces that make a lord needed where it is.</summary>
         public double EnemyThreat(string place, double r) => Threat(place, r, null, false);
 
-        private double Threat(string place, double r, string except, bool bandits)
+        /// <summary>
+        /// Since 0.12.2 the threat counts, beside the parties within r, the host each enemy lord there marches with or to join
+        /// (HostOf: its army and the lords marching to join it, within HostReach of it), wherever those stand: in run
+        /// 20261025-1609-C2 eleven lords following Thrurg stood 27 to 29 from Torech Emel, outside Alenon's area of 20, and
+        /// counted for nothing, though they were one host.
+        /// </summary>
+        private double Threat(string place, double r, ICollection<string> except, bool bandits)
         {
             if (!Where(place, out float px, out float py)) return 0;
-            double sum = (bandits ? ThreatsInView(place, r) : EnemiesNear(place, r)).Where(e => e.Id != except).Sum(StrengthOf);
+            List<PartyRow> near = bandits ? ThreatsInView(place, r) : EnemiesNear(place, r);
+            var counted = new HashSet<string>(near.Select(e => e.Id));
+            double sum = near.Where(e => except == null || !except.Contains(e.Id)).Sum(StrengthOf);
+            foreach (PartyRow e in near.Where(x => x.Kind == "lord").ToList())
+                foreach (PartyRow m in HostOf(e))
+                    if (counted.Add(m.Id) && (except == null || !except.Contains(m.Id))) sum += StrengthOf(m);
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
                 ViewParty v = kv.Value;
-                if (kv.Key == except || v.Relation != "enemy" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                if ((except != null && except.Contains(kv.Key)) || counted.Contains(kv.Key) || v.Relation != "enemy" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
                 if (Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py)) <= r) sum += v.Strength;
             }
             return sum;
+        }
+
+        /// <summary>How far from a lord the rest of his host is counted with him: about eight hours' march at an army's pace.</summary>
+        public const double HostReach = 20;
+
+        /// <summary>
+        /// The army a party marches with (0.12.2): the leader of the army it is in, or of the army or lord it follows to join
+        /// (an enemy lord escorting a party of his own realm: the game sends lords called to an army that way), else itself.
+        /// </summary>
+        public PartyRow HeadOf(PartyRow e)
+        {
+            if (e == null) return null;
+            if (e.Doing == "EscortParty" && e.TargetParty != null && S.PartyById.TryGetValue(e.TargetParty, out PartyRow led) && led.Faction == e.Faction) return Lead(led);
+            return Lead(e);
+        }
+
+        /// <summary>
+        /// The rest of an enemy lord's host (0.12.2): the head of the army he marches with or to join, and every other party in
+        /// view marching to join it, within HostReach of him; himself left out. Hostile lords only (bandits march alone).
+        /// </summary>
+        public List<PartyRow> HostOf(PartyRow e)
+        {
+            var list = new List<PartyRow>();
+            PartyRow head = HeadOf(e);
+            if (head == null) return list;
+            foreach (PartyRow x in _enemies)
+            {
+                if (x.Id == e.Id || HeadOf(x)?.Id != head.Id) continue;
+                if (Math.Sqrt((x.X - e.X) * (x.X - e.X) + (x.Y - e.Y) * (x.Y - e.Y)) <= HostReach) list.Add(x);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// The force an enemy party would be fought with (0.12.2): itself, the rest of its host (HostOf), and every other hostile
+        /// lord and army in view within near of it. Alenon struck Narsha (strength 1,751 against his 8,505) because she was the
+        /// weakest lord near Torech Emel; she was one of a dozen marching to join Thrurg, about 17,000 together, and the chase
+        /// led him into them.
+        /// </summary>
+        public List<PartyRow> Company(string id, double near)
+        {
+            var list = new List<PartyRow>();
+            PartyRow e = Lead(Party(id));
+            if (e == null || !Visible(e)) return list;
+            list.Add(e);
+            var seen = new HashSet<string> { e.Id };
+            foreach (PartyRow m in HostOf(e)) if (seen.Add(m.Id)) list.Add(m);
+            foreach (PartyRow m in EnemiesNear(e.Id, near)) if (seen.Add(m.Id)) list.Add(m);
+            return list;
+        }
+
+        public double CompanyStrength(string id, double near) => Company(id, near).Sum(StrengthOf);
+
+        /// <summary>
+        /// What threatens a lord where he stands (0.12.2, the safety rule): every hostile lord, army and band of bandits in view
+        /// within r of him, and the host each of those lords marches with or to join (HostOf), even the host of a party he is
+        /// told to fight, all together; spared parties themselves (his own target) left out. Before, each was weighed alone,
+        /// so a host split into a dozen parties, none of them strong alone, was never a danger (Thalion and Girda in run
+        /// 20261025-1524-C2, Alenon's army in 20261025-1609-C2).
+        /// </summary>
+        public List<PartyRow> DangerAround(string me, double r, Func<PartyRow, bool> spared)
+        {
+            var list = new List<PartyRow>();
+            var seen = new HashSet<string>();
+            List<PartyRow> near = ThreatsInView(me, r);
+            foreach (PartyRow e in near) if (!spared(e) && seen.Add(e.Id)) list.Add(e);
+            foreach (PartyRow e in near.Where(x => x.Kind == "lord").ToList())
+                foreach (PartyRow m in HostOf(e))
+                    if (m.Id != me && !spared(m) && seen.Add(m.Id)) list.Add(m);
+            return list;
         }
 
         /// <summary>One enemy lord or army counted as coming to a place's relief.</summary>
@@ -415,11 +499,13 @@ namespace BannerlordAgents.Tools
         ///   near its holding), into the nearest other castle or town not under siege.
         /// Null when there is nowhere to go.
         /// </summary>
-        public SettlementRow ChooseRefuge(string me, string preferred, double radius, PartyRow danger, out bool holds, out bool running)
+        public SettlementRow ChooseRefuge(string me, string preferred, double radius, PartyRow danger, out bool holds, out bool running, double groupStrength = -1, ICollection<string> group = null)
         {
             holds = running = false;
             if (!Where(me, out float mx, out float my)) return null;
-            double dangerStrength = danger != null ? StrengthOf(danger) : 0;
+            // a danger counted as a group (0.12.2): its whole strength, and none of its parties counted again near the refuge
+            double dangerStrength = groupStrength >= 0 ? groupStrength : danger != null ? StrengthOf(danger) : 0;
+            ICollection<string> counted = group ?? (danger != null ? new HashSet<string> { danger.Id } : null);
             double DistTo(SettlementRow h, float x, float y) => Math.Sqrt((h.X - x) * (h.X - x) + (h.Y - y) * (h.Y - y));
             // reached before the danger: the lord's hours to it, at its own speed, no more than the danger's at its speed
             double mySpeed = Speed(Party(me)), itsSpeed = danger != null ? Speed(danger) : 1;
@@ -430,7 +516,7 @@ namespace BannerlordAgents.Tools
             foreach (SettlementRow h in places)
             {
                 if (!Reachable(h)) continue;
-                double opposing = dangerStrength + ThreatStrength(h.Id, radius, danger?.Id);
+                double opposing = dangerStrength + ThreatStrength(h.Id, radius, counted);
                 if (Holds(h, me, opposing)) { holds = true; return h; }
             }
             if (danger != null)

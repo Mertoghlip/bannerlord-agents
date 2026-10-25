@@ -1,17 +1,17 @@
 {
   "tool": "defend",
   "kind": "tool",
-  "about": "Guards one of your holdings: patrols within radius of it, strikes weaker enemy lords there (giving up a chase that has not closed in after 4 hours), and breaks sieges it can break (counting the defenders inside when they would sally out). From forces too strong for it, it shelters inside the holding when its garrison, militia and your lords there, with this lord, would hold it (the game's own test for whether besiegers should assault, with the walls' worth); if they would not, in the nearest castle or town of yours or an ally's that would, so it is not trapped and taken with a place that falls. With stay_inside 1 it goes in early enough to get there first: as soon as such forces are due at the holding (by the game's marching rules) sooner than it could ride back from the edge of its patrol, with six hours to spare, even with caution 0. Refilling: when its ranks fall below the floor and it is not needed there (it is not in an army, the holding is not besieged, and no enemy lord or army is within twice its radius of the holding), it refills in the nearest town or village of yours or an ally's (castles give no recruits), then comes back; it breaks off when enemy lords come near the holding, and leaves a place that yields few recruits in 12 hours, trying again two days later. A lord leading an army never leaves to refill by itself.",
+  "about": "Guards one of your holdings: patrols within radius of it, strikes weaker enemy lords there (weighing each with the lords near it and the host it marches with or to join, so it never picks one lord out of a gathering army; breaking off a chase that would take it out of its area or has not closed in for 6 hours), and breaks sieges it can break (counting the defenders inside when they would sally out). From forces too strong for it, it shelters inside the holding when its garrison, militia and your lords there, with this lord, would hold it (the game's own test for whether besiegers should assault, with the walls' worth); if they would not, in the nearest castle or town of yours or an ally's that would, so it is not trapped and taken with a place that falls. With stay_inside 1 it goes in early enough to get there first: as soon as such forces are due at the holding (by the game's marching rules) sooner than it could ride back from the edge of its patrol, with six hours to spare, even with caution 0. Refilling: when its ranks fall below the floor and it is not needed there (it is not in an army, the holding is not besieged, and no enemy lord or army is within twice its radius of the holding), it refills in the nearest town or village of yours or an ally's (castles give no recruits), then comes back; it breaks off when enemy lords come near the holding, and leaves a place that yields few recruits in 12 hours, trying again two days later. A lord leading an army never leaves to refill by itself.",
   "calls_back": "a force too strong for it comes near the holding, the holding is besieged, it breaks or gives up a siege, it goes to refill, has refilled, broke off refilling or found few recruits, or the holding falls",
   "at": "own_holding",
   "settings": {
     "radius": [20, 3, 80, "how far around the holding it patrols and watches, in map units"],
-    "shelter_at": [1.2, 0.3, 5, "shelter when the forces threatening the area are this many times its strength (enemy lords, armies and bandits in view, and armies seen there in the last 6 hours); with stay_inside 1, also when enemy lords and armies this strong are due at the holding before it could ride back from its patrol"],
+    "shelter_at": [1.2, 0.3, 5, "shelter when the forces threatening the area are this many times its strength (enemy lords, armies and bandits in view, the hosts those lords march with or to join, and armies seen there in the last 6 hours); it comes out again only once the area and half as far again beyond it are clear; with stay_inside 1, also when enemy lords and armies this strong are due at the holding before it could ride back from its patrol"],
     "strike_below": [0.7, 0.1, 2, "attack an enemy lord in the area, or the besiegers, up to this share of its strength (against besiegers, counting the defenders inside when they would sally out)"],
     "floor": [0.4, 0, 1, "go to refill when its ranks fall below this share of full, and only while it is not needed there (see above); 0: it never leaves to refill"],
     "stay_inside": [0, 0, 1, "1: always shelter inside the holding itself, even when it would not hold (if it falls, the lord is taken with it); 0: inside only when it would hold, else in the nearest castle or town that would"]
   },
-  "init": { "target": "none", "refuge": "pick(fort(at), at, nearest_fort())", "refill_at": "none", "refill_from": "ranks", "refill_check": "-1", "refill_again": "0", "chase_gap": "0" },
+  "init": { "target": "none", "refuge": "pick(fort(at), at, nearest_fort())", "refill_at": "none", "refill_from": "ranks", "refill_check": "-1", "refill_again": "0", "chase_gap": "0", "best_at": "0", "spurned": "none", "spurned_until": "0" },
   "start": "patrol",
   "states": {
     "patrol": { "about": "patrolling within {radius} of {at}", "do": "patrol at",
@@ -27,12 +27,12 @@
           "poke": "Forces too strong for {me} are coming to {at} and would get there before {me} could ride back from its patrol: strength {relief_within(at, radius / max(pace, 0.3) + 6, radius)} against {strength}. Nearest first: {relief_of(at, radius)}. {me} is going inside {at} ahead of them." },
         { "if": "threat_near(at, radius) >= strength * shelter_at", "go": "shelter", "set": { "refuge": "pick(stay_inside > 0 and fort(at), at, pick(refuge(at, radius) != none, refuge(at, radius), pick(fort(at), at, nearest_fort())))" },
           "poke": "Forces too strong for {me} are near {at}: strength {threat_near(at, radius)} against {strength}. {me} is sheltering in {refuge}." },
-        { "if": "weakest_enemy_near(at, radius) != none and strength_of(weakest_enemy_near(at, radius)) <= strength * strike_below", "go": "strike", "set": { "target": "weakest_enemy_near(at, radius)", "chase_gap": "distance(me, weakest_enemy_near(at, radius))" } } ] },
+        { "if": "easiest_enemy_near(at, radius) != none and (easiest_enemy_near(at, radius) != spurned or now >= spurned_until) and company(easiest_enemy_near(at, radius)) <= strength * strike_below", "go": "strike", "set": { "target": "easiest_enemy_near(at, radius)", "chase_gap": "distance(me, easiest_enemy_near(at, radius))", "best_at": "now" } } ] },
     "shelter": { "about": "sheltering in {refuge}", "do": "enter refuge",
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
         { "if": "besieged(at) and not inside(at) and siege_strength(at) <= relief_strength(at) * strike_below", "go": "relieve", "poke": "{me} is breaking the siege of {at}: strength {relief_strength(at)} with the defenders inside who would sally out ({me}'s own {strength}) against {siege_strength(at)}." },
-        { "if": "hours_in_state >= 3 and not besieged(at) and threat_near(at, radius) < strength * shelter_at * 0.8 and (stay_inside <= 0 or relief_within(at, radius / max(pace, 0.3) + 6, radius) < strength * shelter_at * 0.8)", "go": "patrol" } ] },
+        { "if": "hours_in_state >= 3 and not besieged(at) and threat_near(at, radius * 1.5) < strength * shelter_at * 0.8 and (stay_inside <= 0 or relief_within(at, radius / max(pace, 0.3) + 6, radius * 1.5) < strength * shelter_at * 0.8)", "go": "patrol" } ] },
     "refill": { "about": "refilling its ranks at {refill_at}", "do": "recruit refill_at",
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
@@ -47,14 +47,16 @@
     "strike": { "about": "striking {target} near {at}", "do": "engage target",
       "when": [
         { "if": "gone(target) or not in_view(target)", "go": "patrol" },
-        { "if": "distance(target, at) > radius * 1.5", "go": "patrol" },
-        { "if": "hours_in_state >= 4 and distance(me, target) >= chase_gap", "go": "patrol" },
-        { "if": "strength_of(target) > strength * strike_below * 1.5", "go": "patrol" },
+        { "if": "not in_battle and not within(at, radius)", "go": "patrol", "set": { "spurned": "target", "spurned_until": "now + 6" }, "poke": "{me} broke off the chase of {target}: it would have led {me} out of the area it guards ({distance(me, at)} from {at}). Back to patrolling; it leaves {target} be for 6 hours." },
+        { "if": "distance(target, at) > radius", "go": "patrol" },
+        { "if": "not in_battle and now - best_at >= 6", "go": "patrol", "set": { "spurned": "target", "spurned_until": "now + 6" }, "poke": "{me} gave up the chase of {target}: no closer in 6 hours ({distance(me, target)} away). Back to patrolling around {at}; it leaves {target} be for 6 hours." },
+        { "if": "not in_battle and company(target) > strength * strike_below * 1.5", "go": "patrol", "poke": "{me} broke off the strike on {target}: with the lords near it and the host it marches with it is strength {company(target)} against {strength}. Back to patrolling around {at}." },
         { "if": "besieged(at) and besieger(at) != target", "go": "patrol" },
         { "if": "stay_inside > 0 and fort(at) and relief_within(at, radius / max(pace, 0.3) + 6, radius) >= strength * shelter_at", "go": "shelter", "set": { "refuge": "at" },
           "poke": "Forces too strong for {me} are coming to {at} and would get there before {me} could ride back from its chase: strength {relief_within(at, radius / max(pace, 0.3) + 6, radius)} against {strength}. Nearest first: {relief_of(at, radius)}. {me} is going inside {at} ahead of them." },
         { "if": "threat_near(at, radius) >= strength * shelter_at", "go": "shelter", "set": { "refuge": "pick(stay_inside > 0 and fort(at), at, pick(refuge(at, radius) != none, refuge(at, radius), pick(fort(at), at, nearest_fort())))" },
-          "poke": "Forces too strong for {me} came near {at} while it chased {target}: strength {threat_near(at, radius)} against {strength}. {me} is sheltering in {refuge}." } ] },
+          "poke": "Forces too strong for {me} came near {at} while it chased {target}: strength {threat_near(at, radius)} against {strength}. {me} is sheltering in {refuge}." },
+        { "if": "distance(me, target) < chase_gap - 1", "go": "strike", "set": { "chase_gap": "distance(me, target)", "best_at": "now" } } ] },
     "relieve": { "about": "breaking the siege of {at}", "do": "engage besieger(at)",
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell." },
