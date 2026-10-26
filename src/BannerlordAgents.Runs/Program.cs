@@ -233,7 +233,8 @@ namespace BannerlordAgents.Runs
             {
                 bool game = Process.GetProcesses().Any(p => Safe(() => p.ProcessName).Contains("Bannerlord", StringComparison.OrdinalIgnoreCase));
                 int warRooms = Process.GetProcesses().Count(p => Safe(() => p.ProcessName).Equals("WarRoom", StringComparison.OrdinalIgnoreCase));
-                int wanted = r.Agents.Count;
+                // a war room for each agent switched on (live or watching); none in the control, C0
+                int wanted = r.Agents.Count(a => a.Mode == "live" || a.Mode == "shadow");
                 if (!game) attention.Add("the game is not running (the run is open; load " + ((r.State?["saves"] as JsonArray)?.LastOrDefault()?.ToString() ?? "its last save") + " to carry it on)");
                 if (warRooms < wanted) attention.Add("only " + warRooms + " of " + wanted + " war rooms are running (scripts\\agents.ps1 start)");
                 string bridgeLog = Path.Combine(Root, "logs", "bridge.log");

@@ -83,9 +83,11 @@ namespace BannerlordAgents
                 AgentConfig first = resolved.Where(x => x.Value == k).Select(x => x.Key).OrderBy(x => x.On ? 0 : 1).First();
                 if (first != c)
                 {
-                    // an agent switched off, set aside for the one switched on, is as meant (the test runs' arms): a note, not a problem
-                    string why = Names.Faction(k) + " has two agents; " + (first.On ? "the one switched on" : "the first") + " plays it (" + c.Workspace + " does not)";
-                    if (first.On && !c.On) SetAside.Add(why);
+                    // an agent switched off, set aside for the one switched on or beside another switched off (C0), is as meant
+                    // (the test runs' arms): a note, not a problem; only two switched on is
+                    string how = !c.On ? (first.On ? "the one switched on plays it" : "both are switched off, so neither plays it") : "both are switched on, so the first plays it";
+                    string why = Names.Faction(k) + " has two agents; " + how + " (" + c.Workspace + " set aside)";
+                    if (!c.On) SetAside.Add(why);
                     else Unusable.Add(why);
                     continue;
                 }
