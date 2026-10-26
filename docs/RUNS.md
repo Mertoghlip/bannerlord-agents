@@ -145,6 +145,7 @@ The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $27
 ## The control, C0 (since 0.12.4)
 
 Mert, Oct 25: "be ready for the control test: all realms playing with the game's ai". Arm C0: the playerless switch as in C1 and C2 (you become a wanderer), the kingdom's agent off (`-KingdomWatches` to keep it watching in shadow), the orcs' and Dol Guldur's agents in shadow as in C2 (`-RivalsOff` for off), the lieutenant off. `agents.run check` names it "C0 (the control: the game's AI ruling your kingdom against the game's AI)"; the run records and reports it like the others.
+- **Set for the first control run** (Mert, Oct 25: "For c0: please disable all agents so they don't needlessly take up usage. Just let the game's ai play and watch it yourself. Do keep all of your logs for it though so we can report on the run."): `arm.ps1 -Arm C0 -RivalsOff`, so all four agents are off, and the war rooms are stopped (no model calls at all, not even the chronicler); the dashboard runs alone. The bridge's own logs and the run record (`runs\<run>\`, the session's trace and story) are kept as for every run. Compared with C2, the orcs' and Dol Guldur's agents do not watch, which changes nothing in the game (they gave no orders in C2 either).
 
 ## Not yet seen in a game
 

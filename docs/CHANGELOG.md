@@ -1455,3 +1455,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - War room self-test passed (71; new: an order given the minute before a council sits stands against it). Dashboard self-test passed (27). Speed test within budget. 688 game references, 0 missing.
   - Installed with `scripts\deploy.ps1` at 20:09, the game closed: `BannerlordAgents.dll` sha256 `474540D24DE0487C…`, `WarRoom.dll` `918317060F491648…`. War rooms and dashboard stopped for the build and started again 20:09.
 - **Not yet seen in a game:** all of 0.12.4. The control run (C0) gives no agent orders, so none of the order changes affect it.
+
+### 20:12 · The control run set up with every agent off · (no install)
+- **Mert:** "For c0: please disable all agents so they don't needlessly take up usage. Just let the game's ai play and watch it yourself. Do keep all of your logs for it though so we can report on the run."
+- **Outside the repository:** `scripts\arm.ps1 -Arm C0 -RivalsOff` at 20:12: the orcs' and Dol Guldur's agents shadow → off in their `agent.txt` (the kingdom's agent and the lieutenant were already off); logged in `runs\arms.log`. War rooms stopped (`scripts\agents.ps1 stop`), the dashboard started again alone (detached). The bridge's logs and the run record are unchanged. docs/RUNS.md says so.
