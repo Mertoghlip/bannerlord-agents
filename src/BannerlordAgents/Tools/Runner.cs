@@ -478,7 +478,7 @@ namespace BannerlordAgents.Tools
             // with, together (World.DangerAround); the strongest of them stands for where it is and how fast it comes
             Danger Find(double within)
             {
-                List<PartyRow> g = w.DangerAround(me.Id, within, Spared);
+                List<PartyRow> g = w.DangerAround(me.Id, within, JoinHoursOf(t), Spared);
                 double sum = g.Sum(World.StrengthOf);
                 if (g.Count == 0 || sum < caution * Math.Max(1, mine)) return null;
                 return new Danger { Lead = g.OrderByDescending(World.StrengthOf).First(), Strength = sum, Count = g.Count, Ids = new HashSet<string>(g.Select(x => x.Id)) };
@@ -519,6 +519,9 @@ namespace BannerlordAgents.Tools
             }
             return Shelter(t, me, w, danger, mine, alwaysOwn ? own : null, preferred, again: false);
         }
+
+        /// <summary>The hours ahead an order's fights count the enemy lords and armies who could join them (its join_hours, 0.12.3).</summary>
+        public static double JoinHoursOf(ToolInstance t) => t.Settings.TryGetValue("join_hours", out double h) ? h : Library.JoinHours.Default;
 
         /// <summary>A danger to a lord, counted as a group (0.12.2): its strongest party, and all of it together.</summary>
         private sealed class Danger
@@ -722,8 +725,8 @@ namespace BannerlordAgents.Tools
 
             private PartyRow Me => _w.Party(_t.Order.Party);
 
-            /// <summary>How near counts as with a party, for its company: the order's danger radius.</summary>
-            private double Near => _t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
+            /// <summary>The hours ahead a fight counts those who could join it: the order's join_hours (0.12.3).</summary>
+            private double JoinHours => JoinHoursOf(_t);
 
             private string Id(object v) => v as string;
             private SettlementRow H(object v) => _w.Holding(v as string);
@@ -799,16 +802,16 @@ namespace BannerlordAgents.Tools
                     case "fort": return World.IsFort(H(a[0]));
                     case "enemies_near": return (double)_w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Count;
                     case "enemy_strength_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Sum(World.StrengthOf);
-                    case "threat_near": return _w.ThreatStrength(Id(a[0]), Expr.Number(a[1]));
+                    case "threat_near": return _w.ThreatStrength(Id(a[0]), Expr.Number(a[1]), JoinHours);
                     case "enemy_threat_near": return _w.EnemyThreat(Id(a[0]), Expr.Number(a[1]));
                     case "other_fort": return _w.OtherFort(Id(a[0]), _t.Order.Party)?.Id;
                     case "refuge": return _w.ChooseRefuge(_t.Order.Party, Id(a[0]), Expr.Number(a[1]), null, out _, out _)?.Id;
                     case "would_hold": { SettlementRow h = H(a[0]); return h != null && World.IsFort(h) && _w.Holds(h, _t.Order.Party, _w.ThreatStrength(h.Id, Expr.Number(a[1]))); }
                     case "strongest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     case "weakest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
-                    // a party with what it would be fought with: its host and every enemy near it (0.12.2, World.Company)
-                    case "company": return _w.CompanyStrength(Id(a[0]), Near);
-                    case "easiest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(e => _w.CompanyStrength(e.Id, Near)).FirstOrDefault()?.Id;
+                    // a party with what it would be fought with: every enemy who could join a fight with it within join_hours (World.Company)
+                    case "company": return _w.CompanyStrength(Id(a[0]), JoinHours);
+                    case "easiest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(e => _w.CompanyStrength(e.Id, JoinHours)).FirstOrDefault()?.Id;
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;
                     case "army_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     // enemy lords and armies near a place or heading for it, counted together (0.7.2): their strength, and who they are

@@ -42,7 +42,7 @@ namespace BannerlordAgents.WarRoom
         public int Asked;
 
         public string Server => "routes";
-        public IEnumerable<string> Tools => new[] { ToolName, OddsName, RoadsName, ChaseName };
+        public IEnumerable<string> Tools => new[] { ToolName, OddsName, RoadsName, ChaseName, EngageName };
 
         public RouteTool(string root, string logDir, string campaign, string realm, int poke, string call)
         {
@@ -122,14 +122,14 @@ namespace BannerlordAgents.WarRoom
                     };
                     break;
                 case "tools/list":
-                    result = new JsonObject { ["tools"] = new JsonArray(Definition(), OddsDefinition(), RoadsDefinition(), ChaseDefinition()) };
+                    result = new JsonObject { ["tools"] = new JsonArray(Definition(), OddsDefinition(), RoadsDefinition(), ChaseDefinition(), EngageDefinition()) };
                     break;
                 case "tools/call":
                 {
                     string name = (string)msg["params"]?["name"];
                     JsonObject args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
                     string text = name == ToolName ? Ask(args) : name == OddsName ? Safe(() => Odds(args)) : name == RoadsName ? Safe(() => RoadsIn(args))
-                                  : name == ChaseName ? Safe(() => Chase(args)) : "There is no tool called " + name + ".";
+                                  : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args)) : "There is no tool called " + name + ".";
                     result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
                     break;
                 }

@@ -227,9 +227,19 @@ namespace BannerlordAgents.WarRoom
             Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
             // 0.7.4: the battle odds and the roads in, served beside the way
             string Ask(string name, string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
-            Check((list?["result"]?["tools"] as JsonArray)?.Count == 4 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
-                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch",
-                  "the server lists the battle odds, the roads in and the chase beside the way");
+            Check((list?["result"]?["tools"] as JsonArray)?.Count == 5 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
+                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch" && (string)list?["result"]?["tools"]?[4]?["name"] == "engagement",
+                  "the server lists the battle odds, the roads in, the chase and the engagement beside the way");
+            // 0.12.3: the engagement: when Bolg gets to Hirgon, the fight, and Aragorn's army (50 off at the pace its trail shows) too late to join it
+            string e1 = Ask("engagement", "{\"ours\":[\"lord_bolg\"],\"target\":\"lord_sc\"}");
+            Check(e1 != null && e1.StartsWith("ENGAGEMENT: Bolg [lord_bolg] against Hirgon [lord_sc]") && System.Text.RegularExpressions.Regex.IsMatch(e1, @"Bolg in about \d+ hours")
+                  && e1.Contains("Against Hirgon alone: you win") && System.Text.RegularExpressions.Regex.IsMatch(e1, @"Aragorn \[lord_ar\][^;]*too late") && e1.Contains("None of them gets there before the fight ends")
+                  && e1.Contains("give that order join_hours"),
+                  "the engagement: when Bolg reaches Hirgon, the fight by the game's rules, Aragorn's army too far to join, and the join_hours for the orders: " + e1?.Replace("\n", " | "));
+            string e2 = Ask("engagement", "{\"ours\":[\"lord_bolg\"],\"target\":\"lord_ar\"}");
+            Check(e2 != null && e2.Contains("It is marching somewhere") && e2.Contains("Against Aragorn alone: they win"), "against an army on the march: it says the fight may come later, and Bolg loses: " + e2?.Replace("\n", " | "));
+            string e3 = Ask("engagement", "{\"ours\":[\"lord_bolg\"],\"target\":\"lord_nobody\"}");
+            Check(e3 != null && e3.StartsWith("Name an enemy lord or army in view in target"), "an enemy the realm never saw is refused: " + e3);
             // 0.9.3: the chase question before a hunt (Bolg at his own pace against Aragorn's army at the pace its trail shows)
             string k1 = Ask("can_catch", "{\"hunter\":\"lord_bolg\",\"quarry\":\"lord_ar\"}");
             Check(k1 != null && k1.StartsWith("CAN Bolg [lord_bolg] CATCH Aragorn [lord_ar]?") && k1.Contains("Bolg is the faster") && k1.Contains("caught in about") && k1.Contains("It is marching to Edoras [castle_e]"),

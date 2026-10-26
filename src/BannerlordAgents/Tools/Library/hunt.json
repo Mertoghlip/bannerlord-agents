@@ -6,14 +6,14 @@
   "target": "enemy_lord",
   "settings": {
     "lose_hours": [6, 1, 48, "give up when the target has not been seen for this many hours"],
-    "bigger_ratio": [1.2, 0.3, 5, "stop when the target, with the lords near it and the host it marches with or to join, grows to this many times its strength"]
+    "bigger_ratio": [1.2, 0.3, 5, "stop when the target, with every enemy lord and army in view that could join a fight with it within join_hours, grows to this many times its strength"]
   },
   "start": "chase",
   "states": {
     "chase": { "about": "hunting {target}", "do": "engage target",
       "when": [
         { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
-        { "if": "company(target) > strength * bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: with the lords near it and the host it marches with, strength {company(target)} against {strength}." },
+        { "if": "company(target) > strength * bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: with the enemies who could join a fight with it within {join_hours} hours, strength {company(target)} against {strength}." },
         { "if": "not in_view(target)", "go": "search" } ] },
     "search": { "about": "searching for {target} where it was last seen", "do": "toward target",
       "when": [

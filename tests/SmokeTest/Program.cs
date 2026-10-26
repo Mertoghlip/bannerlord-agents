@@ -600,7 +600,10 @@ namespace SmokeTest
             var host = new PartyRow { Id = "p_host2", Leader = "lord_host2", Name = "Imrahil", Faction = "player_k", Kind = "lord", Men = 2000, ArmyMen = 2400, ArmyParties = 3, ArmyStrength = 3000, Strength = 1200, Speed = 4, X = 90, Y = 100, Doing = "GoToPoint", Spottable = true };
             moves.Clear();
             Brain.OnHour(ToolWorld(5004, d4, raider, host));
-            Check(chased && moves.Any(m => m.Key == 915 && m.Value.Verb == "enter" && m.Value.Place == "castle_two"), "a chase is broken off, into the nearest other castle, when a strong force comes into the area");
+            // since 0.12.3 the safety rule sees Imrahil's army too (it could reach D4 within join_hours), and Orc Keep would not hold
+            // against it, so D4 falls back toward it rather than going in
+            Check(chased && moves.Any(m => m.Key == 915 && (m.Value.Verb == "enter" || m.Value.Verb == "near") && m.Value.Place == "castle_two"),
+                  "a chase is broken off, toward the nearest other castle, when a strong force comes into the area");
             Runner.Ended(915, "test over");
 
             // the danger rule counts bandits: a weak lord shelters in a castle that would hold against them...
@@ -1176,11 +1179,33 @@ namespace SmokeTest
             World w1 = Runner.WorldFor(ToolWorld(7601, alenon, thrurg, narsha, rukmash, gralzuk));
             Check(Math.Abs(w1.CompanyStrength("p_gra", 8) - 9734) < 1 && !moves.Any(m => m.Key == 1301 && m.Value.Verb == "engage"),
                   "Gralzuk (906) alone is weak, but with the host she marches to join (Thrurg's army and two more lords) she is 9,734 against Alenon's 8,505: no strike (" + w1.CompanyStrength("p_gra", 8) + ")");
-            var drub = Foe("drb", "Drubnash", 112, 112, 651);
+            var drub = Foe("drb", "Drubnash", 80, 115, 651);
             drub.Doing = "RaidSettlement";
             Brain.OnHour(ToolWorld(7602, alenon, thrurg, narsha, rukmash, gralzuk, drub));
-            Check(moves.Any(m => m.Key == 1301 && m.Value.Verb == "engage" && m.Value.Party == "p_drb"), "a raider on its own (651) is struck instead");
+            Check(moves.Any(m => m.Key == 1301 && m.Value.Verb == "engage" && m.Value.Party == "p_drb"), "a raider on the far side, more than 8 hours from the host (651), is struck instead");
             Runner.Ended(1301, "test over");
+
+            // 0.12.3: the agent's hours window decides who counts: with join_hours 0 each lord stands alone, so the weakest is struck
+            Check(Math.Abs(w1.CompanyStrength("p_gra", 0) - 906) < 1, "with a window of 0 hours Gralzuk stands alone (906)");
+            var alenon2 = Orc("aln2", "Alenon II", 102, 100, 8505);
+            Brain.OnHour(ToolWorld(7603, alenon2, thrurg, narsha, rukmash, gralzuk));
+            moves.Clear();
+            ToolOrder narrow = Guard("aln2", "Alenon II", 30);
+            narrow.Settings["join_hours"] = 0;
+            Runner.Start(1308, narrow);
+            Check(moves.Any(m => m.Key == 1308 && m.Value.Verb == "engage" && m.Value.Party == "p_gra"), "the same guard given join_hours 0 strikes Gralzuk, the weakest alone: the window is the agent's to set");
+            Runner.Ended(1308, "test over");
+
+            // 0.12.3: the report lists the lords marching to join an army under it, with how far each is and the hours to it
+            Snapshot rs = ToolWorld(7604, alenon, thrurg, narsha, rukmash, gralzuk);
+            string report = Views.Report(Views.Build(rs, "orcs", rs.WatchedSees, rs.HostileToWatched, Brain.Get("orcs")), null);
+            Check(report.Contains("Marching to join it (3 lords, strength 4,134 together), soonest first:") && System.Text.RegularExpressions.Regex.IsMatch(report, @"- Narsha \[lord_nar\]: 875 men, strength 1,751, 11\.0 from it, about \d+ hours? at its pace")
+                  && System.Text.RegularExpressions.Regex.IsMatch(report, @"following Thrurg, 11\.0 from it \(about \d+ hours?\)"),
+                  "the report lists under Thrurg's army the three lords marching to join it, each with its distance and hours: " + report.Substring(Math.Max(0, report.IndexOf("Thrurg", StringComparison.Ordinal)), 300).Replace("\n", " | "));
+            Snapshot hidden = ToolWorld(7605, alenon, thrurg, narsha, rukmash, gralzuk);
+            hidden.WatchedSees.Remove("p_thr");
+            string report2 = Views.Report(Views.Build(hidden, "orcs", hidden.WatchedSees, hidden.HostileToWatched, Brain.Get("orcs")), null);
+            Check(!report2.Contains("Marching to join it") && !report2.Contains("from it (about"), "toward an army the realm cannot see, no distance is given (the fog rule)");
 
             // 2. the safety rule counts the enemies near the lord together: three lords, none strong enough alone
             var thalion = Orc("thal", "Thalion", 150, 130, 600);

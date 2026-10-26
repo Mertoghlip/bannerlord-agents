@@ -34,7 +34,7 @@ You can read `lookups/<id>.txt` for any id in [brackets]: a lord's men, ranks, p
 
 ## Asking the way
 
-You can ask the same questions a commander can, each costing a few seconds: `ask_the_way` (the way a lord or army would march somewhere, its hours, its crossings; `also_from` compares who gets there first), `can_catch` (whether one of the ruler's lords could catch an enemy the report shows), `battle_odds` (how a battle would go by the game's own rules, and what a win would bring in) and `roads_in` (the roads into a holding from the enemy's castles and towns, and where a watch would see a relief coming). Ask only when the answer depends on it.
+You can ask the same questions a commander can, each costing a few seconds: `ask_the_way` (the way a lord or army would march somewhere, its hours, its crossings; `also_from` compares who gets there first), `can_catch` (whether one of the ruler's lords could catch an enemy the report shows), `battle_odds` (how a battle would go by the game's own rules, and what a win would bring in), `roads_in` (the roads into a holding from the enemy's castles and towns, and where a watch would see a relief coming) and `engagement` (before an attack: when the chosen lords would reach an enemy in view, how long the fight would last and how it would end, which other enemies could march to it in time, and the `join_hours` to give the orders, whose rules count with a fight the enemies that could march to it within that many hours, default 8). Ask only when the answer depends on it.
 
 ## Answer format
 

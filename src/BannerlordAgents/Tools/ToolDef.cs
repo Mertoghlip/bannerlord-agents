@@ -246,7 +246,7 @@ namespace BannerlordAgents.Tools
             }.Where(x => x != null));
             sb.Append("- **" + Name + "**" + (takes.Length > 0 ? " (" + takes + ")" : "") + ": " + About);
             if (!string.IsNullOrEmpty(CallsBack)) sb.Append(" Calls you back when " + CallsBack + ".");
-            var shown = Settings.Values.Where(s => s.Name != "caution" && s.Name != "danger_radius").ToList();
+            var shown = Settings.Values.Where(s => s.Name != "caution" && s.Name != "danger_radius" && s.Name != "join_hours").ToList();
             if (shown.Count > 0)
                 sb.Append(" Settings: " + string.Join("; ", shown.Select(s => s.Name + " " + Num(s.Default) + " (" + Num(s.Min) + " to " + Num(s.Max) + ")" + (s.About != null ? ": " + s.About : ""))) + ".");
             return sb.ToString();
@@ -283,8 +283,10 @@ namespace BannerlordAgents.Tools
         private static readonly object Gate = new object();
 
         /// <summary>The safety rule every tool and move carries unless it opts out.</summary>
-        public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when the enemy lords, armies and bandits close to the lord, counted together with the hosts those lords march with or to join, are this many times stronger, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against them and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
+        public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when anything hostile comes close to the lord, so a fight may start where he is, and the enemy lords, armies and bandits close to him, with every enemy lord and army in view that could reach him within join_hours, are this many times stronger together, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against them and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
         public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "how close counts as close for caution, in map units" };
+        /// <summary>The hours window of a fight (0.12.3; Mert chose "Hours window only"): who could join it, by the agent's own reckoning of how long it lasts.</summary>
+        public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, at its own pace as the crow flies, counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
 
         public static Dictionary<string, ToolDef> All
         {
@@ -305,6 +307,7 @@ namespace BannerlordAgents.Tools
                         {
                             if (!d.Settings.ContainsKey("caution")) d.Settings["caution"] = Caution;
                             if (!d.Settings.ContainsKey("danger_radius")) d.Settings["danger_radius"] = DangerRadius;
+                            if (!d.Settings.ContainsKey("join_hours")) d.Settings["join_hours"] = JoinHours;
                         }
                         all[d.Name] = d;
                     }
@@ -352,6 +355,7 @@ namespace BannerlordAgents.Tools
             sb.AppendLine();
             sb.AppendLine("Every move and tool also takes caution (default " + ToolDef.Num(Caution.Default) + ") and danger_radius (default " + ToolDef.Num(DangerRadius.Default)
                           + "): " + Caution.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");
+            sb.AppendLine("And join_hours (default " + ToolDef.Num(JoinHours.Default) + "): " + JoinHours.About + ".");
             return sb.ToString();
         }
     }

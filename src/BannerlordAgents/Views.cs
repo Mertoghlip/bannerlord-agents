@@ -68,6 +68,14 @@ namespace BannerlordAgents
         public string Arrives;
         public double ArrivesAt = double.NaN;
         public Common.Pace March;
+        /// <summary>
+        /// The army it is marching to join (0.12.3; Mert: "every lord marching to an army within view should be listed under that
+        /// army with how far away they are from it"): the army's party id, how far from it as the crow flies, and the hours to it
+        /// at its own pace while the army holds where it is. Set only when that army is in view or the realm's own.
+        /// </summary>
+        public string Joining;
+        public float JoiningDistance = float.NaN;
+        public double JoiningHours = double.NaN;
     }
 
     /// <summary>
@@ -161,6 +169,18 @@ namespace BannerlordAgents
                 int keep = Math.Max(40, v.Seen.Count(x => SeenRank(x) == 0));
                 v.SeenNotListed = v.Seen.Count - keep;
                 v.Seen = v.Seen.Take(keep).ToList();
+            }
+            // the lords marching to join an army, with how far they are from it (0.12.3): only toward an army the realm can see
+            foreach (ViewParty p in v.Forces.Concat(v.Seen))
+            {
+                if (!s.PartyById.TryGetValue(p.Id, out PartyRow r)) continue;
+                PartyRow head = JoiningHead(s, r);
+                if (head == null || !(head.Faction == fid || sees.ContainsKey(head.Id))) continue;
+                float d = Dist(head.X, head.Y, r.X, r.Y);
+                float per = Forecast.DayPerHour(s, r);
+                p.Joining = head.Id;
+                p.JoiningDistance = Text.R1(d);
+                p.JoiningHours = per > 0.05f ? Math.Round(d / per, 1) : double.NaN;
             }
 
             foreach (SettlementRow h in own)
@@ -506,8 +526,9 @@ namespace BannerlordAgents
             {
                 string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
                 Tools.ToolInstance held = Tools.Runner.ForParty(f.Id);
-                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + (f.Arrives != null ? ", " + f.Arrives : "")
+                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + JoiningText(f) + (f.Arrives != null ? ", " + f.Arrives : "")
                               + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
+                JoinerLines(sb, v, f);
             }
 
             sb.AppendLine().AppendLine("YOUR HOLDINGS (" + v.Holdings.Count + ")");
@@ -563,7 +584,8 @@ namespace BannerlordAgents
                 string where = p.NearestHolding == null ? Where(p)
                              : Roads.Both(p.HoldingDistance, p.HoldingRoad) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? "; " + Where(p) : "");
                 sb.AppendLine("- " + p.Relation.ToUpperInvariant() + " " + p.Name + Tag(p) + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
-                    + "; " + where + "; " + p.Doing + (p.Arrives != null ? ", " + p.Arrives : "") + "; seen by " + p.SeenBy + ".");
+                    + "; " + where + "; " + p.Doing + JoiningText(p) + (p.Arrives != null ? ", " + p.Arrives : "") + "; seen by " + p.SeenBy + ".");
+                JoinerLines(sb, v, p);
             }
             if (v.OthersInView > 0) sb.AppendLine("- Also in view: " + v.OthersInView + " caravans, villagers and other small parties.");
 
@@ -639,6 +661,35 @@ namespace BannerlordAgents
             var holdings = s.Settlements.Where(h => h.Faction == fid && h.Kind != "village")
                 .Select(h => new { h.Id, h.Name, h.Kind, h.Garrison, Status = Status(s, h) }).ToList();
             return new { Forces = forces, Holdings = holdings };
+        }
+
+        /// <summary>
+        /// The army a lord is marching to join (0.12.3): the army he belongs to but has not reached yet, or the army or lord of his
+        /// own realm he follows (the game sends a lord called to an army that way); null otherwise.
+        /// </summary>
+        public static PartyRow JoiningHead(Snapshot s, PartyRow r)
+        {
+            if (r == null || r.Kind != "lord" || r.Attached) return null;
+            PartyRow head = null;
+            if (r.ArmyLeader != null && r.ArmyLeader != r.Id) s.PartyById.TryGetValue(r.ArmyLeader, out head);
+            else if ((r.Doing == "EscortParty" || r.Doing == "JoinParty") && r.TargetParty != null && s.PartyById.TryGetValue(r.TargetParty, out PartyRow led) && led.Faction == r.Faction)
+                head = led.Attached && led.ArmyLeader != null && s.PartyById.TryGetValue(led.ArmyLeader, out PartyRow l) ? l : led;
+            return head != null && head.Id != r.Id ? head : null;
+        }
+
+        /// <summary>On a joiner's own line: ", 3.2 from it (about 2 hours)".</summary>
+        private static string JoiningText(ViewParty p) => p.Joining == null ? "" : ", " + Text.D(p.JoiningDistance) + " from it" + (double.IsNaN(p.JoiningHours) ? "" : " (about " + Forecast.HoursText(p.JoiningHours) + ")");
+
+        /// <summary>The lords marching to join an army, under its line: each one's men, strength, distance and hours to it, soonest first.</summary>
+        private static void JoinerLines(StringBuilder sb, View v, ViewParty army)
+        {
+            List<ViewParty> coming = v.Forces.Concat(v.Seen).Where(x => x.Joining == army.Id)
+                                      .OrderBy(x => double.IsNaN(x.JoiningHours) ? double.MaxValue : x.JoiningHours).ThenBy(x => x.JoiningDistance).ToList();
+            if (coming.Count == 0) return;
+            sb.AppendLine("  Marching to join it (" + coming.Count + (coming.Count == 1 ? " lord" : " lords") + ", strength " + Text.N((int)coming.Sum(x => x.Strength)) + " together), soonest first:");
+            foreach (ViewParty x in coming)
+                sb.AppendLine("  - " + x.Name + Tag(x) + ": " + Text.N(x.Men) + " men, strength " + Text.N((int)x.Strength) + ", " + Text.D(x.JoiningDistance) + " from it"
+                              + (double.IsNaN(x.JoiningHours) ? "" : ", about " + Forecast.HoursText(x.JoiningHours) + " at its pace while the army holds where it is") + ".");
         }
 
         /// <summary>The order of the IN VIEW list: enemy armies, enemy lords, bandits, then allies and neutrals.</summary>
