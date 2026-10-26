@@ -306,6 +306,46 @@ namespace BannerlordAgents.Tools
         public double CompanyStrength(string id, double joinHours) => Company(id, joinHours).Sum(StrengthOf);
 
         /// <summary>
+        /// Our side of a fight (0.12.4; Mert, run 20261025-1831-C2: "imak is going back and forth because he is scared of khamul's
+        /// force, even though our lords' combined force is enough to take him. Why is the strength calculator not taking into
+        /// account the strength of the other lords around him?"): five lords besieged Torech Emel, each under his own order, and
+        /// each weighed Khamûl's relief (4,155) against himself alone (559 to 1,199). Counted with a lord, of the realm's lords and
+        /// its allies' in view, out in the field: every one camped in the siege he is in or making for (besieging), wherever; and,
+        /// within joinHours of the fight at their own pace, those marching to join him or his army, and those bound for the same
+        /// place or target (objectives): besieging it, defending it, or holding one of the agent's orders aimed at it. Not every lord
+        /// near him: a lord holding one of the agent's orders has the game's own choices switched off, so he joins no fight by himself.
+        /// </summary>
+        public List<PartyRow> Friends(PartyRow me, float x, float y, double joinHours, string besieging, ICollection<string> objectives)
+        {
+            var list = new List<PartyRow>();
+            foreach (PartyRow r in S.Parties)
+            {
+                if (r.Kind != "lord" || r.Attached || (me != null && r.Id == me.Id) || !(Own(r) || (Ally(r.Faction) && Visible(r)))) continue;
+                if (besieging != null && r.Besieging == besieging) { list.Add(r); continue; }
+                if (r.InSettlement != null || (r.InBattle && HoursTo(r, x, y) > 1) || joinHours <= 0 || HoursTo(r, x, y) > joinHours) continue;
+                if (me != null && Views.JoiningHead(S, r)?.Id == me.Id) { list.Add(r); continue; }
+                if (objectives == null || objectives.Count == 0) continue;
+                bool bound = (r.Besieging != null && objectives.Contains(r.Besieging))
+                             || ((r.Doing == "BesiegeSettlement" || r.Doing == "DefendSettlement") && r.TargetSettlement != null && objectives.Contains(r.TargetSettlement))
+                             || (Runner.ForParty(r.Id) is ToolInstance ti && ((ti.Order.At != null && objectives.Contains(ti.Order.At)) || (ti.Order.Target != null && objectives.Contains(ti.Order.Target))));
+                if (bound) list.Add(r);
+            }
+            return list;
+        }
+
+        /// <summary>A lord with our side of a fight: his own strength and every friend's (Friends) together.</summary>
+        public double SideStrength(PartyRow me, float x, float y, double joinHours, string besieging, ICollection<string> objectives, List<PartyRow> with = null)
+        {
+            double sum = StrengthOf(me);
+            foreach (PartyRow f in Friends(me, x, y, joinHours, besieging, objectives))
+            {
+                sum += StrengthOf(f);
+                with?.Add(f);
+            }
+            return sum;
+        }
+
+        /// <summary>
         /// What threatens a lord where he stands (the safety rule): once anything hostile is within r of him, a fight may start
         /// where he is, so every hostile lord, army and band of bandits in view within r, and every hostile lord and army in view
         /// that could reach him within joinHours (Joiners), count together; spared parties (his own target) left out, though
@@ -498,9 +538,14 @@ namespace BannerlordAgents.Tools
             double dangerStrength = groupStrength >= 0 ? groupStrength : danger != null ? StrengthOf(danger) : 0;
             ICollection<string> counted = group ?? (danger != null ? new HashSet<string> { danger.Id } : null);
             double DistTo(SettlementRow h, float x, float y) => Math.Sqrt((h.X - x) * (h.X - x) + (h.Y - y) * (h.Y - y));
-            // reached before the danger: the lord's hours to it, at its own speed, no more than the danger's at its speed
-            double mySpeed = Speed(Party(me)), itsSpeed = danger != null ? Speed(danger) : 1;
-            bool Reachable(SettlementRow h) => danger == null || DistTo(h, mx, my) < 2 || DistTo(h, mx, my) / mySpeed <= DistTo(h, danger.X, danger.Y) / itsSpeed;
+            // reached before the danger: the lord's hours to it, at its own speed, no more than any of the danger's parties' at
+            // theirs (0.12.4: only the strongest was weighed, and Zlatka, Alvar and Haldir, sheltering from a group, were caught on
+            // the way by another part of it)
+            double mySpeed = Speed(Party(me));
+            List<PartyRow> members = (group ?? new List<string>()).Select(Party).Where(p => p != null).ToList();
+            if (danger != null && !members.Contains(danger)) members.Add(danger);
+            bool Reachable(SettlementRow h) => members.Count == 0 || DistTo(h, mx, my) < 2
+                                               || members.All(d => DistTo(h, mx, my) / mySpeed <= DistTo(h, d.X, d.Y) / Speed(d));
             List<SettlementRow> places = S.Settlements
                 .Where(h => IsFort(h) && (h.Faction == Realm || Ally(h.Faction)) && (!Besieged(h) || (h.Id == preferred && danger == null)))
                 .OrderBy(h => h.Id == preferred ? -1 : DistTo(h, mx, my)).ToList();

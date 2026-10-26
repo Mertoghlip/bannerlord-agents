@@ -602,7 +602,7 @@ namespace BannerlordAgents
                 lines.Add("  ! An agent is live for your kingdom and would command your lords: set its mode to off for A or B.");
             if (ruler != "you")
             {
-                if (ka == null || ka.Mode != "live") lines.Add("  ! You do not rule " + (k != null ? Names.Faction(k) : "the kingdom") + " and no agent commands it live: for C1 or C2 set the kingdom's agent to live.");
+                if ((ka == null || ka.Mode != "live") && arm != "C0") lines.Add("  ! You do not rule " + (k != null ? Names.Faction(k) : "the kingdom") + " and no agent commands it live: for C1 or C2 set the kingdom's agent to live.");
                 List<string> held = k == null ? new List<string>() : k.Clans.Where(c => c != null).SelectMany(c => c.Heroes).Where(h => h != null && h.IsLord && h.IsAlive && PacReader.HoldsOrder(h)).Select(Names.Hero).ToList();
                 if (held.Count > 0) lines.Add("  ! " + held.Count + " of the kingdom's lords hold Party AI Controls orders, which the agent may not override: release them first (" + string.Join(", ", held.Take(6)) + ").");
             }
@@ -714,7 +714,9 @@ namespace BannerlordAgents
     {
         public static readonly Dictionary<string, string> Names = new Dictionary<string, string>
         {
-            ["A"] = "you against the agents", ["B"] = "you against the game's AI", ["C1"] = "an agent ruling your kingdom against the agents", ["C2"] = "an agent ruling your kingdom against the game's AI"
+            ["A"] = "you against the agents", ["B"] = "you against the game's AI", ["C1"] = "an agent ruling your kingdom against the agents", ["C2"] = "an agent ruling your kingdom against the game's AI",
+            // the control (0.12.4; Mert, Oct 25: "the control test: all realms playing with the game's ai")
+            ["C0"] = "the control: the game's AI ruling your kingdom against the game's AI"
         };
 
         /// <summary>The arm from who commands the kingdom (you, agent, watching, game) and each rival (agent, watching, game).</summary>
@@ -725,6 +727,7 @@ namespace BannerlordAgents
             bool ai = r.Count > 0 && r.All(x => x == "game" || x == "watching");
             if (ruler == "you") return agents ? "A" : ai ? "B" : "mixed";
             if (ruler == "agent") return agents ? "C1" : ai ? "C2" : "mixed";
+            if (ruler == "game" || ruler == "watching") return ai ? "C0" : "mixed";
             return "other";
         }
 

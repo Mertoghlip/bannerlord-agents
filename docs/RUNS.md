@@ -130,6 +130,22 @@ The first finished run: C1, `20261023-1802-C1`, 60 days in 1 h 20 min, about $27
 - **How Alenon's army was lost:** his guard order (radius 30) struck Narsha (1,751 against his 8,505), one of a dozen lords marching to join Thrurg's army, and chased her 33 hours out of his area into them; it turned for home only when the lords within 30 of the castle came to 1.5 times his strength, 26 from the walls, and was caught 5 hours later by Bolga and 17 more parties (10,306 men against 3,587). Taken: Alenon, Imák, Oropherion, Orophin, Dáin II, Anairë, Amarië, Galyk, Lek, Faldira, Valkava, Calathiel and Malthorn. The safety rule, weighing each enemy party alone, never fired. The agent's last change (radius 20, `stay_inside` 1) came while he was already in the battle. Fixed in 0.12.2 (docs/TOOLS.md, "A host split into many parties counts as one").
 - **Where it stood at day 10:** the kingdom +1 castle (Sirannon), +3 villages, men −1,923, 14 of its lords taken against 8 enemy lords; the three agents' list price $41.23.
 
+## Run C2 on 0.12.3 (Oct 25): counts
+
+`20261025-1831-C2`, from TEST START, played 18:32 to 19:56, all 60 days, one load. The first counted run with the helper on time, sieges that begin, the agent's own hours window and the engagement question.
+- **Where each side ended:** the kingdom +2 towns (Nanduhirion day 10, Eastern Moria day 44), +2 castles (Caradhras day 31, Hollin Gate day 37, Sirannon day 42; Torech Emel lost day 29, retaken day 42, lost again day 53), +12 villages; the orcs −2 towns, −3 castles, −14 villages; Dol Guldur +1 castle (Torech Emel), +2 villages.
+- **Lords:** 182 enemy lords taken against 29 of its own; lord battles 106-32; 58,985 enemy men lost against 41,729. At the end it held 47 enemy lords, 2 of its own held.
+- **The decisive battle:** at Imnagath, Dol Guldur's main host (Lorgath and 18 parties, 9,686 men) fought the castle's defenders at its siege camp for 13 days; on day 23 it was destroyed (9,641 lost) and 19 lords taken, Thrurg and Lorgath among them. Day 11, Aragorn destroyed Naglur's army (2,033 of 2,034) and 14 orc lords were taken; day 44, Eastern Moria fell with 19 orc lords and their ruler Bûrzum.
+- **The agent used the new tools:** the engagement question at least 21 times by day 14, battle odds 38; its own `join_hours` on about a third of its orders (mostly 12, up to 44).
+- **Its losses, and why:** Haldir (day 11), Zlatka (day 23), Alvar (day 43) and Elrohir (day 42) were caught on the way to a refuge (fixed in 0.12.4: plan again each hour, reach first against every party); Girda (day 37) after the agent switched her siege's withdrawal bar off ("storm underway; cannot leave anyway"); Fin (day 44) attacking with caution 0; Iridi (day 48) under a guard order that sheltered only at 5 times her strength; Dakhila, Galden, Isvan (days 55-56), small lords alone. Torech Emel was lost twice to Dol Guldur's sieges and its besiegers went back and forth at the end, each weighing the relief against himself alone (fixed in 0.12.4: our side counts).
+- **Other gaps found:** the first council overturned the first answer's order for Aragorn (sell at Mount Gundabad, then Hithaegrist, 75 back); guards on the way to their area started and broke off 31 strikes; one false fog alarm (a place named by the poke's own news). All fixed in 0.12.4.
+- **Agents' list price:** $294.42 (the kingdom $116.87, the orcs' shadow $104.61, Dol Guldur's shadow $72.94).
+- **For comparisons** (`Runs.exe compare`): holdings +4 and villages +12 against +1/+4 (20261024-1530-C2) and ±0/+4 (20261024-2110-C2); lords taken 182 against 180 and 183; its own lost 29 against 22 and 52; lord battles 106-32 against 94-27 and 109-34.
+
+## The control, C0 (since 0.12.4)
+
+Mert, Oct 25: "be ready for the control test: all realms playing with the game's ai". Arm C0: the playerless switch as in C1 and C2 (you become a wanderer), the kingdom's agent off (`-KingdomWatches` to keep it watching in shadow), the orcs' and Dol Guldur's agents in shadow as in C2 (`-RivalsOff` for off), the lieutenant off. `agents.run check` names it "C0 (the control: the game's AI ruling your kingdom against the game's AI)"; the run records and reports it like the others.
+
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).

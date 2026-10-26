@@ -463,7 +463,11 @@ namespace BannerlordAgents.Tools
         {
             double caution = t.Def.Safety && t.Settings.TryGetValue("caution", out double c) ? c : 0;
             double radius = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
-            double mine = World.StrengthOf(me);
+            // our side, counted as the danger is (0.12.4): the lord and every lord of the realm or an ally who could join a fight where
+            // he stands within join_hours, and those camped in his siege
+            var with = new List<PartyRow>();
+            double mine = w.SideStrength(me, me.X, me.Y, JoinHoursOf(t), me.Besieging ?? CampOf(t), Objectives(t), with);
+            string ours = SideText(t, me, mine, with);
             var spare = new HashSet<string> { t.Order.Target, t.Current.Party, scope.Get("target") as string };
             // striking a siege camp: every lord camped in that siege is part of the fight the order chose, not a danger to flee
             string siege = t.Current.Verb == "engage" ? w.Party(t.Current.Party)?.Besieging : null;
@@ -481,7 +485,7 @@ namespace BannerlordAgents.Tools
                 List<PartyRow> g = w.DangerAround(me.Id, within, JoinHoursOf(t), Spared);
                 double sum = g.Sum(World.StrengthOf);
                 if (g.Count == 0 || sum < caution * Math.Max(1, mine)) return null;
-                return new Danger { Lead = g.OrderByDescending(World.StrengthOf).First(), Strength = sum, Count = g.Count, Ids = new HashSet<string>(g.Select(x => x.Id)) };
+                return new Danger { Lead = g.OrderByDescending(World.StrengthOf).First(), Strength = sum, Count = g.Count, Ids = new HashSet<string>(g.Select(x => x.Id)), Ours = ours };
             }
             // the order's own holding: always the shelter with stay_inside 1 (garrison's default); tried first, and kept only
             // if it would hold, with stay_inside 0 (defend's default)
@@ -502,9 +506,10 @@ namespace BannerlordAgents.Tools
                     Diag.Event("tool", "resumed", new { id = t.Id, lord = t.Order.Lord, from = was });
                     return false;
                 }
-                // running from a danger no refuge would hold against: keep running from where the lord is now, and take a
-                // refuge that would hold as soon as one is in reach
-                if (still != null && t.Running && me.InSettlement == null && !me.InBattle) Shelter(t, me, w, still, mine, alwaysOwn ? own : null, preferred, again: true);
+                // still on the way, sheltering or running: plan again from where the lord is now, against the danger as it is now, and
+                // take a refuge that would hold as soon as one is in reach (0.12.4: only a running lord planned again, so Haldir, Zlatka
+                // and Alvar, marching to a refuge chosen hours before, were caught on the way by parties that had come up since)
+                if (still != null && me.InSettlement == null && !me.InBattle) Shelter(t, me, w, still, mine, alwaysOwn ? own : null, preferred, again: true);
                 return true;
             }
             if (caution <= 0 || me.InBattle || me.Besieging != null) return false;
@@ -520,6 +525,27 @@ namespace BannerlordAgents.Tools
             return Shelter(t, me, w, danger, mine, alwaysOwn ? own : null, preferred, again: false);
         }
 
+        /// <summary>The siege an order's lord is in or making for: a besiege order's place (0.12.4).</summary>
+        private static string CampOf(ToolInstance t) => t.Def.Name == "besiege" || (t.HasCurrent && t.Current.Verb == "besiege") ? (t.HasCurrent && t.Current.Verb == "besiege" ? t.Current.Place : t.Order.At) : null;
+
+        /// <summary>What an order is aimed at: its place, its target, its current move's, and those named (0.12.4, World.Friends).</summary>
+        private static HashSet<string> Objectives(ToolInstance t, params string[] more)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            void Add(string s) { if (!string.IsNullOrEmpty(s)) set.Add(s); }
+            Add(t.Order.At);
+            Add(t.Order.Target);
+            if (t.HasCurrent) { Add(t.Current.Place); Add(t.Current.Party); }
+            if (t.Memory.TryGetValue("target", out object mt)) Add(mt as string);
+            foreach (string s in more) Add(s);
+            return set;
+        }
+
+        /// <summary>Our side in words: the lord's own strength, and with his friends when any could join.</summary>
+        private static string SideText(ToolInstance t, PartyRow me, double side, List<PartyRow> with) =>
+            with.Count == 0 ? Text.N((int)World.StrengthOf(me))
+                            : t.Order.LordName + "'s " + Text.N((int)World.StrengthOf(me)) + ", " + Text.N((int)side) + " with the " + with.Count + " of your lords who could join within " + ToolDef.Num(JoinHoursOf(t)) + " hours";
+
         /// <summary>The hours ahead an order's fights count the enemy lords and armies who could join them (its join_hours, 0.12.3).</summary>
         public static double JoinHoursOf(ToolInstance t) => t.Settings.TryGetValue("join_hours", out double h) ? h : Library.JoinHours.Default;
 
@@ -530,6 +556,8 @@ namespace BannerlordAgents.Tools
             public double Strength;
             public int Count;
             public HashSet<string> Ids;
+            /// <summary>Our side in words (SideText): "600" or "Imák's 1,800, 6,400 with the 4 of your lords who could join within 10 hours".</summary>
+            public string Ours;
 
             /// <summary>"Bolga and 11 more with it (strength 13,000 together" or "Bolga (strength 1,094"; the caller closes it.</summary>
             public string Say(World w) => w.Name(Lead.Id) + (Count > 1 ? " and " + (Count - 1) + " more with it (strength " + Text.N((int)Math.Round(Strength)) + " together"
@@ -562,7 +590,7 @@ namespace BannerlordAgents.Tools
                 if (first)
                 {
                     Diag.Count("tool:ran");
-                    Poke(t, t.Order.LordName + " is falling back, away from " + group.Say(w) + " against " + Text.N((int)mine)
+                    Poke(t, t.Order.LordName + " is falling back, away from " + group.Say(w) + " against " + (group.Ours ?? Text.N((int)mine))
                             + "): no castle or town it can reach before the enemy would hold against it, so it keeps out of reach in the open. The order resumes once the danger has passed.", w);
                     Log(t, t.State, "running", "no refuge it could reach before the danger");
                 }
@@ -579,9 +607,9 @@ namespace BannerlordAgents.Tools
             double opposing = group.Strength + w.ThreatStrength(fort.Id, World.HoldRadius, group.Ids);
             string why = running
                 ? t.Order.LordName + " is falling back toward " + w.Name(fort.Id) + ", away from " + group.Say(w) + " against "
-                  + Text.N((int)mine) + "): no castle or town it could reach first would hold against it, so it stays out of reach rather than be trapped inside."
+                  + (group.Ours ?? Text.N((int)mine)) + "): no castle or town it could reach first would hold against it, so it stays out of reach rather than be trapped inside."
                 : t.Order.LordName + " is sheltering in " + w.Name(fort.Id) + " from " + group.Say(w) + " against "
-                  + Text.N((int)mine) + "): " + (forced != null ? "its order keeps it inside." : "its defenders with " + t.Order.LordName + ", strength " + Text.N((int)w.DefenceStrength(fort, me.Id))
+                  + (group.Ours ?? Text.N((int)mine)) + "): " + (forced != null ? "its order keeps it inside." : "its defenders with " + t.Order.LordName + ", strength " + Text.N((int)w.DefenceStrength(fort, me.Id))
                   + " behind walls worth " + ToolDef.Num(Math.Round(World.WallFactor(fort), 1)) + " times that, would hold against " + Text.N((int)opposing) + ".");
             Poke(t, why + " The order resumes once the danger has passed.", w);
             Log(t, t.State, running ? "running" : "sheltering", "enemies within its danger radius, with their hosts, stronger together than its caution allows");
@@ -812,6 +840,17 @@ namespace BannerlordAgents.Tools
                     // a party with what it would be fought with: every enemy who could join a fight with it within join_hours (World.Company)
                     case "company": return _w.CompanyStrength(Id(a[0]), JoinHours);
                     case "easiest_enemy_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).OrderBy(e => _w.CompanyStrength(e.Id, JoinHours)).FirstOrDefault()?.Id;
+                    // our side of a fight there (0.12.4, World.SideStrength): the lord and every lord of ours who could get there within
+                    // join_hours, and, at a holding, every one camped in our siege of it
+                    case "side_strength":
+                        {
+                            string id = Id(a[0]);
+                            if (me == null || !_w.Where(id, out float sx, out float sy)) return World.StrengthOf(me);
+                            SettlementRow sh = _w.Holding(id);
+                            if (sh != null && (sh.Gx != 0 || sh.Gy != 0)) { sx = sh.Gx; sy = sh.Gy; }
+                            string camp = sh != null && _w.HostileFaction(sh.Faction) ? sh.Id : me.Besieging;
+                            return _w.SideStrength(me, sx, sy, JoinHours, camp, Objectives(_t, id == me.Id ? null : id));
+                        }
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;
                     case "army_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                     // enemy lords and armies near a place or heading for it, counted together (0.7.2): their strength, and who they are

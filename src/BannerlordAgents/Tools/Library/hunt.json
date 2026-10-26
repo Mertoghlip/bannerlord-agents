@@ -13,7 +13,7 @@
     "chase": { "about": "hunting {target}", "do": "engage target",
       "when": [
         { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
-        { "if": "company(target) > strength * bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: with the enemies who could join a fight with it within {join_hours} hours, strength {company(target)} against {strength}." },
+        { "if": "company(target) > side_strength(target) * bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: with the enemies who could join a fight with it within {join_hours} hours, strength {company(target)} against your side's {side_strength(target)}." },
         { "if": "not in_view(target)", "go": "search" } ] },
     "search": { "about": "searching for {target} where it was last seen", "do": "toward target",
       "when": [

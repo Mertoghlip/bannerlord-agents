@@ -171,6 +171,9 @@ namespace BannerlordAgents
             if (triggers != null)
                 foreach (Trigger t in triggers)
                 {
+                    // the place a poke's own news names (0.12.4: "Fight over a raid at Ufthak", one of the realm's lords there, flagged
+                    // the ready-made fact "Near Ufthak [castle_village_GBC4_1]" in run 20261025-1831-C2)
+                    if (t.Place != null) yield return t.Place;
                     if (t.Party == null || !s.PartyById.TryGetValue(t.Party, out PartyRow tr)) continue;
                     yield return tr.Id;
                     if (tr.Leader != null) yield return tr.Leader;

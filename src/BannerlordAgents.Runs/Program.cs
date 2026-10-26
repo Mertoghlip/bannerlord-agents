@@ -80,7 +80,7 @@ namespace BannerlordAgents.Runs
         public static string ArmWords(string arm) => arm switch
         {
             "A" => "you against the agents", "B" => "you against the game's AI", "C1" => "an agent ruling your kingdom against the agents",
-            "C2" => "an agent ruling your kingdom against the game's AI", _ => null
+            "C2" => "an agent ruling your kingdom against the game's AI", "C0" => "the control: the game's AI ruling your kingdom against the game's AI", _ => null
         };
 
         public static string WhoWords(string who) => who switch

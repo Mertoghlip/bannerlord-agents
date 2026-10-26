@@ -1,7 +1,7 @@
 {
   "tool": "sell",
   "kind": "tool",
-  "about": "Rides into a castle or town of your realm or an ally to cash in. In a town he sells his loot, as far as the town's purse goes: weapons, armour, shields, ammunition, harness and plunder, never food, horses, pack animals, herds, books or banners. In a castle or a town he hands his prisoners over for their ransom. The gold goes into his own purse. Then he is free, or starts his next order. A lord holding any of your orders sells his loot the same way whenever he rides into a friendly town; this order sends him to do it now.",
+  "about": "Rides into a castle or town of your realm or an ally to cash in. In a town he sells his loot, as far as the town's purse goes: weapons, armour, shields, ammunition, harness and plunder, never food, horses, pack animals, herds, books or banners. A castle buys no loot: only a town does. In a castle or a town his prisoners go into its dungeon for their ransom, but when a captured enemy lord is among them the whole batch pays nothing (the game's rule). The gold goes into his own purse. Then he is free, or starts his next order. A lord holding any of your orders sells his loot the same way whenever he rides into a friendly town; this order sends him to do it now.",
   "calls_back": "it has cashed in, with what it got",
   "at": "friendly_fort",
   "start": "go",

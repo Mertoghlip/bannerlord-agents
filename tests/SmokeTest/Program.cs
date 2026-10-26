@@ -948,7 +948,7 @@ namespace SmokeTest
             Check(Calls() == 0, "two lords coming to the relief, strength 1,800, under 0.8 of the besieger's 3,400: no call yet (a lord far off and not heading there is not counted)");
             var beregond = Lord("ber2", "Beregond", 200, 100, 1000, "GoToSettlement");
             Brain.OnHour(Sieged(7205, nag, near, faramir, idle, beregond));
-            Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against Naglur's 3,400"),
+            Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against your side's 3,400 (Naglur's 3,400"),
                   "a third lord makes 2,800, above 0.8 of its strength: besiege calls back, counting lords, not only armies");
             Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Faramir, strength 900, 60\.0 away \(due in about \d+ hours\), defending Fornost"),
                   "and names them nearest first, with what each is doing (those heading for it count from any distance)");
@@ -1290,6 +1290,70 @@ namespace SmokeTest
             Brain.OnHour(ToolWorld(7726, g4, big));
             Check(moves.Any(m => m.Key == 1307 && m.Value.Verb == "patrol"), "40 off: it comes out and patrols again");
             Runner.Ended(1307, "test over");
+
+            // 0.12.4 (Mert: "Why is the strength calculator not taking into account the strength of the other lords around him?"):
+            // four lords camped in one siege, each under his own order, weigh a relief against all of them, not each alone
+            Snapshot Camp(double h, params PartyRow[] ps)
+            {
+                Snapshot s = ToolWorld(h, ps);
+                s.SettlementById["castle_men"].BesiegedBy = "orcs";
+                s.SettlementById["castle_men"].Besieger = "p_cmp1";
+                s.Sieges.Add(new SiegeRow { Settlement = "castle_men", Besieger = "p_cmp1", BesiegerFaction = "orcs", Strategy = "siege_strategy_prepare_assault", StartHours = 7800, WallLevel = 1,
+                                            Prep = 0.2f, PrepRate = 0.04f, Advantage = 5f, Defenders = 600, Attackers = 6000, AttackerMen = 4000, DefenderMen = 450, AttackerMorale = 70, GarrisonPower = 400 });
+                return s;
+            }
+            PartyRow Camped(string id, string name, float y)
+            {
+                PartyRow r = Orc(id, name, 166, y, 1500);
+                r.Besieging = "castle_men";
+                r.Doing = "BesiegeSettlement";
+                return r;
+            }
+            PartyRow Coming(string id, string name, float x, float strength)
+            {
+                PartyRow r = Foe(id, name, x, 100, strength);
+                r.Doing = "DefendSettlement";
+                r.TargetSettlement = "castle_men";
+                return r;
+            }
+            var camp = new[] { Camped("cmp1", "Imak", 101), Camped("cmp2", "Tali", 102), Camped("cmp3", "Thalion", 99), Camped("cmp4", "Gorli", 98) };
+            Brain.OnHour(Camp(7800, camp));
+            for (int i = 0; i < camp.Length; i++)
+            {
+                var o = new ToolOrder { Tool = "besiege", Lord = "lord_" + camp[i].Id.Substring(2), LordName = camp[i].Name, Party = camp[i].Id, At = "castle_men" };
+                o.Settings["withdraw_on_relief"] = 1.2; o.Settings["relief_hours"] = 24; o.Settings["relief_ratio"] = 0.5;
+                Runner.Start(1401 + i, o);
+            }
+            var relief = new[] { Coming("rl1", "Khamul", 195, 1500), Coming("rl2", "Lurgha", 200, 1300), Coming("rl3", "Hlakum", 205, 1355) };
+            Brain.OnHour(Camp(7801, camp.Concat(relief).ToArray()));
+            Brain.OnHour(Camp(7802, camp.Concat(relief).ToArray()));
+            Check(!new[] { "Imak", "Tali", "Thalion", "Gorli" }.Any(n => Notices().Contains(n + " lifts the siege")) && Notices().Contains("against your side's 6,000 (Imak's 1,500 with your lords camped there"),
+                  "a relief of 4,155 against four lords camped in the siege (6,000 together, each 1,500): nobody lifts the siege");
+            for (int i = 0; i < camp.Length; i++) Runner.Ended(1401 + i, "test over");
+            var single = Camped("cmp5", "Valkava", 101);
+            Brain.OnHour(Camp(7803, single));
+            var lo = new ToolOrder { Tool = "besiege", Lord = "lord_cmp5", LordName = "Valkava", Party = "p_cmp5", At = "castle_men" };
+            lo.Settings["withdraw_on_relief"] = 1.2; lo.Settings["relief_hours"] = 24;
+            Runner.Start(1405, lo);
+            Brain.OnHour(Camp(7804, new[] { single }.Concat(relief).ToArray()));
+            Check(Notices().Contains("Valkava lifts the siege of Fornost by your bar"), "the same relief against one lord alone (1,500): he lifts the siege");
+            Runner.Ended(1405, "test over");
+
+            // two lords ordered at the same target weigh a danger together; a third nearby on his own errand does not count
+            var e1 = Orc("st1", "Galyk", 100, 200, 600);
+            var e2 = Orc("st2", "Forim", 104, 200, 600);
+            var e3 = Orc("st3", "Tyaska", 98, 203, 900);
+            var quarry2 = Foe("qr2", "Drubog", 103, 204, 200);
+            var band1 = Foe("bd1", "Ushka", 106, 205, 700);
+            var band2 = Foe("bd2", "Kargoth", 101, 196, 500);
+            Brain.OnHour(ToolWorld(7810, e1, e2, e3, quarry2));
+            Runner.Start(1406, new ToolOrder { Tool = "engage", Lord = "lord_st1", LordName = "Galyk", Party = "p_st1", Target = "p_qr2" });
+            Runner.Start(1407, new ToolOrder { Tool = "engage", Lord = "lord_st2", LordName = "Forim", Party = "p_st2", Target = "p_qr2" });
+            Runner.Start(1408, new ToolOrder { Tool = "goto", Lord = "lord_st3", LordName = "Tyaska", Party = "p_st3", At = "castle_two" });
+            Brain.OnHour(ToolWorld(7811, e1, e2, e3, quarry2, band1, band2));
+            Check(!System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Galyk is (sheltering|falling back)") && !System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Forim is (sheltering|falling back)"),
+                  "Ushka and Kargoth (1,200) against Galyk and Forim, both ordered at Drubog (1,200 together): neither shelters, though each alone (600) would");
+            Runner.Ended(1406, "test over"); Runner.Ended(1407, "test over"); Runner.Ended(1408, "test over");
             moves.Clear();
             released.Clear();
         }
@@ -1589,8 +1653,9 @@ namespace SmokeTest
         {
             Check(RunRules.Arm("you", new[] { "agent", "agent" }) == "A" && RunRules.Arm("you", new[] { "watching", "game" }) == "B"
                   && RunRules.Arm("agent", new[] { "agent", "agent" }) == "C1" && RunRules.Arm("agent", new[] { "game", "watching" }) == "C2"
-                  && RunRules.Arm("you", new[] { "agent", "game" }) == "mixed" && RunRules.Arm("game", new[] { "agent" }) == "other",
-                  "a run's arm follows who commands each side: A, B, C1, C2 (mixed when the rivals differ)");
+                  && RunRules.Arm("you", new[] { "agent", "game" }) == "mixed" && RunRules.Arm("game", new[] { "agent" }) == "mixed"
+                  && RunRules.Arm("game", new[] { "watching", "game" }) == "C0" && RunRules.Arm("watching", new[] { "watching", "watching" }) == "C0" && RunRules.Arm("none", new[] { "game" }) == "other",
+                  "a run's arm follows who commands each side: A, B, C1, C2, and C0 the control, every realm by the game's AI (mixed when the rivals differ)");
             double h0 = 1000.3;
             Check(RunRules.Day(h0, h0) == 1 && RunRules.Day(h0 + 23.9, h0) == 1 && RunRules.Day(h0 + 24, h0) == 2 && !RunRules.Over(h0 + 1439, h0, 60) && RunRules.Over(h0 + 1440, h0, 60),
                   "day 1 is the first 24 in-game hours from the save's time, and a 60-day run is over at 1,440 hours");

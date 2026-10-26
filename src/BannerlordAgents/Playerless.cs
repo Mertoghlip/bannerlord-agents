@@ -142,7 +142,7 @@ namespace BannerlordAgents
             Log.Line("playerless: " + text);
             Diag.Event("run", "playerless switch", new { wanderer = w.StringId, town = pick.Town.StringId, quiet = Math.Round(pick.Quiet, 1), nearest = pick.Nearest, old = old.StringId, released, gold = Gold, grain = Grain });
             return text.Substring(0, 1).ToUpperInvariant() + text.Substring(1)
-                   + "\nNow: in the town menu choose to wait there, type agents.run check (it should say C1 or C2, your kingdom commanded by its agent), then set the clock running.";
+                   + "\nNow: in the town menu choose to wait there, type agents.run check (it should say C1 or C2 with your kingdom commanded by its agent, or C0 with it left to the game's AI), then set the clock running.";
         }
 
         /// <summary>Free wanderers in towns at peace with your kingdom and outside the run's realms, the quietest first.</summary>

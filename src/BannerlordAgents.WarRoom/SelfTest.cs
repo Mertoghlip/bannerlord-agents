@@ -148,6 +148,11 @@ namespace BannerlordAgents.WarRoom
             council.AfterAnswer("POKE #9\nWHY YOU ARE ASKED NOW\n- test\n\nREPORT", (JsonObject)JsonNode.Parse("{\"orders\": [{\"lord\": \"lord_A\", \"do\": \"defend\"}, {\"lord\": \"lord_B\", \"do\": \"gather\", \"lords\": [\"lord_C\"]}]}"));
             Check(council.OrderedMeanwhile.SetEquals(new[] { "lord_A", "lord_B", "lord_C" }) && council.CouncilDue(2000) == null, "while a council sits, the lords a fast answer orders are noted, and no second council sits");
             council.CouncilSitting(false);
+            // 0.12.4: an order given the moment before a council sits counts too (its briefing may not have it yet): Aragorn's sale at Mount Gundabad
+            council.AfterAnswer("POKE #10\nWHY YOU ARE ASKED NOW\n- test\n\nREPORT", (JsonObject)JsonNode.Parse("{\"orders\": [{\"lord\": \"named_companion_aragorn\", \"do\": \"sell\", \"at\": \"town_G1\"}]}"));
+            council.CouncilSitting(true);
+            Check(council.OrderedMeanwhile.Contains("named_companion_aragorn"), "an order given the minute before a council sits stands against the council's older view (Aragorn sent back from Mount Gundabad)");
+            council.CouncilSitting(false);
             var councilOrders = (JsonArray)JsonNode.Parse("[{\"lord\": \"lord_A\", \"do\": \"join\", \"target\": \"lord_X\"}, {\"lord\": \"lord_X\", \"do\": \"gather\", \"at\": \"town_1\", \"lords\": [\"lord_C\", \"lord_D\"]}, {\"lord\": \"lord_E\", \"do\": \"gather\", \"at\": \"town_2\", \"lords\": [\"lord_C\"]}]");
             JsonArray keptOrders = Room.DropOrdered(councilOrders, new HashSet<string>(new[] { "lord_A", "lord_C" }, StringComparer.OrdinalIgnoreCase), out List<string> droppedOrders);
             Check(keptOrders.Count == 1 && (string)keptOrders[0]["lord"] == "lord_X" && ((JsonArray)keptOrders[0]["lords"]).Count == 1 && droppedOrders.Count == 4,

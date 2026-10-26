@@ -58,6 +58,11 @@ namespace BannerlordAgents.WarRoom
         private readonly object _councilGate = new object();
         private bool _councilSitting;
         private readonly HashSet<string> _orderedMeanwhile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // the lords the fast answers ordered in the last minute (0.12.4): a council that sits right after one is briefed on a world
+        // that may not have its orders in it yet (run 20261025-1831-C2: the first answer sent Aragorn to sell at Mount Gundabad the
+        // second the first council sat; the council, briefed on him free, sent him to Hithaegrist and turned him back 75 from the town)
+        private readonly List<KeyValuePair<DateTime, List<string>>> _recentOrders = new List<KeyValuePair<DateTime, List<string>>>();
+        private const double RecentOrderSeconds = 60;
         private string _councilNote;
 
         /// <summary>Lines of the chronicle the bridge puts in the report's RECENT HISTORY: the last 25 of the last 48 hours (Views.Build).</summary>
@@ -475,6 +480,12 @@ namespace BannerlordAgents.WarRoom
             {
                 if (_councilSitting && answer?["orders"] is JsonArray list)
                     foreach (string lord in OrderedLords(list)) _orderedMeanwhile.Add(lord);
+                if (answer?["orders"] is JsonArray given)
+                {
+                    List<string> lords = OrderedLords(given).ToList();
+                    if (lords.Count > 0) _recentOrders.Add(new KeyValuePair<DateTime, List<string>>(DateTime.Now, lords));
+                }
+                _recentOrders.RemoveAll(x => (DateTime.Now - x.Key).TotalSeconds > RecentOrderSeconds);
                 if (!_c.Council || _c.Conversation) return;
                 string reasons = Section(pokeText, "WHY YOU ARE ASKED NOW") + "\n" + Section(pokeText, "WHAT CHANGED SINCE YOUR LAST ANSWER");
                 foreach (string w in _c.CouncilAfter)
@@ -532,11 +543,7 @@ namespace BannerlordAgents.WarRoom
             if (why == null || !Fresh(out _)) return;
             _councilStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
             CancellationToken token = _councilStop.Token;
-            lock (_councilGate)
-            {
-                _councilSitting = true;
-                _orderedMeanwhile.Clear();
-            }
+            lock (_councilGate) BeginSitting();
             _council = Task.Run(() =>
             {
                 try { SitCouncil(why, token); }
@@ -731,7 +738,17 @@ namespace BannerlordAgents.WarRoom
         internal double NextCouncilHours { get { lock (_councilGate) return _nextCouncilHours; } }
 
         /// <summary>For the self-test: a council sitting (fast answers' lords are then noted), and the note for the next fast message.</summary>
-        internal void CouncilSitting(bool sitting) { lock (_councilGate) { _councilSitting = sitting; if (sitting) _orderedMeanwhile.Clear(); } }
+        internal void CouncilSitting(bool sitting) { lock (_councilGate) { if (sitting) BeginSitting(); else _councilSitting = false; } }
+
+        /// <summary>A council sits (under _councilGate): the lords ordered meanwhile start as those the fast answers ordered in the last minute.</summary>
+        private void BeginSitting()
+        {
+            _councilSitting = true;
+            _orderedMeanwhile.Clear();
+            foreach (KeyValuePair<DateTime, List<string>> r in _recentOrders)
+                if ((DateTime.Now - r.Key).TotalSeconds <= RecentOrderSeconds)
+                    foreach (string lord in r.Value) _orderedMeanwhile.Add(lord);
+        }
         internal HashSet<string> OrderedMeanwhile { get { lock (_councilGate) return new HashSet<string>(_orderedMeanwhile, StringComparer.OrdinalIgnoreCase); } }
 
         private string TakeCouncilNote()
