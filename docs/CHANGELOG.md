@@ -1464,7 +1464,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - `20261025-2015-C0`, from TEST START, one load, every realm the game's AI, every agent off (0 calls, $0.00), 0.34 real hours. The kingdom ±0 towns (Nanduhirion taken, Goblin Town lost), +2 castles net (Sirannon, Caradhras; Imnagath and Torech Emel lost and retaken), +4 villages; 137 enemy lords taken against 142 of its own; lord battles 120-115; on day 29 Val's army (5,454 men) destroyed outside Glad Thaw with 13 lords taken. Against the counted C2 run: holdings +2 against +4, villages +4 against +12, own lords lost 142 against 29. Details in docs/RUNS.md; report in `runs\20261025-2015-C0\report.md`, the table in `runs\compare.md`.
 - **Health:** 0 errors, 0 freezes, 1,440 report rounds with none folded. Two false alarms from a run with every agent off (`Runs.exe watch`'s war-room count; the self-check's "two agents" for the kingdom's own and the lieutenant, both off): to fix when the game is closed.
 
-### 20:51 · Version 0.12.5: the control run's two false alarms, and C1 set again · commit HASH (installed 20:50)
+### 20:51 · Version 0.12.5: the control run's two false alarms, and C1 set again · commit 4f36147 (installed 20:50)
 - **The self-check** (`BridgeBehavior`): two agents of one realm both switched off (C0: the kingdom's own and the lieutenant) are a note ("both are switched off, so neither plays it"), not a failed "realm under watch"; only two switched on is still a problem.
 - **`Runs.exe watch`** counts a war room for each agent switched on (live or watching) only, so the control (every agent off) no longer reads "only 0 of 3 war rooms are running".
 - Versions set to 0.12.5.
