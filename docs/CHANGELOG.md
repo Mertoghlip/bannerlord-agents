@@ -1569,7 +1569,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the three realm councils' `warroom.txt`: `council_after` gains "offers peace | offers an alliance | offers a call to war", so an offer calls a council.
 - Not installed.
 
-### 03:41 · 0.13 step 7 of 7, everything together: version 0.13.0 installed · commit (follow-up)
+### 03:41 · 0.13 step 7 of 7, everything together: version 0.13.0 installed · commit 9d0e902
 - **Mert:** "Implement the full plan now, do not stop until you are done." Step 7 of `docs/PLAN-0.13.md` Part F: all tests together, the documents, version 0.13.0, the install.
 - **The speed test** now runs 30 of the agents' own tools (the circuit, on the orcs' first lords of the big made-up world) beside ours: within budget, the 95th slowest of a hundred hours 166 ms (budget 1,000; median 134 ms; 181 ms at step 1), and the time guard stopped none.
 - **All tests:** smoke test 395 checks passed; war room self-test 85 passed; dashboard self-test 27 passed; `WarRoom toolcheck --write` passed (step 6); 803 game references, 0 missing, in the installed DLL too.
