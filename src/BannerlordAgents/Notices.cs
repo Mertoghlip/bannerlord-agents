@@ -333,6 +333,9 @@ namespace BannerlordAgents
         public static void Order(IFaction realm, string kind, string text, string party, bool recordOnly = false)
             => Send(kind, text, Involved(realm ?? Bridge.Watched), party, recordOnly: recordOnly);
 
+        /// <summary>The agents' diplomacy (0.13, Diplomacy): a vote held for a realm's agent, an offer made to it, a vote closing, either settled. Pokes its agent.</summary>
+        public static void Diplomacy(IFaction realm, string kind, string text) => Send(kind, text, Involved(realm));
+
         public static void OnPeaceOfferedToPlayer(IFaction from, int amount, int days)
         {
             List<string> player = Involved(Clan.PlayerClan?.MapFaction);

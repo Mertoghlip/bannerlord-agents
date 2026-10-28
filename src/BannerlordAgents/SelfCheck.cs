@@ -96,6 +96,8 @@ namespace BannerlordAgents
             Check("log folder", () => Diag.SessionDir == null ? "there is no session folder, so the detailed logs are off" : null);
             Check("freeze probe", () => !Settings.FreezeProbe || File.Exists(Probe.Exe) ? null : "the probe is not installed (" + Probe.Exe + ")");
             Check("planned ways", () => Settings.Dashboard ? Capture.WayFieldsProblem : null);
+            // the agents' diplomacy (0.13): its hooks attached, and the vote's private parts it reads found by name
+            Check("diplomacy", () => !Bridge.Configs.Any(c => !c.IsLieutenant && c.Mode == "live") ? null : !GameHooks.DiplomacyInstalled ? GameHooks.Status : Diplomacy.PartsProblem);
             Check("walking map", () =>
             {
                 if (!Settings.Dashboard) return null;

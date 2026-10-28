@@ -59,7 +59,7 @@ namespace BannerlordAgents.WarRoom
         public bool Council = true;
         public double CouncilEveryHours = 24;
         public double CouncilGapHours = 6;
-        public string[] CouncilAfter = { "First look since the campaign was loaded", "passed from", "declared war on", "made peace", "is besieged by", "army has formed" };
+        public string[] CouncilAfter = { "First look since the campaign was loaded", "passed from", "declared war on", "made peace", "is besieged by", "army has formed", "offers peace", "offers an alliance", "offers a call to war" };
         public string CouncilEffort = "high";
         public int CouncilThinkingCap = 12000;
         public int CouncilTimeoutSeconds = 420;

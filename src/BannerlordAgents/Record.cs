@@ -154,6 +154,16 @@ namespace BannerlordAgents
         /// <summary>An order's outcome, at its end (Outcomes).</summary>
         public static void Outcome(object line) => Write(line);
 
+        /// <summary>What became of one diplomatic act of an answer (0.13, B2): applied, checked or refused and why.</summary>
+        public static void Diplomacy(string realm, DiploAct a, string status, string reason, double hours)
+        {
+            Write(new
+            {
+                Type = "diplomacy", Realm = realm, Run = RunTags.Id, Arm = RunTags.Arm, Wall = Wall(), Hours = hours, a.Poke, a.File, a.Index, a.Act, a.With, a.Against, a.Clan, a.Policy, a.Vote, a.Option,
+                a.Offer, a.Tribute, a.Days, a.Why, Status = status, Reason = reason
+            });
+        }
+
         /// <summary>What became of one tool of an answer (0.13, A8): kept, changed, used once, retired, refused and why, with its version and fingerprint.</summary>
         public static void Tool(string realm, int poke, string file, int index, string name, int version, string status, string reason, string hash, double hours)
         {
@@ -193,6 +203,22 @@ namespace BannerlordAgents
                 Captives = v.Captives?.Count ?? 0, Influence = (int)Math.Round(v.Clans?.Sum(c => c.Influence) ?? 0),
                 Orders = Agents.Of(v.Watched)?.Tools.Count ?? 0
             });
+        }
+    }
+
+    /// <summary>
+    /// The diplomacy book (0.13, docs/PLAN-0.13.md C3.5): every act an agent made and what became of it, every vote held for an agent and every
+    /// offer made to one, their answers and outcomes, mercenaries hired and let go, in the campaign's diplomacy.jsonl. Worker thread.
+    /// </summary>
+    internal static class DiploBook
+    {
+        public static int Lines;
+
+        public static void Write(object line)
+        {
+            Files.Append(Path.Combine(Brain.Dir, "diplomacy.jsonl"), Json.Line(line));
+            Lines++;
+            Diag.Count("record:diplomacy");
         }
     }
 

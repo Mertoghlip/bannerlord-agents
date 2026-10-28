@@ -66,6 +66,13 @@ namespace BannerlordAgents
                 snap.Factions[k.StringId] = row;
                 factions[k.StringId] = k;
             }
+            // each realm an agent serves: its diplomacy as its ruler's screens show it (0.13, Diplomacy)
+            foreach (Kingdom k in seats)
+            {
+                if (k == null || k.IsEliminated) continue;
+                try { snap.Diplomacy[k.StringId] = Diplomacy.Capture(k); }
+                catch (Exception e) { Diag.Swallowed("copying a realm's diplomacy", e); }
+            }
             long t1 = Perf.Now();
             var allies = new HashSet<Kingdom>();
             if (watched != null) foreach (Kingdom a in watched.AlliedKingdoms) if (a != null) allies.Add(a);

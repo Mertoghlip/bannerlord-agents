@@ -34,6 +34,9 @@ namespace BannerlordAgents
         public List<string> Clocks = new List<string>();
         /// <summary>The realms at war with it, as the encyclopedia shows any player (0.7.4): living lords, and their parties' strength in all, beside what of it is in sight.</summary>
         public List<string> EnemyRealms = new List<string>();
+        /// <summary>Its diplomacy, and its open votes and the offers made to it (0.13, DiploRules): for a realm an agent serves.</summary>
+        public List<string> Diplomacy = new List<string>();
+        public List<string> Open = new List<string>();
     }
 
     internal sealed class ViewCaptive
@@ -256,6 +259,12 @@ namespace BannerlordAgents
             }
             v.Clocks = Clocks(s, fid, sees, allies);
             v.EnemyRealms = EnemyRealms(s, fid, sees);
+            // its diplomacy and its open votes and offers, as its ruler's screens show them (0.13, B3)
+            if (s.Diplomacy != null && s.Diplomacy.TryGetValue(fid, out DiploView dv))
+            {
+                v.Diplomacy = DiploRules.Diplomacy(dv, s.Hours, Text.When);
+                v.Open = DiploRules.Open(dv, Text.When);
+            }
             return v;
         }
 
@@ -555,6 +564,18 @@ namespace BannerlordAgents
             {
                 sb.AppendLine().AppendLine("ENEMY REALMS, AS THEIR ENCYCLOPEDIA PAGES SHOW ANY RULER");
                 foreach (string l in v.EnemyRealms) sb.AppendLine("- " + l);
+            }
+
+            // 0.13 (docs/PLAN-0.13.md B3): the realm's open votes and the offers made to it, then its diplomacy, as its ruler's screens show them
+            if (v.Open.Count > 0)
+            {
+                sb.AppendLine().AppendLine("OPEN VOTES AND OFFERS (" + v.Open.Count + "; answer them in \"diplomacy\": vote, decide, accept_..., decline_...)");
+                foreach (string l in v.Open) sb.AppendLine("- " + l);
+            }
+            if (v.Diplomacy.Count > 0)
+            {
+                sb.AppendLine().AppendLine("DIPLOMACY, AS YOUR RULER'S SCREENS SHOW IT");
+                foreach (string l in v.Diplomacy) sb.AppendLine("- " + l);
             }
 
             if (v.Sum != null && v.Captives.Count > 0)

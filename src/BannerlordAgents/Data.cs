@@ -349,6 +349,8 @@ namespace BannerlordAgents
         public List<SettlementRow> Settlements = new List<SettlementRow>(1024);
         public Dictionary<string, SettlementRow> SettlementById = new Dictionary<string, SettlementRow>(1024);
         public Dictionary<string, FactionRow> Factions = new Dictionary<string, FactionRow>();
+        /// <summary>Each realm an agent serves: its diplomacy as its ruler's screens show it (0.13, DiploView).</summary>
+        public Dictionary<string, DiploView> Diplomacy = new Dictionary<string, DiploView>();
         public Dictionary<string, string> FactionNames = new Dictionary<string, string>();
         /// <summary>Every faction's colour (realms, clans, bandits), ARGB, for the dashboard's map.</summary>
         public Dictionary<string, uint> FactionColors = new Dictionary<string, uint>();

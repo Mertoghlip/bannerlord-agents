@@ -157,6 +157,9 @@ namespace BannerlordAgents
         /// <summary>The answer to one order, in the channel it came by.</summary>
         public static void Receipt(AgentOrder a, string status, string reason, double hours) => For(a?.Realm).Receipt(a, status, reason, hours);
 
+        /// <summary>What became of a diplomatic act (0.13), in the channel it came by.</summary>
+        public static void DiploReceipt(DiploAct a, string status, string reason, double hours) => For(a?.Realm).DiploReceipt(a, status, reason, hours);
+
         /// <summary>What became of an agent's order later (arrived, given again, ended), in the first realm's channel.</summary>
         public static void Event(string text) => Primary.Event(text);
 
@@ -830,7 +833,9 @@ namespace BannerlordAgents
             // the answer's own tools first (0.13, docs/PLAN-0.13.md A8): checked, then kept, changed, retired or used once, so its orders can name them
             var refusedTools = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, Tools.ToolDef> theirs = ans?.Tools > 0 ? TakeTools(name, poke, ans, refusedTools) : null;
-            if (orders.Count == 0) { if (theirs == null) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
+            // its diplomatic acts (0.13, B2): checked here against the realm's screens as last copied, carried out on the game's thread
+            if (ans?.Diplomacy > 0) TakeDiplomacy(name, poke, ans);
+            if (orders.Count == 0) { if (theirs == null && !(ans?.Diplomacy > 0)) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
             foreach (AgentChannel.AgentOrder o in orders) CheckIds(o);
             foreach (AgentChannel.AgentOrder o in orders) Attach(o, theirs);
             List<AgentChannel.AgentOrder> refused = orders.Where(o => refusedTools.ContainsKey((o.Do ?? "").Trim())).ToList();
@@ -886,6 +891,45 @@ namespace BannerlordAgents
             }
             if (changed) AgentChannel.WriteLibrary(Realm);
             return written;
+        }
+
+        /// <summary>
+        /// An answer's diplomatic acts (0.13, B2): each checked against the realm's screens as last copied (refused here with its reason, or
+        /// checked only in shadow mode), else handed to the game's thread, which checks the game's own conditions again and carries it out.
+        /// </summary>
+        private void TakeDiplomacy(string file, int poke, AgentChannel.Answer ans)
+        {
+            DiploView v = Realm != null && _agent.Latest?.Diplomacy != null && _agent.Latest.Diplomacy.TryGetValue(Realm, out DiploView dv) ? dv : null;
+            int i = 0;
+            foreach (JToken t in ans.DiplomacyList)
+            {
+                i++;
+                DiploAct a = t is JObject o ? DiploAct.From(o, poke, file, i) : new DiploAct { File = file, Index = i, Poke = poke, Act = "?" };
+                a.Realm = Realm;
+                string why = t is JObject ? DiploRules.Check(a, v, out _) : "write each act as an object, for example {\"act\": \"propose_peace\", \"with\": \"...\"}";
+                if (why != null) { DiploReceipt(a, "refused", why, Diag.Hours); continue; }
+                if (Mode == "shadow") { DiploReceipt(a, "checked", "valid: " + a + " (shadow mode: not carried out)", Diag.Hours); continue; }
+                DiploAct act = a;
+                Background.ToMain.Enqueue(() => Diplomacy.FromAgent(act));
+            }
+        }
+
+        /// <summary>What became of one diplomatic act, in receipts.log, the orders' record, the episode index, the diplomacy book and the chronicle.</summary>
+        public void DiploReceipt(DiploAct a, string status, string reason, double hours)
+        {
+            Diag.Count("agent:diplomacy " + status);
+            Line("poke #" + a.Poke + ", " + a.File + " diplomacy " + a.Index + " (" + a + "): " + status.ToUpperInvariant() + ". " + reason.TrimEnd('.') + ".");
+            Diag.Event("answer", "diplomacy", new { realm = Realm, poke = a.Poke, file = a.File, index = a.Index, act = a.Act, with = a.With, status, reason });
+            Brain.WriteOrder(new
+            {
+                Type = "agent_diplomacy", Realm, a.Poke, a.File, a.Index, a.Act, a.With, a.Against, a.Clan, a.Policy, a.Vote, a.Option, a.Offer, a.Tribute, a.Days, a.Why,
+                Status = status, Reason = reason, Hours = hours, Mode, Run = RunTags.Id, Arm = RunTags.Arm
+            });
+            Episodes.Diplomacy(Realm, a, status, reason, hours);
+            DiploBook.Write(new { Type = "act", Realm, Run = RunTags.Id, Arm = RunTags.Arm, Hours = hours, a.Poke, a.File, a.Index, a.Act, a.With, a.Against, a.Clan, a.Policy, a.Vote, a.Option, a.Offer, a.Tribute, a.Days, a.Overrule, a.Why, Status = status, Reason = reason });
+            string why = string.IsNullOrWhiteSpace(a.Why) ? "" : " Why: " + a.Why.Trim().TrimEnd('.') + ".";
+            if (status == "applied") _agent.Chronicle.Line(hours, "diplomacy", "Your diplomacy: " + reason.TrimEnd('.') + "." + why);
+            else if (status == "refused") _agent.Chronicle.Line(hours, "refused", "Your diplomatic act (" + a + ") was refused: " + reason.TrimEnd('.') + "." + why);
         }
 
         /// <summary>An order naming a tool of its answer runs that very tool, else the realm's kept tool of that name; a next order (then) naming one carries its fingerprint.</summary>

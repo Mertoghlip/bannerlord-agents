@@ -52,6 +52,7 @@ namespace BannerlordAgents
             PacReader.Reset();
             LordTours.Reset();
             Votes.Reset();
+            Diplomacy.Reset();
             SallyGate.Reset();
             Vision.Reset();
             LordWatch.Reset();
@@ -318,6 +319,9 @@ namespace BannerlordAgents
                 SelfCheck.FirstHour();
                 try { Votes.Hourly(); }
                 catch (Exception e) { Diag.Error("the realms' votes", e); }
+                // the agents' held votes and offers whose time is up, settled as the game would (0.13)
+                try { Diplomacy.Hourly(); }
+                catch (Exception e) { Diag.Error("the agents' diplomacy", e); }
                 LordWatch.Refresh();
                 Recorder.Hourly();
                 Recorder.PollVassalOrders();
@@ -514,7 +518,7 @@ namespace BannerlordAgents
         }
 
         private void OnDecisionAdded(KingdomDecision d, bool involved) => Guard("realm vote", () => { Notices.OnDecisionAdded(d, involved); Recorder.OnDecisionAdded(d, involved); });
-        private void OnDecisionConcluded(KingdomDecision d, DecisionOutcome o, bool involved) => Guard("realm vote", () => { Notices.OnDecisionConcluded(d, o, involved); Recorder.OnDecisionConcluded(d, o, involved); });
+        private void OnDecisionConcluded(KingdomDecision d, DecisionOutcome o, bool involved) => Guard("realm vote", () => { Notices.OnDecisionConcluded(d, o, involved); Recorder.OnDecisionConcluded(d, o, involved); Diplomacy.OnConcluded(d, o); });
         private void OnPeaceOffered(IFaction f, int amount, int days) => Guard("peace offer", () => { Notices.OnPeaceOfferedToPlayer(f, amount, days); Recorder.OnPeaceOffered(f, amount, days); });
 
         private void OnSettlementEntered(MobileParty p, Settlement s, Hero h) => Guard("settlement", () => Recorder.OnSettlementEntered(p, s, h));

@@ -50,7 +50,9 @@ namespace BannerlordAgents
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried;
+        /// <summary>The agents' diplomacy (0.13): the ruler's choice in a vote, and a vote's announcement held for an agent's say.</summary>
+        public static bool DiplomacyInstalled;
         /// <summary>The record's hooks (0.13): the party screen's Done, your votes in the realm's council, the offer windows shown to you.</summary>
         public static bool PartyScreenInstalled, VoteInstalled, OfferInstalled;
         private static object _harmony;
@@ -84,6 +86,17 @@ namespace BannerlordAgents
                 {
                     Parts["record"] = "the record's hooks could not attach (" + e.GetType().Name + ": " + e.Message + ")";
                     Diag.Swallowed("the record's hooks", e);
+                }
+            }
+            // the agents' diplomacy (0.13, Diplomacy): the ruler's choice in a vote, and a vote's announcement held for an agent; apart from the others
+            if (!_diplomacyTried)
+            {
+                _diplomacyTried = true;
+                try { InstallDiplomacy(); }
+                catch (Exception e)
+                {
+                    Parts["diplomacy"] = "the agents' diplomacy could not attach (" + e.GetType().Name + ": " + e.Message + ")";
+                    Diag.Swallowed("the diplomacy hooks", e);
                 }
             }
             // the chat box's hooks only once a lieutenant is in the agents' settings, apart from the others
@@ -277,6 +290,37 @@ namespace BannerlordAgents
                 Parts["offers"] = "the record of your answers to offers " + (OfferInstalled ? "attached" : "did not attach") + Others(allianceOffer);
             }
             Diag.Event("hooks", "record", new { party_screen = PartyScreenInstalled, votes = VoteInstalled, offers = OfferInstalled });
+        }
+
+        /// <summary>
+        /// The diplomacy hooks (0.13): KingdomElection.GetAiChoice (a private method of over 100 bytes, so never folded into its callers; its
+        /// size is logged, as the Harmony inlining trap asks) and the announcement OnShowDecision, the base one and its four overrides (virtual
+        /// calls, never folded in).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void InstallDiplomacy()
+        {
+            var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
+            const BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            MethodInfo choice = typeof(TaleWorlds.CampaignSystem.Election.KingdomElection).GetMethod("GetAiChoice", any);
+            if (choice == null) { Parts["diplomacy"] = "the agents' diplomacy: the ruler's choice in a vote was not found, so agents have no say in their votes"; return; }
+            h.Patch(choice, prefix: new HarmonyLib.HarmonyMethod(typeof(ChoicePatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
+                    postfix: new HarmonyLib.HarmonyMethod(typeof(ChoicePatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
+            int il = choice.GetMethodBody()?.GetILAsByteArray()?.Length ?? 0;
+            bool shows = true;
+            foreach (Type t in new[] { typeof(TaleWorlds.CampaignSystem.Election.KingdomDecision), typeof(TaleWorlds.CampaignSystem.Election.MakePeaceKingdomDecision),
+                                       typeof(TaleWorlds.CampaignSystem.Election.StartAllianceDecision), typeof(TaleWorlds.CampaignSystem.Election.ProposeCallToWarAgreementDecision),
+                                       typeof(TaleWorlds.CampaignSystem.Election.TradeAgreementDecision) })
+            {
+                MethodInfo show = t.GetMethod("OnShowDecision", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
+                if (show == null) { shows = false; continue; }
+                h.Patch(show, prefix: new HarmonyLib.HarmonyMethod(typeof(ShowPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+                shows &= Ours(show);
+            }
+            DiplomacyInstalled = Ours(choice) && shows;
+            Parts["diplomacy"] = "the agents' diplomacy " + (DiplomacyInstalled ? "attached" : "did not attach") + " (the ruler's choice is " + il + " bytes)" + Others(choice);
+            Diag.Event("hooks", "diplomacy", new { installed = DiplomacyInstalled, choice_il = il, shows });
+            if (il > 0 && il < 100) Diag.Alarm("hook_inlining", "The game's choice in a vote is only " + il + " bytes, small enough to be folded into its callers, so the agents' say in their votes may be skipped.");
         }
 
         /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>
