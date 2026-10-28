@@ -1509,7 +1509,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** build with no warnings; speed test within budget (the 95th slowest of a hundred hours 181 ms, budget 1,000; median 137 ms); smoke test passed (305 checks; 18 new: the run's tags, the episode index's poke, answer, receipt, outcome and day lines, the toolbook, a move with its report kept and read back, the hourly copy, the recorder's two rules, and the bundle on a made-up run with a call folder missing); war room self-test passed (75; 4 new: the thinking read from the stream, its setting, `thinking.txt`); 722 game references, 0 missing.
 - **Outside the repository:** none yet. When the war rooms start next, each agent folder's `warroom.txt` gains `thinking_display = summarized` (the war room adds missing keys). Not installed: the build goes on to step 2; 0.13.0 is installed at step 7.
 
-### 02:40 · 0.13 step 2 of 7, the language grows (0.13.0-pre1) · commit (follow-up)
+### 02:34 · 0.13 step 2 of 7, the language grows (0.13.0-pre1) · commit c49a8ef (not installed)
 - **Mert:** "Tool writing should be for custom strategies they want to pursue", with his circuit order as one of the examples. This is step 2 of `docs/PLAN-0.13.md` Part F (A2): the language the agents will write their own tools in.
 - **New in the language** (`Expr`, `ToolDef`, `Runner`):
   - lists (`[a, b]`, an order's `places` and `lords`) and tables (`{}`, read as `visited[stop]`, set as `"visited[stop]": "now"`); each `{}` is a new table;
