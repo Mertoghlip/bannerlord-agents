@@ -22,7 +22,7 @@ namespace SmokeTest
     /// "SmokeTest --spin" instead starts a thread that spins for ever while the main thread waits: a stand-in for a
     /// frozen game, to try the freeze probe on (scripts\probe.ps1 -TestSpin).
     /// </summary>
-    internal static class Program
+    internal static partial class Program
     {
         private static int _failures;
 
@@ -226,6 +226,7 @@ namespace SmokeTest
 
             TwoRealmsTests(root, agentDir);
             HelperTests(root, agentDir);
+            RecordTests(root, agentDir);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");

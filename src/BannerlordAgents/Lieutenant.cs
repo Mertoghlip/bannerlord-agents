@@ -204,6 +204,7 @@ namespace BannerlordAgents
             if (Unanswered.Count == 0) _unansweredFrom = Thread.Count;
             Unanswered.Add(text);
             Keep("you", text, n);
+            Recorder.OnToLieutenant(n, text);
             double hours = CampaignTime.Now.ToHours;
             // the conversation of this save before the words not yet answered (0.11.1): its latest lines go with the message, all of it into conversation.txt
             List<string> before = Thread.Take(_unansweredFrom < 0 ? Thread.Count : _unansweredFrom).Select(l => ForLieutenant(l, false)).Where(x => x != null).ToList();
@@ -216,7 +217,8 @@ namespace BannerlordAgents
                 Number = n, Said = text, Earlier = Unanswered.Take(Unanswered.Count - 1).ToList(), Notes = Notes.ToList(), Hours = hours, Date = Text.When(hours),
                 Campaign = Bridge.CampaignId, Realm = realm.StringId, RealmName = Names.Faction(realm), LoadId = Bridge.LoadId, Ruler = Names.Hero(Hero.MainHero),
                 Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Hours },
-                History = before.Skip(Math.Max(0, before.Count - HistoryLines)).ToList(), HistoryTotal = before.Count, Save = Bridge.History?.Save, PartyAi = pac
+                History = before.Skip(Math.Max(0, before.Count - HistoryLines)).ToList(), HistoryTotal = before.Count, Save = Bridge.History?.Save, PartyAi = pac,
+                Run = RunTags.Id, Arm = RunTags.Arm
             };
             Notes.Clear();
             Thinking = true;
@@ -237,6 +239,7 @@ namespace BannerlordAgents
             // what was approved stays in the conversation, as the proposal's box empties
             LieutenantWindow.Add(string.IsNullOrEmpty(p.List) ? "You approved it." : "You approved:\n" + p.List, You, false, mine: true);
             Keep("approved", p.List, p.Chat);
+            Recorder.OnLieutenantAnswered(p.Chat, true, p.List);
             Notes.Add("The ruler approved your proposal of message #" + p.Chat + " with the button, and its orders were given.");
             if (ag != null) { string realm = ag.Realm; Background.ToMain.Enqueue(() => Carry(p.Orders, p.Chat, realm)); }
             LieutenantWindow.Refresh();
@@ -251,6 +254,7 @@ namespace BannerlordAgents
             _pending = null;
             LieutenantWindow.Add("You declined it.", You, false, mine: true);
             Keep("declined", "", p.Chat);
+            Recorder.OnLieutenantAnswered(p.Chat, false, null);
             Notes.Add("The ruler declined your proposal of message #" + p.Chat + " with the button; nothing was given.");
             LieutenantWindow.Refresh();
             Diag.Event("lieutenant", "declined", new { chat = p.Chat });

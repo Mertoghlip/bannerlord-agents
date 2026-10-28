@@ -185,7 +185,42 @@ namespace BannerlordAgents.Runs
                     ["hours_folded"] = helper.Sum(h => Lng(h, "hours_folded")), ["report_rounds"] = helper.Sum(h => Lng(h, "rounds"))
                 };
             }
+            o["record"] = Record(r);
             return o;
+        }
+
+        /// <summary>
+        /// The training record of the run (0.13, C5): how many lines of each kind its records hold (by the run's tag), and, once its
+        /// bundle is packed, the bundle's own counts and what its check found missing.
+        /// </summary>
+        private static JsonObject Record(RunData r)
+        {
+            var rec = new JsonObject();
+            string data = Path.Combine(Root, "data", Bundle.Safe(Str(r.State, "campaign") ?? "unknown"));
+            string tag = "\"run\":\"" + r.Id + "\"";
+            JsonObject Count(string path, string field)
+            {
+                var c = new Dictionary<string, int>();
+                if (File.Exists(path))
+                    foreach (string l in ReadShared(path).Split('\n'))
+                    {
+                        if (!l.Contains(tag)) continue;
+                        try { if (JsonNode.Parse(l) is JsonObject x) { string k = Str(x, field) ?? "?"; c[k] = c.TryGetValue(k, out int n) ? n + 1 : 1; } }
+                        catch (Exception) { }
+                    }
+                return new JsonObject(c.OrderByDescending(kv => kv.Value).Select(kv => new KeyValuePair<string, JsonNode>(kv.Key, kv.Value)));
+            }
+            rec["episodes"] = Count(Path.Combine(data, "episodes.jsonl"), "type");
+            rec["toolbook"] = Count(Path.Combine(data, "toolbook.jsonl"), "type");
+            rec["diplomacy"] = Count(Path.Combine(data, "diplomacy.jsonl"), "type");
+            rec["your_moves"] = Count(Path.Combine(data, "record", "decisions.jsonl"), "kind");
+            JsonObject manifest = Obj(Path.Combine(r.Dir, "bundle-manifest.json"));
+            if (manifest != null)
+                rec["bundle"] = new JsonObject
+                {
+                    ["made"] = Str(manifest, "made"), ["files"] = (manifest["files"] as JsonArray)?.Count ?? 0, ["missing"] = manifest["missing"]?.DeepClone(), ["counts"] = manifest["counts"]?.DeepClone()
+                };
+            return rec;
         }
 
         private static string Markdown(RunData r, JsonObject j)
@@ -260,6 +295,18 @@ namespace BannerlordAgents.Runs
                               + Str(hp, "reports_behind_most_hours") + " (day " + Str(hp, "reports_worst_day") + "); " + Str(hp, "hours_folded") + " hours folded into a later report over " + Str(hp, "report_rounds") + " report rounds");
             else sb.AppendLine("- the background helper: not recorded (runs before 0.12.0)");
             foreach (JsonNode n in j["notes"] as JsonArray) sb.AppendLine("- your note, day " + Str(n, "day") + ": " + Str(n, "text"));
+            sb.AppendLine();
+            sb.AppendLine("## The training record");
+            sb.AppendLine();
+            JsonNode rc = j["record"];
+            string Kinds(JsonNode x) => x is JsonObject k && k.Count > 0 ? string.Join(", ", k.Select(kv => kv.Value + " " + kv.Key)) : "none";
+            sb.AppendLine("- the episode index: " + Kinds(rc?["episodes"]));
+            sb.AppendLine("- the toolbook: " + Kinds(rc?["toolbook"]));
+            sb.AppendLine("- the diplomacy book: " + Kinds(rc?["diplomacy"]));
+            sb.AppendLine("- your moves: " + Kinds(rc?["your_moves"]));
+            if (rc?["bundle"] is JsonObject bundle)
+                sb.AppendLine("- the bundle (" + Str(bundle, "made") + "): " + Str(bundle, "files") + " files; missing: " + ((bundle["missing"] as JsonArray)?.Count > 0 ? string.Join("; ", (bundle["missing"] as JsonArray).Take(5).Select(x => x.ToString())) : "nothing"));
+            else sb.AppendLine("- the bundle: not packed yet (Runs.exe bundle " + r.Id + ")");
             return sb.ToString();
         }
 

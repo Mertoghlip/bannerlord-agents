@@ -292,6 +292,8 @@ namespace BannerlordAgents
         public string Quiet;
         /// <summary>Goes into the realm's chronicle, and so its recent history, without poking: a lord set free, an army of its own formed.</summary>
         public bool RecordOnly;
+        /// <summary>The test run it happened in (RunTags, 0.13); null outside a run.</summary>
+        public string Run = RunTags.Id;
     }
 
     /// <summary>
@@ -324,6 +326,13 @@ namespace BannerlordAgents
         public string Date;
         public bool Night;
         public string PlayerFaction, PlayerParty, Watched;
+        /// <summary>The test run this hour belongs to (RunTags, 0.13): its id and arm; null outside a run.</summary>
+        public string Run, Arm;
+        /// <summary>
+        /// The player rules the player's realm himself this hour (Recorder.YouRule, 0.13), so his moves are his to record; and, in a
+        /// test run of his (A, B), his realm's report is kept every hour too (RecordHourly), for the hours he let things run.
+        /// </summary>
+        public bool YouRule, RecordHourly;
         /// <summary>The walking map's checksum (MapExport), so the dashboard knows which map the world stands on.</summary>
         public string MapCrc;
         /// <summary>The game's road distances between holdings (Capture.RoadsFor); null when not copied.</summary>
@@ -467,6 +476,13 @@ namespace BannerlordAgents
         /// <summary>For movements: in-game hours from the first click of this course to the decision, and quick corrections merged into it.</summary>
         public double? SettleHours;
         public int? Corrections;
+        /// <summary>
+        /// Since 0.13 (docs/PLAN-0.13.md C2): the test run and its arm (null outside a run), this load, the realm's report as of that
+        /// hour (record\reports\(hour).txt.gz, the same text an agent of the realm reads, and its fingerprint), and what the move
+        /// was in detail (the troops recruited, the loot sold, the vote cast, ...).
+        /// </summary>
+        public string Run, Arm, Load, Report, ReportHash;
+        public object Detail;
     }
 
     internal sealed class Trigger

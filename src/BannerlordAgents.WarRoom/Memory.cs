@@ -31,6 +31,8 @@ namespace BannerlordAgents.WarRoom
         public string Notes = "", Story = "";
         public double StoryHours = double.NaN, LastHours = double.NaN;
         public string StoryDate = "", LoadId = "", SessionId;
+        /// <summary>The test run and arm of the latest poke (0.13): each snapshot of the notes and story carries them, for the run's bundle.</summary>
+        public string Run, Arm;
         public int LastPoke = -1;
         public long SessionTokens;
         public bool SessionStarted;
@@ -136,6 +138,7 @@ namespace BannerlordAgents.WarRoom
                 var o = new JsonObject
                 {
                     ["hours"] = double.IsNaN(hours) ? null : hours, ["date"] = date, ["poke"] = poke, ["why"] = why, ["load"] = string.IsNullOrEmpty(LoadId) ? null : LoadId, ["at"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    ["run"] = Run, ["arm"] = Arm,
                     ["notes"] = Notes, ["story"] = Story, ["story_hours"] = double.IsNaN(StoryHours) ? null : StoryHours, ["story_date"] = StoryDate
                 };
                 File.AppendAllText(SnapshotFile, o.ToJsonString() + "\n", new UTF8Encoding(false));

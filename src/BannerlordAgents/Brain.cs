@@ -101,6 +101,9 @@ namespace BannerlordAgents
             _dir = Paths.Data(campaign);
             MarkLoad(loadedAt, agents);
             Tools.Runner.Reset();
+            Outcomes.Reset();
+            Episodes.Reset();
+            RecordedReports.Clear();
             Agents.Reset(_dir, loadedAt, agents, histories, History);
             AgentChannel.WriteLibrary();
             Audit.Reset();
@@ -283,6 +286,8 @@ namespace BannerlordAgents
                 // the tools first: their call-backs of this hour go out with the next poke
                 Timed(ms, "orders", () => Tools.Runner.OnHour(v, ag));
                 Timed(ms, "look", () => Observe(v, v.Watched, v.WatchedSees, v.HostileToWatched, false));
+                // the realm's numbers at each day's start, for the episode index (0.13, C4)
+                if (ag.On && !ag.Config.IsLieutenant) Episodes.MaybeDay(v);
             }
             if (s.PlayerFaction != null && !seats.Any(kv => kv.Value.Watched == s.PlayerFaction))
                 Timed(ms, "look", () => Observe(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true));
@@ -342,6 +347,8 @@ namespace BannerlordAgents
                 string r = realm;
                 Steps.Enqueue(() => Guarded("the report of " + r, () => PublishSeat(r, ms, files)));
             }
+            // your realm's report every hour while you play a test run of yours (A, B): the training record's quiet hours (0.13, C2)
+            if (s.RecordHourly && s.PlayerFaction != null) Steps.Enqueue(() => Guarded("your realm's hourly record", () => Timed(ms, "record", () => RecordHour(s))));
             if (Settings.Dashboard) Steps.Enqueue(() => Guarded("writing the dashboard's hourly picture", () => Timed(ms, "dashboard", () => DashboardHour(s, RoundViews.ToList()))));
             Steps.Enqueue(() => EndRound(s, folded, ms, files, began));
         }
@@ -647,7 +654,8 @@ namespace BannerlordAgents
                 : null;
             long filesBegan = Stopwatch.GetTimestamp();
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
-                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Triggers = triggers, View = v, Report = report }));
+                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Triggers = triggers, View = v, Report = report }));
+            Episodes.Poke(fid, number, s.Hours, triggers, report, ch.On && !ch.IsLieutenant);
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
             // the player's lieutenant is never poked (0.10): it speaks when spoken to; what became of its orders goes into the chat box
             if (ch.IsLieutenant) Lieutenant.Heard(triggers);
@@ -657,7 +665,7 @@ namespace BannerlordAgents
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
                     LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count,
-                    History = History.ForAgent()
+                    History = History.ForAgent(), Run = s.Run, Arm = s.Arm
                 });
             ms["files"] = (ms.TryGetValue("files", out double filesBefore) ? filesBefore : 0) + Took(filesBegan);
 
@@ -792,11 +800,61 @@ namespace BannerlordAgents
                    + Text.N(report.Length / 4) + " tokens) is in " + path;
         }
 
+        // ---------- your own moves' record (0.13, docs/PLAN-0.13.md C2) ----------
+
+        /// <summary>The hours whose report of your realm is already kept this session (record\reports\(hour).txt.gz).</summary>
+        private static readonly HashSet<string> RecordedReports = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Your realm's report as of an hour, the same text an agent of your realm would read (its view from what your own party and
+        /// the game show you, its orders in force), packed in record\reports\(hour).txt.gz once per hour; its file and fingerprint.
+        /// </summary>
+        private static string YourReport(Snapshot s, out string hash)
+        {
+            hash = null;
+            if (s?.PlayerFaction == null) return null;
+            string key = RecordFiles.HourKey(s.Hours);
+            string rel = "reports/" + key + ".txt.gz";
+            Snapshot mine = s.SeatViews().FirstOrDefault(x => x.Watched == s.PlayerFaction);
+            Dictionary<string, Sighting> sees = mine?.WatchedSees ?? PlayerSees(s);
+            Snapshot from = mine ?? s;
+            View v = Views.Build(from, s.PlayerFaction, sees, mine != null ? mine.HostileToWatched : s.HostileToPlayer, Get(s.PlayerFaction));
+            Tools.World w = mine != null ? Tools.Runner.WorldFor(mine) : new Tools.World(s, s.PlayerFaction, sees, Get(s.PlayerFaction).LastSeen);
+            string report = Views.Report(v, null, new ReportExtras { InForce = Tools.Runner.InForce(w) });
+            hash = RecordFiles.Hash(report);
+            if (RecordedReports.Add(key) && !RecordFiles.WriteGz(Path.Combine(Dir, "record", "reports", key + ".txt.gz"), report))
+            {
+                RecordedReports.Remove(key);
+                return null;
+            }
+            return rel;
+        }
+
+        /// <summary>An hour of your realm in a test run of yours (A, B): its report kept, and its line in record\hours.jsonl.</summary>
+        private static void RecordHour(Snapshot s)
+        {
+            string report = YourReport(s, out string hash);
+            if (report == null) return;
+            Memory m = Get(s.PlayerFaction);
+            Files.Append(Path.Combine(Dir, "record", "hours.jsonl"), Json.Line(new
+            {
+                Type = "hour", Faction = s.PlayerFaction, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Report = report, ReportHash = hash,
+                RecentPokes = m.Recent.Where(t => s.Hours - t.Hours <= 1.01).Select(t => t.Kind).ToList()
+            }));
+            Diag.Count("record:hours");
+        }
+
         public static void WriteDecision(DecisionRecord d)
         {
             Memory m = Get(d.Faction);
             d.RecentPokes = m.Recent.Where(t => d.Hours - t.Hours <= 24).ToList();
             if (Latest != null && d.Faction != null) d.Realm = Views.Realm(Latest, d.Faction);
+            // the report of the hour the move was made in: the input an agent of your realm would have had (C2)
+            if (Latest != null && d.Faction != null && d.Faction == Latest.PlayerFaction)
+            {
+                try { d.Report = YourReport(Latest, out string hash); d.ReportHash = d.Report != null ? hash : null; }
+                catch (Exception e) { Diag.Error("your realm's report for the record", e); }
+            }
             Files.Append(Path.Combine(Dir, "record", "decisions.jsonl"), Json.Line(d));
             DecisionsWritten++;
             Diag.Count("record:decisions");

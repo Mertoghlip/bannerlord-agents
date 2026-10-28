@@ -63,6 +63,11 @@ namespace BannerlordAgents.WarRoom
         public string CouncilEffort = "high";
         public int CouncilThinkingCap = 12000;
         public int CouncilTimeoutSeconds = 420;
+        /// <summary>
+        /// How each call asks for the model's thinking (0.13, the training record): "summarized" keeps the API's summary of it in the
+        /// call's raw.jsonl and thinking.txt; "omitted" leaves it out; empty asks nothing (Claude Code's own default).
+        /// </summary>
+        public string ThinkingDisplay = "summarized";
 
         /// <summary>What the folder's agent is (its agent.txt's kind, since 0.10): "realm" answers pokes; "lieutenant" answers the player's chat (LieutenantRoom).</summary>
         public string Kind = "realm";
@@ -128,10 +133,13 @@ namespace BannerlordAgents.WarRoom
                     case "council_effort": if (v.Length > 0) c.CouncilEffort = v; break;
                     case "council_thinking_cap": if (int.TryParse(v, out int ctc) && ctc >= 0) c.CouncilThinkingCap = ctc; break;
                     case "council_timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ct) && ct > 10) c.CouncilTimeoutSeconds = ct; break;
+                    case "thinking_display": c.ThinkingDisplay = v == "summarized" || v == "omitted" ? v : ""; break;
                 }
             }
             string text = File.ReadAllText(c.FilePath);
-            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =")) c.Save();   // a settings file from before memory or the council: the new keys are added
+            // a settings file from before memory, the council or the thinking's summary: the new keys are added
+            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =") || !text.Contains("thinking_display =")) c.Save();
+            Claude.ThinkingDisplay = c.ThinkingDisplay;
             return c;
         }
 
@@ -179,6 +187,8 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("council_effort = " + CouncilEffort);
             sb.AppendLine("council_thinking_cap = " + CouncilThinkingCap.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("council_timeout_seconds = " + CouncilTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# the model's thinking: summarized (the API's summary of it is kept with each call, for the training record), omitted, or empty (Claude Code's default)");
+            sb.AppendLine("thinking_display = " + ThinkingDisplay);
             File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
         }
     }

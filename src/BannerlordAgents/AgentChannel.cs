@@ -48,18 +48,38 @@ namespace BannerlordAgents
             /// <summary>The realm whose channel the order came in by (null: the first realm's, or the console).</summary>
             public string Realm;
             public readonly List<string> Lords = new List<string>();
+            /// <summary>The holdings a tool that takes "places" works through (0.13): ids or names, in the order given.</summary>
+            public readonly List<string> Places = new List<string>();
             public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             /// <summary>The order to start when this one finishes (same lord).</summary>
             public JObject Then;
             /// <summary>The order as written (the lieutenant's party_ai reads its settings from it, 0.11.1).</summary>
             public JObject Raw;
             public DateTime Received;
+            /// <summary>The tool run the order started (0.13, the episode index), once the game's thread started it; 0 for none.</summary>
+            public int ToolRun;
+            /// <summary>The agent's own tool the order names, from its answer or its realm's library (0.13, OwnTools); null for ours.</summary>
+            public Tools.ToolDef Tool;
+        }
+
+        /// <summary>
+        /// What one answer file holds besides its orders (0.13): what kind of call wrote it (an answer or a council), the war room's
+        /// folder for that call, and its tools, diplomatic acts and letters (each list as written; null when absent).
+        /// </summary>
+        internal sealed class Answer
+        {
+            public string Kind = "answer", Call, File;
+            public int Poke = -1, Orders;
+            public JArray ToolList, DiplomacyList, LetterList;
+            public int Tools => ToolList?.Count ?? 0;
+            public int Diplomacy => DiplomacyList?.Count ?? 0;
+            public int Letters => LetterList?.Count ?? 0;
         }
 
         /// <summary>The keys of an order that are not settings; any other number in an order is taken as a setting.</summary>
         private static readonly HashSet<string> OrderKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "lord", "do", "order", "verb", "target", "at", "place", "why", "lords", "settings", "then", "poke"
+            "lord", "do", "order", "verb", "target", "at", "place", "why", "lords", "settings", "then", "poke", "places"
         };
 
         private static Timer _fallback;
@@ -244,10 +264,14 @@ namespace BannerlordAgents
         /// Reads one answer file: {"poke": 12, "orders": [{"lord": ..., "do": ..., "target": ..., "why": ...}], "note": ...}.
         /// A bare list of orders, or a single order, is accepted too.
         /// </summary>
-        public static bool Parse(string path, out int poke, out List<AgentOrder> orders, out string error)
+        public static bool Parse(string path, out int poke, out List<AgentOrder> orders, out string error) => Parse(path, out poke, out orders, out _, out error);
+
+        /// <summary>The same, with what else the answer holds (0.13): its kind, its call's folder, its tools, diplomatic acts and letters.</summary>
+        public static bool Parse(string path, out int poke, out List<AgentOrder> orders, out Answer answer, out string error)
         {
             poke = -1;
             orders = new List<AgentOrder>();
+            answer = new Answer { File = Path.GetFileName(path) };
             error = null;
             string text;
             try
@@ -267,6 +291,11 @@ namespace BannerlordAgents
                 list = obj["orders"] as JArray;
                 if (list == null && obj["lord"] != null) list = new JArray(obj);
                 if (list == null) list = new JArray();
+                answer.Kind = ((string)obj["kind"] ?? "answer").Trim().ToLowerInvariant();
+                answer.Call = (string)obj["call"];
+                answer.ToolList = obj["tools"] as JArray;
+                answer.DiplomacyList = obj["diplomacy"] as JArray;
+                answer.LetterList = obj["letters"] as JArray;
             }
             else if (root is JArray arr) list = arr;
             else { error = "expected an object with \"orders\""; return false; }
@@ -280,6 +309,8 @@ namespace BannerlordAgents
                 a.Index = i;
                 orders.Add(a);
             }
+            answer.Poke = poke;
+            answer.Orders = orders.Count;
             return true;
         }
 
@@ -298,6 +329,10 @@ namespace BannerlordAgents
             JToken lords = o["lords"];
             if (lords is JArray arr) a.Lords.AddRange(arr.Select(Str).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
             else if (lords != null && lords.Type == JTokenType.String) a.Lords.AddRange(((string)lords).Split(',').Select(x => x.Trim()).Where(x => x.Length > 0));
+            // a tool's list of holdings (0.13): ids or names, in order
+            JToken places = o["places"];
+            if (places is JArray pa) a.Places.AddRange(pa.Select(Str).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
+            else if (places != null && places.Type == JTokenType.String) a.Places.AddRange(((string)places).Split(',').Select(x => x.Trim()).Where(x => x.Length > 0));
             if (o["settings"] is JObject set)
                 foreach (JProperty p in set.Properties())
                     if (p.Value.Type == JTokenType.Integer || p.Value.Type == JTokenType.Float) a.Settings[p.Name] = (double)p.Value;
@@ -682,7 +717,7 @@ namespace BannerlordAgents
                     MoveDone(f);
                     continue;
                 }
-                if (!AgentChannel.Parse(f, out int poke, out List<AgentChannel.AgentOrder> orders, out string error))
+                if (!AgentChannel.Parse(f, out int poke, out List<AgentChannel.AgentOrder> orders, out AgentChannel.Answer ans, out string error))
                 {
                     Unreadable.TryGetValue(f, out int tries);
                     if (++tries < 5) { Unreadable[f] = tries; fresh = true; continue; }
@@ -696,7 +731,8 @@ namespace BannerlordAgents
                 }
                 Unreadable.Remove(f);
                 foreach (AgentChannel.AgentOrder o in orders) o.Realm = Realm;
-                Answered(f, poke, orders);
+                Episodes.Answer(Realm, poke, Path.GetFileName(f), ans, Diag.Hours);
+                Answered(f, poke, orders, ans);
                 MoveDone(f);
             }
             if (fresh)
@@ -707,7 +743,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>One answer file: timed against its poke, checked, and handed to the game's thread (or refused here).</summary>
-        private void Answered(string f, int poke, List<AgentChannel.AgentOrder> orders)
+        private void Answered(string f, int poke, List<AgentChannel.AgentOrder> orders, AgentChannel.Answer ans = null)
         {
             string name = Path.GetFileName(f);
             AnswerFiles++;
@@ -857,8 +893,9 @@ namespace BannerlordAgents
             {
                 Type = "agent_receipt", Realm, a.Poke, a.File, a.Index, a.Lord, a.Do, a.Target, a.Why, Status = status, Reason = reason,
                 Hours = hours, AnswerSeconds = seconds >= 0 ? seconds : (double?)null, AnswerGameHours = gameHours >= 0 ? gameHours : (double?)null,
-                WaitedSeconds = waited >= 2 ? waited : (double?)null, Mode
+                WaitedSeconds = waited >= 2 ? waited : (double?)null, Mode, Run = RunTags.Id, Arm = RunTags.Arm, ToolRun = a.ToolRun > 0 ? a.ToolRun : (int?)null
             });
+            Episodes.Receipt(Realm, a, status, reason, hours);
         }
 
         /// <summary>What became of an agent's order later (arrived, given again, ended).</summary>

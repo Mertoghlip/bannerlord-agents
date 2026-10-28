@@ -16,6 +16,8 @@ namespace BannerlordAgents.WarRoom
         /// <summary>The save's history, as the bridge found it (since 0.9.1): the game sessions its world lived through, each up to the hour it was saved at; null from an older bridge.</summary>
         public List<KeyValuePair<string, double>> Before;
         public string HistoryFound = "";
+        /// <summary>The test run the poke belongs to, and its arm (0.13, the training record's tags); null outside a run or from an older bridge.</summary>
+        public string Run, Arm;
     }
 
     /// <summary>
@@ -127,6 +129,7 @@ namespace BannerlordAgents.WarRoom
             PokeMeta meta = ReadMeta(number);
             if (meta != null && !double.IsNaN(meta.Hours)) _pokeHours = meta.Hours;
             EnsureMemory(meta);
+            if (meta != null) { _mem.Run = meta.Run; _mem.Arm = meta.Arm; }
             string why = Section(pokeText, "WHY YOU ARE ASKED NOW");
             bool urgent = _c.Urgent.Any(u => why.IndexOf(u, StringComparison.OrdinalIgnoreCase) >= 0);
             effort ??= urgent ? _c.UrgentEffort : _c.Effort;
@@ -191,10 +194,11 @@ namespace BannerlordAgents.WarRoom
             string changed = "";
             if (answer != null && write)
             {
-                WriteOrders(number, answer);
+                WriteOrders(number, answer, call: folder);
                 changed = Remember(answer, number, when, meta);
                 AfterAnswer(pokeText, answer);
             }
+            KeepThinking(folder, r);
             long context = r.InTokens + r.CacheRead + r.CacheWrite;
             if (write)
             {
@@ -216,7 +220,9 @@ namespace BannerlordAgents.WarRoom
                 tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
                 answer_began_ms = Math.Round(r.FirstTextMs), memory = _c.MemoryMode, context_tokens = context, story_words = storyWords, gap_lines = gapLines,
                 notes_chars = _mem.Notes.Length, notes_changed = changed, session = sessionId, campaign = _mem.Campaign,
-                orders, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null
+                orders, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null,
+                run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, system_hash = _systemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
+                tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters")
             });
             if (answer != null)
                 Say("Poke #" + number + ": " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s ("
@@ -342,7 +348,8 @@ namespace BannerlordAgents.WarRoom
                 var m = new PokeMeta
                 {
                     Number = (int?)o["number"] ?? -1, Hours = Num(o["hours"]), Date = (string)o["date"] ?? "", Campaign = (string)o["campaign"], Realm = (string)o["realm"],
-                    RealmName = (string)o["realm_name"], LoadId = (string)o["load_id"], LoadedAt = Num(o["loaded_at"]), LoadedAtDate = (string)o["loaded_at_date"] ?? ""
+                    RealmName = (string)o["realm_name"], LoadId = (string)o["load_id"], LoadedAt = Num(o["loaded_at"]), LoadedAtDate = (string)o["loaded_at_date"] ?? "",
+                    Run = (string)o["run"], Arm = (string)o["arm"]
                 };
                 if (o["history"] is JsonObject h && h["before"] is JsonArray steps)
                 {
@@ -650,11 +657,12 @@ namespace BannerlordAgents.WarRoom
                 answer["kind"] = "council";
                 if (write)
                 {
-                    WriteOrders(number, answer, "council");
+                    WriteOrders(number, answer, "council", folder);
                     changed = Remember(answer, number, meta.Date, meta);
                 }
                 File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
+            KeepThinking(folder, r);
             double seconds = (DateTime.Now - began).TotalSeconds;
             if (answer != null)
             {
@@ -671,7 +679,9 @@ namespace BannerlordAgents.WarRoom
                 thinking_cap = _c.CouncilThinkingCap, ok = answer != null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), api_ms = r.ApiMs, ttft_ms = r.TtftMs, turns = r.Turns,
                 tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
                 context_tokens = r.InTokens + r.CacheRead + r.CacheWrite, story_words = storyWords, gap_lines = gapLines, briefing_chars = briefing.Length, situation_chars = situation.Length,
-                orders, dropped, council_in = councilIn, notes_changed = changed, campaign = _mem.Campaign, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null
+                orders, dropped, council_in = councilIn, notes_changed = changed, campaign = _mem.Campaign, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null,
+                run = meta.Run, arm = meta.Arm, realm = meta.Realm, system_hash = _systemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
+                tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters")
             });
             if (answer != null)
                 Say("Council of war: " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s ("
@@ -1045,13 +1055,19 @@ namespace BannerlordAgents.WarRoom
             }
         }
 
-        /// <summary>The answer's orders into orders\poke-N.json (a council's: poke-N-council.json), swapped in whole for the bridge to read.</summary>
-        private void WriteOrders(int number, JsonObject answer, string suffix = null)
+        /// <summary>
+        /// The answer's orders into orders\poke-N.json (a council's: poke-N-council.json), swapped in whole for the bridge to read; since
+        /// 0.13 with its tools, diplomatic acts and letters, and the folder of the call that wrote it (the episode index names it).
+        /// </summary>
+        private void WriteOrders(int number, JsonObject answer, string suffix = null, string call = null)
         {
             string dir = Path.Combine(_c.ChannelDir, "orders");
             Directory.CreateDirectory(dir);
             var file = new JsonObject { ["poke"] = number, ["orders"] = answer["orders"]?.DeepClone() ?? new JsonArray() };
             if (suffix != null) file["kind"] = suffix;
+            if (call != null) file["call"] = call;
+            foreach (string k in new[] { "tools", "diplomacy", "letters" })
+                if (answer[k] is JsonArray list && list.Count > 0) file[k] = list.DeepClone();
             if (answer["note"] != null) file["note"] = answer["note"].DeepClone();
             else if (answer["plan"] != null) file["note"] = answer["plan"].DeepClone();
             string name = "poke-" + number + (suffix != null ? "-" + suffix + "-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) : "");
@@ -1062,6 +1078,23 @@ namespace BannerlordAgents.WarRoom
         }
 
         // ---------- helpers and logs ----------
+
+        /// <summary>The thinking's summary of a call (0.13), kept beside its prompt and answer as thinking.txt.</summary>
+        internal static void KeepThinking(string folder, CallResult r)
+        {
+            if (folder == null || r == null || string.IsNullOrWhiteSpace(r.ThinkingText)) return;
+            try { File.WriteAllText(Path.Combine(folder, "thinking.txt"), r.ThinkingText.Trim() + "\n", new UTF8Encoding(false)); }
+            catch (IOException) { }
+        }
+
+        /// <summary>The order library's fingerprint as the call read it (tools.txt; 0.13: which tools a call had, the realm's own among them).</summary>
+        private string LibraryHash()
+        {
+            string tools = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt"));
+            return tools == null ? null : Hash(tools);
+        }
+
+        private static int Count(JsonObject answer, string list) => answer?[list] is JsonArray a ? a.Count : 0;
 
         public static int Words(string text) => string.IsNullOrWhiteSpace(text) ? 0 : text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries).Length;
 

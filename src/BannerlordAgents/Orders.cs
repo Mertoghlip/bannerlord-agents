@@ -324,11 +324,13 @@ namespace BannerlordAgents
             if (same != null)
             {
                 status = "applied";
+                a.ToolRun = same.ToolId;
                 Diag.Count("order:kept as it was");
                 Diag.Event("order", "kept", new { id = same.Id, source, poke = a.Poke, lord = lord.StringId, tool = def.Name });
                 return name + " already holds this very order (" + same.ToolText + "): it goes on as it was, not started again";
             }
             string shown = StartTool(lord, party, def, o, realm, words);
+            a.ToolRun = o.Id;
             status = "applied";
             return text + Notes(notes) + shown;
         }
@@ -514,6 +516,7 @@ namespace BannerlordAgents
         {
             if (realm != null) o.Realm = realm.StringId;
             int id = Runner.NewId();
+            o.Id = id;
             var h = new HandOrder
             {
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = o.Source, Poke = o.Poke, Verb = "hold",
@@ -732,6 +735,7 @@ namespace BannerlordAgents
             Diag.Event("army", "formed", new { leader = lord.StringId, place = place.StringId, members = members.Select(m => m.LeaderHero.StringId).ToList(),
                                                 far = far.Select(m => m.LeaderHero?.StringId).ToList(), cost, far_cost_now = farCost, influence_before = (int)influence, type = type.ToString() });
             string shown = StartTool(lord, lp, def, o, realm, o.Words);
+            a.ToolRun = o.Id;
             SendToJoin(far, lp, o, realm);
             status = "applied";
             return text + Notes(notes) + shown;
@@ -1864,7 +1868,7 @@ namespace BannerlordAgents
             {
                 Type = "order", Event = what, Id = o.Id, o.Source, Poke = o.Poke >= 0 ? o.Poke : (int?)null, Hours = CampaignTime.Now.ToHours,
                 Lord = o.Lord?.StringId, LordName = Names.Hero(o.Lord), Realm = o.Realm?.StringId, o.Verb, o.Tool, Place = o.Place?.StringId,
-                Target = o.Target?.StringId, o.Reissued, Text = text
+                Target = o.Target?.StringId, o.Reissued, Text = text, Run = RunTags.Id, ToolRun = o.ToolId > 0 ? o.ToolId : (int?)null
             };
             Background.Post("order record", () => Brain.WriteOrder(rec));
             Diag.Event("order", what, new { id = o.Id, source = o.Source, poke = o.Poke >= 0 ? o.Poke : (int?)null, lord = o.Lord?.StringId, verb = o.Verb, tool = o.Tool,

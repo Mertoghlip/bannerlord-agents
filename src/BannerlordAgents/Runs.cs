@@ -51,6 +51,7 @@ namespace BannerlordAgents
         {
             _last = null;
             EventsFile = null;
+            RunTags.Set(null, null);
             Recruits.Clear();
             Battles.Begun.Clear();
             _trueSightFlagged = _cheatFlagged = false;
@@ -104,6 +105,7 @@ namespace BannerlordAgents
                 Realms.Clear();
                 Realms.UnionWith(open.AllRealms());
                 EventsFile = RunFiles.Events(open.Id);
+                RunTags.Set(open.Id, open.Arm);
                 RunFiles.Write(open, current: true);
                 Say("Test run " + open.Arm + " (" + open.Id + ") carries on from " + save + ", day " + RunRules.Day(loadedAt, open.H0) + " of " + open.Days + ".");
                 Diag.Event("run", "carried on", new { run = open.Id, save, hours = loadedAt });
@@ -147,6 +149,7 @@ namespace BannerlordAgents
             Realms.UnionWith(_run.AllRealms());
             _run.WarAtStart = Wars();
             EventsFile = RunFiles.Events(_run.Id);
+            RunTags.Set(_run.Id, _run.Arm);
             RunFiles.Write(_run, current: true);
             RunSetup setup = Setup();
             string id = _run.Id;
@@ -196,6 +199,9 @@ namespace BannerlordAgents
             RunFiles.Write(_run, current: true);
             Diag.Event("run", "finished", new { run = _run.Id, arm = _run.Arm, hours = h });
             EventsFile = null;
+            RunTags.Set(null, null);
+            // the run's bundle, for the dataset builder (0.13, C5): packed by Runs.exe beside the game, once the files are flushed
+            RunFiles.StartBundle(_run.Id);
             string name = "TEST END " + _run.Arm + " " + _run.Id;
             try
             {
@@ -222,6 +228,7 @@ namespace BannerlordAgents
             _run.CloseSegment(wall, h);
             RunFiles.Write(_run, current: true);
             EventsFile = null;
+            RunTags.Set(null, null);
             Diag.Event("run", "stopped", new { run = _run.Id, hours = h });
             string id = _run.Id;
             _run = null;
@@ -846,6 +853,54 @@ namespace BannerlordAgents
         {
             Files.Append(Path.Combine(Dir(id), "days.jsonl"), Json.Line(line));
             Files.FlushAll();
+        }
+
+        /// <summary>Runs.exe, staged in the module's runs folder beside bin\ (the game loads nothing from there).</summary>
+        public static string RunsExe
+        {
+            get
+            {
+                string dll = typeof(RunFiles).Assembly.Location;
+                return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dll) ?? ".", "..", "..", "runs", "Runs.exe"));
+            }
+        }
+
+        /// <summary>
+        /// The run's bundle (0.13, docs/PLAN-0.13.md C5), packed at its end: the worker flushes every file, then starts Runs.exe bundle
+        /// for it at low priority, its words going to bundle.log in the run's folder. Runs.exe bundle (run) does the same by hand.
+        /// </summary>
+        public static void StartBundle(string id)
+        {
+            Background.Post("run bundle", () =>
+            {
+                Files.FlushAll();
+                try
+                {
+                    string exe = RunsExe;
+                    if (!File.Exists(exe)) { Log.Line("run: the bundle was not packed: " + exe + " is missing (Runs.exe bundle " + id + " packs it by hand)"); return; }
+                    var psi = new System.Diagnostics.ProcessStartInfo(exe, "bundle " + id)
+                    {
+                        UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Path.GetDirectoryName(exe)
+                    };
+                    psi.EnvironmentVariables["BANNERLORD_AGENTS_ROOT"] = Paths.Root;
+                    var p = System.Diagnostics.Process.Start(psi);
+                    if (p == null) return;
+                    try { p.PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal; } catch (Exception e) { Diag.Swallowed("the bundle's priority", e); }
+                    string log = Path.Combine(Dir(id), "bundle.log");
+                    void Keep(string line)
+                    {
+                        if (line == null) return;
+                        try { File.AppendAllText(log, line + Environment.NewLine); }
+                        catch (Exception x) { Diag.Swallowed("the bundle's log", x); }
+                    }
+                    p.OutputDataReceived += (s, e) => Keep(e.Data);
+                    p.ErrorDataReceived += (s, e) => Keep(e.Data);
+                    p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
+                    Diag.Event("run", "bundle started", new { run = id, exe });
+                }
+                catch (Exception e) { Diag.Error("packing the run's bundle", e); }
+            });
         }
 
         /// <summary>The save's file: the game's saves folder in your Documents (OneDrive's when it moved them).</summary>

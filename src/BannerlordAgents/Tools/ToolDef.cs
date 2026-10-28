@@ -50,6 +50,14 @@ namespace BannerlordAgents.Tools
     {
         public string Name, Kind = "tool", About, CallsBack, At, Target, Start;
         public bool Lords, Safety = true;
+        /// <summary>
+        /// Who wrote it (0.13): "ours" for the library that ships with the mod, else the realm whose agent wrote it; its version (1 for
+        /// ours; an agent's tool counts up each time it is changed) and the poke or council it was written at.
+        /// </summary>
+        public string Author = "ours";
+        public int Version = 1, WrittenAt = -1;
+        /// <summary>"ours", or "v2" for the second version of an agent's own tool.</summary>
+        public string VersionText => Author == "ours" ? "ours" : "v" + Version;
         public readonly Dictionary<string, SettingDef> Settings = new Dictionary<string, SettingDef>(StringComparer.OrdinalIgnoreCase);
         public readonly List<KeyValuePair<string, Expr>> Init = new List<KeyValuePair<string, Expr>>();
         public readonly Dictionary<string, StateDef> States = new Dictionary<string, StateDef>(StringComparer.OrdinalIgnoreCase);

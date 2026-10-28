@@ -12,6 +12,8 @@ namespace BannerlordAgents.WarRoom
         /// <summary>With the war room's own tools: Claude Code did not answer the handshake within 30 s (the message went anyway).</summary>
         public bool HandshakeLate;
         public string Text, Raw, Error;
+        /// <summary>The model's thinking as the API summarized it (0.13, Claude Code's --thinking-display summarized); empty when not asked for.</summary>
+        public string ThinkingText = "";
         public double Seconds, ApiMs, TtftMs, Cost, FirstTextMs = -1;
         public int Turns;
         public long InTokens, OutTokens, CacheRead, CacheWrite, Thinking;
@@ -77,6 +79,12 @@ namespace BannerlordAgents.WarRoom
         /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on
         /// (resume true), for the one-long-conversation memory; without one, nothing is kept. A cancelled call is stopped.
         /// </summary>
+        /// <summary>
+        /// How Claude Code asks for the model's thinking (0.13, docs/PLAN-0.13.md C3.8): "summarized" brings the API's summary of it
+        /// into the stream (kept in raw.jsonl and thinking.txt), "omitted" leaves it out; empty passes nothing. Set from warroom.txt.
+        /// </summary>
+        public static string ThinkingDisplay = "summarized";
+
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
                                      string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null)
         {
@@ -100,6 +108,7 @@ namespace BannerlordAgents.WarRoom
                 "--model", model, "--effort", effort, "--system-prompt-file", systemFile,
                 "--tools", read ? "Read" : "", "--safe-mode", "--permission-prompts", "none"
             }) psi.ArgumentList.Add(a);
+            if (!string.IsNullOrWhiteSpace(ThinkingDisplay)) { psi.ArgumentList.Add("--thinking-display"); psi.ArgumentList.Add(ThinkingDisplay.Trim()); }
             if (sessionId == null) psi.ArgumentList.Add("--no-session-persistence");
             else
             {
@@ -127,6 +136,7 @@ namespace BannerlordAgents.WarRoom
                 catch { /* the call still runs, just not throttled */ }
                 var events = new StringBuilder();
                 var written = new StringBuilder();
+                var thoughts = new StringBuilder();
                 string resultLine = null;
                 double firstText = -1;
                 long lastEvent = sw.ElapsedMilliseconds;
@@ -174,6 +184,8 @@ namespace BannerlordAgents.WarRoom
                             if (firstText < 0) firstText = sw.Elapsed.TotalMilliseconds;
                             if (written.Length < 200_000) written.Append(Delta(e.Data));
                         }
+                        // the thinking's summary, in each whole assistant message (0.13)
+                        else if (e.Data.Contains("\"type\":\"assistant\"") && e.Data.Contains("\"thinking\"") && thoughts.Length < 400_000) Thoughts(e.Data, thoughts);
                         if (events.Length < 2_000_000 && !e.Data.Contains("\"stream_event\"")) events.AppendLine(e.Data);
                     }
                 };
@@ -217,7 +229,11 @@ namespace BannerlordAgents.WarRoom
                 if (!p.WaitForExit(2000)) { try { p.Kill(true); } catch { } }
                 writer.Join(2000);
                 r.Seconds = sw.Elapsed.TotalSeconds;
-                lock (events) r.Raw = events.ToString() + (resultLine == null && written.Length > 0 ? "\n--- the text written before it was stopped ---\n" + written : "");
+                lock (events)
+                {
+                    r.Raw = events.ToString() + (resultLine == null && written.Length > 0 ? "\n--- the text written before it was stopped ---\n" + written : "");
+                    r.ThinkingText = thoughts.ToString();
+                }
                 if (resultLine == null)
                 {
                     r.Error = stopped ?? ("no answer" + (err.Length > 0 ? ": " + First(err.ToString()) : ""));
@@ -296,6 +312,23 @@ namespace BannerlordAgents.WarRoom
                 ["type"] = "control_response",
                 ["response"] = new System.Text.Json.Nodes.JsonObject { ["subtype"] = "error", ["request_id"] = id, ["error"] = "the war room does not handle " + (subtype ?? "this request") }
             }.ToJsonString());
+        }
+
+        /// <summary>The thinking blocks of one whole assistant message, appended (empty ones, when the API leaves the text out, add nothing).</summary>
+        internal static void Thoughts(string line, StringBuilder into)
+        {
+            try
+            {
+                using JsonDocument d = JsonDocument.Parse(line);
+                if (!d.RootElement.TryGetProperty("message", out JsonElement m) || !m.TryGetProperty("content", out JsonElement c) || c.ValueKind != JsonValueKind.Array) return;
+                foreach (JsonElement b in c.EnumerateArray())
+                    if (b.TryGetProperty("type", out JsonElement t) && t.GetString() == "thinking" && b.TryGetProperty("thinking", out JsonElement th))
+                    {
+                        string s = th.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) into.Append(s.Trim()).Append("\n\n");
+                    }
+            }
+            catch (JsonException) { }
         }
 
         /// <summary>The text of one streamed text_delta event.</summary>

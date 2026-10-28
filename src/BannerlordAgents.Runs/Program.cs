@@ -13,6 +13,8 @@ namespace BannerlordAgents.Runs
     ///   watch [run]     what is new since the last look, and what needs a look (exit code 1 then)
     ///   report [run]    the run's numbers in full: report.md and report.json in its folder
     ///   compare         every run side by side: compare.md in the runs folder
+    ///   bundle [run]    everything of the run packed for the dataset builder: bundle.zip in its folder (0.13; exit code 1 when something is missing)
+    ///   marks [campaign] your old records made while an agent commanded your kingdom, marked "not yours" (0.13)
     /// A run is its folder's name (or "latest"); none given: the open one, else the newest.
     /// </summary>
     internal static class Program
@@ -32,8 +34,10 @@ namespace BannerlordAgents.Runs
                     case "watch": return Watch.Run(id);
                     case "report": return Report.Run(id);
                     case "compare": return Report.Compare();
+                    case "bundle": return Bundle.Run(id);
+                    case "marks": return Marks.Run(id);
                     default:
-                        Console.WriteLine("Runs.exe status|watch|report [run] | compare");
+                        Console.WriteLine("Runs.exe status|watch|report|bundle [run] | compare | marks [campaign]");
                         return 2;
                 }
             }

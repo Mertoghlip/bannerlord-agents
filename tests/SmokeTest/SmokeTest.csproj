@@ -16,6 +16,9 @@
     <!-- outside the game these must sit beside the test, so they are copied (into bin only, never into git) -->
     <Reference Include="TaleWorlds.Library" HintPath="$(GameBin)\TaleWorlds.Library.dll" Private="true" />
     <Reference Include="Newtonsoft.Json" HintPath="$(GameBin)\Newtonsoft.Json.dll" Private="true" />
+    <!-- the run's bundle is read back (0.13) -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
 </Project>

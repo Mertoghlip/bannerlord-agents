@@ -50,7 +50,9 @@ namespace BannerlordAgents
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried;
+        /// <summary>The record's hooks (0.13): the party screen's Done, your votes in the realm's council, the offer windows shown to you.</summary>
+        public static bool PartyScreenInstalled, VoteInstalled, OfferInstalled;
         private static object _harmony;
 
         /// <summary>Game's thread: at start-up and whenever the settings change. Attaches what is wanted and not yet attached.</summary>
@@ -71,6 +73,17 @@ namespace BannerlordAgents
                     Parts["error"] = "could not attach (" + e.GetType().Name + ": " + e.Message + ")";
                     Diag.Swallowed("game hooks", e);
                     Log.Line("game hooks: " + Status);
+                }
+            }
+            // the training record's hooks (0.13, Recorder): read-only, each one apart, so one that cannot attach costs only its own kind of record
+            if (!_recordTried)
+            {
+                _recordTried = true;
+                try { InstallRecord(); }
+                catch (Exception e)
+                {
+                    Parts["record"] = "the record's hooks could not attach (" + e.GetType().Name + ": " + e.Message + ")";
+                    Diag.Swallowed("the record's hooks", e);
                 }
             }
             // the chat box's hooks only once a lieutenant is in the agents' settings, apart from the others
@@ -218,6 +231,52 @@ namespace BannerlordAgents
             ChatInstalled = Ours(look);
             Parts["chat"] = "the lieutenant's key (Enter) " + (ChatInstalled ? "attached" : "did not attach") + Others(look);
             Diag.Event("hooks", "lieutenant key", new { attached = ChatInstalled });
+        }
+
+        /// <summary>
+        /// The record's hooks (0.13, docs/PLAN-0.13.md C2): the party screen's Done (troops and prisoners moved to or from a garrison or
+        /// a clan party), the player's vote or choice as ruler in the realm's council, and the alliance and call-to-war windows shown
+        /// to the player with the call turned down. They only read and record; nothing the game does changes.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void InstallRecord()
+        {
+            var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
+            const BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            MethodInfo done = typeof(TaleWorlds.CampaignSystem.Party.PartyScreenLogic).GetMethod("DoneLogic", any, null, new[] { typeof(bool) }, null);
+            if (done == null) Parts["party screen"] = "the record of troops left in garrisons: the party screen's Done was not found";
+            else
+            {
+                h.Patch(done, prefix: new HarmonyLib.HarmonyMethod(typeof(PartyScreenPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
+                        postfix: new HarmonyLib.HarmonyMethod(typeof(PartyScreenPatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
+                PartyScreenInstalled = Ours(done);
+                Parts["party screen"] = "the record of troops left in garrisons " + (PartyScreenInstalled ? "attached" : "did not attach") + Others(done);
+            }
+            Type election = typeof(TaleWorlds.CampaignSystem.Election.KingdomElection);
+            MethodInfo support = election.GetMethod("OnPlayerSupport", any);
+            MethodInfo abstain = election.GetMethod("OnPlayerAbstainedAsRuler", any);
+            if (support == null) Parts["vote"] = "the record of your votes: the council's vote was not found";
+            else
+            {
+                h.Patch(support, postfix: new HarmonyLib.HarmonyMethod(typeof(VotePatch).GetMethod("Support", BindingFlags.Static | BindingFlags.NonPublic)));
+                if (abstain != null) h.Patch(abstain, postfix: new HarmonyLib.HarmonyMethod(typeof(VotePatch).GetMethod("Abstain", BindingFlags.Static | BindingFlags.NonPublic)));
+                VoteInstalled = Ours(support);
+                Parts["vote"] = "the record of your votes " + (VoteInstalled ? "attached" : "did not attach") + Others(support);
+            }
+            Type alliances = typeof(TaleWorlds.CampaignSystem.CampaignBehaviors.AllianceCampaignBehavior);
+            MethodInfo allianceOffer = alliances.GetMethod("OnAllianceOfferedToPlayer", any);
+            MethodInfo callOffer = alliances.GetMethod("OnCallToWarAgreementProposedToPlayer", any);
+            MethodInfo deny = alliances.GetMethod("DenyCallToWarAgreement", any);
+            if (allianceOffer == null || callOffer == null || deny == null) Parts["offers"] = "the record of your answers to offers: the alliance windows were not found";
+            else
+            {
+                h.Patch(allianceOffer, postfix: new HarmonyLib.HarmonyMethod(typeof(OfferPatch).GetMethod("Alliance", BindingFlags.Static | BindingFlags.NonPublic)));
+                h.Patch(callOffer, postfix: new HarmonyLib.HarmonyMethod(typeof(OfferPatch).GetMethod("Call", BindingFlags.Static | BindingFlags.NonPublic)));
+                h.Patch(deny, postfix: new HarmonyLib.HarmonyMethod(typeof(OfferPatch).GetMethod("Deny", BindingFlags.Static | BindingFlags.NonPublic)));
+                OfferInstalled = Ours(allianceOffer) && Ours(callOffer) && Ours(deny);
+                Parts["offers"] = "the record of your answers to offers " + (OfferInstalled ? "attached" : "did not attach") + Others(allianceOffer);
+            }
+            Diag.Event("hooks", "record", new { party_screen = PartyScreenInstalled, votes = VoteInstalled, offers = OfferInstalled });
         }
 
         /// <summary>Is Party AI Controls in this game (whether or not our hook on it attached)?</summary>

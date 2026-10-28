@@ -171,6 +171,7 @@ namespace BannerlordAgents.WarRoom
             RouteToolTests(root, c);
             LieutenantTests(root);
             BriefingTests(c, Path.Combine(root, "logs"));
+            RecordTests(root);
 
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
@@ -359,6 +360,30 @@ namespace BannerlordAgents.WarRoom
             Check(!none && note2 != null && note2.Contains("did not write a fresh briefing") && !Directory.GetFiles(orders, Room.BriefingRequest + "*").Any(),
                   "with no game to answer, it gives up after its wait, says so, and takes its request back: " + note2);
             Room.BriefingWait = wait;
+        }
+
+        /// <summary>
+        /// 0.13, the training record: the thinking's summary read from Claude Code's stream (and nothing from a block left empty), the
+        /// setting that asks for it, and a call's thinking kept beside its prompt.
+        /// </summary>
+        private static void RecordTests(string root)
+        {
+            var sb = new System.Text.StringBuilder();
+            Claude.Thoughts("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"thinking\",\"thinking\":\"The orcs must hold the pass.\",\"signature\":\"x\"},{\"type\":\"text\",\"text\":\"{}\"}]}}", sb);
+            Claude.Thoughts("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"y\"}]}}", sb);
+            Check(sb.ToString().Trim() == "The orcs must hold the pass.", "the thinking's summary is read from each assistant message of the stream; an empty block adds nothing");
+            string dir = Path.Combine(root, "think-agent");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "warroom.txt"), "model = claude-opus-5-5\nthinking_display = omitted\n");
+            Config t = Config.Load(dir);
+            Check(t.ThinkingDisplay == "omitted" && Claude.ThinkingDisplay == "omitted", "warroom.txt's thinking_display sets how each call asks for the thinking");
+            File.Delete(Path.Combine(dir, "warroom.txt"));
+            Config d = Config.Load(dir);
+            Check(d.ThinkingDisplay == "summarized" && File.ReadAllText(Path.Combine(dir, "warroom.txt")).Contains("thinking_display = summarized"), "by default the summary is asked for, and the setting is written for the agent's folder");
+            string folder = Path.Combine(root, "call-folder");
+            Directory.CreateDirectory(folder);
+            Room.KeepThinking(folder, new CallResult { ThinkingText = "Mass first." });
+            Check(File.ReadAllText(Path.Combine(folder, "thinking.txt")).Trim() == "Mass first.", "a call's thinking is kept beside its prompt and answer (thinking.txt)");
         }
 
         private static void Check(bool ok, string what)

@@ -98,6 +98,8 @@ namespace BannerlordAgents
             Configs = configs;
             Seats = seats;
             Watched = Seats.FirstOrDefault();
+            // whose the record is, now the agents are known (0.13: only yours while you rule your realm yourself)
+            Recorder.Refresh();
             // the game's road distances, copied at load (a loading screen) rather than in the first hour's copy
             Capture.ResetRoads();
             long tr = Perf.Now();
@@ -252,6 +254,15 @@ namespace BannerlordAgents
             CampaignEvents.OnSettlementLeftEvent.AddNonSerializedListener(this, OnSettlementLeft);
             CampaignEvents.ConversationEnded.AddNonSerializedListener(this, OnConversationEnded);
             CampaignEvents.OnTroopRecruitedEvent.AddNonSerializedListener(this, OnTroopRecruited);
+            // your own moves in towns, castles and on the map (0.13, the training record, Recorder)
+            CampaignEvents.OnUnitRecruitedEvent.AddNonSerializedListener(this, OnUnitRecruited);
+            CampaignEvents.PlayerInventoryExchangeEvent.AddNonSerializedListener(this, OnInventoryExchange);
+            CampaignEvents.OnPrisonerSoldEvent.AddNonSerializedListener(this, OnPrisonerSold);
+            CampaignEvents.OnPrisonerDonatedToSettlementEvent.AddNonSerializedListener(this, OnPrisonerDonated);
+            CampaignEvents.OnTroopGivenToSettlementEvent.AddNonSerializedListener(this, OnTroopGiven);
+            CampaignEvents.PartyRemovedFromArmyEvent.AddNonSerializedListener(this, OnPartyRemovedFromArmy);
+            CampaignEvents.PlayerDesertedBattleEvent.AddNonSerializedListener(this, OnPlayerDeserted);
+            CampaignEvents.GameMenuOpened.AddNonSerializedListener(this, OnMenuOpened);
         }
 
         /// <summary>Nothing of ours goes into the save.</summary>
@@ -302,6 +313,7 @@ namespace BannerlordAgents
                 try { Votes.Hourly(); }
                 catch (Exception e) { Diag.Error("the realms' votes", e); }
                 LordWatch.Refresh();
+                Recorder.Hourly();
                 Recorder.PollVassalOrders();
                 // the hour's order rules go first; its reports follow on the reporting lane, newest hour only (0.12.0)
                 Background.Publisher = Brain.NextStep;
@@ -385,6 +397,36 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Error("recruit count", e); }
         }
 
+        // your own moves (0.13, Recorder): each handler looks first whether the move is yours, so the game's other lords' cost nothing
+        private void OnUnitRecruited(CharacterObject troop, int amount) => Guard("your recruits", () => Recorder.OnUnitRecruited(troop, amount));
+        private void OnInventoryExchange(List<(TaleWorlds.Core.ItemRosterElement, int)> bought, List<(TaleWorlds.Core.ItemRosterElement, int)> sold, bool trading) => Guard("your trade", () => Recorder.OnInventoryExchange(bought, sold, trading));
+
+        private void OnPrisonerSold(PartyBase seller, PartyBase buyer, TaleWorlds.CampaignSystem.Roster.TroopRoster prisoners)
+        {
+            if (!Bridge.Running || seller == null || seller != MobileParty.MainParty?.Party) return;
+            Guard("your prisoners sold", () => Recorder.OnPrisonerSold(seller, buyer, prisoners));
+        }
+
+        private void OnPrisonerDonated(MobileParty party, TaleWorlds.CampaignSystem.Roster.FlattenedTroopRoster prisoners, Settlement s)
+        {
+            if (!Bridge.Running || party == null || party != MobileParty.MainParty) return;
+            Guard("your prisoners given", () => Recorder.OnPrisonerDonated(party, prisoners, s));
+        }
+
+        private void OnTroopGiven(Hero giver, Settlement s, TaleWorlds.CampaignSystem.Roster.TroopRoster roster)
+        {
+            if (!Bridge.Running || giver == null || giver != Hero.MainHero) return;
+            Guard("your garrison", () => Recorder.OnTroopGiven(giver, s, roster));
+        }
+
+        private void OnPartyRemovedFromArmy(MobileParty p) => Guard("army", () => Recorder.OnPartyRemovedFromArmy(p));
+        private void OnPlayerDeserted(int sacrificed) => Guard("your escape", () => Recorder.OnPlayerDeserted(sacrificed));
+        private void OnMenuOpened(TaleWorlds.CampaignSystem.GameMenus.MenuCallbackArgs args)
+        {
+            string id = args?.MenuContext?.GameMenu?.StringId;
+            if (id == "encounter") Guard("your encounter", () => Recorder.OnMenuOpened(id));
+        }
+
         private void OnBeforeSave() => Guard("save hand-back", () => { Orders.HandBackForSave(); Wages.HandBackForSave(); });
         private void OnSaveOver(bool saved, string name) => Guard("save take-back", () =>
         {
@@ -400,10 +442,10 @@ namespace BannerlordAgents
         });
 
         private void OnWarDeclared(IFaction a, IFaction b, DeclareWarAction.DeclareWarDetail d) => Guard("war notice", () => { Notices.OnWarDeclared(a, b, d); Run.OnStance(a, b, true); });
-        private void OnPeace(IFaction a, IFaction b, MakePeaceAction.MakePeaceDetail d) => Guard("peace notice", () => { Notices.OnPeace(a, b, d); Run.OnStance(a, b, false); });
-        private void OnAllianceStarted(Kingdom a, Kingdom b) => Guard("alliance notice", () => Notices.OnAllianceStarted(a, b));
+        private void OnPeace(IFaction a, IFaction b, MakePeaceAction.MakePeaceDetail d) => Guard("peace notice", () => { Notices.OnPeace(a, b, d); Run.OnStance(a, b, false); Recorder.OnAccepted("peace", a, b); });
+        private void OnAllianceStarted(Kingdom a, Kingdom b) => Guard("alliance notice", () => { Notices.OnAllianceStarted(a, b); Recorder.OnAccepted("alliance", a, b); });
         private void OnAllianceEnded(Kingdom a, Kingdom b) => Guard("alliance notice", () => Notices.OnAllianceEnded(a, b));
-        private void OnCallToWarStarted(Kingdom a, Kingdom b, Kingdom c) => Guard("call-to-war notice", () => Notices.OnCallToWarStarted(a, b, c));
+        private void OnCallToWarStarted(Kingdom a, Kingdom b, Kingdom c) => Guard("call-to-war notice", () => { Notices.OnCallToWarStarted(a, b, c); Recorder.OnAccepted("call", a, b); });
         private void OnCallToWarEnded(Kingdom a, Kingdom b, Kingdom c) => Guard("call-to-war notice", () => Notices.OnCallToWarEnded(a, b, c));
 
         private void OnSiegeStarted(SiegeEvent se) => Guard("siege", () => { Notices.OnSiegeStarted(se); Recorder.OnSiegeStarted(se); Run.OnSiege(se, true); });
@@ -414,21 +456,60 @@ namespace BannerlordAgents
         private void OnVillageLooted(Village v) => Guard("looting notice", () => { Notices.OnVillageLooted(v); Run.OnVillageLooted(v); });
 
         private void OnOwnerChanged(Settlement s, bool open, Hero newOwner, Hero oldOwner, Hero capturer, ChangeOwnerOfSettlementAction.ChangeOwnerOfSettlementDetail d)
-            => Guard("holding notice", () => { Notices.OnOwnerChanged(s, open, newOwner, oldOwner, capturer, d); Run.OnOwnerChanged(s, newOwner, oldOwner, d); });
+            => Guard("holding notice", () =>
+            {
+                Notices.OnOwnerChanged(s, open, newOwner, oldOwner, capturer, d);
+                Run.OnOwnerChanged(s, newOwner, oldOwner, d);
+                Recorder.OnOwnerChanged(s, newOwner, oldOwner, d);
+                // the orders' outcomes (0.13): holdings won and lost at their places
+                string id = s?.StringId, from = oldOwner?.MapFaction?.StringId, to = newOwner?.MapFaction?.StringId;
+                if (id != null && from != to) Background.Post("outcomes: holding", () => Outcomes.OnHolding(id, from, to));
+            });
 
         private void OnArmyCreated(Army a) => Guard("army", () => { Recorder.OnArmyCreated(a); Notices.OnArmyCreated(a); Run.OnArmy(a, true); });
-        private void OnArmyDispersed(Army a, Army.ArmyDispersionReason r, bool mine) => Guard("army notice", () => { Notices.OnArmyDispersed(a, r, mine); Run.OnArmy(a, false, r.ToString()); });
+        private void OnArmyDispersed(Army a, Army.ArmyDispersionReason r, bool mine) => Guard("army notice", () => { Notices.OnArmyDispersed(a, r, mine); Run.OnArmy(a, false, r.ToString()); Recorder.OnArmyDispersed(a, r); });
         private void OnPartyJoinedArmy(MobileParty p) => Guard("army", () => Recorder.OnPartyJoinedArmy(p));
         private void OnPartyDestroyed(MobileParty p, PartyBase by) => Guard("party notice", () => Notices.OnPartyDestroyed(p, by));
 
         private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); Run.OnBattleStarted(me); });
-        private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); });
-        private void OnClanChangedKingdom(Clan clan, Kingdom from, Kingdom to, TaleWorlds.CampaignSystem.Actions.ChangeKingdomAction.ChangeKingdomActionDetail detail, bool notify) => Guard("clan moved", () => Run.OnClanChangedKingdom(clan, from, to));
-        private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () => { Notices.OnPrisonerTaken(capturer, h); Run.OnLordTaken(capturer, h); });
+        private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); BattleForOutcomes(me); });
+        private void OnClanChangedKingdom(Clan clan, Kingdom from, Kingdom to, TaleWorlds.CampaignSystem.Actions.ChangeKingdomAction.ChangeKingdomActionDetail detail, bool notify)
+            => Guard("clan moved", () => { Run.OnClanChangedKingdom(clan, from, to); Recorder.OnClanChangedKingdom(clan, from, to, detail); });
+        private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () =>
+        {
+            Notices.OnPrisonerTaken(capturer, h);
+            Run.OnLordTaken(capturer, h);
+            if (h == null || !h.IsLord) return;
+            string hero = h.StringId, faction = h.MapFaction?.StringId, by = capturer?.MobileParty?.StringId;
+            Background.Post("outcomes: capture", () => Outcomes.OnCapture(hero, faction, by));
+        });
+
+        /// <summary>A battle with a watched realm's party in it, for its orders' outcomes (0.13): each party's side and losses, the winner.</summary>
+        private static void BattleForOutcomes(MapEvent me)
+        {
+            if (me?.AttackerSide == null || me.DefenderSide == null || (!Bridge.IsSeat(me.AttackerSide.MapFaction) && !Bridge.IsSeat(me.DefenderSide.MapFaction))) return;
+            var b = new BattleEnd
+            {
+                Hours = CampaignTime.Now.ToHours, Place = me.MapEventSettlement?.StringId,
+                Kind = me.IsSiegeAssault ? "storm" : me.IsSallyOut ? "sally" : me.IsRaid ? "raid" : me.IsSiegeOutside ? "siege outside" : "field",
+                Winner = !me.HasWinner ? "none" : me.WinningSide == TaleWorlds.Core.BattleSideEnum.Attacker ? "attacker" : "defender"
+            };
+            foreach (MapEventSide side in new[] { me.AttackerSide, me.DefenderSide })
+                foreach (MapEventParty mp in side.Parties)
+                {
+                    if (mp?.Party?.MobileParty == null) continue;
+                    b.Parties.Add(new BattleParty
+                    {
+                        Party = mp.Party.MobileParty.StringId, Faction = mp.Party.MapFaction?.StringId, Side = side == me.AttackerSide ? "attacker" : "defender",
+                        Men = mp.Party.NumberOfHealthyMembers, Lost = mp.DiedInBattle.TotalManCount + mp.WoundedInBattle.TotalManCount
+                    });
+                }
+            Background.Post("outcomes: battle", () => Outcomes.OnBattle(b));
+        }
 
         private void OnDecisionAdded(KingdomDecision d, bool involved) => Guard("realm vote", () => { Notices.OnDecisionAdded(d, involved); Recorder.OnDecisionAdded(d, involved); });
         private void OnDecisionConcluded(KingdomDecision d, DecisionOutcome o, bool involved) => Guard("realm vote", () => { Notices.OnDecisionConcluded(d, o, involved); Recorder.OnDecisionConcluded(d, o, involved); });
-        private void OnPeaceOffered(IFaction f, int amount, int days) => Guard("peace offer", () => Notices.OnPeaceOfferedToPlayer(f, amount, days));
+        private void OnPeaceOffered(IFaction f, int amount, int days) => Guard("peace offer", () => { Notices.OnPeaceOfferedToPlayer(f, amount, days); Recorder.OnPeaceOffered(f, amount, days); });
 
         private void OnSettlementEntered(MobileParty p, Settlement s, Hero h) => Guard("settlement", () => Recorder.OnSettlementEntered(p, s, h));
         private void OnSettlementLeft(MobileParty p, Settlement s) => Guard("settlement", () => Recorder.OnSettlementLeft(p, s));

@@ -29,9 +29,18 @@ namespace BannerlordAgents.Tools
         /// <summary>The watched realm whose lord holds it (null: the first realm's; since 0.8).</summary>
         public string Realm;
         public readonly List<string> Lords = new List<string>();
+        /// <summary>The holdings a tool that takes "places" works through, in the order given (0.13, docs/PLAN-0.13.md A2).</summary>
+        public readonly List<string> Places = new List<string>();
         public readonly Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         public JObject Then;
         public int Poke = -1;
+        /// <summary>
+        /// The tool itself (0.13): ours from the library, or the agent's own (kept or one-off), the very version the order was given
+        /// with, so an order keeps its version when the tool is changed later. Null: the library's tool by name.
+        /// </summary>
+        public ToolDef Def;
+        /// <summary>The tool run's id, once the game's thread started it (the receipt names it).</summary>
+        public int Id;
 
         /// <summary>The order's every part (its tool, place, target, lords, settings and next order), to tell the same order given again (0.12.0).</summary>
         public string Signature()
@@ -39,7 +48,8 @@ namespace BannerlordAgents.Tools
             string lords = string.Join(",", Lords.OrderBy(x => x, StringComparer.Ordinal));
             string settings = string.Join(",", Settings.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
                                                        .Select(kv => kv.Key.ToLowerInvariant() + "=" + kv.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
-            return string.Join("|", Tool, At ?? "", Target ?? "", lords, settings, Then?.ToString(Newtonsoft.Json.Formatting.None) ?? "");
+            // the places in their order, and the tool's own version (0.13: an agent's tool changed and given again is a new order)
+            return string.Join("|", Tool, Def != null ? Def.Author + "/" + Def.VersionText : "", At ?? "", Target ?? "", lords, string.Join(",", Places), settings, Then?.ToString(Newtonsoft.Json.Formatting.None) ?? "");
         }
     }
 
@@ -125,7 +135,8 @@ namespace BannerlordAgents.Tools
         /// <summary>The game's thread took a tool order (the lord is held): start it, with the latest view if there is one.</summary>
         public static void Start(int id, ToolOrder o)
         {
-            ToolDef def = Library.Get(o.Tool);
+            // the very tool the order was given with (0.13: an agent's own, kept or one-off, at its version), else ours by name
+            ToolDef def = o.Def ?? Library.Get(o.Tool);
             if (def == null) { Diag.Alarm("tool_unknown", "A tool order named a tool that does not exist: " + o.Tool + "."); return; }
             foreach (ToolInstance old in ById.Values.Where(t => t.Order.Party == o.Party && t.Id != id).ToList())
             {
@@ -133,6 +144,7 @@ namespace BannerlordAgents.Tools
                 old.Owner?.Tools.Remove(old.Id);
                 StormSink(old.Order.Party, null);
                 Diag.Event("tool", "replaced", new { id = old.Id, by = id, lord = o.Lord, tool = old.Def.Name });
+                Outcomes.End(old.Id, "replaced", "replaced by a new order", RowOf(old), Diag.Hours);
             }
             // the named realm's own agent (or the smoke test's stand-in), never the first one listed: a tool for a realm with no
             // agent would otherwise run on another realm's agent, its view and its call-backs (found Oct 22, planning the
@@ -150,7 +162,8 @@ namespace BannerlordAgents.Tools
             owner.Tools[id] = t;
             Diag.Count("tool:started");
             Diag.Count("tool started:" + def.Name);
-            Diag.Event("tool", "started", new { id, tool = def.Name, lord = o.Lord, party = o.Party, at = o.At, target = o.Target, lords = o.Lords.ToList(), settings = new Dictionary<string, double>(t.Settings), then = o.Then?.ToString(Newtonsoft.Json.Formatting.None), poke = o.Poke, source = o.Source });
+            Diag.Event("tool", "started", new { id, tool = def.Name, version = def.VersionText, author = def.Author, lord = o.Lord, party = o.Party, at = o.At, target = o.Target, lords = o.Lords.ToList(), places = o.Places.ToList(), settings = new Dictionary<string, double>(t.Settings), then = o.Then?.ToString(Newtonsoft.Json.Formatting.None), poke = o.Poke, source = o.Source });
+            Outcomes.Started(t, RowOf(t), Diag.Hours);
             Snapshot s0 = owner.Latest ?? Brain.LatestFor(o.Realm);
             if (s0 != null && s0.Watched != null)
             {
@@ -168,6 +181,30 @@ namespace BannerlordAgents.Tools
             StormSink(t.Order.Party, null);
             Diag.Count("tool:ended");
             Diag.Event("tool", "ended", new { id, tool = t.Def.Name, lord = t.Order.Lord, why, state = t.State, steps = t.Steps, hours = Math.Round(Diag.Hours - t.Started, 1) });
+            Outcomes.End(id, HowOf(why), why, RowOf(t), Diag.Hours);
+        }
+
+        /// <summary>The tool's lord's row in its realm's newest hour (null when gone).</summary>
+        private static PartyRow RowOf(ToolInstance t)
+        {
+            Snapshot s = t?.Owner?.Latest ?? Brain.LatestFor(t?.Order.Realm);
+            return s != null && t?.Order.Party != null && s.PartyById.TryGetValue(t.Order.Party, out PartyRow r) ? r : null;
+        }
+
+        /// <summary>How a tool run ended, in one word, from the game's reason (Orders.LordGone, End): for the outcome's record.</summary>
+        internal static string HowOf(string why)
+        {
+            string w = (why ?? "").ToLowerInvariant();
+            if (w.Contains("prisoner") || w.Contains("captured")) return "captured";
+            if (w.Contains("died")) return "killed";
+            if (w.Contains("replaced")) return "replaced";
+            if (w.Contains("released by") || w.Contains("led by the game")) return "released";
+            if (w.Contains("party is gone")) return "party gone";
+            if (w.Contains("army")) return "joined an army";
+            if (w.Contains("no longer in")) return "left the realm";
+            if (w.Contains("could not be done") || w.Contains("refused")) return "failed";
+            if (w.Contains("is done")) return "done";
+            return "ended";
         }
 
         /// <summary>adjust: new numbers for a lord's current tool, checked against its ranges; the state is kept.</summary>
@@ -412,6 +449,9 @@ namespace BannerlordAgents.Tools
         {
             t.Finished = true;
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, null);
+            // the tool run's outcome is taken here, where the tool itself ends, not later when the lord's hold ends (0.13)
+            Outcomes.End(t.Id, end == "fail" ? "failed" : end == "stop" ? "stopped" : t.Order.Then != null && end != "stop" ? "done, next order" : end == "hold" ? "done, holds" : "done",
+                         "the tool reached its end (" + end + ")", w.Party(t.Order.Party), w.Hours);
             if (end == "stop")
             {
                 // stopped short of its aim (a siege lifted by its relief bar): the lord holds where it is, and its next order, which
@@ -655,6 +695,7 @@ namespace BannerlordAgents.Tools
             Diag.Count("tool:call-backs");
             Brain.ToolNotice(text, t.Order.Party, w.Hours, t.Order.At, t.Owner?.Realm ?? t.Order.Realm ?? w.Realm);
             (t.Owner?.Channel ?? AgentChannel.For(w.Realm)).Event("tool: " + text);
+            Outcomes.CallBack(t, text, w.Hours);
         }
 
         private static void Log(ToolInstance t, string from, string to, string why)
@@ -663,6 +704,7 @@ namespace BannerlordAgents.Tools
             t.LastStep = from + " -> " + to + (why != null ? " (" + why + ")" : "");
             Diag.Count("tool:steps");
             Diag.Event("tool", "step", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, from, to, why, move = t.HasPending ? t.Pending.ToString() : null });
+            Outcomes.Step(t, from, to, why, Diag.Hours);
         }
 
         /// <summary>A value as the agent reads it: names for ids, whole numbers with separators.</summary>

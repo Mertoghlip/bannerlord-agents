@@ -103,6 +103,7 @@ namespace BannerlordAgents.WarRoom
             answer ??= new JsonObject { ["say"] = "(I could not answer that: " + (problem ?? "no answer") + ")" };
             WriteAnswer(_c.ChannelDir, n, answer, pending);
             File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            Room.KeepThinking(folder, r);
             Remember(historyFile, n, chat, answer);
             double seconds = (DateTime.Now - began).TotalSeconds;
             int proposed = (answer["propose"] as JsonArray)?.Count ?? 0, carried = answer["carry_out"] is JsonValue cv && cv.TryGetValue(out bool cb) && cb ? (answer["orders"] as JsonArray)?.Count ?? 0 : 0;
@@ -111,7 +112,7 @@ namespace BannerlordAgents.WarRoom
                 kind = "chat", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), chat = n, campaign, realm, said, model = _c.Model, effort = _c.Effort,
                 thinking_cap = _c.ThinkingCap, ok = problem == null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), tokens_in = r.InTokens,
                 tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost, turns = r.Turns, proposed, carried, pending,
-                ways_asked = routes?.Asked ?? 0, folder
+                ways_asked = routes?.Asked ?? 0, folder, run = Str(chat["run"]), arm = Str(chat["arm"]), system_hash = _systemHash, thinking_chars = r.ThinkingText.Length
             });
             Say("Message #" + n + ": answered in " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s" + (proposed > 0 ? ", proposing " + proposed + " orders" : "")
                 + (carried > 0 ? ", carrying out " + carried + " orders" : "") + (problem != null ? " (" + problem + ")" : "") + ".");

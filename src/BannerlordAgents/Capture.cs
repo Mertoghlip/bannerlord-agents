@@ -46,8 +46,13 @@ namespace BannerlordAgents
                 Wall = DateTime.UtcNow.Ticks,
                 LoadId = Bridge.LoadId,
                 LoadedAt = Bridge.LoadedAt,
-                MapCrc = MapExport.Crc
+                MapCrc = MapExport.Crc,
+                // the run and whether you rule your realm yourself (0.13: the record's tags, and your realm's hourly report in runs of yours)
+                Run = RunTags.Id,
+                Arm = RunTags.Arm,
+                YouRule = Recorder.YouRuleNow
             };
+            snap.RecordHourly = snap.YouRule && snap.Run != null && Settings.Record;
             var factions = new Dictionary<string, IFaction>();
 
             foreach (Kingdom k in Kingdom.All)
