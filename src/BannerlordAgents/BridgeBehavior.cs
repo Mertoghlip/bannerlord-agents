@@ -98,6 +98,12 @@ namespace BannerlordAgents
             Configs = configs;
             Seats = seats;
             Watched = Seats.FirstOrDefault();
+            // where each realm's own tools are kept (0.13, docs/PLAN-0.13.md A6): its own agent's folder, switched on or not, else the
+            // lieutenant's, so your kingdom keeps one library whichever of the two plays it
+            var homes = new Dictionary<string, string>();
+            foreach (KeyValuePair<AgentConfig, Kingdom> kv in resolved.OrderBy(x => x.Key.IsLieutenant ? 1 : 0))
+                if (!homes.ContainsKey(kv.Value.StringId)) homes[kv.Value.StringId] = kv.Key.ChannelDir;
+            Tools.OwnLibrary.SetHomes(homes);
             // whose the record is, now the agents are known (0.13: only yours while you rule your realm yourself)
             Recorder.Refresh();
             // the game's road distances, copied at load (a loading screen) rather than in the first hour's copy

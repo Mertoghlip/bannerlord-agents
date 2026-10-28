@@ -63,8 +63,13 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public string Author = "ours";
         public int Version = 1, WrittenAt = -1;
-        /// <summary>"ours", or "v2" for the second version of an agent's own tool.</summary>
-        public string VersionText => Author == "ours" ? "ours" : "v" + Version;
+        /// <summary>An agent's tool used once, for its answer's orders, and not kept (0.13); its fingerprint as written (OwnLibrary).</summary>
+        public bool OneOff;
+        public string Hash;
+        /// <summary>"ours", "v2" for the second version of an agent's own tool, or "one-off".</summary>
+        public string VersionText => Author == "ours" ? "ours" : OneOff ? "one-off" : "v" + Version;
+        /// <summary>The order words that are not tools (Orders.Plain, the lieutenant's party_ai): no tool of an agent's may take them.</summary>
+        public static readonly HashSet<string> Reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "free", "release", "adjust", "add", "disband", "wages", "party_ai", "then" };
         /// <summary>What each thing the tool takes is, in the writer's words ("takes"), shown in the library beside its kind.</summary>
         public readonly Dictionary<string, string> TakesAbout = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>The tool as written (an agent's own, kept whole in the library and the toolbook).</summary>
@@ -309,6 +314,7 @@ namespace BannerlordAgents.Tools
         {
             if (string.IsNullOrEmpty(Name)) Problems.Add("the tool has no name");
             else if (Own && !NamePattern.IsMatch(Name)) Problems.Add("its name, '" + Name + "', must be 2 to 32 small letters, digits and underscores, starting with a letter");
+            else if (Own && (Library.Get(Name) != null || Reserved.Contains(Name))) Problems.Add("'" + Name + "' is the name of one of our orders, which stay as they are; give yours a name of its own");
             if (Kind != "tool" && Kind != "move" && Kind != "army") Problems.Add("kind must be tool, move or army");
             if (Own && Kind == "army") Problems.Add("an army's tools are ours only (gather); write a tool or a move, and order an army's leader");
             if (Own && o?["safety"] != null && !Safety) Problems.Add("a tool of your own always carries the safety and food rules (caution 0 on an order switches the safety rule off for it)");

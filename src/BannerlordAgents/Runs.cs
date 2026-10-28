@@ -833,6 +833,8 @@ namespace BannerlordAgents
                 s.Save.Bytes = fi.Length;
                 s.Save.Written = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", Text.Inv);
             }
+            // each realm's kept tools as the run begins (0.13, A6): names, versions and fingerprints, so the comparisons know what each run had
+            s.Libraries = Tools.OwnLibrary.Setup(s.Agents.Select(a => a.Realm));
             Files.Overwrite(Path.Combine(Dir(id), "setup.json"), Json.Line(s));
         }
 
@@ -1033,6 +1035,8 @@ namespace BannerlordAgents
         /// <summary>Agents switched off and set aside for the one switched on for the same realm (0.11.1).</summary>
         public List<string> SetAside = new List<string>();
         public RunSaveInfo Save = new RunSaveInfo();
+        /// <summary>Each realm's own kept tools at the run's start (0.13): name, version, fingerprint, usable, runs so far.</summary>
+        public Dictionary<string, List<object>> Libraries;
     }
 
     internal sealed class RunAgentInfo

@@ -866,7 +866,8 @@ namespace BannerlordAgents.WarRoom
         {
             if (!_c.RouteTool || meta == null) return null;
             string root = RouteTool.DefaultRoot();
-            var tool = new RouteTool(root, live ? _logDir : Path.Combine(_logDir, "replays"), meta.Campaign, meta.Realm, number, call);
+            // a live call's tool can ask the bridge for a try of a tool being written (0.13, check_tool); a replay's cannot
+            var tool = new RouteTool(root, live ? _logDir : Path.Combine(_logDir, "replays"), meta.Campaign, meta.Realm, number, call) { ChannelDir = live ? _c.ChannelDir : null };
             if (!tool.Ready(out string why))
             {
                 if (_routesWhy != why) { Say("The \"ask the way\" tool is not offered: " + why + "."); _routesWhy = why; }
@@ -909,8 +910,12 @@ namespace BannerlordAgents.WarRoom
         private string SystemFileLocked(bool routes)
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate) : "You command a realm in Mount & Blade II: Bannerlord. Answer each poke with one JSON object of orders.";
-            // never promise a tool the call does not have
-            if (!routes) template = ReplaceSection(template, "## Asking the way", null);
+            // never promise a tool the call does not have ("check a tool" is served beside "ask the way", 0.13)
+            if (!routes)
+            {
+                template = ReplaceSection(template, "## Asking the way", null);
+                template = ReplaceSection(template, "## Checking a tool", null);
+            }
             if (_c.Conversation) template = ReplaceSection(template, "## Your memory", ConversationMemory);
             if (!_c.Lookups)
             {

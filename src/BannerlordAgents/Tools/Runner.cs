@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
@@ -80,6 +81,11 @@ namespace BannerlordAgents.Tools
         public double MoveSince = double.NaN;
         /// <summary>The order's places as the language reads them (a list, 0.13), made once.</summary>
         public List<object> PlacesList, LordsList;
+        /// <summary>An agent's own tool (0.13, docs/PLAN-0.13.md A5): its call-backs this in-game day, those held past the day's limit, and its hours in a row over the time limit.</summary>
+        public long CallBackDay = long.MinValue;
+        public int DayCallBacks, SlowHours;
+        public double LastMs;
+        public readonly List<string> Held = new List<string>();
     }
 
     /// <summary>
@@ -108,6 +114,14 @@ namespace BannerlordAgents.Tools
         public static Action<string, StormRule> StormSink = StormGate.Set;
 
         public static int Count => ById.Count;
+
+        /// <summary>
+        /// The guards on an agent's own tool (0.13, docs/PLAN-0.13.md A5; to be confirmed in testing): at most CallBacksPerDay call-backs an
+        /// in-game day (the rest are held and summed in one when the day is out); stopped when it takes over SlowMs of the helper's time
+        /// an hour for SlowHoursToStop hours running. A tool changes state at most 3 times an hour (Rules), as ours do.
+        /// </summary>
+        public const int CallBacksPerDay = 6, SlowHoursToStop = 3;
+        public static double SlowMs = 5;
 
         public static void Reset()
         {
@@ -250,13 +264,31 @@ namespace BannerlordAgents.Tools
             World w = WorldFor(s);
             foreach (ToolInstance t in agent.Tools.Values.ToList())
             {
+                long began = Stopwatch.GetTimestamp();
                 try { Step(t, w); }
                 catch (Exception e)
                 {
                     Diag.Count("tool:errors");
                     Diag.Error("running " + t.Def.Name + " for " + t.Order.LordName, e);
                 }
+                if (t.Def.Own) Timed(t, w, (Stopwatch.GetTimestamp() - began) * 1000.0 / Stopwatch.Frequency);
             }
+        }
+
+        /// <summary>An agent's own tool's hour, timed (A5): over SlowMs for SlowHoursToStop hours running, it is stopped, the lord let go and the agent told why.</summary>
+        private static void Timed(ToolInstance t, World w, double ms)
+        {
+            t.LastMs = ms;
+            if (t.Finished) return;
+            t.SlowHours = ms > SlowMs ? t.SlowHours + 1 : 0;
+            if (t.SlowHours < SlowHoursToStop) return;
+            t.Finished = true;
+            Diag.Count("tool:own stopped, too slow");
+            Diag.Alarm("tool_slow", t.Order.LordName + "'s " + t.Def.Name + " (" + t.Def.Author + "'s own tool) took over " + ToolDef.Num(SlowMs) + " ms an hour for " + SlowHoursToStop
+                                    + " hours running (" + ToolDef.Num(Math.Round(ms, 1)) + " ms the last), so it was stopped.");
+            Tell(t, t.Order.LordName + "'s " + t.Def.Name + " took over " + ToolDef.Num(SlowMs) + " ms of the game's helper each hour for " + SlowHoursToStop + " hours running ("
+                    + ToolDef.Num(Math.Round(ms, 1)) + " ms the last), so it was stopped and " + t.Order.LordName + " was let go to the game's own AI. Make it lighter (fewer rules, fewer look-ups over the whole map each hour), check it again and give the order anew.", w);
+            ReleaseSink(t.Id, "its tool " + t.Def.Name + " was stopped: it took too long each hour");
         }
 
         /// <summary>The orders in force of the agent whose realm's view this world is (none for a realm without an agent).</summary>
@@ -268,6 +300,8 @@ namespace BannerlordAgents.Tools
         {
             PartyRow me = w.Party(t.Order.Party);
             if (me == null || me.Attached) return;   // gone (the game's thread ends the order and tells us), or marching in another's army
+            // an agent's own tool's call-backs held past yesterday's limit, summed in one now the day is out (0.13, A5)
+            if (t.Def.Own && t.Held.Count > 0 && (long)Math.Floor(w.Hours / 24) != t.CallBackDay) SumHeld(t, w);
             var scope = new Scope(t, w);
             RememberName(t.Order.Target, w);
             if (t.Memory.TryGetValue("target", out object mt)) RememberName(mt as string, w);
@@ -404,8 +438,8 @@ namespace BannerlordAgents.Tools
                     + ": he may be stuck on the map. The order is kept and he holds where he is; give him another order if he should go elsewhere.", w);
         }
 
-        /// <summary>The move a state makes, worked out now: a holding, a party, or the point a party was last seen at.</summary>
-        private static Move Resolve(ToolInstance t, ActionDef a, Scope scope, World w)
+        /// <summary>The move a state makes, worked out now: a holding, a party, or the point a party was last seen at. problems: a try's (it says, instead of counting).</summary>
+        private static Move Resolve(ToolInstance t, ActionDef a, Scope scope, World w, List<string> problems = null)
         {
             if (a == null) return new Move { Verb = "hold" };
             ToolDef.Verbs.TryGetValue(a.Verb, out string kind);
@@ -414,6 +448,7 @@ namespace BannerlordAgents.Tools
                 // where he stands (0.13): the holding he is in, or the village he stands at
                 PartyRow me = w.Party(t.Order.Party);
                 string here = me?.InSettlement ?? w.S.Settlements.Where(h => me != null && w.Near(me.Id, h.Id) <= 2).OrderBy(h => w.Near(me.Id, h.Id)).FirstOrDefault()?.Id;
+                if (here == null) problems?.Add("recruit_here: he stands in no holding and at no village now, so he would hold where he is");
                 return here != null ? new Move { Verb = "recruit", Place = here } : new Move { Verb = "hold" };
             }
             if (kind == "none") return new Move { Verb = a.Verb };
@@ -450,6 +485,11 @@ namespace BannerlordAgents.Tools
                 if (id != null && (w.Party(id) != null || w.Where(id, out _, out _))) return Shadow(t, w, id);
             }
             else if (id != null && w.Party(id) != null) return new Move { Verb = a.Verb, Party = w.Lead(w.Party(id)).Id };
+            if (problems != null)
+            {
+                problems.Add(a + ": " + a.ArgText + " is " + (v == null ? "none" : "'" + Expr.Show(v) + "', which is no " + (kind == "holding" || kind == "spot" ? "holding" : "party") + " your realm knows") + " now, so he would hold where he is");
+                return new Move { Verb = "hold" };
+            }
             Diag.Count("tool:no target");
             Diag.Event("tool", "no target", new { id = t.Id, tool = t.Def.Name, state = t.State, @do = a.ToString(), value = Expr.Show(v) });
             return new Move { Verb = "hold" };
@@ -555,6 +595,100 @@ namespace BannerlordAgents.Tools
                 case "leave": return true;
                 default: return false;
             }
+        }
+
+        // ---------- "check a tool"'s try (0.13) ----------
+
+        /// <summary>
+        /// The try (docs/PLAN-0.13.md A4): a tool on the realm's newest hour for one lord, moving no one and telling no one. Its start state's
+        /// move, each of that state's rules with whether it would fire now (and its names that are none now), and for the first that would,
+        /// what it remembers, its call-back and where it leads, as the runner goes in an hour (at most three changes of state). A move whose
+        /// place or party comes out none, and anything that cannot be worked out, is said where it is. Only the try itself is recorded.
+        /// </summary>
+        public static string Try(ToolDef def, ToolOrder o, Snapshot s)
+        {
+            World w = WorldFor(s);
+            if (w.Party(o.Party) == null) return "THE TRY: " + (o.LordName ?? o.Lord) + "'s party is not in your realm's newest hour, so the tool cannot be tried on him.";
+            var t = new ToolInstance { Id = 0, Order = o, Def = def, Started = w.Hours, StateSince = w.Hours, MoveSince = w.Hours };
+            foreach (SettingDef sd in def.Settings.Values) t.Settings[sd.Name] = o.Settings.TryGetValue(sd.Name, out double v) ? Math.Max(sd.Min, Math.Min(sd.Max, v)) : sd.Default;
+            var scope = new Scope(t, w);
+            var lines = new List<string> { "THE TRY: " + def.Name + " for " + o.LordName + " on your realm's newest hour (" + Text.When(w.Hours) + "); no one moves." };
+            foreach (KeyValuePair<string, Expr> kv in def.Init)
+            {
+                try { t.Memory[kv.Key] = kv.Value.Eval(scope); }
+                catch (Exception e) { lines.Add("- init " + kv.Key + ": cannot be worked out (" + e.Message + ")"); }
+            }
+            t.State = def.Start;
+            // as the runner's hour goes (Enter, then Rules): the start state's move, then at most three changes of state, each new state's move
+            // worked out as it is entered, stopping at a state already entered this hour
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { t.State };
+            if (!Entered(t, def.States[t.State], scope, w, lines)) { lines.Add(SafetyNote); return string.Join("\n", lines); }
+            for (int hop = 0; hop < 3; hop++)
+            {
+                StateDef st = def.States[t.State];
+                TransitionDef fired = null;
+                foreach (TransitionDef tr in st.When)
+                {
+                    string value;
+                    bool yes = false;
+                    try
+                    {
+                        yes = Expr.Truthy(tr.If.Eval(scope));
+                        value = yes ? "true" : "false";
+                    }
+                    catch (Exception e) { value = "cannot be worked out (" + e.Message + ")"; }
+                    var nones = new List<string>();
+                    tr.If.Walk(n => { if (!nones.Contains(n) && scope.Get(n) == null) nones.Add(n); }, (f, n) => { });
+                    lines.Add("  rule " + tr.Number + " (\"" + tr.IfText + "\"): " + value + (nones.Count > 0 ? "; none now: " + string.Join(", ", nones) : "") + (yes && fired == null ? ". It fires." : "."));
+                    if (yes && fired == null) fired = tr;
+                }
+                if (fired == null) { lines.Add("- No rule fires now: he would make that move, and the rules are looked at again each hour."); break; }
+                for (int i = 0; i < fired.Set.Count; i++)
+                {
+                    try { Remember(t, fired.Set[i].Key, fired.SetAt[i], fired.Set[i].Value, scope); }
+                    catch (Exception e) { lines.Add("  ! " + fired.SetText[i] + ": cannot be worked out (" + e.Message + ")."); }
+                }
+                if (fired.SetText.Count > 0) lines.Add("- It remembers " + string.Join(", ", fired.SetText) + ".");
+                if (fired.Poke != null) lines.Add("- It would call you back: \"" + Template.Fill(fired.Poke, scope, x => Show(x, w)) + "\"");
+                if (string.Equals(fired.Go, t.State, StringComparison.OrdinalIgnoreCase)) { lines.Add("- It stays in " + t.State + " (a rule that stays only remembers, once an hour)."); break; }
+                t.State = def.States[fired.Go].Name;
+                t.StateSince = w.Hours;
+                t.MoveSince = w.Hours;
+                lines.Add("- Then to state " + t.State + ":");
+                if (!Entered(t, def.States[t.State], scope, w, lines)) break;
+                if (!visited.Add(t.State)) { lines.Add("- " + t.State + " was already entered this hour, so its rules wait for the next hour."); break; }
+                if (hop == 2) lines.Add("- Its rules are looked at the next hour: a tool changes state at most 3 times an hour.");
+            }
+            lines.Add(SafetyNote);
+            return string.Join("\n", lines);
+        }
+
+        private const string SafetyNote = "(The safety and food rules are not tried here: they hold for every order, yours included.)";
+
+        /// <summary>A state entered in a try: its move worked out and said, with what comes out none; false when the state ends the tool.</summary>
+        private static bool Entered(ToolInstance t, StateDef st, Scope scope, World w, List<string> lines)
+        {
+            if (st.End != null) { lines.Add("- State " + st.Name + " ends the tool (" + st.End + ")."); return false; }
+            var problems = new List<string>();
+            if (st.Do != null)
+            {
+                t.Pending = Resolve(t, st.Do, scope, w, problems);
+                t.HasPending = true;
+                lines.Add("- State " + st.Name + ": its move \"" + st.Do + "\" is " + Plain(t.Pending, w) + ".");
+            }
+            else lines.Add("- State " + st.Name + ": no move of its own, it only decides" + (t.HasPending ? " (he keeps " + Plain(t.Pending, w) + ")" : " (he holds where he is)") + ".");
+            foreach (string p in problems) lines.Add("  ! " + p + ".");
+            return true;
+        }
+
+        /// <summary>A move in words for the try: what it does and to what, names with their ids.</summary>
+        private static string Plain(Move m, World w)
+        {
+            string place = m.Place != null ? " " + Show(m.Place, w) + " [" + m.Place + "]" : "";
+            string party = m.Party != null ? " " + Show(m.Party, w) + " [" + m.Party + "]" : "";
+            string point = m.Verb == "post" || m.Verb == "toward" || m.Verb == "shadow" ? " at " + Spots.Describe(w.S, m.X, m.Y) : "";
+            string r = m.Verb == "wait" ? " " + ToolDef.Num(m.R) + " hours" : m.R > 0 ? " within " + ToolDef.Num(m.R) : "";
+            return m.Verb + place + party + point + r;
         }
 
         // ---------- the two rules every order carries ----------
@@ -755,10 +889,46 @@ namespace BannerlordAgents.Tools
 
         private static void Poke(ToolInstance t, string text, World w)
         {
+            // an agent's own tool calls back at most CallBacksPerDay times an in-game day; the rest are held, and summed when the day is out (0.13, A5)
+            if (t.Def.Own)
+            {
+                long day = (long)Math.Floor(w.Hours / 24);
+                if (day != t.CallBackDay)
+                {
+                    SumHeld(t, w);
+                    t.CallBackDay = day;
+                    t.DayCallBacks = 0;
+                }
+                if (++t.DayCallBacks > CallBacksPerDay)
+                {
+                    t.Held.Add(text);
+                    Diag.Count("tool:call-backs held");
+                    Outcomes.CallBack(t, "(held, past " + CallBacksPerDay + " today) " + text, w.Hours);
+                    return;
+                }
+            }
+            Tell(t, text, w);
+        }
+
+        private static void Tell(ToolInstance t, string text, World w)
+        {
             Diag.Count("tool:call-backs");
             Brain.ToolNotice(text, t.Order.Party, w.Hours, t.Order.At, t.Owner?.Realm ?? t.Order.Realm ?? w.Realm);
             (t.Owner?.Channel ?? AgentChannel.For(w.Realm)).Event("tool: " + text);
             Outcomes.CallBack(t, text, w.Hours);
+        }
+
+        /// <summary>The call-backs an agent's own tool held past a day's limit, in one, once that day is out (A5).</summary>
+        private static void SumHeld(ToolInstance t, World w)
+        {
+            t.CallBackDay = (long)Math.Floor(w.Hours / 24);
+            t.DayCallBacks = 0;
+            if (t.Held.Count == 0) return;
+            int n = t.Held.Count;
+            string last = t.Held[n - 1];
+            t.Held.Clear();
+            Tell(t, t.Order.LordName + "'s " + t.Def.Name + " would have called you back " + n + " more time" + (n == 1 ? "" : "s") + " the day before, past the " + CallBacksPerDay
+                    + " a day a tool of yours may call; they were held (each is in its record). The last of them: \"" + last.TrimEnd('.') + ".\"", w);
         }
 
         private static void Log(ToolInstance t, string from, string to, string why)

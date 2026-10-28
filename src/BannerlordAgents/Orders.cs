@@ -300,9 +300,14 @@ namespace BannerlordAgents
             }
             if (verb == "add" || verb == "release" || verb == "disband") return ArmyChange(verb, lord, party, a, realm, source, shadow, live, ref status);
 
-            ToolDef def = Library.Get(verb);
+            // the tool its answer wrote, else ours, else one the realm's agent kept (0.13: a next order or the console names it)
+            ToolDef def = a.Tool ?? Library.Get(verb) ?? OwnLibrary.Find(realm.StringId, verb);
             if (def == null)
-                return "'" + verb + "' is not an order. Orders: " + string.Join(", ", Library.All.Keys.OrderBy(k => k)) + ", " + string.Join(", ", Plain) + ".";
+            {
+                List<string> own = OwnLibrary.Names(realm.StringId);
+                return "'" + verb + "' is not an order. Orders: " + string.Join(", ", Library.All.Keys.OrderBy(k => k)) + ", " + string.Join(", ", Plain)
+                       + (own.Count > 0 ? "; and your own: " + string.Join(", ", own) : "") + ".";
+            }
             ToolOrder o = PrepareTool(lord, party, def, a, realm, out error, out List<string> notes);
             if (o == null) return error;
             o.Source = source;
@@ -393,7 +398,8 @@ namespace BannerlordAgents
         {
             error = null;
             notes = new List<string>();
-            var o = new ToolOrder { Tool = def.Name, Lord = lord.StringId, LordName = Names.Hero(lord), Party = party.StringId, Why = a.Why, Then = a.Then, Poke = a.Poke };
+            // an agent's own tool goes with the order, the very version it was given with (0.13); ours is found by name
+            var o = new ToolOrder { Tool = def.Name, Def = def.Own ? def : null, Lord = lord.StringId, LordName = Names.Hero(lord), Party = party.StringId, Why = a.Why, Then = a.Then, Poke = a.Poke };
             if (def.At != null)
             {
                 string words = a.At ?? a.Target;
@@ -469,7 +475,8 @@ namespace BannerlordAgents
             if (a.Then != null)
             {
                 string next = ((string)a.Then["do"] ?? "").Trim().ToLowerInvariant();
-                if (Library.Get(next) == null && next != "free" && next != "disband") { error = "the next order (then) is not an order: '" + next + "'."; return null; }
+                bool own = OwnLibrary.ByHash((string)a.Then["tool_hash"]) != null || OwnLibrary.Find(realm.StringId, next) != null;
+                if (Library.Get(next) == null && !own && next != "free" && next != "disband") { error = "the next order (then) is not an order: '" + next + "'."; return null; }
             }
             return o;
         }

@@ -61,6 +61,8 @@ namespace BannerlordAgents
         /// <summary>The latest hour, the whole copy (each agent keeps its own realm's view of it: RealmAgent.Latest).</summary>
         public static Snapshot Latest;
         public static int DecisionsWritten, PokesWatched, PokesPlayer;
+        /// <summary>The in-game day tools.txt last took the kept tools' records (0.13).</summary>
+        private static long _toolsDay = long.MinValue;
 
         public static string Dir => _dir ?? (_dir = Paths.Data("unknown"));
 
@@ -105,6 +107,9 @@ namespace BannerlordAgents
             Episodes.Reset();
             RecordedReports.Clear();
             Agents.Reset(_dir, loadedAt, agents, histories, History);
+            // each realm's own tools, read again from its folder (0.13), then every channel's library with them
+            Tools.OwnLibrary.Reset();
+            _toolsDay = long.MinValue;
             AgentChannel.WriteLibrary();
             Audit.Reset();
             LiveMap.Reset();
@@ -293,6 +298,13 @@ namespace BannerlordAgents
                 Timed(ms, "look", () => Observe(s, s.PlayerFaction, PlayerSees(s), s.HostileToPlayer, true));
             DropOrphanNotices(s);
             Timed(ms, "recruitment", () => { foreach (KeyValuePair<RealmAgent, Snapshot> kv in seats) Recruitment.OnHour(kv.Value); });
+            // the kept tools' records in tools.txt, refreshed once a day (0.13): each change costs the war room one fresh cache write
+            long day = (long)Math.Floor(s.Hours / 24);
+            if (day != _toolsDay)
+            {
+                _toolsDay = day;
+                foreach (string realm in Tools.OwnLibrary.TakeChanged()) AgentChannel.WriteLibrary(realm);
+            }
             Background.DecidedHours = s.Hours;
             double total = Took(began);
             LastOrdersMs = ms;

@@ -75,6 +75,12 @@ namespace BannerlordAgents.WarRoom
         /// <summary>No answer is this long (the longest so far was under 6,000 characters); past it, the call is stopped.</summary>
         public const int RunawayChars = 16000;
 
+        /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8): each tool's definition is long, so it may run longer.</summary>
+        public const int RunawayCharsWithTools = 48000;
+
+        /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools".</summary>
+        internal static int RunawayLimit(string written) => written.Contains("\"tools\"") ? RunawayCharsWithTools : RunawayChars;
+
         /// <summary>
         /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on
         /// (resume true), for the one-long-conversation memory; without one, nothing is kept. A cancelled call is stopped.
@@ -217,9 +223,10 @@ namespace BannerlordAgents.WarRoom
                     {
                         // an answer that types tool calls as text, or runs far past any answer's length, will not end well
                         string so = written.Length > 0 ? written.ToString() : "";
-                        if (so.Contains("<invoke ") || so.Contains("<function_calls>") || so.Length > RunawayChars)
+                        int limit = RunawayLimit(so);
+                        if (so.Contains("<invoke ") || so.Contains("<function_calls>") || so.Length > limit)
                         {
-                            stopped = so.Length > RunawayChars ? "runaway: over " + RunawayChars + " characters written" : "runaway: it typed tool calls as text";
+                            stopped = so.Length > limit ? "runaway: over " + limit + " characters written" : "runaway: it typed tool calls as text";
                             r.Runaway = true;
                             break;
                         }

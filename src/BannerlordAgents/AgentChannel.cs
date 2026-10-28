@@ -163,17 +163,29 @@ namespace BannerlordAgents
         /// <summary>What became of an agent's order later, in that realm's channel.</summary>
         public static void Event(string realm, string text) => For(realm).Event(text);
 
-        /// <summary>The library of orders the agent can give, written into every channel once a session (the war room reads it too).</summary>
-        public static void WriteLibrary()
+        /// <summary>
+        /// The library of orders each agent can give, written into its channel as tools.txt once a session (the war room's system prompt
+        /// reads it): ours, Party AI Controls' for the lieutenant (0.11.1), and since 0.13 the realm's own kept tools with their records;
+        /// and each tool's whole definition as tools\(name).json, ours and the realm's own (docs/PLAN-0.13.md A1). With a realm: only the
+        /// channels serving it, when its own library changed.
+        /// </summary>
+        public static void WriteLibrary(string realm = null)
         {
             if (!On) return;
             List<string> problems = Tools.Library.Problems();
-            if (problems.Count > 0)
+            if (problems.Count > 0 && realm == null)
                 Diag.Alarm("tool_library", "The tool library has " + problems.Count + " problems, so some orders will not work: " + string.Join("; ", problems.Take(3)) + ".", true);
             string text = Tools.Library.Text();
-            // the lieutenant's library also has Party AI Controls (0.11.1); the other agents' stays as it was
-            foreach (Channel c in All) Files.Overwrite(Path.Combine(c.Dir, "tools.txt"), c.IsLieutenant ? text + PacRules.LibraryText() : text);
-            Diag.Event("tool", "library written", new { tools = Tools.Library.All.Count, problems, channels = All.Count });
+            int written = 0;
+            foreach (Channel c in All)
+            {
+                if (realm != null && c.Realm != realm) continue;
+                string own = c.Realm != null ? Tools.OwnLibrary.TextFor(c.Realm) : "";
+                Files.Overwrite(Path.Combine(c.Dir, "tools.txt"), (c.IsLieutenant ? text + PacRules.LibraryText() : text) + (own.Length > 0 ? "\n" + own : ""));
+                c.WriteDefinitions();
+                written++;
+            }
+            Diag.Event("tool", "library written", new { tools = Tools.Library.All.Count, problems, channels = written, realm });
         }
 
         /// <summary>The watchdog's checks (its own thread; reads plain fields only).</summary>
@@ -338,6 +350,8 @@ namespace BannerlordAgents
                     if (p.Value.Type == JTokenType.Integer || p.Value.Type == JTokenType.Float) a.Settings[p.Name] = (double)p.Value;
             foreach (JProperty p in o.Properties())
                 if (!OrderKeys.Contains(p.Name) && (p.Value.Type == JTokenType.Integer || p.Value.Type == JTokenType.Float)) a.Settings[p.Name] = (double)p.Value;
+            // a next order naming a tool its answer wrote carries that tool's fingerprint (Channel.Attach): it starts that very tool
+            if (o["tool_hash"] is JValue th && th.Type == JTokenType.String) a.Tool = Tools.OwnLibrary.ByHash((string)th);
             return a;
         }
 
@@ -629,6 +643,33 @@ namespace BannerlordAgents
             return count;
         }
 
+        /// <summary>Each tool's whole definition as tools\(name).json (0.13, A1): ours and the realm's own kept tools; files no longer written are removed.</summary>
+        public void WriteDefinitions()
+        {
+            string dir = Paths.Ensure(Path.Combine(Dir, "tools"));
+            var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void Put(string name, string json)
+            {
+                if (json == null) return;
+                string file = Safe(name) + ".json";
+                keep.Add(file);
+                Files.WriteIfChanged(Path.Combine(dir, file), json);
+            }
+            foreach (Tools.ToolDef d in Tools.Library.All.Values) Put(d.Name, d.Json);
+            if (Realm != null)
+                foreach (KeyValuePair<string, string> kv in Tools.OwnLibrary.Definitions(Realm)) Put(kv.Key, kv.Value);
+            try
+            {
+                foreach (string f in Directory.GetFiles(dir, "*.json"))
+                    if (!keep.Contains(Path.GetFileName(f)))
+                    {
+                        System.IO.File.Delete(f);
+                        Files.Forget(f);
+                    }
+            }
+            catch (Exception e) { Diag.Swallowed("tidying the tools' definitions", e); }
+        }
+
         private static string Safe(string id)
         {
             var sb = new StringBuilder(id.Length);
@@ -701,6 +742,12 @@ namespace BannerlordAgents
                     catch (Exception e) { Diag.Swallowed("removing the war room's request for a briefing", e); }
                     try { Brain.Briefing(_agent); }
                     catch (Exception e) { Diag.Error("writing the council's briefing", e); }
+                    continue;
+                }
+                // the war room's "check a tool" asks for a try on the newest hour (0.13): answered at once (it moves the request in whole)
+                if (Path.GetFileName(f).StartsWith(ToolCheckRequest, StringComparison.OrdinalIgnoreCase))
+                {
+                    AnswerToolCheck(f);
                     continue;
                 }
                 if ((DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(f)).TotalMilliseconds < 300) { fresh = true; continue; }   // still being written
@@ -777,11 +824,20 @@ namespace BannerlordAgents
                 Diag.Count("agent:before load", orders.Count);
                 foreach (AgentChannel.AgentOrder o in orders)
                     Receipt(o, "refused", "it answers poke #" + poke + ", from before the game was loaded again; the situation has changed, so nothing in it was carried out", Diag.Hours);
-                if (orders.Count == 0) Line("file " + name + " (poke #" + poke + "): answers a poke from before the game was loaded again; nothing changes");
+                if (orders.Count == 0 || ans?.Tools > 0) Line("file " + name + " (poke #" + poke + "): answers a poke from before the game was loaded again; nothing changes" + (ans?.Tools > 0 ? ", its tools included" : ""));
                 return;
             }
-            if (orders.Count == 0) { Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
+            // the answer's own tools first (0.13, docs/PLAN-0.13.md A8): checked, then kept, changed, retired or used once, so its orders can name them
+            var refusedTools = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, Tools.ToolDef> theirs = ans?.Tools > 0 ? TakeTools(name, poke, ans, refusedTools) : null;
+            if (orders.Count == 0) { if (theirs == null) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
             foreach (AgentChannel.AgentOrder o in orders) CheckIds(o);
+            foreach (AgentChannel.AgentOrder o in orders) Attach(o, theirs);
+            List<AgentChannel.AgentOrder> refused = orders.Where(o => refusedTools.ContainsKey((o.Do ?? "").Trim())).ToList();
+            foreach (AgentChannel.AgentOrder o in refused)
+                Receipt(o, "refused", "its tool " + o.Do.Trim().ToLowerInvariant() + " was refused (" + refusedTools[o.Do.Trim()] + ")", Diag.Hours);
+            orders = orders.Except(refused).ToList();
+            if (orders.Count == 0) return;
             if (!Watchdog.ClockRunning)
             {
                 Diag.Count("agent:waited for clock", orders.Count);
@@ -797,10 +853,101 @@ namespace BannerlordAgents
             }
         }
 
+        /// <summary>
+        /// An answer's tools (0.13, A8), each checked and then kept, changed, retired or used once in the realm's library (in shadow mode
+        /// checked only); each answered in receipts.log. Returns the usable ones by name for this answer's orders; refused gets the others.
+        /// </summary>
+        private Dictionary<string, Tools.ToolDef> TakeTools(string file, int poke, AgentChannel.Answer ans, Dictionary<string, string> refused)
+        {
+            var written = new Dictionary<string, Tools.ToolDef>(StringComparer.OrdinalIgnoreCase);
+            Tools.OwnLibrary lib = Tools.OwnLibrary.For(Realm);
+            double hours = Diag.Hours;
+            bool changed = false;
+            int i = 0;
+            foreach (JToken t in ans.ToolList)
+            {
+                i++;
+                Tools.OwnLibrary.Taken r;
+                try
+                {
+                    r = lib != null ? lib.Take(t as JObject, poke, ans.Kind, file, hours, Mode == "shadow")
+                                    : new Tools.OwnLibrary.Taken { Name = (string)(t as JObject)?["name"], Status = "refused", Reason = "your realm has no library: no agent folder serves it" };
+                }
+                catch (Exception e)
+                {
+                    Diag.Error("taking an agent's tool", e);
+                    r = new Tools.OwnLibrary.Taken { Name = (string)(t as JObject)?["name"], Status = "refused", Reason = "it could not be read (" + e.Message + ")" };
+                }
+                ToolReceipt(poke, file, i, r, hours);
+                if (r.Name == null) continue;
+                if (r.Usable) written[r.Name] = r.Def;
+                else if (r.Status == "refused") refused[r.Name] = r.Reason;
+                if (r.Status == "kept" || r.Status == "changed" || r.Status == "retired") changed = true;
+            }
+            if (changed) AgentChannel.WriteLibrary(Realm);
+            return written;
+        }
+
+        /// <summary>An order naming a tool of its answer runs that very tool, else the realm's kept tool of that name; a next order (then) naming one carries its fingerprint.</summary>
+        private void Attach(AgentChannel.AgentOrder o, Dictionary<string, Tools.ToolDef> written)
+        {
+            string verb = (o.Do ?? "").Trim().ToLowerInvariant();
+            if (written != null && written.TryGetValue(verb, out Tools.ToolDef d)) o.Tool = d;
+            else if (Tools.Library.Get(verb) == null) o.Tool = Tools.OwnLibrary.Find(Realm, verb);
+            for (JObject then = o.Then; then != null; then = then["then"] as JObject)
+            {
+                string next = ((string)then["do"] ?? "").Trim().ToLowerInvariant();
+                Tools.ToolDef td = written != null && written.TryGetValue(next, out Tools.ToolDef w) ? w : Tools.Library.Get(next) == null ? Tools.OwnLibrary.Find(Realm, next) : null;
+                if (td?.Hash != null) then["tool_hash"] = td.Hash;
+            }
+        }
+
+        /// <summary>What became of one tool of an answer, in receipts.log, the orders' record, the episode index and the chronicle.</summary>
+        public void ToolReceipt(int poke, string file, int index, Tools.OwnLibrary.Taken r, double hours)
+        {
+            Diag.Count("agent:tool " + r.Status);
+            Line("poke #" + poke + ", " + file + " tool " + index + " (" + (r.Name ?? "?") + "): " + r.Status.Replace('_', '-').ToUpperInvariant() + ". " + r.Reason + ".");
+            Diag.Event("answer", "tool", new { realm = Realm, poke, file, index, name = r.Name, version = r.Version, status = r.Status, reason = r.Reason, hash = r.Hash });
+            Brain.WriteOrder(new
+            {
+                Type = "agent_tool", Realm, Poke = poke, File = file, Index = index, r.Name, Version = r.Version > 0 ? r.Version : (int?)null, r.Status, r.Reason, r.Hash,
+                Hours = hours, Mode, Run = RunTags.Id, Arm = RunTags.Arm
+            });
+            Episodes.Tool(Realm, poke, file, index, r.Name, r.Version, r.Status, r.Reason, r.Hash, hours);
+            string about = r.Def?.About != null ? " (" + r.Def.About.Trim().TrimEnd('.') + ")" : "";
+            if (r.Status == "kept" || r.Status == "changed") _agent.Chronicle.Line(hours, "tool", "You kept a tool of your own: " + r.Name + " v" + r.Version + about + ".");
+            else if (r.Status == "retired") _agent.Chronicle.Line(hours, "tool", "You retired your tool " + r.Name + " (v" + r.Version + ").");
+        }
+
+        /// <summary>The war room's "check a tool" asks for a try on the realm's newest hour (0.13, A4): orders\toolcheck-request-(id).json.</summary>
+        public const string ToolCheckRequest = "toolcheck-request";
+
+        /// <summary>A try asked for: answered from the realm's newest hour into toolcheck-(id).txt beside the channel's other files (the war room waits for it).</summary>
+        private void AnswerToolCheck(string f)
+        {
+            string text = null;
+            try
+            {
+                text = System.IO.File.ReadAllText(f);
+                System.IO.File.Delete(f);
+            }
+            catch (Exception e) { Diag.Swallowed("reading the war room's request to try a tool", e); }
+            string id = Path.GetFileNameWithoutExtension(f).Substring(ToolCheckRequest.Length).Trim('-');
+            string answer;
+            try { answer = text == null ? "The request could not be read." : Tools.ToolTry.Answer(_agent, text); }
+            catch (Exception e)
+            {
+                Diag.Error("trying a tool for the war room", e);
+                answer = "The try could not be made (" + e.Message + ").";
+            }
+            Files.Overwrite(Path.Combine(Dir, "toolcheck-" + Safe(id) + ".txt"), answer);
+            Diag.Count("agent:tool tries");
+        }
+
         /// <summary>An id the agent was never shown: made up, or learned outside its folder (the independence check).</summary>
         private void CheckIds(AgentChannel.AgentOrder o)
         {
-            foreach (string v in new[] { o.Lord, o.Target, o.At }.Concat(o.Lords))
+            foreach (string v in new[] { o.Lord, o.Target, o.At }.Concat(o.Lords).Concat(o.Places))
             {
                 if (string.IsNullOrWhiteSpace(v)) continue;
                 string s = v.Trim().Trim('[', ']');

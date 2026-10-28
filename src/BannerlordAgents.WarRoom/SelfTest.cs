@@ -172,6 +172,7 @@ namespace BannerlordAgents.WarRoom
             LieutenantTests(root);
             BriefingTests(c, Path.Combine(root, "logs"));
             RecordTests(root);
+            ToolCheckTests(root);
 
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
@@ -233,9 +234,9 @@ namespace BannerlordAgents.WarRoom
             Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
             // 0.7.4: the battle odds and the roads in, served beside the way
             string Ask(string name, string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
-            Check((list?["result"]?["tools"] as JsonArray)?.Count == 5 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
-                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch" && (string)list?["result"]?["tools"]?[4]?["name"] == "engagement",
-                  "the server lists the battle odds, the roads in, the chase and the engagement beside the way");
+            Check((list?["result"]?["tools"] as JsonArray)?.Count == 6 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
+                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch" && (string)list?["result"]?["tools"]?[4]?["name"] == "engagement" && (string)list?["result"]?["tools"]?[5]?["name"] == "check_tool",
+                  "the server lists the battle odds, the roads in, the chase, the engagement and (0.13) checking a tool beside the way");
             // 0.12.3: the engagement: when Bolg gets to Hirgon, the fight, and Aragorn's army (50 off at the pace its trail shows) too late to join it
             string e1 = Ask("engagement", "{\"ours\":[\"lord_bolg\"],\"target\":\"lord_sc\"}");
             Check(e1 != null && e1.StartsWith("ENGAGEMENT: Bolg [lord_bolg] against Hirgon [lord_sc]") && System.Text.RegularExpressions.Regex.IsMatch(e1, @"Bolg in about \d+ hours")
@@ -366,6 +367,64 @@ namespace BannerlordAgents.WarRoom
         /// 0.13, the training record: the thinking's summary read from Claude Code's stream (and nothing from a block left empty), the
         /// setting that asks for it, and a call's thinking kept beside its prompt.
         /// </summary>
+        /// <summary>
+        /// 0.13, "check a tool" (docs/PLAN-0.13.md A4): the game's own checker in the war room, an answer's tool form read, the try asked of a
+        /// stand-in bridge through the channel and the checker's result alone when none answers; and the runaway limit raised for tools.
+        /// </summary>
+        private static void ToolCheckTests(string root)
+        {
+            const string Watch = "{\"name\": \"watch_home\", \"about\": \"patrols around its castle\", \"takes\": {\"at\": \"own_fort: the castle\"}, \"settings\": {\"radius\": [12, 3, 30, \"how far\"]},"
+                                 + " \"start\": \"a\", \"states\": {\"a\": {\"do\": \"patrol at\", \"when\": [{\"if\": \"hours_in_state >= 24\", \"go\": \"b\"}]}, \"b\": {\"end\": \"free\"}}}";
+            var tool = new RouteTool(root, Path.Combine(root, "check-logs"), "camp-t", "orcs", 7, "answer");
+            string Ask(string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"check_tool\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
+            string ok = Ask("{\"definition\": " + Watch + "}");
+            Check(ok != null && ok.StartsWith("THE CHECKER: watch_home passes (2 states, 1 rule") && ok.Contains("Name one of your lords"), "check_tool: a sound tool passes the game's own checker: " + ok);
+            string bad = Ask("{\"definition\": {\"name\": \"bad\", \"start\": \"a\", \"states\": {\"a\": {\"do\": \"patrol at\", \"when\": [{\"if\": \"next_due(places, 24)\", \"go\": \"z\"}]}}}}");
+            Check(bad != null && bad.Contains("problems, so it would be refused") && bad.Contains("state a, rule 1 (\"next_due(places, 24)\"): next_due takes 3 values, given 2") && bad.Contains("go must name one of the states"),
+                  "check_tool: each problem with its place in the definition: " + bad?.Replace("\n", " | "));
+            string entry = Ask("{\"definition\": {\"name\": \"watch_home\", \"keep\": true, \"definition\": " + Watch.Replace("\"name\": \"watch_home\", ", "") + "}}");
+            Check(entry != null && entry.StartsWith("THE CHECKER: watch_home passes"), "check_tool reads a tool written as in an answer's tools too ({name, keep, definition})");
+            Check(Ask("{\"definition\": " + Watch + ", \"lord\": \"lord_bolg\"}").Contains("THE TRY is not available in this call"), "a replay's call (no channel) has the checker only");
+
+            // the try, asked of a stand-in bridge through the channel folder, as the game answers it
+            string channel = Path.Combine(root, "check-channel");
+            Directory.CreateDirectory(Path.Combine(channel, "orders"));
+            tool.ChannelDir = channel;
+            string seen = null;
+            var stop = new CancellationTokenSource();
+            var bridge = new Thread(() =>
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    foreach (string f in Directory.GetFiles(Path.Combine(channel, "orders"), "toolcheck-request-*.json"))
+                    {
+                        JsonObject q = JsonNode.Parse(File.ReadAllText(f)) as JsonObject;
+                        File.Delete(f);
+                        seen = (string)q?["lord"] + " " + (string)q?["at"] + " " + ((string)q?["definition"])?.Length;
+                        File.WriteAllText(Path.Combine(channel, "toolcheck-" + (string)q?["id"] + ".txt"), "THE TRY: watch_home for Bolg (a stand-in bridge).");
+                    }
+                    Thread.Sleep(20);
+                }
+            }) { IsBackground = true };
+            bridge.Start();
+            string tried = Ask("{\"definition\": " + Watch + ", \"lord\": \"lord_bolg\", \"at\": \"castle_orc\"}");
+            stop.Cancel();
+            bridge.Join(1000);
+            Check(tried != null && tried.Contains("THE TRY: watch_home for Bolg (a stand-in bridge).") && seen != null && seen.StartsWith("lord_bolg castle_orc ") && Directory.GetFiles(channel, "toolcheck-*.txt").Length == 0,
+                  "with a lord, the try is asked of the bridge through the channel with the order's parts, and its answer read and tidied away: " + tried?.Replace("\n", " | "));
+            TimeSpan wait = RouteTool.TryWait;
+            RouteTool.TryWait = TimeSpan.FromMilliseconds(300);
+            string late = Ask("{\"definition\": " + Watch + ", \"lord\": \"lord_bolg\"}");
+            RouteTool.TryWait = wait;
+            Check(late.Contains("THE TRY was not available: the game did not answer") && Directory.GetFiles(Path.Combine(channel, "orders")).Length == 0,
+                  "with no bridge answering, the checker's result stands alone, and the request is taken back");
+            string[] logged = File.ReadAllLines(Path.Combine(root, "check-logs", "routes.jsonl"));
+            Check(logged.Count(l => l.Contains("\"tool\":\"check_tool\"")) == 6 && logged.Any(l => l.Contains("\"valid\":false") && l.Contains("next_due takes 3 values")),
+                  "every check is logged with the definition, its problems and the answer (" + logged.Length + ")");
+            Check(Claude.RunawayLimit("{\"poke\": 3, \"orders\": []}") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\": 3, \"tools\": [{\"name\":") == Claude.RunawayCharsWithTools,
+                  "the runaway limit is raised for an answer that writes tools (" + Claude.RunawayCharsWithTools + " characters)");
+        }
+
         private static void RecordTests(string root)
         {
             var sb = new System.Text.StringBuilder();

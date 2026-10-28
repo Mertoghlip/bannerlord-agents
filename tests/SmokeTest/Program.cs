@@ -228,6 +228,7 @@ namespace SmokeTest
             HelperTests(root, agentDir);
             RecordTests(root, agentDir);
             LanguageTests(root, agentDir);
+            OwnToolTests(root, agentDir);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");

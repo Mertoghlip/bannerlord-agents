@@ -154,6 +154,16 @@ namespace BannerlordAgents
         /// <summary>An order's outcome, at its end (Outcomes).</summary>
         public static void Outcome(object line) => Write(line);
 
+        /// <summary>What became of one tool of an answer (0.13, A8): kept, changed, used once, retired, refused and why, with its version and fingerprint.</summary>
+        public static void Tool(string realm, int poke, string file, int index, string name, int version, string status, string reason, string hash, double hours)
+        {
+            Write(new
+            {
+                Type = "tool", Realm = realm, Run = RunTags.Id, Arm = RunTags.Arm, Wall = Wall(), Hours = hours, Poke = poke, File = file, Index = index, Name = name,
+                Version = version > 0 ? version : (int?)null, Status = status, Reason = reason, Hash = hash
+            });
+        }
+
         // ---------- the realm's day (C4) ----------
 
         private static readonly Dictionary<string, long> LastDay = new Dictionary<string, long>();
@@ -318,6 +328,9 @@ namespace BannerlordAgents
                 Type = "run_end", Realm = k.Realm, Run = RunTags.Id, Arm = RunTags.Arm, Wall = Wall(), Hours = hours, ToolRun = k.Id, k.Tool, k.Version, How = how, Why = why, Outcome = outcome
             });
             Episodes.Outcome(outcome);
+            // a kept tool of an agent's: its record in the realm's library gains the run (A7)
+            if (k.Author != null && k.Author != "ours" && k.Version != "one-off")
+                OwnLibrary.Recorded(k.Realm, k.Tool, k.Version, how, hours - k.Started, k.CallBacks, k.Start, end, k.Fought, k.Won, k.LordsTaken, k.LordsLost, k.Gained, k.LostHoldings);
         }
 
         /// <summary>The tool runs still going (the record's check at a session's end).</summary>

@@ -22,4 +22,13 @@
     <ProjectReference Include="..\BannerlordAgents.Routes\BannerlordAgents.Routes.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- "check a tool" (0.13, docs/PLAN-0.13.md A4): the game module's own checker, which needs no game, with our tools' library to know
+         their names; the same JSON reader the game ships (13.0.1) -->
+    <Compile Include="..\BannerlordAgents\Tools\Expr.cs" Link="Tools\Expr.cs" />
+    <Compile Include="..\BannerlordAgents\Tools\ToolDef.cs" Link="Tools\ToolDef.cs" />
+    <EmbeddedResource Include="..\BannerlordAgents\Tools\Library\*.json" LogicalName="BannerlordAgents.Tools.Library.%(Filename)%(Extension)" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+
 </Project>
