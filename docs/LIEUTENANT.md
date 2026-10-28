@@ -50,6 +50,14 @@ Party AI Controls is the player's own command panel for his clan's parties and (
 - **What the lieutenant sees.** Each message carries PARTY AI CONTROLS NOW (`PacLink.Overview`, read on the game's thread when the player sends words, not every hour): every managed lord's order (and whose), queue, backup order, template, troop mix and the options unlike the defaults, who is not managed, the templates with their troops, and the top-tier troops of the realm's peoples a new template can aim at.
 - **Logs**: `%LOCALAPPDATA%\BannerlordAgents\logs\warroom-lieutenant` (`calls.jsonl` with kind `chat`, each call's prompt, stream and answer), the channel's `chats.log` and `receipts.log`, and the session's trace (`lieutenant` events: said, answer file, answered with its gate).
 
+## Tools, diplomacy and letters (since 0.13)
+
+Mert, Oct 28: the lieutenant "should be able to write tools, based on my permission", and "the player being able to communicate with their allies (who are agents) through their liutenant".
+- **Its proposals** carry, beside its orders, tools it would write (`tools`), diplomatic acts (`diplomacy`) and letters to your allies (`letters`), all under its yes rule: carried out on your words answering the proposal, or your Approve; dropped on Decline. The proposal's box shows each tool with what it does, its settings and whether the game's checker passes it, each act, and each letter's first lines. A load puts a waiting proposal back whole.
+- **Tools** go into your realm's library, the one your kingdom's own war council keeps too ([TOOLS.md](TOOLS.md#the-agents-own-tools-since-013)); it has `check_tool` beside its other questions.
+- **Diplomacy** for your realm: a proposal is added to your kingdom's votes and waits for your decision in the kingdom screen; the game's own windows bring you the offers made to your realm ([DIPLOMACY.md](DIPLOMACY.md)).
+- **Letters**: to an ally whose ruler is an agent; your allies' letters come into its window (green) and into its next message (LETTERS FROM YOUR RULER'S ALLIES), so it tells you what each says and asks.
+
 ## Not yet seen in a game
 
 - The window (0.10.1, opened with Enter since 0.10.2): its look, its focus, Enter and Esc, the buttons, the clock locked and released. (0.10.1 in a game, Oct 23: Enter and T opened the game's chat box; the window never opened.) (0.10.0's chat-log version was seen Oct 23: the words reached the lieutenant and its proposal came back in 42 s, but the answer waited for the clock, which 0.10.1 fixes.)

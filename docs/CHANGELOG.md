@@ -1568,3 +1568,12 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `C:\Users\karab\Projects\lieutenant\warroom-system.md`: the new lieutenant template (f28838b5);
   - the three realm councils' `warroom.txt`: `council_after` gains "offers peace | offers an alliance | offers a call to war", so an offer calls a council.
 - Not installed.
+
+### 03:41 · 0.13 step 7 of 7, everything together: version 0.13.0 installed · commit (follow-up)
+- **Mert:** "Implement the full plan now, do not stop until you are done." Step 7 of `docs/PLAN-0.13.md` Part F: all tests together, the documents, version 0.13.0, the install.
+- **The speed test** now runs 30 of the agents' own tools (the circuit, on the orcs' first lords of the big made-up world) beside ours: within budget, the 95th slowest of a hundred hours 166 ms (budget 1,000; median 134 ms; 181 ms at step 1), and the time guard stopped none.
+- **All tests:** smoke test 395 checks passed; war room self-test 85 passed; dashboard self-test 27 passed; `WarRoom toolcheck --write` passed (step 6); 803 game references, 0 missing, in the installed DLL too.
+- **The documents:** a new [DIPLOMACY.md](DIPLOMACY.md) (what the game does and why votes are held, every act, the agent's say in its realm's votes, offers, what it reads, allies, the lieutenant, the record); [TOOLS.md](TOOLS.md) gains "The language grows" and "The agents' own tools"; [WARROOM.md](WARROOM.md) the answer's new parts, `check_tool`, the runaway limit, `thinking_display`, the call lines' new fields, `toolcheck --write` (and a stray character where a backslash belonged, from an earlier edit, put right); [LOGGING.md](LOGGING.md) "The training record"; [LIEUTENANT.md](LIEUTENANT.md) tools, diplomacy and letters; [MEMORY.md](MEMORY.md) what else carries over; [PLAN.md](PLAN.md)'s week-4 list; [PLAN-0.13.md](PLAN-0.13.md) where it stands and the docket.
+- **Version 0.13.0** (`SubModule.xml`, the module and the war room).
+- **Installed** with `scripts\deploy.ps1`, the game closed (no Bannerlord process, no war room or dashboard running): `Modules\BannerlordAgents` in the game's folder, the DLL's sha256 `06f9169d7afdc627…`, `runs\Runs.exe` beside it. It stays where it was in the launcher's list.
+- **On the docket** (for Mert, step 8, and the shake-down, step 9): in `docs/PLAN-0.13.md` "Where it stands".

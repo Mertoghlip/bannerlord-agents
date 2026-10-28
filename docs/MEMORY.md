@@ -82,6 +82,12 @@ Then the poke itself, as before. The agent can also read the whole `chronicle.tx
 - **Measured runs** start from the same save, so each starts with the memory of that date: empty, apart from the game's own history.
 - **Each realm** keeps its own memory, of only what it could know. When Mordor, Harad and Rhûn play, each will have its own channel.
 
+### What else carries over (since 0.13)
+
+- **The realm's own tools** live in its channel folder (`library\`), not in a campaign: every load, campaign and test run starts with every tool the realm's agent has kept ([TOOLS.md](TOOLS.md#the-agents-own-tools-since-013)).
+- **Letters and joint plans** are kept per campaign, labelled by session, so a load keeps those of its save's history, as the chronicle does ([DIPLOMACY.md](DIPLOMACY.md)).
+- **Votes and offers held for an agent** live only in the bridge: a reload drops them.
+
 ## Settings (`warroom.txt`)
 
 | Key | Default | What it does |

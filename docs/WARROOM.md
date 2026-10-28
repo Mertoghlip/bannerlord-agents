@@ -83,7 +83,8 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 | `memory`, `story_every`, `story_words`, `story_model`, `story_effort`, `story_thinking_cap`, `conversation_limit` | written, 12, 450, (the agent's), medium, 2000, 180000 | the realm's memory and its chronicler ([MEMORY.md](MEMORY.md#settings-warroomtxt)) |
 | `council` | on | the council of war ([below](#the-council-of-war)); written memory only |
 | `council_every_hours`, `council_gap_hours` | 24, 6 | a council sits at least this often, and never sooner than this after the last (in-game hours; the first look excepted) |
-| `council_after` | First look since the campaign was loaded, passed from, declared war on, made peace, is besieged by, army has formed | words in a poke's reasons (or in what changed since the last answer) that call a council |
+| `council_after` | First look since the campaign was loaded, passed from, declared war on, made peace, is besieged by, army has formed, offers peace, offers an alliance, offers a call to war (the last three since 0.13) | words in a poke's reasons (or in what changed since the last answer) that call a council |
+| `thinking_display` | summarized | how each call asks Claude Code for the model's thinking (0.13): summarized keeps its summary (`thinking.txt`), omitted leaves it out |
 | `council_effort`, `council_thinking_cap`, `council_timeout_seconds` | high, 12000, 420 | the council's call: room to think about the whole realm |
 | `claude_path` | (empty) | the newest Claude Code in VS Code's extension folder, else claude on the path |
 | `log_dir` | (empty) | where its logs go; empty is `%LOCALAPPDATA%\BannerlordAgents\logs\warroom`. A second agent's war room keeps its own (since 0.8) |
@@ -104,7 +105,7 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
   - prompts are refused rather than asked, and no session is saved.
   - It runs in the channel folder, so the agent can read only the channel. Anything outside is refused.
   - The war room and Claude Code run at below-normal priority with efficiency mode, on the efficiency cores.
-- **The reply** must be one JSON object: `poke`, `orders`, an optional `plan` and `lessons`.
+- **The reply** must be one JSON object: `poke`, `orders`, an optional `plan` and `lessons`; since 0.13 also `tools` (the agent's own, [TOOLS.md](TOOLS.md#the-agents-own-tools-since-013)), `diplomacy` and `letters` ([DIPLOMACY.md](DIPLOMACY.md)). Since 0.13 the questions served beside "ask the way" include `check_tool`, and the instructions' "## Checking a tool" is left out of a call without them.
   - When there is more than one object, the last that reads wins. If none reads, the war room retries once at low effort, showing the agent its own answer.
   - The orders go to `orders\poke-N.json`, swapped in whole.
   - The plan, the notes on enemies and the lessons go into the notes ([MEMORY.md](MEMORY.md)).
@@ -136,7 +137,7 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 
 - **The answer ends the call,** not Claude Code's exit: Claude Code sometimes lingers after answering, so it is closed after 2 s.
 - **A call that sends nothing for 45 s counts as stalled:** it is stopped and asked once more.
-- **An answer that types tool calls as text, or runs past 16,000 characters, counts as a runaway,** and is stopped and asked once more. This was seen when the instructions promised look-ups to a call that had no tools; now the look-ups section is dropped whenever reading is off.
+- **An answer that types tool calls as text, or runs past 16,000 characters, counts as a runaway,** and is stopped and asked once more. This was seen when the instructions promised look-ups to a call that had no tools; now the look-ups section is dropped whenever reading is off. Since 0.13 an answer that has begun its `"tools"` may run to 48,000 characters (a tool's definition is long).
 - **A poke from before the war room started** is answered only if it is under 2 minutes old.
 - **One war room per agent folder** (since 0.6.3): `WarRoom run` holds a lock for the folder while it runs (a named mutex, `LiveLock`). A second `run` stops at once, and `once` and `council` refuse while it runs. On Oct 16 a `once` started beside a running war room answered the first poke too, and the game carried out both answers' orders: two of the agent's army calls were refused and its siege host was split.
 
@@ -153,13 +154,15 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - **`calls\<date>\<time>-poke-N\`**, **`<time>-council-N\`** and **`<time>-story\`:** the prompt, Claude Code's event stream (`raw.jsonl`) and the answer (or the story), for reading side by side.
 - **`warroom-<date>.log`:** the window's lines, memory included ("Memory: the story so far was rewritten ...", "Memory: an earlier save was loaded ...").
 - **`system-<hash>.md`**, **`chronicler-<hash>.md`:** each system prompt used.
-- **`routes.jsonl`** (0.7): every question to the "ask the way" tool (and since 0.7.4 to "battle odds" and "roads in", with `tool`), with its poke and the answer; `replaysoutes.jsonl` for replays. Each call's line in `calls.jsonl` gives `ways_asked` and `way_tool` (whether it was offered).
+- **`routes.jsonl`** (0.7): every question to the "ask the way" tool (and since 0.7.4 to "battle odds" and "roads in", with `tool`), with its poke and the answer; `replays\routes.jsonl` for replays. Each call's line in `calls.jsonl` gives `ways_asked` and `way_tool` (whether it was offered). Since 0.13 every `check_tool` too: the definition, whether it passed, its problems, the lord tried and the answer.
+- **Since 0.13 (the training record):** each line of `calls.jsonl` also has the run and its arm, the realm, the instructions' fingerprint (`system_hash`) and the order library's (`library_hash`: which tools the call had, the realm's own among them), the thinking's length (`thinking_chars`) and counts of the answer's tools, diplomatic acts and letters; each call's folder keeps the model's thinking as summarized (`thinking.txt`; `thinking_display` in `warroom.txt`, summarized by default); the orders file names its call's folder (`call`) and carries the answer's `tools`, `diplomacy` and `letters`.
 
 ## Other commands
 
 - `WarRoom story`: the chronicler rewrites the story so far now, from every chronicle line it does not cover yet.
 - `WarRoom council`: a council of war sits now (the game must be running, and no `WarRoom run` for the folder: that one holds its own councils).
 - `WarRoom selftest`: the memory, the council and the "ask the way", "battle odds" and "roads in" tools checked in a scratch folder, without any call (50 checks in 0.7.4; `scripts\deploy.ps1` runs it before installing).
+- `WarRoom toolcheck --write [--model m]` (0.13): one real, short call (a small model) given the instructions' "Writing your own tools" and "Checking a tool", asked to write a two-state tool with one mistake in its first draft, check it with `check_tool`, fix it and answer with it; it passes when its last check passed and the tool it answers with passes the checker, and says whether a draft was refused and fixed (on Oct 28: refused, fixed, passed, in 8.8 s with claude-haiku-5-5).
 - `WarRoom toolcheck [--model m] [--big]`: one real, short call (a small model by default) on the self-test's made-up map, asked to use the "ask the way" tool once, then a plain call: the whole path the agent's tool takes. `--big` sends a message as long as a real poke: on Oct 16 that froze both sides (the message filled the pipe while Claude Code was busy with the tool's handshake, and the tool's answer queued behind it), so standard input now has a writer thread of its own and the message goes only after the handshake. Passed after the fix in about 4 s.
 
 ## Replay

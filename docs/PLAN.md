@@ -181,7 +181,9 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [ ] **Checkpoint, Tue Oct 27:** first numbers against the stock AI, and a first summary of your recorded play
   - [x] The test runs' record, scoreboard, setups and watcher (Oct 23, 0.11; [RUNS.md](RUNS.md))
   - [ ] Run A (you against the agents, 60 days), then C1, then C2; B if time allows
-- [ ] Tool writing: the checker, replay tests on recorded game states, each tool's record, repair and retire
+- [x] Tool writing: the checker, each tool's record, repair and retire (0.13, Oct 28: [PLAN-0.13.md](PLAN-0.13.md) Part A; the agents write, check, keep, change and retire tools of their own)
+- [x] Diplomacy and the allied channel (0.13, Oct 28: [DIPLOMACY.md](DIPLOMACY.md)); the training record (Part C)
+- [ ] 0.13 with Mert: the instructions' final wording and the doctrine's diplomacy principles; the backup's place; an agent for an ally of your realm (PLAN-0.13 step 8); then the shake-down (step 9)
 - [ ] Every-move runs, and overnight data collection
 - [ ] Your playbook: Opus 5.5 reads your recordings and writes down how you play
 

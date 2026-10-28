@@ -2216,7 +2216,8 @@ namespace SmokeTest
             if (hours.Count == 0) { Console.WriteLine("No saved hours in " + folder); return 1; }
             Console.WriteLine("SPEED TEST of the helper's hour: " + hours.Count + " hours " + (folder != null ? "saved in " + folder : "of a big made-up world")
                               + ", " + hours[0].Parties.Count + " parties, " + hours[0].Settlements.Count + " holdings, " + Math.Max(1, hours[0].Seats.Count) + " watched realms; on " + Cpu.Description);
-            PerfResult r = PerfReplay(hours, Path.Combine(root, "agents"), placed: true, quiet: false);
+            // 0.13 (Part E): 30 of the agents' own tools running beside ours, as a realm keeping its whole library busy would
+            PerfResult r = PerfReplay(hours, Path.Combine(root, "agents"), placed: true, quiet: false, ownTools: OwnToolsInPerf);
             List<double> total = r.Orders.Zip(r.Reports, (a, b) => a + b).OrderBy(x => x).ToList();
             double p95 = total[(int)Math.Min(total.Count - 1, Math.Ceiling(total.Count * 0.95) - 1)];
             var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -2234,7 +2235,10 @@ namespace SmokeTest
         private static double Median(List<double> xs) { List<double> s = xs.OrderBy(x => x).ToList(); return s.Count == 0 ? 0 : s[s.Count / 2]; }
 
         /// <summary>Runs the hours through the helper's two parts with a watching agent per watched realm (placed: on the helper's cores and priority).</summary>
-        private static PerfResult PerfReplay(List<Snapshot> hours, string agentsRoot, bool placed, bool quiet)
+        /// <summary>How many of the agents' own tools (the circuit) the speed test runs (0.13: 30, a realm's whole library).</summary>
+        private const int OwnToolsInPerf = 30;
+
+        private static PerfResult PerfReplay(List<Snapshot> hours, string agentsRoot, bool placed, bool quiet, int ownTools = 0)
         {
             Settings.Notify = false;
             Settings.Dashboard = true;
@@ -2252,6 +2256,7 @@ namespace SmokeTest
             Brain.Reset(hours[0].Campaign ?? "perf", double.NaN, Agents.Configured(), null);
             var r = new PerfResult();
             long written0 = Diag.CountOf("files:look-ups written"), unchanged0 = Diag.CountOf("files:look-ups unchanged");
+            if (ownTools > 0) StartOwnTools(hours[0], ownTools);
             void Work()
             {
                 if (placed) Cpu.MakeCurrentThreadBackground();
@@ -2285,6 +2290,37 @@ namespace SmokeTest
             r.LookupsWritten = Diag.CountOf("files:look-ups written") - written0;
             r.LookupsUnchanged = Diag.CountOf("files:look-ups unchanged") - unchanged0;
             return r;
+        }
+
+        /// <summary>
+        /// The agents' own tools for the speed test (0.13): the circuit, kept by the first watched realm, on its first lords, each with three of
+        /// its holdings nearest him to go round and its nearest castle or town as home; their hours are timed with the rest, and a tool the time
+        /// guard stops is said.
+        /// </summary>
+        private static void StartOwnTools(Snapshot first, int count)
+        {
+            string realm = first.Seats.Count > 0 ? first.Seats[0].Realm : first.Watched;
+            ToolDef circuit = ToolDef.FromJson(CircuitJson, "circuit", realm);
+            List<PartyRow> lords = first.Parties.Where(p => p.Faction == realm && p.Kind == "lord").Take(count).ToList();
+            List<SettlementRow> own = first.Settlements.Where(h => h.Faction == realm).ToList();
+            double D(PartyRow p, SettlementRow h) => (p.X - h.X) * (p.X - h.X) + (p.Y - h.Y) * (p.Y - h.Y);
+            int id = 99000, started = 0;
+            var stopped = new List<int>();
+            Runner.MoveSink = (i, m) => { };
+            Runner.ThenSink = (i, t) => { };
+            Runner.ReleaseSink = (i, why) => { if (why.Contains("took too long")) stopped.Add(i); };
+            foreach (PartyRow p in lords)
+            {
+                SettlementRow home = own.Where(h => h.Kind == "town" || h.Kind == "castle").OrderBy(h => D(p, h)).FirstOrDefault();
+                List<SettlementRow> round = own.OrderBy(h => D(p, h)).Take(3).ToList();
+                if (home == null || round.Count == 0) continue;
+                var o = new ToolOrder { Tool = "circuit", Def = circuit, Lord = p.Leader, LordName = p.Name, Party = p.Id, At = home.Id, Realm = realm };
+                o.Places.AddRange(round.Select(h => h.Id));
+                Runner.Start(++id, o);
+                started++;
+            }
+            Console.WriteLine("  " + started + " of the agents' own tools (the circuit) running for " + realm + "; the time guard stops one over " + Runner.SlowMs + " ms an hour for " + Runner.SlowHoursToStop + " hours running");
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => { if (stopped.Count > 0) Console.WriteLine("  the time guard stopped " + stopped.Count + " of them"); };
         }
 
         /// <summary>A big made-up world for the speed test with no saved hours: nine realms, three of them watched, 828 holdings, about 3,400 parties moving a little each hour.</summary>
