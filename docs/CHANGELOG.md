@@ -1577,3 +1577,6 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Version 0.13.0** (`SubModule.xml`, the module and the war room).
 - **Installed** with `scripts\deploy.ps1`, the game closed (no Bannerlord process, no war room or dashboard running): `Modules\BannerlordAgents` in the game's folder, the DLL's sha256 `06f9169d7afdc627…`, `runs\Runs.exe` beside it. It stays where it was in the launcher's list.
 - **On the docket** (for Mert, step 8, and the shake-down, step 9): in `docs/PLAN-0.13.md` "Where it stands".
+
+### 03:42 · The war rooms and the dashboard started again (outside the repository)
+- **What:** `scripts\agents.ps1 start`: the four war rooms (orcs, Dol Guldur, the lieutenant, the kingdom) and the dashboard, detached, as before the build; each waits for the game. On starting, each war room added `thinking_display = summarized` to its folder's `warroom.txt`, as step 1 said it would (all four checked).
