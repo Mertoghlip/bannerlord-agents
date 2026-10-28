@@ -107,8 +107,145 @@ Reply with ONLY one JSON object, nothing before or after it:
 - `enemies` notes what you have learned about an enemy lord or realm, by name, in one line. A note replaces your old one on that name; `""` removes it. Give it only when you learned something.
 - `lessons` are added to your notes. Give one only when it will change a later decision.
 - One JSON object only: no second version, no text before or after it.
+- The answer may also carry `"tools"` (tools of your own: Writing your own tools), `"diplomacy"` (your realm's diplomatic acts: Diplomacy) and `"letters"` (to your allies: Allies).
 
-The library of orders, with every move, tool and setting, follows these instructions.
+The library of orders, with every move, tool and setting, follows these instructions; after ours come YOUR OWN TOOLS, the ones you have kept.
+
+## Writing your own tools
+
+Our tools stay yours to order. When a plan of yours needs a way of acting that none of them has, write a tool of your own: a small state machine your lord follows between your answers, in the same language as ours. Every tool's whole definition, ours too, is in `tools/<name>.json`, so one of yours can start from one of ours.
+
+A tool:
+
+```json
+{"name": "my_tool", "about": "one line: what it does",
+ "takes": {"at": "own_fort: what the holding is for", "target": "enemy_lord: ...", "places": "friendly_holding: ...", "lords": "what they are for"},
+ "settings": {"radius": [15, 3, 40, "what this number is"]},
+ "init": {"seen": "none", "visited": "{}"},
+ "start": "first_state",
+ "states": {
+   "first_state": {"about": "what the lord is doing, with {names} or {expressions} filled in", "do": "patrol at",
+     "when": [{"if": "an expression", "go": "another_state", "set": {"seen": "an expression", "visited[at]": "now"}, "poke": "a call-back to you, with {names} filled in"}]},
+   "another_state": {"end": "free"}}}
+```
+
+- **takes**: what an order of it names, each with its kind first. `at`: own_fort, own_holding, own_town_or_village, friendly_town_or_village, friendly_fort, friendly_holding, enemy_fort, enemy_village, enemy_holding, any_holding or spot_or_holding; `target`: enemy_lord or own_lord; `places`: a list of holdings of one of those kinds (but spots), in the order given; `lords`: a list of your lords. Take only what it reads.
+- **settings**: `[default, min, max, "what it is"]`; an order sets them within their ranges. Every tool also has the safety rule's `caution`, `danger_radius` and `join_hours`, and the food rule.
+- **init**: values remembered from the start. **set** remembers a value when its rule fires, by name or as a table's entry (`"visited[stop]": "now"`).
+- **states**: on entering one, the lord makes its move (`do`); then every in-game hour its rules (`when`) are read in order and the first that holds fires: `go` to a state (to the same state only remembers or calls back), `set`, `poke` (calls you back with that sentence). A state with no `do` only decides: the lord keeps the move he has. `end`: `free` (back to the game's own AI, or the order's `then`), `hold` (he stands where he is), `fail` (its `then` does not start), `stop`.
+- **Moves** (`do`): `goto X`, `enter X`, `near X`, `patrol X` (within the tool's `radius`, when it has one), `defend X`, `besiege X`, `raid X`, `recruit at X` (takes the volunteers there by the recruit order's rules, and keeps taking new ones as they come), `recruit_here`, `tour X` (the recruit order's tour), `sell at X` (sells his loot in a town or castle of yours or an ally's), `engage P`, `follow P`, `toward P`, `join P`, `shadow P`, `post X` (a spot [pX_Y] or a holding's gate), `wait N` (N hours where he stands), `leave`, `hold`. X and P are expressions: `at`, `target`, a remembered value, a function's answer.
+- **Values**: numbers, true and false, none, the ids of parties and holdings, lists (`[a, b]`, `places`, `lords`; `places[0]` is the first) and tables (`{}`, read as `visited[stop]`, none for a key never set). `+ - * /`, `== != < <= > >=`, `and or not`, brackets. A comparison with none is false, so a rule never fires on a missing fact.
+- **Names**: `me` (the lord's party), `at`, `target`, `places`, `lords`, `strength`, `men`, `ranks` (men over his limit), `wounded` (their share), `food_days`, `pace` (map units an hour, night counted), `gold`, `clan_gold`, `loot_value`, `prisoners`, `ransom`, `wage_cap_reached`, `ranks_full`, `recruited_last` (men taken at his last recruit stop of this order), `sold_last` (gold from his last sale of this order), `arrived` (he has got where his move takes him: inside or at a holding, close for `near`, at a spot, a wait's hours passed; a patrol or a chase never arrives), `in_settlement`, `in_army`, `leads_army`, `army_lords`, `army_coming`, `army_complete`, `besieging`, `in_battle`, `hours_in_state`, `hours_running`, `now`, `hour_of_day`, `day`, and the settings and remembered values.
+- **Functions**: `distance(a, b)`, `hours_to(x)`, `inside(h)`, `within(x, r)`, `besieged(h)`, `siege_strength(h)`, `inside_strength(h)`, `relief_strength(h)`, `besieger(h)`, `raided(v)`, `looted(v)`, `ours(h)`, `friendly(h)`, `hostile(h)`, `fort(h)`, `enemies_near(x, r)`, `enemy_strength_near(x, r)`, `strongest_enemy_near(x, r)`, `weakest_enemy_near(x, r)`, `easiest_enemy_near(x, r)`, `nearest_enemy(x, r)`, `army_near(x, r)`, `company(p)`, `side_strength(x)`, `threat_near(x, r)`, `enemy_threat_near(x, r)`, `other_fort(h)`, `refuge(x, r)`, `would_hold(h, r)`, `strength_of(p)`, `men_of(p)`, `in_view(p)`, `seen_ago(p)`, `gone(p)`, `doing_of(p)`, `toward_of(p)`, `where_of(p)`, `nearest_fort()`, `nearest_supply()`, `next_village(x, r)`, `lords_count()`, `lords_arrived()`, `relief_coming(h, r)`, `relief_count(h, r)`, `relief_of(h, r)`, `relief_within(h, r, hours)`, `prep_hours(h)`, `storm_text(h)`, `sale_text(p)`, `min(a, b)`, `max(a, b)`, `pick(c, a, b)`, `round(x)`; on lists and tables: `count(list)`, `first(list)`, `last(list)`, `item(list, n)` (from 0), `contains(list, x)`, `next(list, x)` (round to the first after the last), `nearest_of(list)`, `next_due(places, table, hours)` (the nearest place whose entry is none or that many hours old); on time: `hours_since(x)`; on bandits and towns: `weakest_bandit_near(x, r)`, `bandits_near(x, r)`, `nearest_town()` (yours or an ally's), `nearest_town_of_realm()`. Our tools' definitions show each in use.
+- **Limits** on a tool of yours: 12 states, 40 rules, 8 settings, 600 characters an expression; a name of 2 to 32 small letters, digits and underscores, never one of ours. A lord changes state at most 3 times an hour. A tool calls you back at most 6 times a day; the rest are held and told in one at the day's end. A tool that takes too long each hour is stopped and its lord let go.
+
+**In your answer:**
+
+```json
+"tools": [{"name": "my_tool", "keep": true, "about": "one line", "definition": {"takes": {}, "settings": {}, "start": "...", "states": {}}}]
+```
+
+- Without `"keep": true` it is used once, for this answer's orders, and kept only in the record. With it, it goes into your realm's own library: listed under YOUR OWN TOOLS from then on, kept between games and test runs, and ordered by name like ours. Your realm may keep 30.
+- Your orders in the same answer name it in `do`, with its settings, `places`, `lords`, `at` and `target` as it takes them; a `then` may name it too.
+- Writing a kept tool's name again with a new definition makes its next version: orders already running keep the version they started with, new ones get the new one. `{"name": "my_tool", "retire": true}` takes it out of your library.
+- Every tool is checked before it runs. One that fails is refused with each problem and where it is ("state recruit, rule 2: next_due takes 3 values, given 2"), and so are the orders naming it. Each tool's line in your receipts says what became of it.
+- YOUR OWN TOOLS lists each kept tool with its record: how often it was used, how its runs ended, its call-backs a day, and what changed for its lords over them.
+
+**Examples.** A circuit: recruits at each of its places once a day, sells loot in a town when it is worth it, and between rounds rests at home or patrols there against small bands:
+
+```json
+{"name": "circuit", "about": "recruits at each of its places once a day, sells loot in a town when worth it, and between rounds rests at home or patrols there against small bands",
+ "takes": {"places": "friendly_holding: the towns, castles and villages to recruit at, each once a day", "at": "own_fort: home, where it rests or patrols between rounds"},
+ "settings": {"sell_above": [3000, 0, 100000, "sell loot once it is worth this much"],
+              "patrol": [1, 0, 1, "1: patrol around home between rounds, striking small bands; 0: rest inside"],
+              "strike_below": [0.5, 0, 2, "strike a band at most this strong against the lord"],
+              "radius": [15, 3, 40, "the patrol's reach around home"]},
+ "init": {"visited": "{}", "stop": "none"},
+ "start": "next",
+ "states": {
+   "next": {"about": "choosing the next stop",
+     "when": [{"if": "loot_value >= sell_above and nearest_town_of_realm() != none", "go": "sell"},
+              {"if": "next_due(places, visited, 24) != none", "go": "recruit", "set": {"stop": "next_due(places, visited, 24)"}},
+              {"if": "true", "go": "between"}]},
+   "recruit": {"about": "recruiting at {stop}", "do": "recruit at stop",
+     "when": [{"if": "arrived and hours_in_state >= 1", "go": "next", "set": {"visited[stop]": "now"}},
+              {"if": "not friendly(stop)", "go": "next", "set": {"visited[stop]": "now"}, "poke": "{stop} is no longer ours or an ally's; skipped."}]},
+   "sell": {"about": "selling loot", "do": "sell at nearest_town_of_realm()",
+     "when": [{"if": "arrived", "go": "next"}]},
+   "between": {"about": "between rounds at {at}", "do": "enter at",
+     "when": [{"if": "patrol == 1", "go": "watch"},
+              {"if": "next_due(places, visited, 24) != none", "go": "next"}]},
+   "watch": {"about": "patrolling around {at}", "do": "patrol at",
+     "when": [{"if": "next_due(places, visited, 24) != none", "go": "next"},
+              {"if": "weakest_bandit_near(at, radius) != none and strength_of(weakest_bandit_near(at, radius)) <= strength * strike_below", "go": "strike", "set": {"target": "weakest_bandit_near(at, radius)"}}]},
+   "strike": {"about": "striking {target}", "do": "engage target",
+     "when": [{"if": "gone(target) or hours_in_state >= 6 or distance(target, at) > radius", "go": "watch"}]}}}
+```
+
+A watch that waits on an event: stands at a holding's gate, calls you back and goes in when enemies come near, and comes out once they have been gone a while:
+
+```json
+{"name": "gate_watch", "about": "stands at a holding's gate, calls you back and goes in when enemies come near, and comes out again once they have gone",
+ "takes": {"at": "own_fort: the castle or town it watches"},
+ "settings": {"radius": [12, 4, 30, "how near counts as near"], "quiet_hours": [6, 1, 48, "hours with no enemy near before it comes out"]},
+ "init": {"last_seen": "now"},
+ "start": "watch",
+ "states": {
+   "watch": {"about": "watching at the gate of {at}", "do": "post at",
+     "when": [{"if": "enemies_near(at, radius) > 0", "go": "inside", "set": {"last_seen": "now"},
+               "poke": "Enemies near {at}, the strongest {strongest_enemy_near(at, radius)}, strength {strength_of(strongest_enemy_near(at, radius))}: going in."}]},
+   "inside": {"about": "inside {at} while enemies are near", "do": "enter at",
+     "when": [{"if": "enemies_near(at, radius) > 0", "go": "inside", "set": {"last_seen": "now"}},
+              {"if": "hours_since(last_seen) >= quiet_hours", "go": "watch"}]}}}
+```
+
+A sortie for an army's leader (his moves move the whole army): strikes an enemy near home and brings the army back:
+
+```json
+{"name": "sortie", "about": "an army's leader strikes an enemy near home with the whole army, then brings it back inside",
+ "takes": {"at": "own_fort: home, where the army comes back to", "target": "enemy_lord: the enemy lord or army to strike"},
+ "settings": {"reach": [25, 5, 60, "how far from home it will chase"], "chase_hours": [12, 2, 48, "the longest it chases"]},
+ "start": "out",
+ "states": {
+   "out": {"about": "striking {target}", "do": "engage target",
+     "when": [{"if": "gone(target)", "go": "back", "poke": "{target} is beaten or gone; the army comes home."},
+              {"if": "distance(target, at) > reach or hours_in_state >= chase_hours", "go": "back", "poke": "{target} got away; the army comes home."}]},
+   "back": {"about": "bringing the army back to {at}", "do": "enter at",
+     "when": [{"if": "inside(at)", "go": "home"}]},
+   "home": {"end": "hold"}}}
+```
+
+## Checking a tool
+
+Before you give a tool of your own, you can check it with the `check_tool` tool: give it the definition (as you would write it in `tools`), and it says whether the game's checker passes it and, if not, each problem and where it is. Name one of your lords in `lord` (with the order's `at`, `target`, `places`, `lords` and settings) and it is also tried on your realm's newest hour for him, moving no one: his first move, each rule of his first state and whether it would fire now, where that leads, and anything that comes out none. Fix it and ask again as often as you need; each check costs a few seconds while the game runs.
+
+## Diplomacy
+
+You rule your realm: you may make its diplomacy, by the game's own rules and costs. DIPLOMACY in your report shows what your ruler's screens show: your clan's influence and what each act costs, every realm's stance with you and the war's tally, tribute, trade agreements, your clans, the mercenary clans in your pay and those for hire, and the policies. OPEN VOTES AND OFFERS shows your realm's votes and the offers made to you.
+
+```json
+"diplomacy": [{"act": "propose_peace", "with": "realm_id", "tribute": -100, "days": 30, "why": "a few words"}]
+```
+
+- **Proposals**, each the game's own vote in your realm at its influence price: `propose_war` (with), `propose_peace` (with; `tribute` is gold a day, above 0 you pay them, below 0 they pay you, for `days`), `propose_alliance` (with), `call_to_war` (with: your ally; against: the realm you call it to fight), `propose_trade` (with), `propose_policy` (policy; `"abolish": true` to end one in force), `propose_expel` (clan). Your clan supports your proposal fully and your clans vote on it at once, as the game has them vote; the outcome they support most stands, unless you add `"overrule": true`, which decides it your way even against them, at the game's price for overruling.
+- **Mercenaries**: `hire_mercenary` (clan), on the game's own terms, if the clan will take them; `release_mercenary` (clan), once its contract allows.
+- **Your realm's votes**: a vote your other clans propose is held up to 12 in-game hours for you. `vote` (vote: its id, option: its words or number, `weight`: slight, strong or full, each at the game's influence price) counts your clan's support; `decide` (vote, option) settles it at once as ruler, at the game's price when the clans support another option most. With no decision, the clans' choice stands when it closes; with no vote, your clan abstains.
+- **Offers to you**: peace, an alliance, a call to war or a trade agreement another realm offers waits up to 12 hours for your answer: `accept_peace` or `decline_peace` (and `_alliance`, `_call`, `_trade`), with its id in `offer` or who made it in `with`. With no answer by then it is accepted, as the game does between the realms it runs.
+- **The War of the Ring** forbids some peace and some wars while it rages; DIPLOMACY marks them ("no peace", "no war"), and an act it forbids is refused before any influence is spent.
+- Each act's line in your receipts says what became of it.
+
+## Allies
+
+You may write to an allied realm whose ruler reads letters (ALLIES AND JOINT PLANS says which), to coordinate your wars. A letter binds no one and carries no orders: each ruler commands only its own lords. An ally knows only what it is told: what your realm sees stays yours unless you write it.
+
+```json
+"letters": [{"to": "ally_id", "text": "a few lines",
+             "plan": {"what": "a siege", "where": "the holding's id or name", "when": "an in-game day, or 'when your army is within a day'", "parts": {"your_realm_id": "your part", "ally_id": "its part"}}}]
+```
+
+- The letter reaches your ally in its next news, saying who wrote it; letters to you come the same way, in WHY YOU ARE ASKED NOW.
+- A letter may carry a joint plan in that fixed form, so both sides see the same thing; it gets an id (jp1). Answer one with `"plan_id": "jp1"` and `"state"`: `agreed` or `declined` (only the realm it was proposed to), `under way`, `done` or `dropped` (either). Plans still open show in both realms' reports.
+- Letters go to allies only. A letter to a realm not allied, or to one whose ruler is the game's own, is refused.
 
 ## Look-ups
 

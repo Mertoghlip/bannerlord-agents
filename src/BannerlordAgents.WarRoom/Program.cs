@@ -69,7 +69,7 @@ namespace BannerlordAgents.WarRoom
             Native.Self();
             string mode = args.Length > 0 && !args[0].StartsWith("--") ? args[0].ToLowerInvariant() : "run";
             if (mode == "selftest") return SelfTest.Run();   // its own scratch folder: the live agent folder is never read or written
-            if (mode == "toolcheck") return ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5", args.Contains("--big"));
+            if (mode == "toolcheck") return args.Contains("--write") ? ToolWrite(Arg(args, "--model") ?? "claude-haiku-5-5") : ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5", args.Contains("--big"));
             string dir = Arg(args, "--dir");
             Config c = Config.Load(dir);
             if ((mode == "once" || mode == "council") && LiveLock.Running(c))
@@ -148,6 +148,62 @@ namespace BannerlordAgents.WarRoom
             bool ok = r.Ok && tool.Asked == 1 && (r.Text ?? "").Contains("60") && plain.Ok;
             Console.WriteLine((ok ? "TOOL CHECK PASSED" : "TOOL CHECK FAILED") + ": asked " + tool.Asked + " time(s), " + r.Turns + " steps, " + Math.Round(r.Seconds, 1) + " s; answer: " + (r.Text ?? r.Error));
             return ok ? 0 : 1;
+        }
+
+        /// <summary>
+        /// "WarRoom toolcheck --write [--model m]" (0.13, docs/PLAN-0.13.md Part E): one real, short call (a small model by default) given the
+        /// instructions' "Writing your own tools" and "Checking a tool" sections, asked to write a two-state tool with one mistake in its first
+        /// draft, check it with check_tool, fix it and answer with the tool: it passes when it checked at least twice, the first refused and
+        /// the last passing, and the tool it answers with passes the game's checker. Outside the live folder; no game needed.
+        /// </summary>
+        private static int ToolWrite(string model)
+        {
+            string root = Path.Combine(Path.GetTempPath(), "warroom-toolwrite");
+            string channel = Path.Combine(root, "warroom"), logs = Path.Combine(root, "logs");
+            try { Directory.Delete(root, true); } catch (DirectoryNotFoundException) { }
+            Directory.CreateDirectory(channel);
+            string template = null;
+            for (DirectoryInfo up = new DirectoryInfo(AppContext.BaseDirectory); up != null && template == null; up = up.Parent)
+                if (File.Exists(Path.Combine(up.FullName, "agent", "warroom-system.template.md"))) template = File.ReadAllText(Path.Combine(up.FullName, "agent", "warroom-system.template.md"));
+            if (template == null) { Console.WriteLine("TOOL WRITE FAILED: the instructions' template (agent\\warroom-system.template.md) was not found above " + AppContext.BaseDirectory); return 1; }
+            string Section(string head)
+            {
+                int a = template.IndexOf(head, StringComparison.Ordinal), b = a < 0 ? -1 : template.IndexOf("\n## ", a + 3, StringComparison.Ordinal);
+                return a < 0 ? "" : b < 0 ? template.Substring(a) : template.Substring(a, b - a);
+            }
+            string system = Path.Combine(root, "toolwrite-system.md");
+            File.WriteAllText(system, "You write tools for a realm's lords in a game, in the language below. Answer with ONLY the final tool's JSON object.\n\n" + Section("## Writing your own tools") + "\n" + Section("## Checking a tool"));
+            var tool = new RouteTool(root, logs, "camp-write", "orcs", 0, "toolwrite");
+            string ask = "Write a tool named two_step that takes at (own_fort: where the lord goes). State go: the lord enters at; once he has arrived, go to state rest. "
+                         + "State rest: he waits 6 hours (wait 6); once that has arrived, the tool ends (free). In your FIRST draft, on purpose, put one mistake in a rule: "
+                         + "write a condition that calls next_due with only two values. Check every draft with the check_tool tool, fix what it says, and check again until it passes. "
+                         + "Then answer with ONLY the final tool's JSON object.";
+            CallResult r = Claude.Run(Claude.Find(""), system, ask, model, "low", channel, false, 240, 4000, tools: tool);
+            List<string> checks = File.Exists(Path.Combine(logs, "routes.jsonl")) ? File.ReadAllLines(Path.Combine(logs, "routes.jsonl")).Where(l => l.Contains("\"tool\":\"check_tool\"")).ToList() : new List<string>();
+            bool firstRefused = checks.Count > 0 && checks[0].Contains("\"valid\":false"), lastPassed = checks.Count > 0 && checks[checks.Count - 1].Contains("\"valid\":true");
+            string json = r.Ok ? RouteTool.ToolJson(LastObject(r.Text)) : null;
+            BannerlordAgents.Tools.ToolDef d = json != null ? BannerlordAgents.Tools.ToolDef.FromJson(json, "two_step", "orcs") : null;
+            // the loop that matters: it checked its tool, and what it answers with passes; a first draft refused and fixed is told, as the small model may skip the mistake asked for
+            bool ok = r.Ok && checks.Count >= 1 && lastPassed && d != null && d.Valid && d.Name == "two_step" && d.States.ContainsKey("go") && d.States.ContainsKey("rest");
+            Console.WriteLine((ok ? "TOOL WRITE PASSED" : "TOOL WRITE FAILED") + ": " + checks.Count + " checks (" + (firstRefused && lastPassed ? "a draft refused, then fixed" : "first " + (firstRefused ? "refused" : "passed")) + ", last " + (lastPassed ? "passed" : "not passed")
+                              + "), " + r.Turns + " steps, " + Math.Round(r.Seconds, 1) + " s; the tool answered " + (d == null ? "could not be read" : d.Valid ? "passes the checker (" + d.States.Count + " states)" : "fails: " + string.Join("; ", d.Problems))
+                              + (r.Ok ? "" : "; call: " + r.Error));
+            if (!ok && r.Text != null) Console.WriteLine("Its answer:\n" + r.Text);
+            return ok ? 0 : 1;
+        }
+
+        /// <summary>The last whole { ... } object in a text, as a node (null: none).</summary>
+        private static JsonNode LastObject(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return null;
+            for (int end = text.LastIndexOf('}'); end > 0; end = text.LastIndexOf('}', end - 1))
+                for (int start = text.LastIndexOf('{', end); start >= 0; start = start > 0 ? text.LastIndexOf('{', start - 1) : -1)
+                {
+                    try { if (JsonNode.Parse(text.Substring(start, end - start + 1)) is JsonObject o && o["states"] != null) return o; }
+                    catch (JsonException) { }
+                    if (start == 0) break;
+                }
+            return null;
         }
 
         /// <summary>The story so far, rewritten now from every chronicle line it does not cover yet (for a first story, or a test).</summary>

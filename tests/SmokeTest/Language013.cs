@@ -140,6 +140,33 @@ namespace SmokeTest
 
             CircuitTests(circuit, moves, released);
             Settings.AgentDir = agentDir;
+            InstructionExampleTests();
+        }
+
+        /// <summary>The example tools in the agents' instructions (agent/warroom-system.template.md, Part D) each pass the game's checker, as written there.</summary>
+        private static void InstructionExampleTests()
+        {
+            string template = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent", "warroom-system.template.md"));
+            if (!File.Exists(template)) { Check(false, "the instructions' template is where the test looks for it (" + template + ")"); return; }
+            string text = File.ReadAllText(template);
+            int a = text.IndexOf("## Writing your own tools", StringComparison.Ordinal), b = text.IndexOf("\n## ", a + 3, StringComparison.Ordinal);
+            string section = a < 0 ? "" : b < 0 ? text.Substring(a) : text.Substring(a, b - a);
+            var tools = new List<ToolDef>();
+            foreach (string block in section.Split(new[] { "```json" }, StringSplitOptions.None).Skip(1).Select(x => x.Substring(0, x.IndexOf("```", StringComparison.Ordinal))))
+            {
+                JObject o;
+                try { o = JObject.Parse(block); }
+                catch (Newtonsoft.Json.JsonException) { continue; }   // a fragment, such as the answer's "tools" line
+                if (o["states"] == null || (string)o["name"] == "my_tool") continue;
+                tools.Add(ToolDef.FromJson(block, (string)o["name"], "orcs"));
+            }
+            Check(tools.Count == 3 && tools.All(t => t.Valid) && tools.Select(t => t.Name).SequenceEqual(new[] { "circuit", "gate_watch", "sortie" }),
+                  "the instructions' example tools (" + string.Join(", ", tools.Select(t => t.Name)) + ") each pass the game's checker as written"
+                  + string.Concat(tools.Where(t => !t.Valid).Select(t => "; " + t.Name + ": " + string.Join("; ", t.Problems))));
+            ToolDef example = tools.FirstOrDefault(t => t.Name == "circuit"), tested = ToolDef.FromJson(CircuitJson, "circuit", "orcs");
+            Check(example != null && example.States.Count == tested.States.Count && example.States.Keys.All(k => tested.States.ContainsKey(k) && tested.States[k].When.Count == example.States[k].When.Count
+                  && tested.States[k].When.Select(r => r.IfText).SequenceEqual(example.States[k].When.Select(r => r.IfText))),
+                  "the circuit in the instructions is the one the tests run, rule for rule");
         }
 
         /// <summary>The circuit on a made-up world: each place once a day, a sale over the bar, a patrol striking only small bands, shelter from an army, a call-back only when a place is lost.</summary>
