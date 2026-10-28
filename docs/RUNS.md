@@ -172,3 +172,7 @@ Mert, Oct 25: "set up the c1 test again." The first C1 (Oct 23, 0.11.2) was play
 ## Not yet seen in a game
 
 All of it: the run's start, its day lines, its events, the day-60 pause and save, carrying on after a load, the switch of arms, the kingdom's agent in command, and the wanderer trick with the bridge (who rules, the lieutenant switched off, Party AI Controls).
+
+## Run A again (Oct 28), set
+
+Mert, Oct 28: "I'm about to play the game myself for a bit. I will use the TEST CONTINUOUS save to save my progress, but start at the 'TEST START' save. Set everything up accordingly." The old A (`20261023-1613-A`, 4 in-game hours) ends unfinished when TEST START is loaded. `arm.ps1 -Arm A` at 00:30: the orcs' and Dol Guldur's agents live, the lieutenant live, the kingdom's agent off; the four war rooms and the dashboard restarted. A save made during the run under one name (`TEST CONTINUOUS SAVE`, overwritten each time) is the run's own, so loading it carries the run on; hours played after the last save and lost (a crash, quitting without saving) are flagged "replayed" when played again.
