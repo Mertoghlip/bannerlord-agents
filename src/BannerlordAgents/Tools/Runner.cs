@@ -76,6 +76,10 @@ namespace BannerlordAgents.Tools
         /// <summary>Where and since when the lord has stood still on his way (NaN: moving, or not on his way), and the stand already told.</summary>
         public float StillX, StillY;
         public double StillSince = double.NaN, StallTold = double.NaN;
+        /// <summary>When the move now in force was given (0.13: a wait's hours count from it, and so does "arrived").</summary>
+        public double MoveSince = double.NaN;
+        /// <summary>The order's places as the language reads them (a list, 0.13), made once.</summary>
+        public List<object> PlacesList, LordsList;
     }
 
     /// <summary>
@@ -318,7 +322,7 @@ namespace BannerlordAgents.Tools
                 foreach (TransitionDef tr in st.When)
                     if (tr.If != null && Expr.Truthy(tr.If.Eval(scope))) { fired = tr; break; }
                 if (fired == null) return;
-                foreach (var kv in fired.Set) t.Memory[kv.Key] = kv.Value.Eval(scope);
+                for (int i = 0; i < fired.Set.Count; i++) Remember(t, fired.Set[i].Key, fired.SetAt[i], fired.Set[i].Value, scope);
                 if (fired.Poke != null) Poke(t, Template.Fill(fired.Poke, scope, v => Show(v, w)), w);
                 string from = t.State;
                 if (string.Equals(fired.Go, from, StringComparison.OrdinalIgnoreCase))
@@ -333,13 +337,28 @@ namespace BannerlordAgents.Tools
             }
         }
 
+        /// <summary>A rule's set: a plain name, or a table's entry ("visited[stop]", 0.13), the table made when it is not one yet.</summary>
+        private static void Remember(ToolInstance t, string name, Expr at, Expr value, Scope scope)
+        {
+            object v = value?.Eval(scope);
+            if (at == null) { t.Memory[name] = v; return; }
+            string key = Expr.Key(at.Eval(scope));
+            if (key == null) { Diag.Count("tool:no key"); return; }   // an entry for none is not kept
+            if (!(t.Memory.TryGetValue(name, out object o) && o is Dictionary<string, object> table))
+                t.Memory[name] = table = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            table[key] = v;
+        }
+
         private static void Enter(ToolInstance t, string state, Scope scope, World w)
         {
             t.State = t.Def.States.ContainsKey(state) ? t.Def.States[state].Name : state;
             t.StateSince = w.Hours;
+            t.MoveSince = w.Hours;   // a state's move begins when it is entered, even the same move again (a wait counts its hours anew)
             t.Entered = true;
             StateDef st = t.Def.States[t.State];
             if (st.End != null) { Finish(t, st.End, w); return; }
+            // a state with no move only decides (0.13): the lord keeps the move he has (a tool's first state holds him)
+            if (st.Do == null && t.HasCurrent) return;
             t.Pending = Resolve(t, st.Do, scope, w);
             t.HasPending = true;
         }
@@ -348,7 +367,7 @@ namespace BannerlordAgents.Tools
         public const double StallHours = 6, StallNear = 6;
 
         /// <summary>
-        /// A march that stopped short (0.12.1): a lord whose move takes him to a place (near, goto, enter, post, toward) and who
+        /// A march that stopped short (0.12.1): a lord whose move takes him to a place (near, goto, enter, post, toward; since 0.13 recruit and sell) and who
         /// has not moved for StallHours while still far from it is called back once (run 20261025-1524-C2: three sieges stood
         /// still outside their castles for up to 15 days and the agent was never told). The order is kept: the lord holds where
         /// he is until the agent gives another.
@@ -356,7 +375,8 @@ namespace BannerlordAgents.Tools
         private static void Stalled(ToolInstance t, PartyRow me, World w, Scope scope)
         {
             string verb = t.HasCurrent ? t.Current.Verb : null;
-            bool toPlace = verb == "near" || verb == "goto" || verb == "enter";
+            // 0.13: a stop to recruit or sell at is a place to get to as well
+            bool toPlace = verb == "near" || verb == "goto" || verb == "enter" || verb == "recruit" || verb == "sell";
             bool toSpot = verb == "post" || verb == "toward";
             double d = double.NaN;
             if ((toPlace || toSpot) && !me.InBattle && me.InSettlement == null && me.Besieging == null)
@@ -389,9 +409,22 @@ namespace BannerlordAgents.Tools
         {
             if (a == null) return new Move { Verb = "hold" };
             ToolDef.Verbs.TryGetValue(a.Verb, out string kind);
+            if (a.Verb == "recruit_here")
+            {
+                // where he stands (0.13): the holding he is in, or the village he stands at
+                PartyRow me = w.Party(t.Order.Party);
+                string here = me?.InSettlement ?? w.S.Settlements.Where(h => me != null && w.Near(me.Id, h.Id) <= 2).OrderBy(h => w.Near(me.Id, h.Id)).FirstOrDefault()?.Id;
+                return here != null ? new Move { Verb = "recruit", Place = here } : new Move { Verb = "hold" };
+            }
             if (kind == "none") return new Move { Verb = a.Verb };
             object v = a.Arg?.Eval(scope);
             string id = v as string;
+            if (kind == "number")
+            {
+                // wait N (0.13): he stays where he is for N hours (kept to 0 to 240)
+                double n = Expr.Number(v);
+                return new Move { Verb = "wait", R = double.IsNaN(n) ? 0f : (float)Math.Max(0, Math.Min(240, n)) };
+            }
             if (kind == "holding")
             {
                 if (w.Holding(id) != null)
@@ -491,7 +524,37 @@ namespace BannerlordAgents.Tools
             if (t.HasCurrent && t.Current.Same(m)) return;
             t.Current = m;
             t.HasCurrent = true;
+            t.MoveSince = w.Hours;
             MoveSink(t.Id, m);
+        }
+
+        /// <summary>
+        /// Has the lord got where his move takes him (0.13, the language's "arrived")? Into or at its holding (goto, enter, recruit, sell,
+        /// tour: inside, or within 2 of it, as a lord stands at a village), close to it (near: within 6), at its point (post, toward,
+        /// shadow: within 1.5), or, for wait, its hours passed. A patrol, a strike, a chase or a siege never arrives.
+        /// </summary>
+        private static bool Arrived(ToolInstance t, PartyRow me, World w)
+        {
+            // the state's own move: the one about to be given when a state was just entered, else the one in force
+            if ((!t.HasCurrent && !t.HasPending) || me == null) return false;
+            Move m = t.HasPending ? t.Pending : t.Current;
+            switch (m.Verb)
+            {
+                case "goto":
+                case "enter":
+                case "recruit":
+                case "sell":
+                case "tour":
+                    return m.Place != null && (me.InSettlement == m.Place || w.Near(me.Id, m.Place) <= 2);
+                case "near": return m.Place != null && w.Near(me.Id, m.Place) <= StallNear;
+                case "post":
+                case "toward":
+                case "shadow": return Math.Sqrt((me.X - m.X) * (me.X - m.X) + (me.Y - m.Y) * (me.Y - m.Y)) <= 1.5;
+                case "wait": return !double.IsNaN(t.MoveSince) && w.Hours - t.MoveSince >= m.R - 1e-6;
+                case "hold":
+                case "leave": return true;
+                default: return false;
+            }
         }
 
         // ---------- the two rules every order carries ----------
@@ -710,6 +773,7 @@ namespace BannerlordAgents.Tools
         /// <summary>A value as the agent reads it: names for ids, whole numbers with separators.</summary>
         public static string Show(object v, World w)
         {
+            if (v is List<object> list) return list.Count == 0 ? "none" : string.Join(", ", list.Select(x => Show(x, w)));
             if (v is string id)
             {
                 string name = w.Name(id);
@@ -837,8 +901,23 @@ namespace BannerlordAgents.Tools
                     case "in_settlement": return me?.InSettlement != null;
                     case "besieging": return me?.Besieging != null;
                     case "in_battle": return me != null && me.InBattle;
-                    case "lords": return (double)_t.Order.Lords.Count;
+                    // 0.13: the order's lords and places as lists
+                    case "lords": return _t.LordsList ?? (_t.LordsList = _t.Order.Lords.Cast<object>().ToList());
+                    case "places": return _t.PlacesList ?? (_t.PlacesList = _t.Order.Places.Cast<object>().ToList());
                     case "now": return _w.Hours;
+                    // 0.13: his money and his loot, the last stop's recruits and sale while this order ran, the move arrived, the day
+                    case "gold": return me != null && me.Gold >= 0 ? (double)me.Gold : (object)null;
+                    case "loot_value": return me != null ? (double)me.Loot : (object)null;
+                    case "prisoners": return me != null ? (double)me.Prisoners : (object)null;
+                    case "ransom": return me != null ? (double)me.Ransom : (object)null;
+                    case "wage_cap_reached": return me != null && me.WageCap >= 0 && me.Wages >= me.WageCap;
+                    case "ranks_full": return me != null && me.SizeLimit > 0 && me.Men >= me.SizeLimit;
+                    case "recruited_last": return me != null && !double.IsNaN(me.RecruitedLastHours) && me.RecruitedLastHours >= _t.Started - 0.01 ? (double)me.RecruitedLast : 0.0;
+                    case "sold_last": return me != null && !double.IsNaN(me.SaleHours) && me.SaleHours >= _t.Started - 0.01 ? (double)me.SaleGold : 0.0;
+                    case "arrived": return Arrived(_t, me, _w);
+                    case "clan_gold": { ClanRow c = me?.Clan != null ? _w.S.Clans?.FirstOrDefault(x => x.Id == me.Clan) : null; return c != null && c.Gold >= 0 ? (double)c.Gold : (object)null; }
+                    case "hour_of_day": return Math.Floor(((_w.Hours % 24) + 24) % 24);
+                    case "day": return Math.Floor(_w.Hours / 24);
                 }
                 if (_t.Settings.TryGetValue(name, out double v)) return v;
                 if (_t.Memory.TryGetValue(name, out object o)) return o;
@@ -938,9 +1017,57 @@ namespace BannerlordAgents.Tools
                     case "max": return Nan(Math.Max(Expr.Number(a[0]), Expr.Number(a[1])));
                     case "pick": return Expr.Truthy(a[0]) ? a[1] : a[2];
                     case "round": return Nan(Math.Round(Expr.Number(a[0])));
+                    // ---------- 0.13: lists, tables, time, bandits, towns ----------
+                    case "count": return a[0] is List<object> cl ? (double)cl.Count : a[0] is Dictionary<string, object> ct ? (double)ct.Count : (object)null;
+                    case "first": return a[0] is List<object> fl && fl.Count > 0 ? fl[0] : null;
+                    case "last": return a[0] is List<object> ll && ll.Count > 0 ? ll[ll.Count - 1] : null;
+                    case "item":
+                        {
+                            double n = Expr.Number(a[1]);
+                            return a[0] is List<object> il && !double.IsNaN(n) && n >= 0 && n < il.Count ? il[(int)Math.Floor(n)] : null;
+                        }
+                    case "contains": return a[0] is List<object> hl && hl.Any(x => Same(x, a[1]));
+                    case "next":
+                        {
+                            if (!(a[0] is List<object> nl) || nl.Count == 0) return null;
+                            int i = nl.FindIndex(x => Same(x, a[1]));
+                            return nl[i < 0 ? 0 : (i + 1) % nl.Count];
+                        }
+                    case "nearest_of": return a[0] is List<object> ol ? ol.Where(x => x is string).OrderBy(x => Far(_w.Near(_t.Order.Party, (string)x))).FirstOrDefault(x => !double.IsNaN(_w.Near(_t.Order.Party, (string)x))) : null;
+                    case "next_due":
+                        {
+                            // the nearest place of the list not done in the last so many hours (by the table's entries, set to now when done)
+                            if (!(a[0] is List<object> dl)) return null;
+                            Dictionary<string, object> done = a[1] as Dictionary<string, object>;
+                            double hours = Expr.Number(a[2]);
+                            if (double.IsNaN(hours)) return null;
+                            return dl.Where(x => x is string).Where(x =>
+                            {
+                                if (done == null || !done.TryGetValue((string)x, out object when)) return true;
+                                double h = Expr.Number(when);
+                                return double.IsNaN(h) || _w.Hours - h >= hours - 1e-6;
+                            }).OrderBy(x => Far(_w.Near(_t.Order.Party, (string)x))).FirstOrDefault();
+                        }
+                    case "hours_since": { double h = Expr.Number(a[0]); return double.IsNaN(h) ? null : (object)(_w.Hours - h); }
+                    case "weakest_bandit_near": return _w.BanditsNear(Id(a[0]), Expr.Number(a[1])).OrderBy(World.StrengthOf).FirstOrDefault()?.Id;
+                    case "bandits_near": return (double)_w.BanditsNear(Id(a[0]), Expr.Number(a[1])).Count;
+                    case "nearest_town": return _w.NearestTown(_t.Order.Party, true)?.Id;
+                    case "nearest_town_of_realm": return _w.NearestTown(_t.Order.Party, false)?.Id;
                 }
                 throw new InvalidOperationException("no function " + fn);
             }
+
+            /// <summary>Two values the same (ids without regard to case), as the language's == has it.</summary>
+            private static bool Same(object x, object y)
+            {
+                if (x == null || y == null) return x == null && y == null;
+                if (x is string sx && y is string sy) return string.Equals(sx, sy, StringComparison.OrdinalIgnoreCase);
+                double a = Expr.Number(x), b = Expr.Number(y);
+                return !double.IsNaN(a) && !double.IsNaN(b) ? Math.Abs(a - b) < 1e-9 : Equals(x, y);
+            }
+
+            /// <summary>A distance to sort by, the unknown last.</summary>
+            private static double Far(double d) => double.IsNaN(d) ? double.MaxValue : d;
 
             private static object Nan(double d) => double.IsNaN(d) ? null : (object)d;
         }

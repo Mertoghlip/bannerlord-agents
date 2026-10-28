@@ -69,6 +69,13 @@ namespace BannerlordAgents
         public bool CapOurs;
         public double SaleHours = double.NaN;
         public string SaleText;
+        /// <summary>
+        /// 0.13 (the language's sold_last and recruited_last): what his last sale brought in gold (loot and ransom), and the men he took at
+        /// his last recruiting stop, when, and where.
+        /// </summary>
+        public int SaleGold, RecruitedLast;
+        public double RecruitedLastHours = double.NaN;
+        public string RecruitedLastAt;
         /// <summary>The game's own flag: the player's party can see this one.</summary>
         public bool SeenByPlayer;
         /// <summary>Can be spotted at all: outside a settlement, or a lord flying his banner inside one.</summary>

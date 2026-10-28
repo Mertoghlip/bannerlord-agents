@@ -115,7 +115,9 @@ namespace BannerlordAgents
             {
                 r.SaleHours = s.Hours;
                 r.SaleText = s.Text();
+                r.SaleGold = s.LootGold + s.RansomGold;
             }
+            RecruitTour.Fill(p, r);
         }
 
         // ---------- selling ----------

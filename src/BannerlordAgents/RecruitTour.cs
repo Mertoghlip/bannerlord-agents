@@ -49,8 +49,27 @@ namespace BannerlordAgents
         private static MethodInfo _buy, _offersFor;
         private static bool _looked;
 
-        public static void Reset() { Swept.Clear(); Lines.Clear(); _parents = null; }
+        public static void Reset() { Swept.Clear(); Lines.Clear(); _parents = null; LastStop.Clear(); }
         public static void Forget(int orderId) => Swept.Remove(orderId);
+
+        /// <summary>Each lord's last recruiting stop by our orders (0.13, the language's recruited_last): the men taken, when, where.</summary>
+        private sealed class Stop
+        {
+            public int Men;
+            public double Hours;
+            public string Place;
+        }
+
+        private static readonly Dictionary<MobileParty, Stop> LastStop = new Dictionary<MobileParty, Stop>();
+
+        /// <summary>The hourly copy of a held lord (Purse.Fill): his last stop's recruits.</summary>
+        public static void Fill(MobileParty p, PartyRow r)
+        {
+            if (!LastStop.TryGetValue(p, out Stop s)) return;
+            r.RecruitedLast = s.Men;
+            r.RecruitedLastHours = s.Hours;
+            r.RecruitedLastAt = s.Place;
+        }
 
         private static void Look()
         {
@@ -263,6 +282,11 @@ namespace BannerlordAgents
 
         private static void Report(MobileParty p, Settlement s, int got, int let)
         {
+            // the stop is the lord's last, men or none (recruited_last: 0 when a stop gave nothing)
+            double now = CampaignTime.Now.ToHours;
+            if (!LastStop.TryGetValue(p, out Stop last) || last.Place != s.StringId || now - last.Hours > 1) LastStop[p] = last = new Stop { Place = s.StringId, Hours = now };
+            last.Men += got;
+            last.Hours = now;
             if (got == 0) return;
             Diag.Count("recruit order:men bought", got);
             if (let > 0) Diag.Count("recruit order:off-line men let go", let);

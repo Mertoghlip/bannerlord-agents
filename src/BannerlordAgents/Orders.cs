@@ -441,6 +441,20 @@ namespace BannerlordAgents
                     if (!o.Lords.Contains(p.StringId)) o.Lords.Add(p.StringId);
                 }
             else if (a.Lords.Count > 0) notes.Add(def.Name + " takes no lords, so they were left out");
+            // a tool's list of holdings (0.13), each of the kind it takes, in the order given
+            if (def.Places != null)
+            {
+                if (a.Places.Count == 0) { error = def.Name + " needs \"places\": a list, each " + ToolDef.Plain(def.Places) + "."; return null; }
+                foreach (string w in a.Places)
+                {
+                    Settlement s = FindSettlement(w, out error);
+                    if (s == null) { error = "places: " + error; return null; }
+                    error = CheckAt(def.Places, s, realm);
+                    if (error != null) { error = "places: " + error; return null; }
+                    if (!o.Places.Contains(s.StringId)) o.Places.Add(s.StringId);
+                }
+            }
+            else if (a.Places.Count > 0) notes.Add(def.Name + " takes no places, so they were left out");
             foreach (KeyValuePair<string, double> kv in a.Settings)
             {
                 if (!def.Settings.TryGetValue(kv.Key, out SettingDef sd))
@@ -638,8 +652,10 @@ namespace BannerlordAgents
                 case "enter":
                 case "recruit":
                 case "garrison":
+                case "sell":
                     return o.Place != null && (realm == null || o.Place.MapFaction == null || !FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm));
                 case "tour": return true;   // a stop that fell or emptied: the tour picks the next one itself
+                case "wait": return true;
                 case "besiege":
                 case "raid":
                     return o.Place != null && realm != null && o.Place.MapFaction != null && FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm);
@@ -1133,7 +1149,7 @@ namespace BannerlordAgents
                     if (o.Verb != "hold") { o.Verb = "hold"; Apply(o); }
                     continue;
                 }
-                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour") && At(p, o.Place))
+                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour" || o.Verb == "sell") && At(p, o.Place))
                 {
                     if (o.Verb == "recruit") RecruitTour.SweepAt(o, now);   // a refill stop buys the same way as a tour (0.9.2)
                     if (!o.Arrived)
@@ -1228,7 +1244,7 @@ namespace BannerlordAgents
         /// </summary>
         private static void Progress(HandOrder o, float? d, double now)
         {
-            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "patrol" || o.Verb == "follow" || o.Verb == "join" || o.Verb == "shadow") return;
+            if (!d.HasValue || o.Arrived || o.Verb == "hold" || o.Verb == "wait" || o.Verb == "patrol" || o.Verb == "follow" || o.Verb == "join" || o.Verb == "shadow") return;
             MobileParty p = o.Party;
             if (o.Verb == "besiege" && p.BesiegedSettlement == o.Place) return;
             if (o.Verb == "near" && d.Value < 12f) return;
@@ -1451,7 +1467,10 @@ namespace BannerlordAgents
                     case "garrison":
                     case "enter":
                     case "recruit":
+                    case "sell":
                     case "tour": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
+                    // wait (0.13): he stands where he is, inside the holding when he is in one
+                    case "wait": if (p.CurrentSettlement == null) p.SetMoveModeHold(); break;
                     case "near":
                         // 2 to 5 from the gate: inside the tools' "within 6" with room to spare (0.12.1; it was 3 to 6, measured against the centre)
                         p.SetMoveGoToPoint(NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, 5f, 2f), p.NavigationCapability);
@@ -1488,8 +1507,8 @@ namespace BannerlordAgents
                 }
                 p.Ai.SetDoNotMakeNewDecisions(true);
                 Toggled.Add(p);
-                // a sell order for a lord already inside its place: the game sells only on entering, so the sale is made now (0.9.4)
-                if (o.Tool == "sell" && o.Verb == "enter" && o.Place != null && At(p, o.Place)) Purse.CashIn(p, o.Place);
+                // a sell order (or a tool's sell move, 0.13) for a lord already inside its place: the game sells only on entering, so the sale is made now (0.9.4)
+                if (((o.Tool == "sell" && o.Verb == "enter") || o.Verb == "sell") && o.Place != null && At(p, o.Place)) Purse.CashIn(p, o.Place);
             }
             finally { Witness.Ours = false; }
         }
@@ -1516,7 +1535,9 @@ namespace BannerlordAgents
                 case "garrison":
                 case "enter":
                 case "recruit":
+                case "sell":
                 case "tour": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || At(p, o.Place);
+                case "wait": return p.CurrentSettlement != null || b == AiBehavior.Hold;
                 // on the way to a spot close to the place (its target there), or standing close to it
                 case "near": return o.Place != null && ((b == AiBehavior.GoToPoint && p.TargetPosition.Distance(o.Place.GatePosition) < 12f)
                                                         || ((b == AiBehavior.GoToPoint || b == AiBehavior.Hold) && p.Position.Distance(o.Place.GatePosition) < 12f));
@@ -1817,6 +1838,8 @@ namespace BannerlordAgents
                 case "raid": return lord + " raids " + Names.Settlement(o.Place);
                 case "recruit": return lord + " fills the ranks at " + Names.Settlement(o.Place);
                 case "tour": return lord + " recruits place by place, now bound for " + Names.Settlement(o.Place);
+                case "sell": return lord + " goes to sell his loot at " + Names.Settlement(o.Place);
+                case "wait": return lord + " waits " + ToolDef.Num(o.Radius) + " hours where he is";
                 default: return lord + " holds position";
             }
         }

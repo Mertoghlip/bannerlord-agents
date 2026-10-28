@@ -670,6 +670,31 @@ namespace BannerlordAgents.Tools
             return best;
         }
 
+        /// <summary>Bands of bandits in view within r of a place, nearest first (0.13: a tool can strike small bands and leave armies alone).</summary>
+        public List<PartyRow> BanditsNear(string place, double r)
+        {
+            var list = new List<PartyRow>();
+            if (!Where(place, out float px, out float py)) return list;
+            foreach (PartyRow b in _bandits)
+                if (Math.Sqrt((b.X - px) * (b.X - px) + (b.Y - py) * (b.Y - py)) <= r) list.Add(b);
+            return list.OrderBy(b => (b.X - px) * (b.X - px) + (b.Y - py) * (b.Y - py)).ToList();
+        }
+
+        /// <summary>The nearest town of the realm (and of an ally's, when allies) not under siege, to a party or place (0.13: where loot sells).</summary>
+        public SettlementRow NearestTown(string from, bool allies)
+        {
+            if (!Where(from, out float px, out float py)) return null;
+            SettlementRow best = null;
+            double bd = double.MaxValue;
+            foreach (SettlementRow h in S.Settlements)
+            {
+                if (h.Kind != "town" || Besieged(h) || (h.Faction != Realm && !(allies && Ally(h.Faction)))) continue;
+                double d = (h.X - px) * (h.X - px) + (h.Y - py) * (h.Y - py);
+                if (d < bd) { bd = d; best = h; }
+            }
+            return best;
+        }
+
         /// <summary>Nearest enemy village within r of a place that still has something to take.</summary>
         public SettlementRow NextVillage(string place, double r)
         {

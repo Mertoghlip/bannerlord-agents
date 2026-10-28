@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace BannerlordAgents.Tools
@@ -18,8 +19,9 @@ namespace BannerlordAgents.Tools
     /// <summary>
     /// An expression of the behavior language (docs/TOOLS.md): numbers, true/false/none, names, function calls,
     /// + - * /, comparisons (== != &lt; &lt;= &gt; &gt;=), and/or/not, and brackets. Values are numbers (double), true or
-    /// false (bool), ids of parties and holdings (string), or none (null). Game-free, so tools can be checked outside
-    /// the game.
+    /// false (bool), ids of parties and holdings (string), or none (null); since 0.13 (docs/PLAN-0.13.md A2) also lists
+    /// (List&lt;object&gt;: an order's places or lords, or [a, b, c] written out) and tables keyed by an id ({} for an empty one,
+    /// read as visited[stop], set as "visited[stop]"). Game-free, so tools can be checked outside the game.
     /// </summary>
     internal abstract class Expr
     {
@@ -30,6 +32,20 @@ namespace BannerlordAgents.Tools
 
         public static Expr Parse(string text) => new Parser(text ?? "").ParseAll();
 
+        /// <summary>A table's key for a value: an id as it is, a number as its text, anything else (none) as no key.</summary>
+        public static string Key(object v)
+        {
+            if (v is string s) return s.Length > 0 ? s : null;
+            if (v is double || v is bool) return Show(v);
+            return null;
+        }
+
+        /// <summary>A list's items (none for anything that is not a list).</summary>
+        public static List<object> ListOf(object v) => v as List<object>;
+
+        /// <summary>A table (none for anything that is not one).</summary>
+        public static Dictionary<string, object> TableOf(object v) => v as Dictionary<string, object>;
+
         // ---------- values ----------
 
         public static bool Truthy(object v)
@@ -38,6 +54,8 @@ namespace BannerlordAgents.Tools
             if (v is bool b) return b;
             if (v is double d) return !double.IsNaN(d) && d != 0;
             if (v is string s) return s.Length > 0;
+            if (v is List<object> l) return l.Count > 0;
+            if (v is Dictionary<string, object> t) return t.Count > 0;
             return true;
         }
 
@@ -55,7 +73,38 @@ namespace BannerlordAgents.Tools
             if (v == null) return "none";
             if (v is bool b) return b ? "true" : "false";
             if (v is double d) return Math.Abs(d - Math.Round(d)) < 1e-9 ? Math.Round(d).ToString("0", CultureInfo.InvariantCulture) : d.ToString("0.##", CultureInfo.InvariantCulture);
+            if (v is List<object> l) return l.Count == 0 ? "nothing" : string.Join(", ", l.Select(Show));
+            if (v is Dictionary<string, object> t) return t.Count == 0 ? "nothing kept" : string.Join(", ", t.Select(kv => kv.Key + " " + Show(kv.Value)));
             return v.ToString();
+        }
+
+        // ---------- lists and tables (0.13) ----------
+
+        private sealed class ListLit : Expr
+        {
+            public List<Expr> Items = new List<Expr>();
+            public override object Eval(IScope s) => Items.Select(e => e.Eval(s)).ToList();   // a new list each time it is worked out
+            public override void Walk(Action<string> name, Action<string, int> call) { foreach (Expr e in Items) e.Walk(name, call); }
+        }
+
+        private sealed class TableLit : Expr
+        {
+            public override object Eval(IScope s) => new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);   // a new table each time
+            public override void Walk(Action<string> name, Action<string, int> call) { }
+        }
+
+        /// <summary>a[b]: a table's value for a key (none when never set), or a list's item at a position counted from 0.</summary>
+        private sealed class Index : Expr
+        {
+            public Expr Of, At;
+            public override object Eval(IScope s)
+            {
+                object of = Of.Eval(s), at = At.Eval(s);
+                if (of is Dictionary<string, object> t) { string k = Key(at); return k != null && t.TryGetValue(k, out object v) ? v : null; }
+                if (of is List<object> l) { double n = Number(at); return !double.IsNaN(n) && n >= 0 && n < l.Count && Math.Abs(n - Math.Round(n)) < 1e-9 ? l[(int)Math.Round(n)] : null; }
+                return null;
+            }
+            public override void Walk(Action<string> name, Action<string, int> call) { Of.Walk(name, call); At.Walk(name, call); }
         }
 
         // ---------- the tree ----------
@@ -193,7 +242,7 @@ namespace BannerlordAgents.Tools
                         string two = text.Substring(i, 2);
                         if (two == "<=" || two == ">=" || two == "==" || two == "!=") { _t.Add(two); i += 2; continue; }
                     }
-                    if ("()+-*/<>,".IndexOf(c) >= 0) { _t.Add(c.ToString()); i++; continue; }
+                    if ("()+-*/<>,[]{}".IndexOf(c) >= 0) { _t.Add(c.ToString()); i++; continue; }
                     throw new FormatException("unexpected '" + c + "' in \"" + text + "\"");
                 }
             }
@@ -263,7 +312,21 @@ namespace BannerlordAgents.Tools
             private Expr Sign()
             {
                 if (Peek == "-") { Next(); return new Unary { Op = "-", E = Sign() }; }
-                return Atom();
+                return Postfix(Atom());
+            }
+
+            /// <summary>An atom followed by indexes: visited[stop], places[0] (0.13).</summary>
+            private Expr Postfix(Expr e)
+            {
+                while (Peek == "[")
+                {
+                    Next();
+                    if (Peek == "]") throw new FormatException("an index needs something between [ and ] in \"" + _text + "\"");
+                    Expr at = Or();
+                    Expect("]");
+                    e = new Index { Of = e, At = at };
+                }
+                return e;
             }
 
             private Expr Atom()
@@ -276,6 +339,26 @@ namespace BannerlordAgents.Tools
                     Expect(")");
                     return e;
                 }
+                if (t == "[")
+                {
+                    // a list written out: [a, b, c], or [] for an empty one
+                    var l = new ListLit();
+                    if (Peek != "]")
+                    {
+                        l.Items.Add(Or());
+                        while (Peek == ",") { Next(); l.Items.Add(Or()); }
+                    }
+                    Expect("]");
+                    return l;
+                }
+                if (t == "{")
+                {
+                    // an empty table, filled by "set": {"visited[stop]": "now"}
+                    if (Peek != "}") throw new FormatException("a table is written {} (empty) and filled by set, as \"visited[stop]\": \"now\"; in \"" + _text + "\"");
+                    Next();
+                    return new TableLit();
+                }
+                if (t == "]" || t == "}") throw new FormatException("unexpected '" + t + "' in \"" + _text + "\"");
                 if (char.IsDigit(t[0]) || t[0] == '.')
                 {
                     if (!double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out double d)) throw new FormatException("bad number '" + t + "'");
