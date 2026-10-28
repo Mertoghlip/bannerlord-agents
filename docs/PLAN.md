@@ -13,6 +13,7 @@ Started Tue Oct 6, 2026, the day the proposal went in; updated Thu Oct 8. This i
     - **C1:** an agent ruling your kingdom against the agents.
     - **C2:** an agent ruling your kingdom against the game's own AI.
   - These use the realms already playing in your campaign. The coalition waits.
+- **Next build, 0.13 (Oct 28, for Mert's review):** diplomacy, the agents writing their own tools, and the training record of both Mert's moves and the agents': [PLAN-0.13.md](PLAN-0.13.md).
 - **Final report and talk, Tue Dec 1:** tool writing, the trained small models, what your play adds, and the full comparison for the everyday gamer.
 - **Budget:** about 90 hours. [worklog.md](worklog.md) keeps the count.
 
