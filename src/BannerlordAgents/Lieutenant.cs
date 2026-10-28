@@ -41,14 +41,17 @@ namespace BannerlordAgents
     internal static class Lieutenant
     {
         public const string Name = "Lieutenant";
-        private const uint Voice = 0xFFE6C36Au, You = 0xFFC8C8C8u, Aside = 0xFF8FB3D9u, Refused = 0xFFD98F8Fu;
+        private const uint Voice = 0xFFE6C36Au, You = 0xFFC8C8C8u, Aside = 0xFF8FB3D9u, Refused = 0xFFD98F8Fu, Post = 0xFFB8D98Fu;
 
         private sealed class Proposal
         {
             public int Chat;
             public string Say, Words, List;
             public JArray Orders;
+            /// <summary>Since 0.13 (docs/PLAN-0.13.md B5): tools it would write, diplomatic acts and letters to allies, waiting for the same yes.</summary>
+            public JArray Tools, Diplomacy, Letters;
             public double Hours;
+            public int Count => (Orders?.Count ?? 0) + (Tools?.Count ?? 0) + (Diplomacy?.Count ?? 0) + (Letters?.Count ?? 0);
         }
 
         private static Proposal _pending;
@@ -57,6 +60,8 @@ namespace BannerlordAgents
         private static readonly List<string> Unanswered = new List<string>();
         // what the player did with a proposal (the buttons), told with the next words
         private static readonly List<string> Notes = new List<string>();
+        // letters from the realm's allies since the lieutenant's last answer (0.13), told with the next words
+        private static readonly List<string> Mail = new List<string>();
         // the conversation of this save (0.11.1): its lines as kept, oldest first; where the words not yet answered begin
         private static readonly List<JObject> Thread = new List<JObject>();
         private static int _unansweredFrom = -1;
@@ -89,6 +94,7 @@ namespace BannerlordAgents
             Thinking = false;
             Unanswered.Clear();
             Notes.Clear();
+            Mail.Clear();
             Thread.Clear();
             _unansweredFrom = -1;
             _chatFile = null;
@@ -118,9 +124,11 @@ namespace BannerlordAgents
             if (last >= 0 && !Thread.Skip(last + 1).Any(l => Resolves((string)l["k"])))
             {
                 JObject p = Thread[last];
-                if (p["o"] is JArray orders && orders.Count > 0)
+                JObject x = p["x"] as JObject;
+                Proposal back = Make((int?)p["n"] ?? -1, (string)p["say"], p["o"] as JArray ?? new JArray(), (double?)p["h"] ?? 0, x?["tools"] as JArray, x?["diplomacy"] as JArray, x?["letters"] as JArray);
+                if (back.Count > 0)
                 {
-                    _pending = Make((int?)p["n"] ?? -1, (string)p["say"], orders, (double?)p["h"] ?? 0);
+                    _pending = back;
                     LieutenantWindow.Add("(Your lieutenant's proposal from before still waits for your answer.)", Aside, false);
                 }
             }
@@ -130,7 +138,7 @@ namespace BannerlordAgents
         private static bool Resolves(string kind) => kind == "approved" || kind == "declined" || kind == "carried" || kind == "dropped" || kind == "proposal";
 
         /// <summary>One line of the conversation, kept for this save (and the window's own line, shown by the caller).</summary>
-        private static void Keep(string kind, string text, int n = -1, JArray orders = null, string say = null)
+        private static void Keep(string kind, string text, int n = -1, JArray orders = null, string say = null, Proposal whole = null)
         {
             if (_chatFile == null || Campaign.Current == null) return;
             var l = new JObject
@@ -140,6 +148,9 @@ namespace BannerlordAgents
             if (n >= 0) l["n"] = n;
             if (orders != null) l["o"] = orders.DeepClone();
             if (say != null) l["say"] = say;
+            // a proposal's tools, diplomatic acts and letters (0.13), so a load puts the whole proposal back
+            if (whole != null && (whole.Tools?.Count > 0 || whole.Diplomacy?.Count > 0 || whole.Letters?.Count > 0))
+                l["x"] = new JObject { ["tools"] = whole.Tools?.DeepClone(), ["diplomacy"] = whole.Diplomacy?.DeepClone(), ["letters"] = whole.Letters?.DeepClone() };
             Thread.Add(l);
             string json = l.ToString(Newtonsoft.Json.Formatting.None), file = _chatFile;
             Background.Post("lieutenant conversation", () => Files.Append(file, json));
@@ -159,6 +170,7 @@ namespace BannerlordAgents
                 case "aside": return new KeyValuePair<string, uint>(t, Aside);
                 case "refused": return new KeyValuePair<string, uint>("(" + t + ")", Refused);
                 case "heard": return new KeyValuePair<string, uint>(Name + ": " + t, Aside);
+                case "letter": return new KeyValuePair<string, uint>(t, Post);
                 default: return null;
             }
         }
@@ -180,6 +192,7 @@ namespace BannerlordAgents
                 case "dropped": return "  (your proposal was dropped)";
                 case "refused": return "  (an order was refused: " + t + ")";
                 case "heard": return "  (what became of an order: " + t + ")";
+                case "letter": return date + " · " + t;
                 default: return null;
             }
         }
@@ -214,13 +227,14 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Error("reading Party AI Controls for the lieutenant", e); }
             var chat = new
             {
-                Number = n, Said = text, Earlier = Unanswered.Take(Unanswered.Count - 1).ToList(), Notes = Notes.ToList(), Hours = hours, Date = Text.When(hours),
+                Number = n, Said = text, Earlier = Unanswered.Take(Unanswered.Count - 1).ToList(), Notes = Notes.ToList(), Letters = Mail.ToList(), Hours = hours, Date = Text.When(hours),
                 Campaign = Bridge.CampaignId, Realm = realm.StringId, RealmName = Names.Faction(realm), LoadId = Bridge.LoadId, Ruler = Names.Hero(Hero.MainHero),
-                Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Hours },
+                Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Tools, _pending.Diplomacy, _pending.Letters, _pending.Hours },
                 History = before.Skip(Math.Max(0, before.Count - HistoryLines)).ToList(), HistoryTotal = before.Count, Save = Bridge.History?.Save, PartyAi = pac,
                 Run = RunTags.Id, Arm = RunTags.Arm
             };
             Notes.Clear();
+            Mail.Clear();
             Thinking = true;
             LieutenantWindow.Refresh();
             Channel ch = ag.Channel;
@@ -241,9 +255,9 @@ namespace BannerlordAgents
             Keep("approved", p.List, p.Chat);
             Recorder.OnLieutenantAnswered(p.Chat, true, p.List);
             Notes.Add("The ruler approved your proposal of message #" + p.Chat + " with the button, and its orders were given.");
-            if (ag != null) { string realm = ag.Realm; Background.ToMain.Enqueue(() => Carry(p.Orders, p.Chat, realm)); }
+            if (ag != null) { string realm = ag.Realm; Background.ToMain.Enqueue(() => Carry(p, p.Chat, realm)); }
             LieutenantWindow.Refresh();
-            Diag.Event("lieutenant", "approved", new { chat = p.Chat, orders = p.Orders.Count });
+            Diag.Event("lieutenant", "approved", new { chat = p.Chat, orders = p.Orders?.Count, tools = p.Tools?.Count, diplomacy = p.Diplomacy?.Count, letters = p.Letters?.Count });
         }
 
         /// <summary>The Decline button: the proposal waiting is dropped, and the lieutenant is told with the next words.</summary>
@@ -292,6 +306,9 @@ namespace BannerlordAgents
             int n = (int?)a["chat"] ?? -1;
             string say = (string)a["say"], detail = (string)a["detail"];
             JArray orders = a["orders"] as JArray, propose = a["propose"] as JArray;
+            // since 0.13 (B5): tools it would write, diplomatic acts and letters to allies, under the same yes rule as its orders
+            JArray tools = a["tools"] as JArray, diplomacy = a["diplomacy"] as JArray, letters = a["letters"] as JArray;
+            int extras = (tools?.Count ?? 0) + (diplomacy?.Count ?? 0) + (letters?.Count ?? 0);
             bool carry = (bool?)a["carry_out"] == true, drop = (bool?)a["drop"] == true;
             int answered = (int?)a["pending_chat"] ?? -1;
             Unanswered.Clear();
@@ -300,25 +317,28 @@ namespace BannerlordAgents
             if (!string.IsNullOrWhiteSpace(say)) { LieutenantWindow.Add(Name + ": " + say.Trim(), Voice, true); Keep("lt", say.Trim(), n); }
             if (!string.IsNullOrWhiteSpace(detail)) { LieutenantWindow.Add(detail.Trim(), Voice, false); Keep("detail", detail.Trim(), n); }
             double now = Campaign.Current != null ? CampaignTime.Now.ToHours : 0;
-            string gate = LieutenantRules.Gate(_pending?.Chat, answered, carry, orders?.Count ?? 0, propose?.Count ?? 0, drop);
+            string gate = LieutenantRules.Gate(_pending?.Chat, answered, carry, (orders?.Count ?? 0) + (carry ? extras : 0), (propose?.Count ?? 0) + (carry ? 0 : extras), drop);
             switch (gate)
             {
                 case "carry":
-                    Background.ToMain.Enqueue(() => Carry(orders, n, realmId));
-                    Keep("carried", Make(n, say, orders, now).List, n);
+                {
+                    Proposal agreed = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
+                    Background.ToMain.Enqueue(() => Carry(agreed, n, realmId));
+                    Keep("carried", agreed.List, n);
                     _pending = null;
                     break;
+                }
                 case "wait":
                     // orders the player has not agreed to: they wait for the yes, as a proposal
-                    _pending = Make(n, say, orders, now);
+                    _pending = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
                     LieutenantWindow.Add("(Your lieutenant waits for your yes before giving those orders.)", Aside, false);
                     Keep("aside", "(Your lieutenant waits for your yes before giving those orders.)", n);
-                    Keep("proposal", _pending.List, n, orders, say);
+                    Keep("proposal", _pending.List, n, _pending.Orders, say, _pending);
                     Diag.Count("lieutenant:orders held for a yes");
                     break;
                 case "propose":
-                    _pending = Make(n, say, propose, now);
-                    Keep("proposal", _pending.List, n, propose, say);
+                    _pending = Make(n, say, propose ?? new JArray(), now, tools, diplomacy, letters);
+                    Keep("proposal", _pending.List, n, _pending.Orders, say, _pending);
                     break;
                 case "drop":
                     if (_pending != null) Keep("dropped", "", _pending.Chat);
@@ -330,9 +350,27 @@ namespace BannerlordAgents
             Diag.Event("lieutenant", "answered", new { chat = n, gate, pending = _pending?.Chat, said = say });
         }
 
-        private static Proposal Make(int chat, string say, JArray orders, double hours)
+        private static Proposal Make(int chat, string say, JArray orders, double hours, JArray tools = null, JArray diplomacy = null, JArray letters = null)
         {
             var lines = new List<string>();
+            // a tool it writes is shown with what it does, its settings and the checker's result before you approve it (0.13, B5)
+            foreach (JObject t in (tools ?? new JArray()).OfType<JObject>())
+            {
+                if ((bool?)t["retire"] == true) { lines.Add("- Retire your tool " + Str(t["name"]) + "."); continue; }
+                JObject def = t["definition"] as JObject ?? t;
+                var json = (JObject)def.DeepClone();
+                json["name"] = Str(t["name"]) ?? Str(def["name"]);
+                if (json["about"] == null && t["about"] != null) json["about"] = t["about"];
+                Tools.ToolDef d = Tools.ToolDef.FromJson(json.ToString(), Str(json["name"]) ?? "tool", Agent?.Realm ?? "player");
+                lines.Add("- " + ((bool?)t["keep"] == true ? "Keep" : "Use once") + " a tool of your own: " + d.Describe().TrimStart('-', ' ')
+                          + (d.Valid ? " The checker: it passes." : " The checker: " + d.Problems.Count + " problem" + (d.Problems.Count == 1 ? "" : "s") + ", so it would be refused (" + string.Join("; ", d.Problems.Take(3)) + ")."));
+            }
+            foreach (JObject o in (diplomacy ?? new JArray()).OfType<JObject>()) lines.Add("- Diplomacy: " + DiploAct.From(o, -1, "chat-" + chat + ".json", 0) + (Str(o["why"]) != null ? " (" + Str(o["why"]) + ")" : "") + ".");
+            foreach (JObject o in (letters ?? new JArray()).OfType<JObject>())
+            {
+                string text = Str(o["text"]) ?? "";
+                lines.Add("- A letter to " + (Str(o["to"]) ?? "?") + ": \"" + (text.Length > 300 ? text.Substring(0, 300) + "..." : text) + "\"" + (o["plan"] is JObject p ? " (with a joint plan: " + Str(p["what"]) + (Str(p["where"]) != null ? " at " + Str(p["where"]) : "") + ")" : o["plan_id"] != null ? " (plan " + Str(o["plan_id"]) + ": " + Str(o["state"]) + ")" : "") + ".");
+            }
             foreach (JObject o in orders.OfType<JObject>())
             {
                 string lord = Str(o["lord"]), what = Str(o["do"]);
@@ -349,7 +387,7 @@ namespace BannerlordAgents
                           + (t != null ? " " + Names.Hero(t) : target != null && s == null ? " " + target : ""));
             }
             string list = string.Join("\n", lines);
-            return new Proposal { Chat = chat, Say = say, Orders = orders, Hours = hours, List = list, Words = "Waiting for your answer:\n" + list };
+            return new Proposal { Chat = chat, Say = say, Orders = orders, Tools = tools, Diplomacy = diplomacy, Letters = letters, Hours = hours, List = list, Words = "Waiting for your answer:\n" + list };
         }
 
         private static string Str(JToken t) => t == null || t.Type == JTokenType.Null || t is JContainer ? null : ((string)t)?.Trim().Trim('[', ']');
@@ -378,22 +416,71 @@ namespace BannerlordAgents
             return "in Party AI Controls, " + (parts.Count > 0 ? string.Join("; ", parts) : "nothing");
         }
 
-        /// <summary>The orders the player agreed to, through the door every agent's orders go through; a refusal is said in the window.</summary>
-        private static void Carry(JArray orders, int chat, string realmId)
+        /// <summary>
+        /// What the player agreed to (game's thread): its orders through the door every agent's go through; its tools into your realm's library,
+        /// its diplomatic acts through the agents' own diplomacy, its letters to your allies' agents (0.13). Each refusal is said in the window.
+        /// </summary>
+        private static void Carry(Proposal p, int chat, string realmId)
         {
+            string file = "chat-" + chat + ".json";
+            void Say(string text, uint colour) => Background.ToUi.Enqueue(() => { LieutenantWindow.Add(text, colour, true); Keep(colour == Refused ? "refused" : "heard", text.Trim('(', ')'), chat); });
             int i = 0;
-            foreach (JObject o in orders.OfType<JObject>())
+            foreach (JObject o in (p.Orders ?? new JArray()).OfType<JObject>())
             {
-                AgentChannel.AgentOrder order = AgentChannel.OrderFrom(o, null, -1, "chat-" + chat + ".json");
+                AgentChannel.AgentOrder order = AgentChannel.OrderFrom(o, null, -1, file);
                 order.Index = ++i;
                 order.Realm = realmId;
                 string lord = order.Lord;
                 Orders.FromAgent(order, (status, reason) =>
                 {
-                    if (status == "refused") { string r = reason ?? "an order for " + lord + " was refused"; Background.ToUi.Enqueue(() => { LieutenantWindow.Add("(" + r + ")", Refused, true); Keep("refused", r, chat); }); }
+                    if (status == "refused") Say("(" + (reason ?? "an order for " + lord + " was refused") + ")", Refused);
                 });
             }
             Diag.Count("lieutenant:orders carried out", i);
+            int d = 0;
+            foreach (JObject o in (p.Diplomacy ?? new JArray()).OfType<JObject>())
+            {
+                DiploAct act = DiploAct.From(o, -1, file, ++d);
+                act.Realm = realmId;
+                Diplomacy.FromAgent(act, (status, reason) => Say((status == "refused" ? "(Refused: " : "(") + act + ": " + reason + ")", status == "refused" ? Refused : Aside));
+            }
+            // tools and letters are the helper's: the realm's library and the allied channel live there
+            JArray tools = p.Tools, letters = p.Letters;
+            if ((tools?.Count ?? 0) + (letters?.Count ?? 0) == 0) return;
+            Background.Post("lieutenant's tools and letters", () =>
+            {
+                RealmAgent ag = Agents.Of(realmId);
+                int t = 0;
+                foreach (JToken tool in tools ?? new JArray())
+                {
+                    t++;
+                    Tools.OwnLibrary lib = Tools.OwnLibrary.For(realmId);
+                    Tools.OwnLibrary.Taken r = lib != null ? lib.Take(tool as JObject, -1, "lieutenant", file, Diag.Hours, false)
+                                                           : new Tools.OwnLibrary.Taken { Name = (string)(tool as JObject)?["name"], Status = "refused", Reason = "your realm has no library" };
+                    ag?.Channel.ToolReceipt(-1, file, t, r, Diag.Hours);
+                    if (r.Status == "kept" || r.Status == "changed" || r.Status == "retired") AgentChannel.WriteLibrary(realmId);
+                    Say("(" + (r.Name ?? "a tool") + ": " + r.Status.Replace('_', ' ') + ". " + r.Reason + ")", r.Status == "refused" ? Refused : Aside);
+                }
+                int l = 0;
+                foreach (JToken letter in letters ?? new JArray())
+                {
+                    l++;
+                    string reason = Allies.Send(ag?.Latest, realmId, letter as JObject, "lieutenant", -1, out string status);
+                    ag?.Channel.LetterReceipt(-1, file, l, (string)(letter as JObject)?["to"], status, reason, Diag.Hours);
+                    Say("(" + (status == "sent" ? "Sent: " : "Not sent: ") + reason + ")", status == "sent" ? Aside : Refused);
+                }
+            });
+        }
+
+        /// <summary>A letter from an ally's agent to your realm (0.13, B5): into the window, and told to the lieutenant with your next words.</summary>
+        public static void Letter(Allies.Letter letter, Allies.Plan plan)
+        {
+            string text = "A letter from the ruler of " + letter.FromName + " (" + letter.Id + "): \"" + letter.Text + "\""
+                          + (plan != null ? " " + Allies.PlanText(null, plan) : "") + (plan?.State == "proposed" && plan.To == letter.To ? " Tell your lieutenant whether to agree." : "");
+            LieutenantWindow.Add(text, Post, true);
+            Keep("letter", text);
+            Mail.Add(text);
+            Diag.Count("lieutenant:letters");
         }
 
         // ---------- what becomes of its orders ----------

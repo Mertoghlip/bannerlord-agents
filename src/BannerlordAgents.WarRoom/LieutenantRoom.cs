@@ -154,13 +154,24 @@ namespace BannerlordAgents.WarRoom
                 foreach (JsonNode n in notes) sb.AppendLine("- " + Str(n));
                 sb.AppendLine();
             }
+            // letters from your ruler's allies since your last answer (0.13): tell your ruler what they say and ask
+            if (chat["letters"] is JsonArray mail && mail.Count > 0)
+            {
+                sb.AppendLine("LETTERS FROM YOUR RULER'S ALLIES SINCE YOUR LAST ANSWER (your ruler saw them in your window)");
+                foreach (JsonNode m in mail) sb.AppendLine("- " + Str(m));
+                sb.AppendLine();
+            }
             if (chat["pending"] is JsonObject p && p["orders"] is JsonArray po)
             {
                 sb.AppendLine("YOUR PROPOSAL WAITING FOR YOUR RULER'S ANSWER (from message #" + (int)Num(p["chat"]) + "): " + Str(p["say"]));
                 sb.AppendLine(po.ToJsonString());
-                sb.AppendLine("If your ruler's words below agree to it, answer with \"carry_out\": true and these orders (changed as they say) in \"orders\".");
+                // its tools, diplomatic acts and letters wait for the same yes (0.13)
+                foreach (string part in new[] { "tools", "diplomacy", "letters" })
+                    if (p[part] is JsonArray pa && pa.Count > 0) sb.AppendLine(part + ": " + pa.ToJsonString());
+                sb.AppendLine("If your ruler's words below agree to it, answer with \"carry_out\": true and these orders (changed as they say) in \"orders\""
+                              + " (and its tools, diplomacy and letters, as they stand or changed, in \"tools\", \"diplomacy\" and \"letters\").");
             }
-            else sb.AppendLine("No proposal of yours is waiting: any orders you would give now go in \"propose\", for your ruler's yes.");
+            else sb.AppendLine("No proposal of yours is waiting: any orders you would give now go in \"propose\", and any tools, diplomatic acts or letters in \"tools\", \"diplomacy\" and \"letters\", all for your ruler's yes.");
             sb.AppendLine();
             sb.AppendLine("THE REALM NOW");
             sb.AppendLine(report.Trim());
@@ -213,7 +224,7 @@ namespace BannerlordAgents.WarRoom
             string dir = Path.Combine(channelDir, "orders");
             Directory.CreateDirectory(dir);
             var file = new JsonObject { ["chat"] = n, ["pending_chat"] = pending };
-            foreach (string k in new[] { "say", "propose", "carry_out", "orders", "drop", "detail" })
+            foreach (string k in new[] { "say", "propose", "carry_out", "orders", "drop", "detail", "tools", "diplomacy", "letters" })
                 if (answer[k] != null) file[k] = answer[k].DeepClone();
             string final = Path.Combine(dir, "chat-" + n + ".json"), temp = final + ".part";
             File.WriteAllText(temp, file.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
@@ -277,7 +288,7 @@ namespace BannerlordAgents.WarRoom
         private RouteTool Routes(string campaign, string realm, int n)
         {
             if (!_c.RouteTool || campaign == null || realm == null) return null;
-            var tool = new RouteTool(RouteTool.DefaultRoot(), _logDir, campaign, realm, n, "chat");
+            var tool = new RouteTool(RouteTool.DefaultRoot(), _logDir, campaign, realm, n, "chat") { ChannelDir = _c.ChannelDir };
             if (!tool.Ready(out string why))
             {
                 if (_routesWhy != why) { Say("The questions (the way, battle odds, can catch, roads in) are not offered: " + why + "."); _routesWhy = why; }
@@ -292,7 +303,7 @@ namespace BannerlordAgents.WarRoom
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate)
                 : "You are the lieutenant of a ruler in Mount & Blade II: Bannerlord. Answer with one JSON object: {\"say\": \"...\"}.";
-            if (!routes) template = Cut(template, "## Asking the way");
+            if (!routes) template = Cut(Cut(template, "## Asking the way"), "## Checking a tool");
             if (!_c.Lookups) template = Cut(template, "## Look-ups").TrimEnd() + "\n\nYou have no tools in this call: answer from the message alone.\n";
             string tools = Room.ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "(the order library appears once the game has loaded a campaign)";
             string text = template.TrimEnd() + "\n\n" + tools.Trim() + "\n";

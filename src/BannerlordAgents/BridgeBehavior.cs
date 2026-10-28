@@ -134,6 +134,8 @@ namespace BannerlordAgents
             // the lieutenant's conversation of this save, and its own Party AI Controls orders (0.11.1)
             try { Lieutenant.Restore(history); }
             catch (Exception e) { Diag.Error("the lieutenant's conversation at the load", e); }
+            // a letter to your realm from an ally's agent goes into the lieutenant's window (0.13, B5)
+            Allies.ToLieutenant = (letter, plan) => Background.ToUi.Enqueue(() => Lieutenant.Letter(letter, plan));
             try { PacLink.Reset(history); }
             catch (Exception e) { Diag.Error("the lieutenant's Party AI Controls record at the load", e); }
             // a test run (0.11, docs/RUNS.md): the run's save readies one; one of a running run's own saves carries it on

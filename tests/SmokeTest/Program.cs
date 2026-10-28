@@ -230,6 +230,7 @@ namespace SmokeTest
             LanguageTests(root, agentDir);
             OwnToolTests(root, agentDir);
             DiplomacyTests(root, agentDir);
+            AlliesTests(root, agentDir);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");

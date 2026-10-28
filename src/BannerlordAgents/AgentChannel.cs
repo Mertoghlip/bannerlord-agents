@@ -835,7 +835,9 @@ namespace BannerlordAgents
             Dictionary<string, Tools.ToolDef> theirs = ans?.Tools > 0 ? TakeTools(name, poke, ans, refusedTools) : null;
             // its diplomatic acts (0.13, B2): checked here against the realm's screens as last copied, carried out on the game's thread
             if (ans?.Diplomacy > 0) TakeDiplomacy(name, poke, ans);
-            if (orders.Count == 0) { if (theirs == null && !(ans?.Diplomacy > 0)) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
+            // its letters to allies (0.13, B5): checked and delivered here
+            if (ans?.Letters > 0) TakeLetters(name, poke, ans);
+            if (orders.Count == 0) { if (theirs == null && !(ans?.Diplomacy > 0) && !(ans?.Letters > 0)) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
             foreach (AgentChannel.AgentOrder o in orders) CheckIds(o);
             foreach (AgentChannel.AgentOrder o in orders) Attach(o, theirs);
             List<AgentChannel.AgentOrder> refused = orders.Where(o => refusedTools.ContainsKey((o.Do ?? "").Trim())).ToList();
@@ -912,6 +914,40 @@ namespace BannerlordAgents
                 DiploAct act = a;
                 Background.ToMain.Enqueue(() => Diplomacy.FromAgent(act));
             }
+        }
+
+        /// <summary>An answer's letters (0.13, B5): each to an ally whose ruler reads letters, delivered with its joint plan if it carries one (in shadow mode checked only).</summary>
+        private void TakeLetters(string file, int poke, AgentChannel.Answer ans)
+        {
+            int i = 0;
+            foreach (JToken t in ans.LetterList)
+            {
+                i++;
+                var l = t as JObject;
+                string to = (string)l?["to"], status, reason;
+                if (Mode == "shadow")
+                {
+                    reason = l == null ? "write each letter as an object" : Allies.CanWrite(_agent.Latest, Realm, to);
+                    status = reason == null ? "checked" : "refused";
+                    if (reason == null) reason = "valid (shadow mode: not sent)";
+                }
+                else
+                {
+                    try { reason = Allies.Send(_agent.Latest, Realm, l, "agent", poke, out status); }
+                    catch (Exception e) { status = "refused"; reason = "it could not be sent (" + e.Message + ")"; Diag.Error("sending an agent's letter", e); }
+                }
+                LetterReceipt(poke, file, i, to, status, reason, Diag.Hours);
+            }
+        }
+
+        /// <summary>What became of one letter, in receipts.log, the orders' record and the episode index.</summary>
+        public void LetterReceipt(int poke, string file, int index, string to, string status, string reason, double hours)
+        {
+            Diag.Count("agent:letter " + status);
+            Line("poke #" + poke + ", " + file + " letter " + index + " (to " + (to ?? "?") + "): " + status.ToUpperInvariant() + ". " + reason.TrimEnd('.') + ".");
+            Brain.WriteOrder(new { Type = "agent_letter", Realm, Poke = poke, File = file, Index = index, To = to, Status = status, Reason = reason, Hours = hours, Mode, Run = RunTags.Id, Arm = RunTags.Arm });
+            Episodes.Letter(Realm, poke, file, index, to, status, reason, hours);
+            if (status == "sent") _agent.Chronicle.Line(hours, "letter", "You wrote to " + to + ": " + reason.TrimEnd('.') + ".");
         }
 
         /// <summary>What became of one diplomatic act, in receipts.log, the orders' record, the episode index, the diplomacy book and the chronicle.</summary>

@@ -37,6 +37,8 @@ namespace BannerlordAgents
         /// <summary>Its diplomacy, and its open votes and the offers made to it (0.13, DiploRules): for a realm an agent serves.</summary>
         public List<string> Diplomacy = new List<string>();
         public List<string> Open = new List<string>();
+        /// <summary>Its allies, whether their rulers read letters, their last letters, and the joint plans between them (0.13, Allies).</summary>
+        public List<string> Allied = new List<string>();
     }
 
     internal sealed class ViewCaptive
@@ -265,6 +267,8 @@ namespace BannerlordAgents
                 v.Diplomacy = DiploRules.Diplomacy(dv, s.Hours, Text.When);
                 v.Open = DiploRules.Open(dv, Text.When);
             }
+            // its allies, their letters and the joint plans between them (0.13, B5)
+            v.Allied = Allies.Section(s, fid);
             return v;
         }
 
@@ -576,6 +580,11 @@ namespace BannerlordAgents
             {
                 sb.AppendLine().AppendLine("DIPLOMACY, AS YOUR RULER'S SCREENS SHOW IT");
                 foreach (string l in v.Diplomacy) sb.AppendLine("- " + l);
+            }
+            if (v.Allied.Count > 0)
+            {
+                sb.AppendLine().AppendLine("ALLIES AND JOINT PLANS (an ally knows only what it is told; write in \"letters\")");
+                foreach (string l in v.Allied) sb.AppendLine("- " + l);
             }
 
             if (v.Sum != null && v.Captives.Count > 0)

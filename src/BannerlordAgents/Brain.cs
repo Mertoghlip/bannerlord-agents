@@ -109,6 +109,8 @@ namespace BannerlordAgents
             Agents.Reset(_dir, loadedAt, agents, histories, History);
             // each realm's own tools, read again from its folder (0.13), then every channel's library with them
             Tools.OwnLibrary.Reset();
+            // the letters and joint plans of this save's history (0.13, B5)
+            Allies.Reset(_dir, History);
             _toolsDay = long.MinValue;
             AgentChannel.WriteLibrary();
             Audit.Reset();

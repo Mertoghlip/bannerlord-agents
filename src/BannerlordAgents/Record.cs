@@ -154,6 +154,12 @@ namespace BannerlordAgents
         /// <summary>An order's outcome, at its end (Outcomes).</summary>
         public static void Outcome(object line) => Write(line);
 
+        /// <summary>What became of one letter of an answer (0.13, B5): sent, checked or refused and why.</summary>
+        public static void Letter(string realm, int poke, string file, int index, string to, string status, string reason, double hours)
+        {
+            Write(new { Type = "letter", Realm = realm, Run = RunTags.Id, Arm = RunTags.Arm, Wall = Wall(), Hours = hours, Poke = poke, File = file, Index = index, To = to, Status = status, Reason = reason });
+        }
+
         /// <summary>What became of one diplomatic act of an answer (0.13, B2): applied, checked or refused and why.</summary>
         public static void Diplomacy(string realm, DiploAct a, string status, string reason, double hours)
         {

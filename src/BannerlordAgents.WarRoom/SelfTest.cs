@@ -321,6 +321,17 @@ namespace BannerlordAgents.WarRoom
                   && !m2.Contains("[you proposed: lord_dain defend town_gt]") && m2.Contains("PARTY AI CONTROLS NOW") && m2.Contains("Thalion [lord_m5_3]")
                   && m2.IndexOf("PARTY AI CONTROLS NOW", StringComparison.Ordinal) < m2.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal),
                   "with the save's conversation from the bridge, the message has its latest lines (not the war room's own memory) and Party AI Controls before the ruler's words");
+            // 0.13 (B5): letters from the ruler's allies, a proposal's tools, diplomacy and letters waiting for the same yes, and the answer file carrying them
+            chat["letters"] = new JsonArray("A letter from the ruler of Rohan (l4): \"We ride for Lasgalor on the 12th.\"");
+            ((JsonObject)chat["pending"])["letters"] = new JsonArray(JsonNode.Parse("{\"to\": \"rohan\", \"text\": \"We come too.\"}"));
+            string m3 = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string>());
+            Check(m3.Contains("LETTERS FROM YOUR RULER'S ALLIES SINCE YOUR LAST ANSWER") && m3.Contains("We ride for Lasgalor") && m3.Contains("letters: [{\"to\":\"rohan\"")
+                  && m3.Contains("and its tools, diplomacy and letters, as they stand or changed"),
+                  "the lieutenant hears its ruler's allies' letters, and its proposal's letters, tools and diplomacy wait for the same yes as its orders");
+            LieutenantRoom.ExtractAnswer("{\"say\": \"Writing to Rohan.\", \"carry_out\": true, \"orders\": [], \"letters\": [{\"to\": \"rohan\", \"text\": \"We come too.\"}], \"tools\": [{\"name\": \"x\"}], \"diplomacy\": [{\"act\": \"propose_trade\", \"with\": \"rohan\"}]}", out JsonObject withAll);
+            LieutenantRoom.WriteAnswer(channel, 8, withAll, 7);
+            var written2 = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(channel, "orders", "chat-8.json")));
+            Check(written2["letters"] is JsonArray wl && wl.Count == 1 && written2["tools"] is JsonArray && written2["diplomacy"] is JsonArray, "the answer file carries the lieutenant's tools, diplomacy and letters to the bridge");
         }
 
         private static Program.Trigger T(string kind, string text) => new Program.Trigger { Kind = kind, Text = text };
