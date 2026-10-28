@@ -870,6 +870,7 @@ namespace BannerlordAgents
         /// <summary>
         /// The run's bundle (0.13, docs/PLAN-0.13.md C5), packed at its end: the worker flushes every file, then starts Runs.exe bundle
         /// for it at low priority, its words going to bundle.log in the run's folder. Runs.exe bundle (run) does the same by hand.
+        /// Since 0.13.1 the backup follows it, when settings.txt names its place.
         /// </summary>
         public static void StartBundle(string id)
         {
@@ -880,7 +881,7 @@ namespace BannerlordAgents
                 {
                     string exe = RunsExe;
                     if (!File.Exists(exe)) { Log.Line("run: the bundle was not packed: " + exe + " is missing (Runs.exe bundle " + id + " packs it by hand)"); return; }
-                    var psi = new System.Diagnostics.ProcessStartInfo(exe, "bundle " + id)
+                    var psi = new System.Diagnostics.ProcessStartInfo(exe, BundleArguments(id))
                     {
                         UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Path.GetDirectoryName(exe)
                     };
@@ -899,11 +900,14 @@ namespace BannerlordAgents
                     p.ErrorDataReceived += (s, e) => Keep(e.Data);
                     p.BeginOutputReadLine();
                     p.BeginErrorReadLine();
-                    Diag.Event("run", "bundle started", new { run = id, exe });
+                    Diag.Event("run", "bundle started", new { run = id, exe, backup = Settings.Backup });
                 }
                 catch (Exception e) { Diag.Error("packing the run's bundle", e); }
             });
         }
+
+        /// <summary>Runs.exe's words at a run's end: pack its bundle, then the backup when settings.txt names its place (0.13.1).</summary>
+        public static string BundleArguments(string id) => "bundle " + id + (string.IsNullOrWhiteSpace(Settings.Backup) ? "" : " --backup");
 
         /// <summary>The save's file: the game's saves folder in your Documents (OneDrive's when it moved them).</summary>
         public static string SavePath(string save)

@@ -104,6 +104,11 @@ namespace BannerlordAgents
         public static int RunDays = 60;
         public static List<string> RunRivals = new List<string> { "mistymountainorcs", "dolguldur" };
         public static string RunKingdom = "";
+        /// <summary>
+        /// The backup's place (0.13.1; Mert, Oct 28: "I would keep the data local for now, at the D: drive"): when a run ends,
+        /// Runs.exe copies the records folder and every agent's folder there, after the run's bundle. Empty: no backup.
+        /// </summary>
+        public static string Backup = "";
 
         /// <summary>Lines of settings.txt that were not understood, for the start-up self-check.</summary>
         public static readonly List<string> Unknown = new List<string>();
@@ -177,12 +182,13 @@ namespace BannerlordAgents
                             break;
                         case "run_rivals": RunRivals = value.Split(';', ',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList(); break;
                         case "run_kingdom": RunKingdom = value; break;
+                        case "backup": Backup = value; break;
                         default: Unknown.Add(line); break;
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
                 foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause",
-                                             "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom" })
+                                             "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom", "backup" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -229,6 +235,8 @@ namespace BannerlordAgents
                 sb.AppendLine("run_days = " + RunDays.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("run_rivals = " + string.Join("; ", RunRivals));
                 sb.AppendLine("run_kingdom = " + RunKingdom);
+                sb.AppendLine("# the backup (docs/LOGGING.md): where Runs.exe copies the records and the agents' folders when a run ends (empty: none)");
+                sb.AppendLine("backup = " + Backup);
                 File.WriteAllText(FilePath, sb.ToString());
             }
             catch (Exception e) { Log.Line("settings could not be saved: " + e.Message); }

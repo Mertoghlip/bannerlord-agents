@@ -129,6 +129,95 @@ namespace SmokeTest
             RunTags.Set(null, null);
 
             BundleTests(root, data);
+            BackupTests(root);
+        }
+
+        /// <summary>
+        /// Runs.exe backup (0.13.1) on a made-up records folder and agent folder: the first copy whole, nothing written when nothing
+        /// changed, a grown file's new bytes added, a shrunk one copied whole with its old copy kept, nothing deleted, a file held shut
+        /// left for the next backup, a place inside what it copies refused, the backup after a run's bundle, and the bridge's setting.
+        /// </summary>
+        private static void BackupTests(string root)
+        {
+            string exe = FindRuns();
+            if (exe == null) return;   // the bundle's check has said so
+            string records = Path.Combine(root, "backup-test", "records"), agent = Path.Combine(root, "backup-test", "orc-council"), copy = Path.Combine(root, "backup-test-copy");
+            Directory.CreateDirectory(Path.Combine(records, "data", "c1"));
+            Directory.CreateDirectory(Path.Combine(records, "live", "frames"));
+            Directory.CreateDirectory(Path.Combine(agent, "warroom", "library"));
+            File.WriteAllText(Path.Combine(records, "settings.txt"), "# made up\nagents = " + agent + "\nbackup = " + copy + "\n");
+            string pokes = Path.Combine(records, "data", "c1", "pokes_orcs.jsonl"), notes = Path.Combine(agent, "notes.md"), frame = Path.Combine(records, "live", "frames", "h1.json.gz");
+            File.WriteAllText(pokes, string.Concat(Enumerable.Range(1, 3000).Select(i => "{\"number\":" + i + ",\"text\":\"a poke line long enough to fill some bytes\"}\n")));
+            File.WriteAllText(notes, "The plan: hold the Redhorn Gate, then strike at Lorien when Dol Guldur moves.\n");
+            File.WriteAllBytes(frame, Enumerable.Range(0, 5000).Select(i => (byte)(i % 251)).ToArray());
+            File.WriteAllText(Path.Combine(agent, "warroom", "library", "index.json"), "{\"tools\":[]}");
+            string copyPokes = Path.Combine(copy, "records", "data", "c1", "pokes_orcs.jsonl"), copyNotes = Path.Combine(copy, "agents", "orc-council", "notes.md");
+
+            (int Code, string Out) Runs(string args)
+            {
+                var psi = new ProcessStartInfo(exe, args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+                psi.EnvironmentVariables["BANNERLORD_AGENTS_ROOT"] = records;
+                using (Process p = Process.Start(psi))
+                {
+                    string o = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(60000);
+                    return (p.ExitCode, o);
+                }
+            }
+            bool SameFile(string a, string b) => File.Exists(a) && File.Exists(b) && File.ReadAllBytes(a).SequenceEqual(File.ReadAllBytes(b));
+
+            var first = Runs("backup");
+            Check(first.Code == 0 && SameFile(pokes, copyPokes) && SameFile(frame, Path.Combine(copy, "records", "live", "frames", "h1.json.gz")) && SameFile(notes, copyNotes)
+                  && File.Exists(Path.Combine(copy, "agents", "orc-council", "warroom", "library", "index.json")) && File.Exists(Path.Combine(copy, "README.txt"))
+                  && ReadIf(Path.Combine(copy, "backup.log")).Contains("5 new"),
+                  "the first backup copies the records folder and each agent's folder whole, into the place settings.txt names (" + first.Out.Split('\n')[0].Trim() + ")");
+            var second = Runs("backup");
+            Check(second.Code == 0 && second.Out.Contains("0 new, 0 grown, 0 rewritten") && second.Out.Contains("5 unchanged"), "a backup with nothing changed writes nothing");
+
+            // a file grows, one is wiped by mistake, one is deleted, and a new one is held shut by another program
+            DateTime born = File.GetCreationTimeUtc(copyPokes);
+            File.AppendAllText(pokes, "{\"number\":3001,\"text\":\"one more\"}\n");
+            File.WriteAllText(notes, "Wiped by mistake.\n");
+            File.Delete(frame);
+            string held = Path.Combine(records, "data", "c1", "held.jsonl"), copyHeld = Path.Combine(copy, "records", "data", "c1", "held.jsonl");
+            File.WriteAllText(held, "{\"a\":1}\n");
+            (int Code, string Out) third;
+            using (new FileStream(held, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) third = Runs("backup");
+            string[] kept = Directory.Exists(Path.Combine(copy, "earlier")) ? Directory.GetFiles(Path.Combine(copy, "earlier"), "notes.md", SearchOption.AllDirectories) : new string[0];
+            Check(SameFile(pokes, copyPokes) && File.GetCreationTimeUtc(copyPokes) == born && third.Out.Contains("1 grown"),
+                  "a file that grew gets only its new bytes added: the copy is the same file, whole again");
+            Check(SameFile(notes, copyNotes) && kept.Length == 1 && File.ReadAllText(kept[0]).StartsWith("The plan:") && third.Out.Contains("1 rewritten"),
+                  "a file that shrank is copied whole, and the copy it replaced is kept under earlier\\");
+            Check(File.Exists(Path.Combine(copy, "records", "live", "frames", "h1.json.gz")), "a file gone from its place stays in the copy: a backup never deletes");
+            Check(third.Code == 1 && !File.Exists(copyHeld) && third.Out.Contains("held.jsonl"), "a file another program holds shut is named and left for the next backup");
+            var fourth = Runs("backup");
+            Check(fourth.Code == 0 && SameFile(held, copyHeld), "and the next backup copies it");
+
+            string inside = Path.Combine(records, "copy-here");
+            var refused = Runs("backup --to \"" + inside + "\"");
+            Check(refused.Code == 2 && !Directory.Exists(inside), "a backup place inside what it copies is refused");
+
+            // a run's end: the bundle is packed, then backed up with everything else
+            string run = Path.Combine(records, "runs", "r1");
+            Directory.CreateDirectory(run);
+            File.WriteAllText(Path.Combine(run, "run.json"), "{\"id\":\"r1\",\"arm\":\"C1\",\"status\":\"finished\",\"campaign\":\"c1\"}");
+            var chained = Runs("bundle r1 --backup");
+            Check(File.Exists(Path.Combine(copy, "records", "runs", "r1", "bundle.zip")) && chained.Out.Contains("Backup into"),
+                  "bundle --backup packs the run, then backs it up with everything else");
+
+            // the bridge keeps the place in settings.txt (it writes the file back with only the keys it knows), and asks for the backup
+            string file = Path.Combine(Paths.Root, "settings.txt");
+            string before = File.Exists(file) ? File.ReadAllText(file) : null;
+            Settings.Backup = @"D:\BannerlordAgents-backup";
+            Settings.Save();
+            Settings.Backup = "";
+            Settings.Load();
+            bool keptPlace = ReadIf(file).Contains(@"backup = D:\BannerlordAgents-backup") && Settings.Backup == @"D:\BannerlordAgents-backup";
+            string withPlace = RunFiles.BundleArguments("r1");
+            Settings.Backup = "";
+            Check(keptPlace && withPlace == "bundle r1 --backup" && RunFiles.BundleArguments("r1") == "bundle r1",
+                  "the bridge reads and keeps the backup's place in settings.txt, and at a run's end asks for the backup after the bundle (only when a place is set)");
+            if (before != null) File.WriteAllText(file, before); else File.Delete(file);
         }
 
         /// <summary>Runs.exe bundle on a made-up run: the files by the run's tag, the call folders, the manifest, and the check's findings.</summary>

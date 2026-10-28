@@ -63,9 +63,12 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public string Author = "ours";
         public int Version = 1, WrittenAt = -1;
-        /// <summary>An agent's tool used once, for its answer's orders, and not kept (0.13); its fingerprint as written (OwnLibrary).</summary>
-        public bool OneOff;
-        public string Hash;
+        /// <summary>
+        /// An agent's tool used once, for its answer's orders, and not kept (0.13); its fingerprint as written. Only OwnLibrary sets
+        /// them, which the war room's copy of this file does not have, so they start set to their defaults.
+        /// </summary>
+        public bool OneOff = false;
+        public string Hash = null;
         /// <summary>"ours", "v2" for the second version of an agent's own tool, or "one-off".</summary>
         public string VersionText => Author == "ours" ? "ours" : OneOff ? "one-off" : "v" + Version;
         /// <summary>The order words that are not tools (Orders.Plain, the lieutenant's party_ai): no tool of an agent's may take them.</summary>

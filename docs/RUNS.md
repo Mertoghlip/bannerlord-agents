@@ -42,11 +42,13 @@ Loading TEST START readies a run. It begins on the first in-game hour the clock 
 
 ## Watching and reporting (`Runs.exe`)
 
-`src\BannerlordAgents.Runs\bin\Release\net8.0\Runs.exe`, read-only:
+`src\BannerlordAgents.Runs\bin\Release\net8.0\Runs.exe` (also staged in the module's `runs\` folder), which only reads the runs and writes nothing but its own reports, bundles and the backup:
 - `status [run]`: where the open run stands: each side now and since day 0, the agents' calls so far, the marks.
 - `watch [run]`: what is new since the last look (the cursor is `watch.json` in the run's folder): the new day lines' changes, holdings, battles between lords, sieges, lords taken and killed, your notes, the agents' orders and pokes, your decisions, the lieutenant, and each agent's calls and tokens. First, under NEEDS A LOOK (exit code 1): new marks, serious alarms, errors, freezes outside loading, fog leaks, a sight check under 97%, failed calls, usage limits, the game or a war room not running, the bridge silent for 10 minutes. The coding session runs it every few minutes during a run.
 - `report [run]`: the run in full, `report.md` and `report.json` in its folder: where each side ended, the run's tally, the game's war tally over the run, the holdings that changed hands, the biggest battles, the lords killed, the agents' calls, times and tokens (and by in-game day in the JSON), their orders by status and kind with the commonest refusals, the pokes and their report sizes, your decisions, the lieutenant, the run's health, your notes.
 - `compare`: every run side by side, `runs\compare.md`.
+- `bundle [run] [--backup]` (0.13): the run's whole record packed for the dataset builder, `bundle.zip` in its folder ([LOGGING.md](LOGGING.md#the-training-record-since-013)); with `--backup` (as the bridge asks at a run's end, since 0.13.1), the backup follows.
+- `backup [--to <folder>]` (0.13.1): a copy of the records folder and every agent's folder in the backup's place (`backup` in `settings.txt`; [LOGGING.md](LOGGING.md#the-backup-since-0131)). It never deletes anything there.
 
 ## Run C1 (Oct 23) and what it changed (0.11.3)
 

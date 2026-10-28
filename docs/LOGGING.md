@@ -209,6 +209,14 @@ What each side saw, what it did and what came of it, linked by ids and tagged by
 - **The war room** ([WARROOM.md](WARROOM.md#logs-localappdatabannerlordagentslogswarroom)): `calls.jsonl` with run, arm, realm, the instructions' and the library's fingerprints, the thinking's length and the answer's counts; `thinking.txt` in each call's folder; every `check_tool` in `routes.jsonl`.
 - **The run's bundle** (`Runs.exe bundle [run]`, and by itself when a run reaches day 60): everything of a run in `runs\<run>\bundle.zip` with `bundle-manifest.json` (each file's lines, bytes, fingerprint and span) and a check of what is missing (an answer's call folder, a poke the index names, a move's report). Lines are chosen by the run's tag; for older runs by the run's loads and hours, or its wall-clock windows. `Runs.exe report` has "The training record".
 
+### The backup (since 0.13.1)
+
+Mert, Oct 28: "I would keep the data local for now, at the D: drive." Everything the project records is copied to the laptop's second drive (its own disk), at `D:\BannerlordAgents-backup`, the place `backup` in `settings.txt` names (empty: no backup).
+- **When:** at a run's end, right after its bundle (the bridge starts `Runs.exe bundle <run> --backup`; its words go to the run's `bundle.log`), and by hand with `Runs.exe backup [--to <folder>]`.
+- **What:** `records\` is the records folder (`%LOCALAPPDATA%\BannerlordAgents`: every campaign's records, the hourly pictures, the logs, the runs and their bundles, the settings); `agents\<folder>\` is each agent's folder named in `agents` (instructions, memory, channel, library of tools). The game's saves are not in it: they live in Documents, which OneDrive keeps.
+- **How:** it never deletes: a file gone from its place stays in the copy (the dashboard keeps the hourly pictures of only the newest `keep_loads` loads; the copy keeps all). A file that only grew (the logs, the pokes) gets its new bytes added; one that shrank or was rewritten is copied whole, and the copy it replaces goes to `earlier\<time>\`. A file another program holds shut is named and left for the next backup. It works at background priority, so the game keeps the disk, and it refuses a place inside what it copies, or a drive without room for it and 1 GB more.
+- **What it says:** a line per backup in `backup.log` beside the copy (files, new, grown, rewritten, unchanged, what it wrote, what was in use or failed); `README.txt` there says what each folder is.
+
 ## Where the files are
 
 `%LOCALAPPDATA%\BannerlordAgents\logs\`:

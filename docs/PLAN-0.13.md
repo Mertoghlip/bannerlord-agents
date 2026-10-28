@@ -2,8 +2,8 @@
 
 Written Oct 28 and reviewed by Mert the same night (his decisions below). This is the working plan and the authority for everything in it; [PLAN.md](PLAN.md) points here. Each part has a plain description first and **build notes** after, with the names in the code, for whoever builds it.
 
-**Where it stands (Oct 28, version 0.13.0):** steps 1 to 7 of Part F are built, tested and installed (the record; the language; the agents' own tools with "check a tool"; diplomacy; the allied channel and the lieutenant; the instructions' skeleton; everything together), each in [CHANGELOG.md](CHANGELOG.md). What is built is described in [TOOLS.md](TOOLS.md) (the language and the agents' own tools), [DIPLOMACY.md](DIPLOMACY.md), [LOGGING.md](LOGGING.md#the-training-record-since-013), [WARROOM.md](WARROOM.md) and [LIEUTENANT.md](LIEUTENANT.md). Next: step 8 with Mert, then the shake-down (step 9). **On the docket:**
-- with Mert (step 8): the instructions' final wording and the doctrine's diplomacy principles (decision 8); the backup's place (decision 9); whether a realm allied to his gets an agent of its own (B5); letters to realms that are not allies;
+**Where it stands (Oct 28, version 0.13.1):** steps 1 to 7 of Part F are built, tested and installed (the record; the language; the agents' own tools with "check a tool"; diplomacy; the allied channel and the lieutenant; the instructions' skeleton; everything together), each in [CHANGELOG.md](CHANGELOG.md). What is built is described in [TOOLS.md](TOOLS.md) (the language and the agents' own tools), [DIPLOMACY.md](DIPLOMACY.md), [LOGGING.md](LOGGING.md#the-training-record-since-013), [WARROOM.md](WARROOM.md) and [LIEUTENANT.md](LIEUTENANT.md). Since then, **0.13.1**: the backup, on the laptop's D: drive (decision 9, decided after the build; C6). Next: step 8 with Mert, then the shake-down (step 9). **On the docket:**
+- with Mert (step 8): the instructions' final wording and the doctrine's diplomacy principles (decision 8; the wording was given to him whole in the chat on Oct 28, with points to weigh: the opening's "war council of a realm ruled by its warlord" against Diplomacy's "You rule your realm"; the three diplomacy maxims of DOCTRINE.md to write as principles; an unanswered offer accepted after 12 hours; whether the two example tools besides his circuit steer the agents; the 16,000 characters the new sections add to every call); whether a realm allied to his gets an agent of its own (B5); letters to realms that are not allies;
 - only testable in the game (the shake-down): votes held and settled in an agent's realm, offers and their answers, the ruler's choice, mercenaries hired and released, the War of the Ring's answers asked of the pack, the try through the bridge, the lieutenant's tools, diplomacy and letters;
 - not built: a setting that is a place or a list (A2; settings stay numbers, and `places` and `lords` carry the lists); the checker's "set before read" (A4: a remembered value read before it is set is none, and the try shows it);
 - as built, to weigh in the shake-down: a vote or offer held for an agent is not in the save (a reload drops it); an offer with no answer in 12 hours is accepted, as the game does between the realms it runs; an agent that does not vote leaves its clan out of the count.
@@ -23,7 +23,7 @@ Written Oct 28 and reviewed by Mert the same night (his decisions below). This i
 6. "Good, but in the spirit I described in 4." → Letters serve allies' coordination; letters to Mert's realm come through his lieutenant, not a window of their own (B5).
 7. "Good." → Tools are written in answers and councils both, councils with the longer time.
 8. "Good, but build all of the skeleton first and once all the building is done, I'll review the wording and we'll write the final prompt." → The instructions get working skeleton sections during the build; their final wording, the doctrine's diplomacy principles included, is written with Mert after all the building is done and before any run (Part D).
-9. "Keep on the docket for now, build everything first and then propose the backup location you recommend." → After the build, a proposal for the backup's place (C6).
+9. "Keep on the docket for now, build everything first and then propose the backup location you recommend." → After the build, a proposal for the backup's place (C6). Proposed after the build (the laptop's second drive, and a private Hugging Face dataset off the laptop); Mert, Oct 28: "I would keep the data local for now, at the D: drive." Built in 0.13.1.
 10. "Build everything out now. We'll do a long run." → Every diplomatic act the game has, mercenary clans and expelling clans included (B2).
 11. "We'll compare everything however we please to spot the added value of new capabilities." → No rule on which runs compare with which.
 
@@ -300,7 +300,7 @@ At a run's end (and with `Runs.exe bundle <run>` for any run, older ones include
 
 - Per run, raw: about 0.1 GB of calls (1,081 calls in C1 at ~100 KB), 0.3 GB of pokes with views, 0.07 GB of hourly reports in A and B; text packs about five to eight times.
 - With 48 GB free, a pack of about 0.1 GB a run is fine, but the raw files stay too. Nothing is thinned or deleted without Mert's word.
-- **On the docket** (decision 9): once everything is built, a proposal for the backup's place (an external drive, a private Hugging Face repository, or another), with the sizes measured on the shake-down run.
+- **The backup** (decision 9; 0.13.1): Mert chose the laptop's second drive ("I would keep the data local for now, at the D: drive"), its own disk, with 789 GB free on Oct 28. Everything is copied to `D:\BannerlordAgents-backup` at every run's end, after the bundle, and by hand (`Runs.exe backup`): the records folder (7.2 GB on Oct 28) and every agent's folder (80 MB). It never deletes, adds only the new bytes of a file that grew, and keeps the old copy of a file that shrank or was rewritten ([LOGGING.md](LOGGING.md#the-backup-since-0131)). The sizes per run are measured on the shake-down, as planned; a copy off the laptop (the private Hugging Face dataset proposed) can follow later.
 
 ### C7. The dataset builder (November, outline only)
 
@@ -356,7 +356,7 @@ Each step ends with every test green, a commit and push with its change-log entr
 5. **The allied channel and the lieutenant** (B5): letters, joint plans, ALLIES AND JOINT PLANS, the lieutenant's tools under Approve, its diplomacy and letters on Mert's word.
 6. **The instructions' skeleton** (Part D): working sections for every new part, enough for the tests and a real toolcheck call.
 7. **Everything together:** all tests, the docs (TOOLS.md, WARROOM.md, LOGGING.md, LIEUTENANT.md, a new DIPLOMACY.md, MEMORY.md where needed, PLAN.md's checklist), version 0.13.0, install, push.
-8. **With Mert:** the instructions' final wording and the doctrine's diplomacy principles (decision 8); the backup's place proposed (decision 9); whether a realm allied to his gets an agent of its own (B5).
+8. **With Mert:** the instructions' final wording and the doctrine's diplomacy principles (decision 8); the backup's place proposed (decision 9; done: D:, built in 0.13.1); whether a realm allied to his gets an agent of its own (B5).
 9. **The shake-down** in the game (Part G), fixes, then the long run.
 
 This is the biggest build since 0.4: several long sessions. Each step stands on its own, so Mert can stop after any step.
@@ -370,7 +370,7 @@ This is the biggest build since 0.4: several long sessions. Each step stands on 
 ## Part H: risks
 
 - **Usage limits** mid-run (as on Oct 25): the runs need a pause-and-resume that loses nothing (it does today: pausing the game pauses the run).
-- **Disk** (48 GB free): the bundles, and the backup's place proposed after the build (C6).
+- **Disk** (45 GB free on C: on Oct 28): the bundles; the backup is on D: since 0.13.1 (C6).
 - **Bad tools** wasting lords: the checker, the try, the limits, the safety rule, the record shown to the agent.
 - **Diplomacy against the pack:** peace with the orcs and Dol Guldur cannot hold while the War of the Ring rages (B1); the agents are told, so they do not spend influence on it.
 - **The game's own AI in agent realms** still proposes and votes for its other clans; the agent rules with its ruler's say, not alone.
@@ -383,7 +383,6 @@ This is the biggest build since 0.4: several long sessions. Each step stands on 
 
 **Still open, for after the build** (Part F, step 8):
 - the instructions' final wording and the doctrine's diplomacy principles, written together (decision 8);
-- the backup's place, proposed with the sizes measured on the shake-down (decision 9);
 - whether a realm allied to Mert's gets an agent of its own, and which, so he can speak to an agent ally through his lieutenant (B5);
 - letters to realms that are not allies (B5 keeps them to allies and Mert's lieutenant for now).
 

@@ -15,6 +15,8 @@ namespace BannerlordAgents.Runs
     ///   compare         every run side by side: compare.md in the runs folder
     ///   bundle [run]    everything of the run packed for the dataset builder: bundle.zip in its folder (0.13; exit code 1 when something is missing)
     ///   marks [campaign] your old records made while an agent commanded your kingdom, marked "not yours" (0.13)
+    ///   backup [--to folder] a copy of the records and every agent's folder on another drive (0.13.1): the place is "backup" in
+    ///                   settings.txt; bundle (run) --backup packs the run, then makes it (the bridge asks for both at a run's end)
     /// A run is its folder's name (or "latest"); none given: the open one, else the newest.
     /// </summary>
     internal static class Program
@@ -25,7 +27,14 @@ namespace BannerlordAgents.Runs
         {
             Console.OutputEncoding = Encoding.UTF8;
             string cmd = args.Length > 0 ? args[0].ToLowerInvariant() : "status";
-            string id = args.Length > 1 ? args[1] : null;
+            string id = null, to = null;
+            var flags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 1; i < args.Length; i++)
+            {
+                if (string.Equals(args[i], "--to", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) to = args[++i];
+                else if (args[i].StartsWith("--", StringComparison.Ordinal)) flags.Add(args[i]);
+                else id ??= args[i];
+            }
             try
             {
                 switch (cmd)
@@ -34,10 +43,16 @@ namespace BannerlordAgents.Runs
                     case "watch": return Watch.Run(id);
                     case "report": return Report.Run(id);
                     case "compare": return Report.Compare();
-                    case "bundle": return Bundle.Run(id);
+                    case "bundle":
+                    {
+                        int code = Bundle.Run(id);
+                        if (flags.Contains("--backup")) Backup.Run(null);
+                        return code;
+                    }
                     case "marks": return Marks.Run(id);
+                    case "backup": return Backup.Run(to);
                     default:
-                        Console.WriteLine("Runs.exe status|watch|report|bundle [run] | compare | marks [campaign]");
+                        Console.WriteLine("Runs.exe status|watch|report|bundle [run] [--backup] | compare | marks [campaign] | backup [--to folder]");
                         return 2;
                 }
             }
