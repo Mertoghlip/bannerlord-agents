@@ -135,7 +135,8 @@ namespace SmokeTest
         /// <summary>
         /// Runs.exe backup (0.13.1) on a made-up records folder and agent folder: the first copy whole, nothing written when nothing
         /// changed, a grown file's new bytes added, a shrunk one copied whole with its old copy kept, nothing deleted, a file held shut
-        /// left for the next backup, a place inside what it copies refused, the backup after a run's bundle, and the bridge's setting.
+        /// left for the next backup, a place inside what it copies refused (through a link too, 0.13.2), the backup after a run's
+        /// bundle, and the bridge's setting.
         /// </summary>
         private static void BackupTests(string root)
         {
@@ -153,10 +154,10 @@ namespace SmokeTest
             File.WriteAllText(Path.Combine(agent, "warroom", "library", "index.json"), "{\"tools\":[]}");
             string copyPokes = Path.Combine(copy, "records", "data", "c1", "pokes_orcs.jsonl"), copyNotes = Path.Combine(copy, "agents", "orc-council", "notes.md");
 
-            (int Code, string Out) Runs(string args)
+            (int Code, string Out) Runs(string args, string at = null)
             {
                 var psi = new ProcessStartInfo(exe, args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
-                psi.EnvironmentVariables["BANNERLORD_AGENTS_ROOT"] = records;
+                psi.EnvironmentVariables["BANNERLORD_AGENTS_ROOT"] = at ?? records;
                 using (Process p = Process.Start(psi))
                 {
                     string o = p.StandardOutput.ReadToEnd();
@@ -196,6 +197,18 @@ namespace SmokeTest
             string inside = Path.Combine(records, "copy-here");
             var refused = Runs("backup --to \"" + inside + "\"");
             Check(refused.Code == 2 && !Directory.Exists(inside), "a backup place inside what it copies is refused");
+
+            // the records folder can be a link to where it really is (Mert's has been one to D: since Oct 28): a place in there is inside it too
+            string link = Path.Combine(root, "backup-test", "records-link"), deep = Path.Combine(records, "copy-here-too");
+            var mklink = new ProcessStartInfo("cmd.exe", "/c mklink /J \"" + link + "\" \"" + records + "\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+            using (Process p = Process.Start(mklink)) { p.StandardOutput.ReadToEnd(); p.WaitForExit(10000); }
+            bool linked = Directory.Exists(link) && (File.GetAttributes(link) & FileAttributes.ReparsePoint) != 0;
+            try
+            {
+                var through = linked ? Runs("backup --to \"" + deep + "\"", link) : (Code: -1, Out: "");
+                Check(linked && through.Code == 2 && !Directory.Exists(deep), "and so is a place inside where a linked records folder really is");
+            }
+            finally { if (linked) try { Directory.Delete(link); } catch (Exception) { /* the next run starts by wiping its folder */ } }
 
             // a run's end: the bundle is packed, then backed up with everything else
             string run = Path.Combine(records, "runs", "r1");

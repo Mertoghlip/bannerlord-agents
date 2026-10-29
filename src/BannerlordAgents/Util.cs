@@ -111,33 +111,39 @@ namespace BannerlordAgents
     /// The worker's open files. Lines are buffered and flushed whenever the worker has nothing else queued. Files
     /// are shared for reading, so they can be opened while the game writes to them. A file that is rewritten whole
     /// (the agent's poke.txt and report.txt, the reports) is written beside the old one and swapped in, so a reader
-    /// never sees half a file. Failures are counted and reported, never dropped silently.
+    /// never sees half a file. Failures are counted and reported, never dropped silently. One lock guards the open files
+    /// (0.13.2): in the game only the worker writes, but the smoke test writes and flushes from its own thread while the worker
+    /// flushes too, and on Oct 28 two runs in three ended with the worker's flush meeting a file the test had just opened.
     /// </summary>
     internal static class Files
     {
         private static readonly Dictionary<string, StreamWriter> Open = new Dictionary<string, StreamWriter>(StringComparer.OrdinalIgnoreCase);
+        private static readonly object Gate = new object();
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
 
-        public static int OpenCount => Open.Count;
+        public static int OpenCount { get { lock (Gate) return Open.Count; } }
 
         public static void Append(string path, string line)
         {
-            try
+            lock (Gate)
             {
-                if (!Open.TryGetValue(path, out StreamWriter w))
+                try
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    w = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete), Utf8);
-                    Open[path] = w;
+                    if (!Open.TryGetValue(path, out StreamWriter w))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(path));
+                        w = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete), Utf8);
+                        Open[path] = w;
+                    }
+                    w.WriteLine(line);
                 }
-                w.WriteLine(line);
+                catch (Exception e) { Diag.Error("writing " + Path.GetFileName(path), e); }
             }
-            catch (Exception e) { Diag.Error("writing " + Path.GetFileName(path), e); }
         }
 
         public static bool IsNew(string path)
         {
-            try { return !Open.ContainsKey(path) && (!File.Exists(path) || new FileInfo(path).Length == 0); }
+            try { lock (Gate) return !Open.ContainsKey(path) && (!File.Exists(path) || new FileInfo(path).Length == 0); }
             catch (Exception e) { Diag.Swallowed("checking " + Path.GetFileName(path), e); return false; }
         }
 
@@ -184,48 +190,58 @@ namespace BannerlordAgents
         public static bool WriteIfChanged(string path, string text)
         {
             text = text ?? "";
-            if (LastText.TryGetValue(path, out string last) && string.Equals(last, text, StringComparison.Ordinal) && File.Exists(path)) return false;
-            try
+            lock (Gate)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllText(path, text, Utf8);
-                LastText[path] = text;
-                return true;
-            }
-            catch (Exception e)
-            {
-                LastText.Remove(path);
-                Diag.Error("writing " + Path.GetFileName(path), e);
-                return false;
+                if (LastText.TryGetValue(path, out string last) && string.Equals(last, text, StringComparison.Ordinal) && File.Exists(path)) return false;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
+                    File.WriteAllText(path, text, Utf8);
+                    LastText[path] = text;
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    LastText.Remove(path);
+                    Diag.Error("writing " + Path.GetFileName(path), e);
+                    return false;
+                }
             }
         }
 
         /// <summary>A file WriteIfChanged wrote was removed: it is written whole next time.</summary>
-        public static void Forget(string path) => LastText.Remove(path);
+        public static void Forget(string path) { lock (Gate) LastText.Remove(path); }
 
         public static void FlushAll()
         {
-            foreach (KeyValuePair<string, StreamWriter> kv in Open)
-            {
-                try { kv.Value.Flush(); } catch (Exception e) { Diag.Swallowed("flushing " + Path.GetFileName(kv.Key), e); }
-            }
+            lock (Gate)
+                foreach (KeyValuePair<string, StreamWriter> kv in new List<KeyValuePair<string, StreamWriter>>(Open))
+                {
+                    try { kv.Value.Flush(); } catch (Exception e) { Diag.Swallowed("flushing " + Path.GetFileName(kv.Key), e); }
+                }
         }
 
         /// <summary>Closes one file kept open for appending, so it can be rewritten whole.</summary>
         public static void Close(string path)
         {
-            if (!Open.TryGetValue(path, out StreamWriter w)) return;
-            try { w.Dispose(); } catch (Exception e) { Diag.Swallowed("closing " + Path.GetFileName(path), e); }
-            Open.Remove(path);
+            lock (Gate)
+            {
+                if (!Open.TryGetValue(path, out StreamWriter w)) return;
+                try { w.Dispose(); } catch (Exception e) { Diag.Swallowed("closing " + Path.GetFileName(path), e); }
+                Open.Remove(path);
+            }
         }
 
         public static void CloseAll()
         {
-            foreach (KeyValuePair<string, StreamWriter> kv in Open)
+            lock (Gate)
             {
-                try { kv.Value.Dispose(); } catch (Exception e) { Diag.Swallowed("closing " + Path.GetFileName(kv.Key), e); }
+                foreach (KeyValuePair<string, StreamWriter> kv in new List<KeyValuePair<string, StreamWriter>>(Open))
+                {
+                    try { kv.Value.Dispose(); } catch (Exception e) { Diag.Swallowed("closing " + Path.GetFileName(kv.Key), e); }
+                }
+                Open.Clear();
             }
-            Open.Clear();
         }
     }
 }

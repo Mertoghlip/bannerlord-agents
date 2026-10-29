@@ -184,6 +184,7 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [x] Tool writing: the checker, each tool's record, repair and retire (0.13, Oct 28: [PLAN-0.13.md](PLAN-0.13.md) Part A; the agents write, check, keep, change and retire tools of their own)
 - [x] Diplomacy and the allied channel (0.13, Oct 28: [DIPLOMACY.md](DIPLOMACY.md)); the training record (Part C)
 - [x] The backup: on the laptop's D: drive, at every run's end and by hand (0.13.1, Oct 28: [LOGGING.md](LOGGING.md#the-backup-since-0131))
+- [x] The records folder moved to the D: drive, still found at the usual place through a link (0.13.2, Oct 28: [LOGGING.md](LOGGING.md#where-the-files-are))
 - [ ] 0.13 with Mert: the instructions' final wording and the doctrine's diplomacy principles; an agent for an ally of your realm (PLAN-0.13 step 8); then the shake-down (step 9)
 - [ ] Every-move runs, and overnight data collection
 - [ ] Your playbook: Opus 5.5 reads your recordings and writes down how you play

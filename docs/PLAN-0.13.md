@@ -2,7 +2,7 @@
 
 Written Oct 28 and reviewed by Mert the same night (his decisions below). This is the working plan and the authority for everything in it; [PLAN.md](PLAN.md) points here. Each part has a plain description first and **build notes** after, with the names in the code, for whoever builds it.
 
-**Where it stands (Oct 28, version 0.13.1):** steps 1 to 7 of Part F are built, tested and installed (the record; the language; the agents' own tools with "check a tool"; diplomacy; the allied channel and the lieutenant; the instructions' skeleton; everything together), each in [CHANGELOG.md](CHANGELOG.md). What is built is described in [TOOLS.md](TOOLS.md) (the language and the agents' own tools), [DIPLOMACY.md](DIPLOMACY.md), [LOGGING.md](LOGGING.md#the-training-record-since-013), [WARROOM.md](WARROOM.md) and [LIEUTENANT.md](LIEUTENANT.md). Since then, **0.13.1**: the backup, on the laptop's D: drive (decision 9, decided after the build; C6). Next: step 8 with Mert, then the shake-down (step 9). **On the docket:**
+**Where it stands (Oct 28, version 0.13.2):** steps 1 to 7 of Part F are built, tested and installed (the record; the language; the agents' own tools with "check a tool"; diplomacy; the allied channel and the lieutenant; the instructions' skeleton; everything together), each in [CHANGELOG.md](CHANGELOG.md). What is built is described in [TOOLS.md](TOOLS.md) (the language and the agents' own tools), [DIPLOMACY.md](DIPLOMACY.md), [LOGGING.md](LOGGING.md#the-training-record-since-013), [WARROOM.md](WARROOM.md) and [LIEUTENANT.md](LIEUTENANT.md). Since then, **0.13.1**: the backup, on the laptop's D: drive (decision 9, decided after the build; C6); **0.13.2**: the records themselves moved to D: (Mert: "Yes, move the records themselves to D: as well."), the backup's check that its place is not inside what it copies now follows links, and one lock guards the module's open files (the smoke test's thread had met the worker's flush). Next: step 8 with Mert, then the shake-down (step 9). **On the docket:**
 - with Mert (step 8): the instructions' final wording and the doctrine's diplomacy principles (decision 8; the wording was given to him whole in the chat on Oct 28, with points to weigh: the opening's "war council of a realm ruled by its warlord" against Diplomacy's "You rule your realm"; the three diplomacy maxims of DOCTRINE.md to write as principles; an unanswered offer accepted after 12 hours; whether the two example tools besides his circuit steer the agents; the 16,000 characters the new sections add to every call); whether a realm allied to his gets an agent of its own (B5); letters to realms that are not allies;
 - only testable in the game (the shake-down): votes held and settled in an agent's realm, offers and their answers, the ruler's choice, mercenaries hired and released, the War of the Ring's answers asked of the pack, the try through the bridge, the lieutenant's tools, diplomacy and letters;
 - not built: a setting that is a place or a list (A2; settings stay numbers, and `places` and `lords` carry the lists); the checker's "set before read" (A4: a remembered value read before it is set is none, and the try shows it);
@@ -300,7 +300,7 @@ At a run's end (and with `Runs.exe bundle <run>` for any run, older ones include
 
 - Per run, raw: about 0.1 GB of calls (1,081 calls in C1 at ~100 KB), 0.3 GB of pokes with views, 0.07 GB of hourly reports in A and B; text packs about five to eight times.
 - With 48 GB free, a pack of about 0.1 GB a run is fine, but the raw files stay too. Nothing is thinned or deleted without Mert's word.
-- **The backup** (decision 9; 0.13.1): Mert chose the laptop's second drive ("I would keep the data local for now, at the D: drive"), its own disk, with 789 GB free on Oct 28. Everything is copied to `D:\BannerlordAgents-backup` at every run's end, after the bundle, and by hand (`Runs.exe backup`): the records folder (7.2 GB on Oct 28) and every agent's folder (80 MB). It never deletes, adds only the new bytes of a file that grew, and keeps the old copy of a file that shrank or was rewritten ([LOGGING.md](LOGGING.md#the-backup-since-0131)). The sizes per run are measured on the shake-down, as planned; a copy off the laptop (the private Hugging Face dataset proposed) can follow later.
+- **The backup** (decision 9; 0.13.1): Mert chose the laptop's second drive ("I would keep the data local for now, at the D: drive"), its own disk, with 789 GB free on Oct 28. Everything is copied to `D:\BannerlordAgents-backup` at every run's end, after the bundle, and by hand (`Runs.exe backup`): the records folder (7.2 GB on Oct 28) and every agent's folder (80 MB). It never deletes, adds only the new bytes of a file that grew, and keeps the old copy of a file that shrank or was rewritten ([LOGGING.md](LOGGING.md#the-backup-since-0131)). The sizes per run are measured on the shake-down, as planned; a copy off the laptop (the private Hugging Face dataset proposed) can follow later. Since 0.13.2 the records themselves live on D: too (`D:\BannerlordAgents`, reached at the usual place through a link), so the backup guards against mistakes, not against that disk failing: a copy off it matters more now.
 
 ### C7. The dataset builder (November, outline only)
 
@@ -370,7 +370,7 @@ This is the biggest build since 0.4: several long sessions. Each step stands on 
 ## Part H: risks
 
 - **Usage limits** mid-run (as on Oct 25): the runs need a pause-and-resume that loses nothing (it does today: pausing the game pauses the run).
-- **Disk** (45 GB free on C: on Oct 28): the bundles; the backup is on D: since 0.13.1 (C6).
+- **Disk** (42 GB free on C: on Oct 28): the bundles; the backup is on D: since 0.13.1 (C6), the records since 0.13.2 (7.2 GB more free on C: once their old copy there is deleted).
 - **Bad tools** wasting lords: the checker, the try, the limits, the safety rule, the record shown to the agent.
 - **Diplomacy against the pack:** peace with the orcs and Dol Guldur cannot hold while the War of the Ring rages (B1); the agents are told, so they do not spend influence on it.
 - **The game's own AI in agent realms** still proposes and votes for its other clans; the agent rules with its ruler's say, not alone.
@@ -384,7 +384,9 @@ This is the biggest build since 0.4: several long sessions. Each step stands on 
 **Still open, for after the build** (Part F, step 8):
 - the instructions' final wording and the doctrine's diplomacy principles, written together (decision 8);
 - whether a realm allied to Mert's gets an agent of its own, and which, so he can speak to an agent ally through his lieutenant (B5);
-- letters to realms that are not allies (B5 keeps them to allies and Mert's lieutenant for now).
+- letters to realms that are not allies (B5 keeps them to allies and Mert's lieutenant for now);
+- the records' old copy on C: (`%LOCALAPPDATA%\BannerlordAgents-old-20261028`, 7.2 GB, as it was at the move), kept until Mert says it can go;
+- a copy off D:, now that the records and their backup share that disk (C6).
 
 ## What stays out
 

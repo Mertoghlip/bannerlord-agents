@@ -2154,6 +2154,17 @@ namespace SmokeTest
             bool w4 = Files.WriteIfChanged(lf, "b");
             Check(w1 && !w2 && w3 && w4 && File.ReadAllText(lf) == "b", "a look-up file is written only when its text changed, and again when it went missing");
 
+            // the open files with two threads at once (0.13.2: the worker's flush met a file this test had just opened, and the run ended)
+            string many = Path.Combine(root, "files-race");
+            Exception clash = null;
+            var opener = new Thread(() => { for (int i = 0; i < 400; i++) Files.Append(Path.Combine(many, "f" + i + ".txt"), "a line"); });
+            opener.Start();
+            try { while (opener.IsAlive) Files.FlushAll(); } catch (Exception e) { clash = e; }
+            opener.Join();
+            for (int i = 0; i < 400; i++) Files.Close(Path.Combine(many, "f" + i + ".txt"));
+            Check(clash == null && Directory.GetFiles(many).Length == 400 && File.ReadAllText(Path.Combine(many, "f399.txt")).StartsWith("a line"),
+                  "the open files take lines on one thread while another flushes them all" + (clash != null ? " (" + clash.GetType().Name + ")" : ""));
+
             // an hour saved for the speed test reads back whole
             string pf = Path.Combine(root, "perf-test");
             Snapshot Seated(double h, params PartyRow[] ps)

@@ -15,7 +15,7 @@ namespace BannerlordAgents.Runs
     /// It never deletes: a file gone from its place stays in the copy. A file that only grew gets its new bytes added; one that
     /// shrank or was rewritten is copied whole, and the copy it replaces is kept under earlier\(time)\. A file another program holds
     /// shut is named and left for the next backup. backup.log in the copy has a line for each backup. It works at background
-    /// priority, so the game keeps the disk.
+    /// priority, so the game keeps the disk. A place inside what it copies is refused, links followed (0.13.2).
     /// </summary>
     internal static class Backup
     {
@@ -160,8 +160,23 @@ namespace BannerlordAgents.Runs
 
         private static bool Inside(string path, string dir)
         {
-            string p = Path.GetFullPath(path).TrimEnd('\\', '/') + "\\", d = Path.GetFullPath(dir).TrimEnd('\\', '/') + "\\";
+            string p = Real(path).TrimEnd('\\', '/') + "\\", d = Real(dir).TrimEnd('\\', '/') + "\\";
             return p.StartsWith(d, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Where a path really is, each link on the way followed (0.13.2): the records folder can be a link to another drive
+        /// (Mert's is one to D:\BannerlordAgents since Oct 28), and a place inside where it really is must count as inside it.</summary>
+        private static string Real(string path)
+        {
+            string full = Path.GetFullPath(path), at = Path.GetPathRoot(full) ?? "";
+            foreach (string part in full.Substring(at.Length).Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                at = Path.Combine(at, part);
+                if (!Directory.Exists(at)) continue;   // not made yet: nothing further on can be a link
+                try { if (new DirectoryInfo(at).ResolveLinkTarget(true) is FileSystemInfo link) at = link.FullName; }
+                catch (Exception) { /* not readable: taken as written */ }
+            }
+            return at;
         }
 
         private static string SettingsFile => Path.Combine(Root, "settings.txt");
