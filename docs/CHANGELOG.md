@@ -1612,3 +1612,20 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the old copy stays on C: as it was at the move (28,674 files, 7.2 GB) until Mert says it can go; C: has 42 GB free with it, D: 770 GB;
   - `D:\BannerlordAgents-backup`: a backup through the link at 19:22 found 35,056 of the 35,062 files unchanged and added the new bytes of 6 logs that had grown.
 - **On the docket:** deleting the old copy on C: (Mert's word); a copy off D:, now that the records and their backup share that disk; step 8 as before.
+
+## Thursday, October 29
+
+### 15:08 · The agents' instructions: raiders struck while they are alone · commit (follow-up) (the template)
+- **Mert, Oct 29**, reading the instructions (step 8): "And for the general system prompt: telling the ai to attack raiders 'on their way home' is wrong in terms of the game mechanics. The smarter move is to attack them when they are isolated from their allies and we can either catch them before they get to safety or if they are already bogged down in a raid, which means they are stuck, isolated, and therefore in a vulnerable position."
+- A correction in the doctrine's own words, the same for every realm agent, with nothing of this war in it. The reasons, the game's rules behind it, the grounding and the caveats: docs/DOCTRINE.md, "Principle 7 corrected (Oct 29)".
+- **What changed** (`agent/warroom-system.template.md`, principle 7 only):
+  - now "Raiders: small forces, struck while they are alone": a raider is weakest cut off from its own (*On Skirmishing* 9: once the raiders, "rushing to get to the villages and gather as much booty as possible", are too far from their main body to fall back on it, the general falls on them "as they are scattered all around"); strike it while it is at work on a village, where the raid holds it and it does not flee as it would on the march; strike one on the march only if it can be reached before it reaches safety, its own walls, its army or its allies;
+  - kept from Oct 25: small groups of lords strong enough to crush them, never the armies; an army turns aside only for an enemy force worth more than its task; never chase a raider into the arms of its main army;
+  - gone: raiders "slow and careless" with plunder, the "return home unscathed" quotation (*On Skirmishing* 4, which is about a whole host coming home through the passes), and "Strike them on their road home, not in the strength of their first advance".
+- **The game's rules behind it** (the 1.4.8 source): a raid is a battle at the village, the militia first and then the looting until the village's health runs out (`RaidEventComponent`); a party in it makes no quick moves (`MobilePartyAi.TickInternal`), so it makes no move to flee an attacker; its leader still decides every hour and can end the raid for a better aim (`AiPartyThinkBehavior`); on the march a lord flees a stronger party it can outpace.
+- **Checks:** the smoke test passed (407 checks, among them the instructions' example tools and the circuit read from the template). No code changed.
+- **Outside the repository:**
+  - each realm agent's `warroom-system.md` (orc, Dol Guldur and kingdom war councils), edited in place at 15:08: the one paragraph replaced. Each still matches the template word for word apart from its own name and opening line (compared line by line: the orcs' differs nowhere, the other two in lines 1 and 3). Fingerprints (sha256), before → after: orcs `be4df7e7…` → `e16d43b6…`, Dol Guldur `b0d45ad1…` → `0a4a33b1…`, kingdom `ce056fba…` → `dd98fbd5…`;
+  - backups are `warroom-system.md.bak-20261029-before-raiders-alone`;
+  - the game was closed and the war rooms kept running; each call reads the instructions afresh, so the new text is in force from their next answer, with no restart. The lieutenant's instructions have no doctrine and are unchanged.
+- **For comparisons:** every run so far was played with the old principle 7; the shake-down and the runs after it are on the new one. A run's setup records each agent's instructions' fingerprint, so it shows.
