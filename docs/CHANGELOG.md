@@ -1615,7 +1615,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, October 29
 
-### 15:08 · The agents' instructions: raiders struck while they are alone · commit (follow-up) (the template)
+### 15:08 · The agents' instructions: raiders struck while they are alone · commit 4fc6b84 (the template)
 - **Mert, Oct 29**, reading the instructions (step 8): "And for the general system prompt: telling the ai to attack raiders 'on their way home' is wrong in terms of the game mechanics. The smarter move is to attack them when they are isolated from their allies and we can either catch them before they get to safety or if they are already bogged down in a raid, which means they are stuck, isolated, and therefore in a vulnerable position."
 - A correction in the doctrine's own words, the same for every realm agent, with nothing of this war in it. The reasons, the game's rules behind it, the grounding and the caveats: docs/DOCTRINE.md, "Principle 7 corrected (Oct 29)".
 - **What changed** (`agent/warroom-system.template.md`, principle 7 only):
