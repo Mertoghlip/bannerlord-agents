@@ -1630,7 +1630,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the game was closed and the war rooms kept running; each call reads the instructions afresh, so the new text is in force from their next answer, with no restart. The lieutenant's instructions have no doctrine and are unchanged.
 - **For comparisons:** every run so far was played with the old principle 7; the shake-down and the runs after it are on the new one. A run's setup records each agent's instructions' fingerprint, so it shows.
 
-### 15:44 · Version 0.13.3: recruiting at towns and castles, in the instructions and the circuit example; installed · commit (follow-up)
+### 15:44 · Version 0.13.3: recruiting at towns and castles, in the instructions and the circuit example; installed · commit 7727645
 - **Mert, Oct 29**, on the instructions given whole in the chat: "I like the instruction set, but would want a revision to the recruitment loop example. The game allows recruitment at towns and castles, and towns actually have the most amount of notables to recruit from so are recruitment centers. Make sure this is known, and that the recruitment circuit state machine also includes recruitment at a town and at a castle so the example doesn't confuse the agent."
 - **The game's rules, read for it:**
   - the base game gives notables to towns (2 merchants, 2 gang leaders, 1 artisan) and villages (1 headman, 2 rural notables) only (`DefaultNotableSpawnModel`, `NotablesCampaignBehavior`);
