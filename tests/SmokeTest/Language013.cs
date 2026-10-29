@@ -11,13 +11,15 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// Mert's circuit order (docs/PLAN-0.13.md A3), written in the language: recruits at each of its places once a day, sells loot in a
-        /// town when it is worth it, and between rounds patrols at home, striking small bands. The places each take their kind first.
+        /// Mert's circuit order (docs/PLAN-0.13.md A3), written in the language: once a day it recruits at the realm's nearest town, at each
+        /// of its places and at its home castle (Mert, Oct 29: towns and castles both give recruits, towns the most), goes to the town at once
+        /// when its loot is worth selling (sold as it rides in), and between rounds patrols at home, striking small bands. The places each
+        /// take their kind first.
         /// </summary>
         internal const string CircuitJson = @"{ ""name"": ""circuit"",
-  ""about"": ""recruits at each of its places once a day, sells loot in a town when worth it, and between rounds rests at home or patrols there against small bands"",
-  ""takes"": { ""places"": ""friendly_holding: the towns, castles and villages to recruit at, each once a day"", ""at"": ""own_fort: home, where it rests or patrols between rounds"" },
-  ""settings"": { ""sell_above"": [3000, 0, 100000, ""sell loot once it is worth this much""],
+  ""about"": ""recruits once a day at the realm's nearest town, at each of its places and at its home castle, sells its loot in the town, and between rounds rests at home or patrols there against small bands"",
+  ""takes"": { ""places"": ""friendly_holding: other towns, castles and villages to recruit at, each once a day"", ""at"": ""own_fort: home, the castle where it recruits each round and rests or patrols between rounds"" },
+  ""settings"": { ""sell_above"": [3000, 0, 100000, ""go to the town at once when its loot is worth this much""],
                 ""patrol"": [1, 0, 1, ""1: patrol around home between rounds, striking small bands; 0: rest inside""],
                 ""strike_below"": [0.5, 0, 2, ""strike a band at most this strong against the lord""],
                 ""radius"": [15, 3, 40, ""the patrol's reach around home""] },
@@ -25,19 +27,25 @@ namespace SmokeTest
   ""start"": ""next"",
   ""states"": {
     ""next"": { ""about"": ""choosing the next stop"",
-      ""when"": [ { ""if"": ""loot_value >= sell_above and nearest_town_of_realm() != none"", ""go"": ""sell"" },
+      ""when"": [ { ""if"": ""loot_value >= sell_above and nearest_town_of_realm() != none and not inside(nearest_town_of_realm())"", ""go"": ""town"", ""set"": { ""stop"": ""nearest_town_of_realm()"" } },
+                { ""if"": ""next_due([nearest_town_of_realm()], visited, 24) != none"", ""go"": ""town"", ""set"": { ""stop"": ""nearest_town_of_realm()"" } },
                 { ""if"": ""next_due(places, visited, 24) != none"", ""go"": ""recruit"", ""set"": { ""stop"": ""next_due(places, visited, 24)"" } },
+                { ""if"": ""next_due([at], visited, 24) != none"", ""go"": ""home"" },
                 { ""if"": ""true"", ""go"": ""between"" } ] },
+    ""town"": { ""about"": ""recruiting at {stop}, the realm's nearest town, where its loot is sold as it rides in"", ""do"": ""recruit at stop"",
+      ""when"": [ { ""if"": ""arrived and hours_in_state >= 1"", ""go"": ""next"", ""set"": { ""visited[stop]"": ""now"" } },
+                { ""if"": ""not ours(stop) or besieged(stop)"", ""go"": ""next"" } ] },
     ""recruit"": { ""about"": ""recruiting at {stop}"", ""do"": ""recruit at stop"",
       ""when"": [ { ""if"": ""arrived and hours_in_state >= 1"", ""go"": ""next"", ""set"": { ""visited[stop]"": ""now"" } },
                 { ""if"": ""not friendly(stop)"", ""go"": ""next"", ""set"": { ""visited[stop]"": ""now"" }, ""poke"": ""{stop} is no longer ours or an ally's; skipped."" } ] },
-    ""sell"": { ""about"": ""selling loot"", ""do"": ""sell at nearest_town_of_realm()"",
-      ""when"": [ { ""if"": ""arrived"", ""go"": ""next"" } ] },
+    ""home"": { ""about"": ""recruiting at home in {at}"", ""do"": ""recruit at at"",
+      ""when"": [ { ""if"": ""arrived and hours_in_state >= 1"", ""go"": ""between"", ""set"": { ""visited[at]"": ""now"" } },
+                { ""if"": ""besieged(at)"", ""go"": ""between"", ""set"": { ""visited[at]"": ""now"" } } ] },
     ""between"": { ""about"": ""between rounds at {at}"", ""do"": ""enter at"",
       ""when"": [ { ""if"": ""patrol == 1"", ""go"": ""watch"" },
-                { ""if"": ""next_due(places, visited, 24) != none"", ""go"": ""next"" } ] },
+                { ""if"": ""next_due([nearest_town_of_realm(), at], visited, 24) != none or next_due(places, visited, 24) != none"", ""go"": ""next"" } ] },
     ""watch"": { ""about"": ""patrolling around {at}"", ""do"": ""patrol at"",
-      ""when"": [ { ""if"": ""next_due(places, visited, 24) != none"", ""go"": ""next"" },
+      ""when"": [ { ""if"": ""next_due([nearest_town_of_realm(), at], visited, 24) != none or next_due(places, visited, 24) != none"", ""go"": ""next"" },
                 { ""if"": ""weakest_bandit_near(at, radius) != none and strength_of(weakest_bandit_near(at, radius)) <= strength * strike_below"",
                   ""go"": ""strike"", ""set"": { ""target"": ""weakest_bandit_near(at, radius)"" } } ] },
     ""strike"": { ""about"": ""striking {target}"", ""do"": ""engage target"",
@@ -69,14 +77,15 @@ namespace SmokeTest
 
             // the checker: kinds first in takes, places, a table set by key, its problems named by state and rule, every state reachable
             ToolDef circuit = ToolDef.FromJson(CircuitJson, "circuit", "orcs");
-            Check(circuit.Valid && circuit.Places == "friendly_holding" && circuit.At == "own_fort" && circuit.Own && circuit.TakesAbout["places"].StartsWith("the towns"),
+            Check(circuit.Valid && circuit.Places == "friendly_holding" && circuit.At == "own_fort" && circuit.Own && circuit.TakesAbout["places"].StartsWith("other towns"),
                   "Mert's circuit order passes the checker, its places of the friendly kind and its home one of the realm's forts" + (circuit.Valid ? "" : ": " + string.Join("; ", circuit.Problems)));
-            Check(circuit.States["recruit"].Do.Verb == "recruit" && circuit.States["recruit"].Do.ArgText == "stop" && circuit.States["sell"].Do.Verb == "sell" && circuit.States["sell"].Do.ArgText == "nearest_town_of_realm()"
-                  && circuit.States["between"].Do.ArgText == "at" && circuit.States["recruit"].When[0].SetAt[0] != null && circuit.States["recruit"].When[0].Set[0].Key == "visited",
-                  "\"recruit at stop\" and \"sell at X\" read as the move and its place (\"enter at\" stays the order's own place); \"visited[stop]\" sets the table's entry");
+            Check(circuit.States["recruit"].Do.Verb == "recruit" && circuit.States["recruit"].Do.ArgText == "stop" && circuit.States["town"].Do.Verb == "recruit" && circuit.States["town"].Do.ArgText == "stop"
+                  && circuit.States["home"].Do.Verb == "recruit" && circuit.States["home"].Do.ArgText == "at" && circuit.States["between"].Do.ArgText == "at"
+                  && circuit.States["recruit"].When[0].SetAt[0] != null && circuit.States["recruit"].When[0].Set[0].Key == "visited",
+                  "\"recruit at stop\" and \"recruit at at\" read as the move and its place (\"enter at\" stays the order's own place); \"visited[stop]\" sets the table's entry");
             Check(circuit.Settings.ContainsKey("caution") && circuit.Settings.ContainsKey("danger_radius") && circuit.Settings.ContainsKey("join_hours"),
                   "an agent's own tool carries the safety rule's numbers, as ours do");
-            Check(circuit.Describe().StartsWith("- **circuit** (yours, v1) (at: one of your castles or towns, home, where it rests") && circuit.Describe().Contains("places: a list, each your or an ally's holding, the towns"),
+            Check(circuit.Describe().StartsWith("- **circuit** (yours, v1) (at: one of your castles or towns, home, the castle where it recruits") && circuit.Describe().Contains("places: a list, each your or an ally's holding, other towns"),
                   "the library lists an agent's tool as theirs, with what it takes in their own words: " + circuit.Describe());
             ToolDef bad = ToolDef.FromJson(@"{ ""name"": ""bad"", ""takes"": { ""places"": ""the towns"" }, ""start"": ""a"", ""states"": {
                 ""a"": { ""do"": ""hold"", ""when"": [ { ""if"": ""hours_in_state > 2"", ""go"": ""a"" }, { ""if"": ""next_due(places, 24) != none"", ""go"": ""a"" } ] },
@@ -169,7 +178,7 @@ namespace SmokeTest
                   "the circuit in the instructions is the one the tests run, rule for rule");
         }
 
-        /// <summary>The circuit on a made-up world: each place once a day, a sale over the bar, a patrol striking only small bands, shelter from an army, a call-back only when a place is lost.</summary>
+        /// <summary>The circuit on a made-up world: the town first, each place and home once a day, back to the town when the loot is worth it, a patrol striking only small bands, shelter from an army, a call-back only when a place is lost.</summary>
         private static void CircuitTests(ToolDef circuit, List<KeyValuePair<int, Move>> moves, List<KeyValuePair<int, string>> released)
         {
             var lord = new PartyRow { Id = "p_circ", Leader = "lord_circ", Name = "Grishnakh", Faction = "orcs", Kind = "lord", Men = 200, SizeLimit = 300, Strength = 400, Speed = 5, FoodDays = 20, X = 100, Y = 100, InSettlement = "castle_orc", Doing = "Hold", Spottable = true, Loot = 100, Gold = 2000 };
@@ -187,16 +196,22 @@ namespace SmokeTest
             Diag.Hours = h0;
             Brain.OnHour(World(h0));
             Runner.Start(9500, order);
-            Check(Last()?.Verb == "recruit" && Last()?.Place == "village_orc", "the circuit starts at the nearest of its places not visited today: recruit at Orc Village (" + Last() + ")");
-            lord.InSettlement = null; lord.X = 110; lord.Y = 104;
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "town_orc", "the circuit starts at the realm's nearest town, where recruits are most plentiful: recruit at Goblin Town (" + Last() + ")");
+            lord.InSettlement = "town_orc"; lord.X = 120; lord.Y = 130;
             Brain.OnHour(World(h0 + 1));
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "village_orc", "an hour in the town, it rides on to the nearest of its places: recruit at Orc Village (" + Last() + ")");
+            lord.InSettlement = null; lord.X = 110; lord.Y = 104;
+            Brain.OnHour(World(h0 + 2));
             Check(Last()?.Verb == "recruit" && Last()?.Place == "castle_two", "an hour at the village, it rides on to the next place due: recruit at Orc Keep (" + Last() + ")");
             lord.InSettlement = "castle_two"; lord.X = 140; lord.Y = 100;
-            Brain.OnHour(World(h0 + 2));
-            Check(Last()?.Verb == "patrol" && Last()?.Place == "castle_orc" && Math.Abs(Last().Value.R - 15) < 0.01, "with every place visited today, it patrols at home within its radius (" + Last() + ")");
+            Brain.OnHour(World(h0 + 3));
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "castle_orc", "with its places done, it recruits at home, its castle (" + Last() + ")");
+            lord.InSettlement = "castle_orc"; lord.X = 100; lord.Y = 100;
+            Brain.OnHour(World(h0 + 4));
+            Check(Last()?.Verb == "patrol" && Last()?.Place == "castle_orc" && Math.Abs(Last().Value.R - 15) < 0.01, "with the town, every place and home visited today, it patrols at home within its radius (" + Last() + ")");
             lord.InSettlement = null; lord.X = 104; lord.Y = 100;
             int before = moves.Count;
-            for (int h = 3; h <= 20; h++) Brain.OnHour(World(h0 + h));
+            for (int h = 5; h <= 20; h++) Brain.OnHour(World(h0 + h));
             Check(Since(before).Count == 0, "within the day it does not go back to a place it has visited, and patrols on");
             var big = new PartyRow { Id = "p_horde", Name = "Hill-troll band", Faction = "bandits", Kind = "bandit", Men = 120, Strength = 380, X = 108, Y = 103, Doing = "PatrolAroundPoint", Spottable = true };
             Brain.OnHour(World(h0 + 21, big));
@@ -208,22 +223,24 @@ namespace SmokeTest
             before = moves.Count;
             Brain.OnHour(World(h0 + 23, army));
             Check(Since(before).Any(m => m.Verb == "enter" || m.Verb == "near" || m.Verb == "toward"), "an army far too strong comes: the safety rule takes the lord out of its way, as for every order (" + Last() + ")");
-            lord.Loot = 3600;
             before = moves.Count;
             for (int h = 24; h <= 28; h++) Brain.OnHour(World(h0 + h));
             Move? firstStop = Since(before).Where(m => m.Verb == "sell" || m.Verb == "recruit").Select(m => (Move?)m).FirstOrDefault();
-            Check(firstStop?.Verb == "sell" && firstStop?.Place == "town_orc", "once the danger has passed and a day is out, with loot worth more than its bar, it sells first, in the realm's nearest town (" + firstStop + ")");
-            lord.X = 120; lord.Y = 130; lord.InSettlement = "town_orc"; lord.Loot = 0;
+            Check(firstStop?.Verb == "recruit" && firstStop?.Place == "town_orc", "once the danger has passed and a day is out, it goes round again, the town first (" + firstStop + ")");
+            lord.X = 120; lord.Y = 130; lord.InSettlement = "town_orc";
             Brain.OnHour(World(h0 + 29));
-            Check(Last()?.Verb == "recruit" && Last()?.Place == "village_orc", "then goes round its places again, the nearest due first (" + Last() + ")");
-            lord.InSettlement = null; lord.X = 110; lord.Y = 104;
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "village_orc", "then its places again, the nearest due first (" + Last() + ")");
+            lord.InSettlement = null; lord.X = 110; lord.Y = 104; lord.Loot = 3600;
             Brain.OnHour(World(h0 + 30));
-            Check(Last()?.Verb == "recruit" && Last()?.Place == "castle_two", "and on to the next (" + Last() + ")");
-            Snapshot lost = World(h0 + 31);
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "town_orc", "with loot worth more than its bar, it goes back to the town at once to sell it there, though it was there today (" + Last() + ")");
+            lord.X = 120; lord.Y = 130; lord.InSettlement = "town_orc"; lord.Loot = 0;
+            Brain.OnHour(World(h0 + 31));
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "castle_two", "the loot sold as it rode in, it goes on to the next of its places (" + Last() + ")");
+            Snapshot lost = World(h0 + 32);
             lost.SettlementById["castle_two"].Faction = "player_k";
-            lord.X = 125; lord.Y = 100;
+            lord.InSettlement = null; lord.X = 125; lord.Y = 100;
             Brain.OnHour(lost);
-            Check(Last()?.Verb == "patrol" && Last()?.Place == "castle_orc", "a place lost on the way is skipped: with nothing else due it goes back to its patrol (" + Last() + ")");
+            Check(Last()?.Verb == "recruit" && Last()?.Place == "castle_orc", "a place lost on the way is skipped: with nothing else due it goes home to recruit at its castle (" + Last() + ")");
             Files.FlushAll();
             List<JObject> mine = ReadIf(Path.Combine(Brain.Dir, "notices.jsonl")).Split('\n').Where(l => l.Contains("\"party\":\"p_circ\"") && l.Contains("\"kind\":\"tool\"")).Select(JObject.Parse).ToList();
             Check(mine.Any(n => ((string)n["text"]).StartsWith("Orc Keep is no longer ours or an ally's; skipped.")), "and the agent is told so, in the tool's own words");

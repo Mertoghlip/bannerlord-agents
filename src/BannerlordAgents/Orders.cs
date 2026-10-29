@@ -521,7 +521,7 @@ namespace BannerlordAgents
                 case "own_fort": return own && s.IsFortification ? null : n + " is not one of " + Names.Faction(realm) + "'s castles or towns.";
                 case "own_holding": return own ? null : n + " is not " + Names.Faction(realm) + "'s.";
                 case "own_town_or_village": return own && (s.IsTown || s.IsVillage) ? null : n + " is not one of " + Names.Faction(realm) + "'s towns or villages.";
-                case "friendly_town_or_village": return (own || allied) && (s.IsTown || s.IsVillage) ? null : n + " is not a town or village of " + Names.Faction(realm) + " or an ally (only those give recruits).";
+                case "friendly_town_or_village": return (own || allied) && (s.IsTown || s.IsVillage) ? null : n + " is not a town or village of " + Names.Faction(realm) + " or an ally.";
                 case "friendly_fort": return (own || allied) && s.IsFortification ? null : n + " is not a castle or town of " + Names.Faction(realm) + " or an ally.";
                 case "friendly_holding": return own || allied ? null : n + " is not " + Names.Faction(realm) + "'s or an ally's.";
                 case "enemy_fort": return hostile && s.IsFortification ? null : n + " is not an enemy castle or town.";

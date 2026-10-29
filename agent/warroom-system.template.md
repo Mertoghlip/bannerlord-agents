@@ -151,12 +151,12 @@ A tool:
 - Every tool is checked before it runs. One that fails is refused with each problem and where it is ("state recruit, rule 2: next_due takes 3 values, given 2"), and so are the orders naming it. Each tool's line in your receipts says what became of it.
 - YOUR OWN TOOLS lists each kept tool with its record: how often it was used, how its runs ended, its call-backs a day, and what changed for its lords over them.
 
-**Examples.** A circuit: recruits at each of its places once a day, sells loot in a town when it is worth it, and between rounds rests at home or patrols there against small bands:
+**Examples.** A circuit: each day it recruits first at the realm's nearest town, where recruits are most plentiful and its loot is sold as it rides in, then at each of its places and at its home castle; between rounds it rests at home or patrols there against small bands:
 
 ```json
-{"name": "circuit", "about": "recruits at each of its places once a day, sells loot in a town when worth it, and between rounds rests at home or patrols there against small bands",
- "takes": {"places": "friendly_holding: the towns, castles and villages to recruit at, each once a day", "at": "own_fort: home, where it rests or patrols between rounds"},
- "settings": {"sell_above": [3000, 0, 100000, "sell loot once it is worth this much"],
+{"name": "circuit", "about": "recruits once a day at the realm's nearest town, at each of its places and at its home castle, sells its loot in the town, and between rounds rests at home or patrols there against small bands",
+ "takes": {"places": "friendly_holding: other towns, castles and villages to recruit at, each once a day", "at": "own_fort: home, the castle where it recruits each round and rests or patrols between rounds"},
+ "settings": {"sell_above": [3000, 0, 100000, "go to the town at once when its loot is worth this much"],
               "patrol": [1, 0, 1, "1: patrol around home between rounds, striking small bands; 0: rest inside"],
               "strike_below": [0.5, 0, 2, "strike a band at most this strong against the lord"],
               "radius": [15, 3, 40, "the patrol's reach around home"]},
@@ -164,19 +164,25 @@ A tool:
  "start": "next",
  "states": {
    "next": {"about": "choosing the next stop",
-     "when": [{"if": "loot_value >= sell_above and nearest_town_of_realm() != none", "go": "sell"},
+     "when": [{"if": "loot_value >= sell_above and nearest_town_of_realm() != none and not inside(nearest_town_of_realm())", "go": "town", "set": {"stop": "nearest_town_of_realm()"}},
+              {"if": "next_due([nearest_town_of_realm()], visited, 24) != none", "go": "town", "set": {"stop": "nearest_town_of_realm()"}},
               {"if": "next_due(places, visited, 24) != none", "go": "recruit", "set": {"stop": "next_due(places, visited, 24)"}},
+              {"if": "next_due([at], visited, 24) != none", "go": "home"},
               {"if": "true", "go": "between"}]},
+   "town": {"about": "recruiting at {stop}, the realm's nearest town, where its loot is sold as it rides in", "do": "recruit at stop",
+     "when": [{"if": "arrived and hours_in_state >= 1", "go": "next", "set": {"visited[stop]": "now"}},
+              {"if": "not ours(stop) or besieged(stop)", "go": "next"}]},
    "recruit": {"about": "recruiting at {stop}", "do": "recruit at stop",
      "when": [{"if": "arrived and hours_in_state >= 1", "go": "next", "set": {"visited[stop]": "now"}},
               {"if": "not friendly(stop)", "go": "next", "set": {"visited[stop]": "now"}, "poke": "{stop} is no longer ours or an ally's; skipped."}]},
-   "sell": {"about": "selling loot", "do": "sell at nearest_town_of_realm()",
-     "when": [{"if": "arrived", "go": "next"}]},
+   "home": {"about": "recruiting at home in {at}", "do": "recruit at at",
+     "when": [{"if": "arrived and hours_in_state >= 1", "go": "between", "set": {"visited[at]": "now"}},
+              {"if": "besieged(at)", "go": "between", "set": {"visited[at]": "now"}}]},
    "between": {"about": "between rounds at {at}", "do": "enter at",
      "when": [{"if": "patrol == 1", "go": "watch"},
-              {"if": "next_due(places, visited, 24) != none", "go": "next"}]},
+              {"if": "next_due([nearest_town_of_realm(), at], visited, 24) != none or next_due(places, visited, 24) != none", "go": "next"}]},
    "watch": {"about": "patrolling around {at}", "do": "patrol at",
-     "when": [{"if": "next_due(places, visited, 24) != none", "go": "next"},
+     "when": [{"if": "next_due([nearest_town_of_realm(), at], visited, 24) != none or next_due(places, visited, 24) != none", "go": "next"},
               {"if": "weakest_bandit_near(at, radius) != none and strength_of(weakest_bandit_near(at, radius)) <= strength * strike_below", "go": "strike", "set": {"target": "weakest_bandit_near(at, radius)"}}]},
    "strike": {"about": "striking {target}", "do": "engage target",
      "when": [{"if": "gone(target) or hours_in_state >= 6 or distance(target, at) > radius", "go": "watch"}]}}}
@@ -256,6 +262,14 @@ When the facts in the message are not enough, you may read one file per id with 
 You can ask the way for one army at a time with the `ask_the_way` tool: the shortest way it would march to a holding or to another army, found as the game itself finds ways; how many hours that takes at the army's pace; the ground it crosses; and the bridges, fords and narrow passes on it, with what closing each would cost. Name the army and the destination by their ids in [brackets]; an enemy starts from where your realm last saw it. Add `also_from` to compare who would get there first. Each answer names spots on the way in [brackets], pX_Y (its crossings, and points along it): a lord can keep watch on one (the watch order). Its first answer in a call says how marching works, and so does `marching.txt`. Each question costs a few seconds while the game runs, so ask only when the way matters to your decision.
 
 Four more questions work the same way. `can_catch`: whether one of your lords or armies (`hunter`) could catch an enemy your report shows (`quarry`): each side's pace, the way between them, how long to reach it if it holds still and to run it down if it flees, and who gets first to where it is marching; ask it before a hunt. `battle_odds`: how a battle would go and how long it would last, by the game's own battle rules, between lords of yours (`ours`) and enemies your report shows (`theirs`), in the open, or storming a castle or town (`at`), with how long the siege camp's preparations would take first; the enemy's morale you cannot see, so it is run low, middling and high; when you would win, it also says what the win would bring in, by your realm's own won battles on record. `roads_in`: the roads into a holding from the castles and towns of the realms at war with you, where they come together, and a spot on each where a watch would see a relief some hours before it reaches the walls. `engagement`: before an attack, when each of your chosen lords or armies (`ours`) would reach an enemy lord or army in view (`target`), by the way the game would march at each one's pace; the fight from the first arrival, with your others joining as they come, how long it would last and how it would end; and every other enemy lord and army in view with the hour it could march there, the fight run without them and again with those who would arrive while it is still going on; it ends with the `join_hours` to give your orders. Every order takes `join_hours` (default 8): its rules (caution, a strike's or a hunt's weighing of its target, the threat near a guarded holding) count with a fight every enemy lord and army in view that could march to it within that many hours, and on your side every lord of yours camped in the same siege and, within those hours, those marching to join the lord or bound for the same place or target, so set it from the engagement's answer when a fight would be long, or lower it when only those already close should count. Your report lists, under each army in view, the lords marching to join it, with how far each is from it and the hours it needs.
+
+## Recruiting
+
+Lords fill their ranks with volunteers, by the game's own rules:
+- Volunteers come from the notables of towns, castles and villages. Each notable has up to six men to offer, and new ones come in over the days.
+- A town has the most notables, about five, so towns are the centres of recruiting; a castle or a village has about three.
+- Which of a notable's men a lord may take depends on his standing with that notable, and each man must fit his gold and his wage cap (Money).
+- A besieged town or castle gives no recruits, nor does a village being raided or looted, nor any place of an enemy's.
 
 ## Money
 

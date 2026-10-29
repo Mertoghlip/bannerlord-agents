@@ -163,7 +163,7 @@ namespace SmokeTest
             string request = new JObject { ["id"] = "t1", ["name"] = "circuit", ["definition"] = CircuitJson, ["lord"] = "lord_bolg", ["at"] = "castle_orc", ["places"] = new JArray("village_orc", "castle_two") }.ToString();
             int before = moves.Count;
             string tried = ToolTry.Answer(Agents.Of("orcs"), request);
-            Check(tried.StartsWith("THE TRY: circuit for Bolg") && tried.Contains("rule 2 (\"next_due(places, visited, 24) != none\"): true. It fires.") && tried.Contains("recruit Orc Village [village_orc]")
+            Check(tried.StartsWith("THE TRY: circuit for Bolg") && tried.Contains("rule 3 (\"next_due(places, visited, 24) != none\"): true. It fires.") && tried.Contains("recruit Orc Village [village_orc]")
                   && tried.Contains("No rule fires now") && moves.Count == before,
                   "the try says the first move, which rule fires and where it leads, and moves no one:\n" + tried);
             string asked = ToolTry.Answer(Agents.Of("orcs"), new JObject { ["definition"] = CircuitJson, ["lord"] = "lord_nobody" }.ToString());
