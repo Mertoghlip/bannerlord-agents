@@ -106,6 +106,13 @@ namespace SmokeTest
             Check(Orders.Shown("agent", true) && Orders.Shown("hand", false) && Orders.Shown("you", false) && !Orders.Shown("agent", false) && !Orders.Shown("then", false),
                   "an order's line goes on screen for the lieutenant's orders and your own, never for another agent's");
             RulerChaseTests(moves);
+            // 0.13.12: at a load, before the helper's reset fills its agents, the lieutenant's realm is known from the load's own settings, so its
+            // carried-on orders for lords on a Party AI Controls order are its own (Oct 29, 21:12: two were refused)
+            List<AgentConfig> kept = Bridge.Configs;
+            Bridge.Configs = new List<AgentConfig> { new AgentConfig { Realm = "realm_lt", Kind = "lieutenant", Mode = "live" } };
+            bool known = Lieutenant.IsRealm("realm_lt") && !Lieutenant.IsRealm("realm_other");
+            Bridge.Configs = kept;
+            Check(known, "the lieutenant's realm is known from the load's own settings, before the helper's agents are filled");
         }
 
         /// <summary>

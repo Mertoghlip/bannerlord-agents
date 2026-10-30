@@ -513,7 +513,13 @@ namespace BannerlordAgents
         }
 
         /// <summary>Is this the lieutenant's realm (its orders' endings go to its window, not the corner)?</summary>
-        public static bool IsRealm(string fid) => fid != null && Agents.All.Any(a => a.Config.IsLieutenant && a.Realm == fid);
+        /// <summary>
+        /// Does the lieutenant serve this realm? From the bridge's agents of this load (Bridge.Configs, set on the game's thread as the load begins),
+        /// and the helper's (Agents, filled only once its reset has run): since 0.13.12 the first too, so at a load, before that reset, the lieutenant's
+        /// carried-on orders are known as its own (Oct 29, 21:12: Theorin's and Himrion's recruiting rounds were refused at the load as if another
+        /// agent's, for their Party AI Controls orders, which the lieutenant's replace).
+        /// </summary>
+        public static bool IsRealm(string fid) => fid != null && (Bridge.Configs.Any(c => c.IsLieutenant && c.Realm == fid) || Agents.All.Any(a => a.Config.IsLieutenant && a.Realm == fid));
     }
 
     /// <summary>The lieutenant's rules that need no game (the smoke test reads them).</summary>
