@@ -1763,7 +1763,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed:** 21:31:54. `BannerlordAgents.dll` sha256 `CA6D4E504E3E8BC2CA10F3B4A338EC0AA25E5C0A43B5447064DB5DE394CEACA1`, SubModule v0.13.12.
 
 
-### 12:52 (Oct 30) · Version 0.13.13 built: the lieutenant's orders wait for its answer's own tools; to be installed when the game is next closed · commit (next)
+### 12:52 (Oct 30) · Version 0.13.13 built: the lieutenant's orders wait for its answer's own tools; to be installed when the game is next closed · commit af8a643
 - **Seen in the run** (session 20261029-232345, Autumn 9, 15:00): Mert asked for Himrion and Theorin to recruit together, each taking half at every stop. The lieutenant wrote a new tool, `recruit_pair` (the first tool it has written itself in a run). In the same answer (chat-18.json) it ordered both lords onto it and told Mert "Done, sire". The orders were refused as unknown ("'recruit_pair' is not an order ... and your own: recruit_round"), and the tool was kept in the realm's library a moment after (receipts.log 12:41:04). On Mert's next words ("Place the orders") the lieutenant gave a different plan with tools already kept (recruit_round for Theorin; Himrion, already full, to follow), so nothing was lost in the game.
 - **Cause:** `Lieutenant.Carry` gave the answer's orders on the game's thread first, and only then posted its tools to the helper. An agent's answer takes its tools first (`Channel`, docs/PLAN-0.13.md A8).
 - **Changed:**
