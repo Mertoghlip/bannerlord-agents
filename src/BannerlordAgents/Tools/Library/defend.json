@@ -1,14 +1,14 @@
 {
   "tool": "defend",
   "kind": "tool",
-  "about": "Guards one of your holdings: patrols within radius of it, strikes weaker enemy lords there (weighing each with every enemy lord and army in view that could join a fight with it within join_hours, so it never picks one lord out of a gathering army; breaking off a chase that would take it out of its area or has not closed in for 6 hours), and breaks sieges it can break (counting the defenders inside when they would sally out). From forces too strong for it, it shelters inside the holding when its garrison, militia and your lords there, with this lord, would hold it (the game's own test for whether besiegers should assault, with the walls' worth); if they would not, in the nearest castle or town of yours or an ally's that would, so it is not trapped and taken with a place that falls. With stay_inside 1 it goes in early enough to get there first: as soon as such forces are due at the holding (by the game's marching rules) sooner than it could ride back from the edge of its patrol, with six hours to spare, even with caution 0. Refilling: when its ranks fall below the floor and it is not needed there (it is not in an army, the holding is not besieged, and no enemy lord or army is within twice its radius of the holding), it refills in the nearest town or village of yours or an ally's, then comes back; it breaks off when enemy lords come near the holding, and leaves a place that yields few recruits in 12 hours, trying again two days later. A lord leading an army never leaves to refill by itself.",
-  "calls_back": "a force too strong for it comes near the holding, the holding is besieged, it breaks or gives up a siege, it goes to refill, has refilled, broke off refilling or found few recruits, or the holding falls",
+  "about": "Guards one of your holdings: patrols within radius of it, strikes weaker enemy lords there (weighing each with every enemy lord and army in view that could join a fight with it within join_hours, so it never picks one lord out of a gathering army; breaking off a chase that would take it out of its area or has not closed in for 6 hours), and breaks sieges it can break (counting the defenders inside when they would sally out). From forces too strong for it, it shelters inside the holding when its garrison, militia and your lords there, with this lord, would hold it (the game's own test for whether besiegers should assault, with the walls' worth); if they would not, in the nearest castle or town of yours or an ally's that would, so it is not trapped and taken with a place that falls. With stay_inside 1 it goes in early enough to get there first: as soon as such forces are due at the holding (by the game's marching rules) sooner than it could ride back from the edge of its patrol, with six hours to spare, even with caution 0. Refilling: when its ranks fall below the floor and it is not needed there (it is not in an army, the holding is not besieged, and no enemy lord or army is within twice its radius of the holding), it first takes the volunteers of the holding itself when that is a castle or town, staying at its post; if that does not bring its ranks up to the floor within two hours there, it refills in the nearest town or village of yours or an ally's, then comes back; it breaks off when enemy lords come near the holding, and leaves a place that yields few recruits in 12 hours, trying again two days later. A lord leading an army never leaves to refill by itself.",
+  "calls_back": "a force too strong for it comes near the holding, the holding is besieged, it breaks or gives up a siege, it rides off to refill elsewhere, has refilled, broke off refilling or found few recruits (taking the volunteers of the holding itself is not called back), or the holding falls",
   "at": "own_holding",
   "settings": {
     "radius": [20, 3, 80, "how far around the holding it patrols and watches, in map units"],
     "shelter_at": [1.2, 0.3, 5, "shelter when the forces threatening the area are this many times your side's strength there (this lord and your lords who could reach the holding within join_hours) (enemy lords, armies and bandits in view, every enemy lord and army that could reach the holding within join_hours, and armies seen there in the last 6 hours); it comes out again only once the area and half as far again beyond it are clear; with stay_inside 1, also when enemy lords and armies this strong are due at the holding before it could ride back from its patrol"],
     "strike_below": [0.7, 0.1, 2, "attack an enemy lord in the area, or the besiegers, up to this share of your side's strength (this lord and your lords who could join the fight within join_hours) (against besiegers, counting the defenders inside when they would sally out)"],
-    "floor": [0.4, 0, 1, "go to refill when its ranks fall below this share of full, and only while it is not needed there (see above); 0: it never leaves to refill"],
+    "floor": [0.4, 0, 1, "refill when its ranks fall below this share of full, at the holding itself first when it is a castle or town, and only while it is not needed there (see above); 0: it never refills"],
     "stay_inside": [0, 0, 1, "1: always shelter inside the holding itself, even when it would not hold (if it falls, the lord is taken with it); 0: inside only when it would hold, else in the nearest castle or town that would"]
   },
   "init": { "target": "none", "refuge": "pick(fort(at), at, nearest_fort())", "refill_at": "none", "refill_from": "ranks", "refill_check": "-1", "refill_again": "0", "chase_gap": "0", "best_at": "0", "spurned": "none", "spurned_until": "0" },
@@ -17,6 +17,8 @@
     "patrol": { "about": "patrolling within {radius} of {at}", "do": "patrol at",
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
+        { "if": "ranks < floor and not in_army and hours_running >= refill_again and not besieged(at) and enemy_threat_near(at, radius * 2) <= 0 and fort(at)", "go": "restock",
+          "set": { "refill_at": "at", "refill_from": "ranks", "refill_check": "-1" } },
         { "if": "ranks < floor and not in_army and hours_running >= refill_again and not besieged(at) and enemy_threat_near(at, radius * 2) <= 0", "go": "refill",
           "set": { "refill_at": "pick(nearest_supply() != none, nearest_supply(), refuge)", "refill_from": "ranks", "refill_check": "-1" },
           "poke": "{me}'s ranks are {round(ranks * 100)}% and no enemy lord is near {at}; refilling at {refill_at}, then back." },
@@ -33,6 +35,18 @@
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
         { "if": "besieged(at) and not inside(at) and siege_strength(at) <= relief_strength(at) * strike_below", "go": "relieve", "poke": "{me} is breaking the siege of {at}: strength {relief_strength(at)} with the defenders inside who would sally out ({me}'s own {strength}) against {siege_strength(at)}." },
         { "if": "hours_in_state >= 3 and not besieged(at) and threat_near(at, radius * 1.5) < side_strength(at) * shelter_at * 0.8 and (stay_inside <= 0 or relief_within(at, radius / max(pace, 0.3) + 6, radius * 1.5) < side_strength(at) * shelter_at * 0.8)", "go": "patrol" } ] },
+    "restock": { "about": "refilling its ranks at {at} itself", "do": "recruit at",
+      "when": [
+        { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },
+        { "if": "besieged(at) or enemy_threat_near(at, radius) > 0", "go": "patrol" },
+        { "if": "hours_in_state >= 3 and ranks >= floor", "go": "patrol" },
+        { "if": "refill_check < 0 and arrived", "go": "restock", "set": { "refill_check": "hours_in_state" } },
+        { "if": "refill_check >= 0 and hours_in_state >= refill_check + 2 and ranks < floor and nearest_supply() != none and nearest_supply() != at", "go": "refill",
+          "set": { "refill_at": "nearest_supply()", "refill_from": "ranks", "refill_check": "-1" },
+          "poke": "{me} took the volunteers at {at}, but its ranks are {round(ranks * 100)}%, still below its floor; no enemy lord is near, so it is refilling at {refill_at}, then back." },
+        { "if": "refill_check >= 0 and hours_in_state >= refill_check + 2 and ranks < floor", "go": "refill", "set": { "refill_from": "ranks", "refill_check": "-1" } },
+        { "if": "hours_in_state >= 24", "go": "patrol", "set": { "refill_again": "hours_running + 48" },
+          "poke": "{me} has not reached {at} to refill there in a day (ranks {round(ranks * 100)}%) and goes back to defending it; it tries again in two days." } ] },
     "refill": { "about": "refilling its ranks at {refill_at}", "do": "recruit refill_at",
       "when": [
         { "if": "not ours(at)", "go": "lost", "poke": "{at} fell, so {me} stopped defending it." },

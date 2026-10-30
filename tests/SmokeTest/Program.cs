@@ -525,7 +525,7 @@ namespace SmokeTest
 
         /// <summary>
         /// Version 0.6.1, the weak spots of defend and patrol: a patrol kept within its radius; shelter outside a castle
-        /// under a strong siege (inside only when told); refilling in a town or village; a chase broken off when a strong
+        /// under a strong siege (inside only when told); refilling at the castle it guards, then in a town or village; a chase broken off when a strong
         /// force comes; the danger rule counting bandits, sparing a siege camp being struck, and never sheltering in the
         /// place the danger marches on; and an army out of sight counted where it was last seen, for six hours.
         /// </summary>
@@ -572,13 +572,37 @@ namespace SmokeTest
             Runner.Ended(912, "test over");
             Runner.Ended(913, "test over");
 
-            // ranks below the floor: refill in the nearest town or village, where recruits are (not a castle)
+            // ranks below the floor (0.13.4, Mert: castles recruit in this pack): first the volunteers of the castle it guards,
+            // without calling back; still short two hours after arriving, it rides on to the nearest town or village
             var weak = Lord("p_d3", 120, 50, 300, 70);
             Brain.OnHour(ToolWorld(5002, weak));
             moves.Clear();
+            double callBacks = Diag.CountOf("tool:call-backs");
             Runner.Start(914, new ToolOrder { Tool = "defend", Lord = "lord_p_d3", LordName = "D3", Party = "p_d3", At = "castle_two" });
-            Check(moves.Any(m => m.Key == 914 && m.Value.Verb == "recruit" && m.Value.Place == "village_orc"), "a lord whose ranks fall below the floor goes to refill in the nearest town or village");
+            bool home = moves.Any(m => m.Key == 914 && m.Value.Verb == "recruit" && m.Value.Place == "castle_two");
+            bool quiet = Diag.CountOf("tool:call-backs") == callBacks;
+            var weakIn = Lord("p_d3", 140, 50, 300, 70);
+            weakIn.InSettlement = "castle_two";
+            for (int h = 5003; h <= 5004; h++) Brain.OnHour(ToolWorld(h, weakIn));
+            bool stillHome = !moves.Any(m => m.Key == 914 && m.Value.Place == "village_orc");
+            Brain.OnHour(ToolWorld(5005, weakIn));
+            bool onward = moves.Any(m => m.Key == 914 && m.Value.Verb == "recruit" && m.Value.Place == "village_orc") && Diag.CountOf("tool:call-backs") == callBacks + 1;
+            Check(home && quiet && stillHome && onward, "a lord whose ranks fall below the floor first takes the volunteers of the castle it guards, without a call-back, and rides on to the nearest town or village only when still short two hours after arriving ("
+                  + home + ", " + quiet + ", " + stillHome + ", " + onward + ")");
             Runner.Ended(914, "test over");
+            // ... and one that the castle's volunteers bring up to the floor goes back to its patrol, never leaving its area
+            var filled = Lord("p_d5", 140, 100, 300, 140);
+            filled.InSettlement = "castle_two";
+            Brain.OnHour(ToolWorld(5006, filled));
+            moves.Clear();
+            Runner.Start(944, new ToolOrder { Tool = "defend", Lord = "lord_p_d5", LordName = "D5", Party = "p_d5", At = "castle_two" });
+            bool filling = moves.Any(m => m.Key == 944 && m.Value.Verb == "recruit" && m.Value.Place == "castle_two");
+            filled = Lord("p_d5", 140, 210, 300, 290);
+            filled.InSettlement = "castle_two";
+            for (int h = 5007; h <= 5009; h++) Brain.OnHour(ToolWorld(h, filled));
+            Check(filling && moves.Any(m => m.Key == 944 && m.Value.Verb == "patrol") && !moves.Any(m => m.Key == 944 && m.Value.Place == "village_orc")
+                  && Diag.CountOf("tool:call-backs") == callBacks + 1, "a lord the castle's own volunteers bring up to the floor goes back to its patrol without leaving its area or calling back");
+            Runner.Ended(944, "test over");
 
             // the recruit order tours (0.9.2, Mert: "follows the logic as my own parties"): its move is a tour from its place,
             // a castle may start it, and it no longer stops itself after three days there (the game's side ends it, and says why)
@@ -753,7 +777,7 @@ namespace SmokeTest
             // ... refills once it has gone...
             moves.Clear();
             Brain.OnHour(ToolWorld(5022, thin));
-            bool went = moves.Any(m => m.Key == 924 && m.Value.Verb == "recruit" && m.Value.Place == "village_orc");
+            bool went = moves.Any(m => m.Key == 924 && m.Value.Verb == "recruit" && m.Value.Place == "castle_two");   // the castle it guards first (0.13.4)
             Check(stayed && went, "a lone thin lord does not leave to refill while an enemy lord is near the holding, and goes once it has gone");
             // ... and breaks off when an enemy lord comes near the holding
             var comer = new PartyRow { Id = "p_cm", Leader = "lord_cm", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 40, Strength = 60, Speed = 5, X = 150, Y = 100, Doing = "Hold", Spottable = true };
@@ -762,19 +786,24 @@ namespace SmokeTest
             Check(moves.Any(m => m.Key == 924 && m.Value.Verb == "patrol") && !InForce(ToolWorld(5023, thin, comer)).Contains("refilling"), "a lord refilling breaks off when an enemy lord comes near the holding");
             Runner.Ended(924, "test over");
 
-            // a place that yields few recruits in 12 hours: back to defending, and no new try for two days
+            // a place that yields few recruits in 12 hours: back to defending, and no new try for two days (since 0.13.4 after
+            // the castle it guards gave too few: two hours there, then the village)
+            var dryHome = Lord("p_dry", 140, 50, 300, 70);
+            dryHome.InSettlement = "castle_two";
+            Brain.OnHour(ToolWorld(5030, dryHome));
+            Runner.Start(925, Defend(925, "p_dry"));
+            bool atHome = InForce(ToolWorld(5030, dryHome)).Contains("refilling its ranks at Orc Keep itself");
+            for (int h = 5031; h <= 5032; h++) Brain.OnHour(ToolWorld(h, dryHome));
             var dry = Lord("p_dry", 110, 50, 300, 70);
             dry.Y = 104;
-            Brain.OnHour(ToolWorld(5030, dry));
-            Runner.Start(925, Defend(925, "p_dry"));
-            bool refilling = InForce(ToolWorld(5030, dry)).Contains("refilling its ranks at Orc Village");
-            for (int h = 5031; h <= 5041; h++) Brain.OnHour(ToolWorld(h, dry));
-            bool stillAt11 = InForce(ToolWorld(5041, dry)).Contains("refilling");
+            bool refilling = atHome && InForce(ToolWorld(5032, dry)).Contains("refilling its ranks at Orc Village");
+            for (int h = 5033; h <= 5044; h++) Brain.OnHour(ToolWorld(h, dry));
+            bool stillAt11 = InForce(ToolWorld(5044, dry)).Contains("refilling");
             moves.Clear();
-            Brain.OnHour(ToolWorld(5042, dry));
+            Brain.OnHour(ToolWorld(5045, dry));
             bool back = moves.Any(m => m.Key == 925 && m.Value.Verb == "patrol");
-            for (int h = 5043; h <= 5050; h++) Brain.OnHour(ToolWorld(h, dry));
-            bool waits = InForce(ToolWorld(5050, dry)).Contains("patrolling");
+            for (int h = 5046; h <= 5053; h++) Brain.OnHour(ToolWorld(h, dry));
+            bool waits = InForce(ToolWorld(5053, dry)).Contains("patrolling");
             Check(refilling && stillAt11 && back && waits, "a lord leaves a place that yields few recruits after 12 hours there, and does not try again at once ("
                   + refilling + ", " + stillAt11 + ", " + back + ", " + waits + ")");
             Runner.Ended(925, "test over");

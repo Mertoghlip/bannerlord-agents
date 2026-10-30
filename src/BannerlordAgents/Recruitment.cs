@@ -11,7 +11,8 @@ namespace BannerlordAgents
     /// <summary>
     /// Why the watched realm's parties do or do not refill: a measurement for the logs only (docs/LOGGING.md), never shown
     /// to the agent. The game's own gates (RecruitmentCampaignBehavior, 1.4.8) decide whether a lord the game runs may
-    /// recruit, each hour it spends in a town or an unraided village:
+    /// recruit, each hour it spends in a town or an unraided village (and, in TAOM, a castle: its castle recruiting gives
+    /// castles notables, so the log counts castles too since 0.13.4):
     /// - the party's gold above HeroHelper.StartRecruitingMoneyLimit (50 + 20 a man, up to 150 men);
     /// - for a lord who does not lead the clan, the clan's gold above StartRecruitingMoneyLimitForClanLeader (50 + the
     ///   clan leader's party wages + 40 a man in that party);
@@ -65,7 +66,8 @@ namespace BannerlordAgents
             {
                 if (r.Faction != s.Watched || r.Kind != "lord" || r.InSettlement == null || r.InBattle) continue;
                 if (!s.SettlementById.TryGetValue(r.InSettlement, out SettlementRow h)) continue;
-                bool can = (h.Kind == "town" && h.BesiegedBy == null) || (h.Kind == "village" && (h.VillageState == null || h.VillageState == "Normal"));
+                // castles too since 0.13.4: TAOM gives them notables (CLAUDE.md, "Where volunteers are")
+                bool can = ((h.Kind == "town" || h.Kind == "castle") && h.BesiegedBy == null) || (h.Kind == "village" && (h.VillageState == null || h.VillageState == "Normal"));
                 if (!can) continue;
                 HoursAt.TryGetValue(r.Leader ?? r.Id, out int n);
                 HoursAt[r.Leader ?? r.Id] = n + 1;
@@ -156,7 +158,7 @@ namespace BannerlordAgents
             Hero ruler = k.Leader;
             foreach (Settlement s in k.Settlements)
             {
-                if (s == null || (!s.IsTown && !s.IsVillage)) continue;
+                if (s == null || (!s.IsTown && !s.IsCastle && !s.IsVillage)) continue;
                 int here = 0, could = 0;
                 try
                 {
@@ -178,7 +180,7 @@ namespace BannerlordAgents
                 if (here > 0) placesWithVolunteers++;
                 places.Add(new
                 {
-                    id = s.StringId, name = Names.Settlement(s), kind = s.IsTown ? "town" : "village", culture = s.Culture?.StringId,
+                    id = s.StringId, name = Names.Settlement(s), kind = s.IsTown ? "town" : s.IsCastle ? "castle" : "village", culture = s.Culture?.StringId,
                     state = s.IsVillage ? s.Village.VillageState.ToString() : s.IsUnderSiege ? "besieged" : "normal", waiting = here, ruler_could_take = could
                 });
             }
@@ -192,7 +194,7 @@ namespace BannerlordAgents
             string line = "recruitment" + (named ? " in " + Names.Faction(k) : "") + ", " + date + (fromConsole ? " (so far today)" : "") + ": " + count + " lords at " + Math.Round(100 * (count > 0 ? fill / count : 0)) + "% of their size limits on average; "
                           + belowGold + " below the party-gold bar, " + belowClan + " below the clan-gold bar, " + noWage + " without wage room, " + full + " full, " + starving + " starving; "
                           + recruited + " men recruited by " + recruiters + " lords; " + waiting + " volunteers waiting in " + placesWithVolunteers + " of the realm's " + places.Count
-                          + " towns and villages (" + rulerCould + " within what the ruler's relations allow)";
+                          + " towns, castles and villages (" + rulerCould + " within what the ruler's relations allow)";
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (MobileParty p in MobileParty.AllLordParties) if (p != null && p.IsActive && p.MapFaction == k && p.LeaderHero != null) ids.Add(p.LeaderHero.StringId);
             return new RealmDay { Realm = k.StringId, Date = date, Line = line, Hours = hours, Summary = summary, Lords = lords, Places = places, LordIds = ids };
