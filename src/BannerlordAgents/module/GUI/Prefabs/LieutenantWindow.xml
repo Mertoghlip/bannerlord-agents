@@ -52,7 +52,7 @@
                 <!--While it thinks-->
                 <TextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginLeft="34" MarginRight="34" Brush="Popup.Description.Text" Brush.FontSize="18" Brush.TextHorizontalAlignment="Left" Text="@ThinkingText" />
 
-                <!--The proposal waiting, with Decline and Approve; its list scrolls when long-->
+                <!--The proposal waiting, answered in words; its list scrolls when long-->
                 <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginLeft="34" MarginRight="24" StackLayout.LayoutMethod="VerticalTopToBottom" IsVisible="@HasProposal">
                   <Children>
                     <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="130">
@@ -74,20 +74,7 @@
                         </ScrollbarWidget>
                       </Children>
                     </Widget>
-                    <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" HorizontalAlignment="Center" MarginTop="4" StackLayout.LayoutMethod="HorizontalLeftToRight">
-                      <Children>
-                        <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" Brush="Popup.Cancel.Button" Command.Click="ExecuteDecline">
-                          <Children>
-                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32" VerticalAlignment="Center" MarginLeft="40" MarginRight="40" Brush="Popup.Button.Text" Text="@DeclineText" />
-                          </Children>
-                        </ButtonWidget>
-                        <ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="251" SuggestedHeight="64" MarginLeft="20" Brush="Popup.Done.Button" Command.Click="ExecuteApprove">
-                          <Children>
-                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32" VerticalAlignment="Center" MarginLeft="40" MarginRight="40" Brush="Popup.Button.Text" Text="@ApproveText" />
-                          </Children>
-                        </ButtonWidget>
-                      </Children>
-                    </ListPanel>
+                    <!--Approve and Decline are gone (0.13.8, Mert, Oct 29): the ruler answers the proposal in words-->
                   </Children>
                 </ListPanel>
 

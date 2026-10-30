@@ -169,10 +169,12 @@ namespace BannerlordAgents.WarRoom
                 // its tools, diplomatic acts and letters wait for the same yes (0.13)
                 foreach (string part in new[] { "tools", "diplomacy", "letters" })
                     if (p[part] is JsonArray pa && pa.Count > 0) sb.AppendLine(part + ": " + pa.ToJsonString());
-                sb.AppendLine("If your ruler's words below agree to it, answer with \"carry_out\": true and these orders (changed as they say) in \"orders\""
-                              + " (and its tools, diplomacy and letters, as they stand or changed, in \"tools\", \"diplomacy\" and \"letters\").");
+                // 0.13.8 (Mert, Oct 29): answered in words only, all of it, some of it, or some with changes
+                sb.AppendLine("If your ruler's words below agree to all or some of it, give what they agree to with \"carry_out\": true in \"orders\" (changed as they say),"
+                              + " with its tools, diplomacy and letters in \"tools\", \"diplomacy\" and \"letters\" if they agree to those; what they want changed goes, changed, in \"propose\""
+                              + " in the same answer, for their next words; what they refuse is left out.");
             }
-            else sb.AppendLine("No proposal of yours is waiting: any orders you would give now go in \"propose\", and any tools, diplomatic acts or letters in \"tools\", \"diplomacy\" and \"letters\", all for your ruler's yes.");
+            else sb.AppendLine("No proposal of yours is waiting. Orders your ruler's words below tell you to give go in \"orders\" with \"carry_out\": true; anything of your own idea goes in \"propose\" for their yes.");
             sb.AppendLine();
             sb.AppendLine("THE REALM NOW");
             sb.AppendLine(report.Trim());

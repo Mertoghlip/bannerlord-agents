@@ -81,6 +81,11 @@ namespace BannerlordAgents
         public string Joining;
         public float JoiningDistance = float.NaN;
         public double JoiningHours = double.NaN;
+        /// <summary>
+        /// The lords marching in its army, when it leads one of the realm's own (0.13.8; Mert, Oct 29: "my liutenant is not able to see
+        /// folks in armies"): the report named an army's size only, so neither the lieutenant nor an agent could order its lords by name.
+        /// </summary>
+        public List<ViewParty> Members;
     }
 
     /// <summary>
@@ -157,6 +162,8 @@ namespace BannerlordAgents
                 v.Forces.Add(Party(s, r, null, "own", own));
             }
             v.Forces = v.Forces.OrderByDescending(x => x.ArmyMen > 0 ? x.ArmyMen : x.Men).ToList();
+            // each army's own lords, under it (0.13.8)
+            foreach (ViewParty f in v.Forces) if (f.ArmyMen > 0) f.Members = ArmyMembers(s, f.Id, fid);
 
             foreach (KeyValuePair<string, Sighting> kv in sees)
             {
@@ -542,6 +549,7 @@ namespace BannerlordAgents
                 sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + JoiningText(f) + (f.Arrives != null ? ", " + f.Arrives : "")
                               + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
                 JoinerLines(sb, v, f);
+                MemberLines(sb, f.Members);
             }
 
             sb.AppendLine().AppendLine("YOUR HOLDINGS (" + v.Holdings.Count + ")");
@@ -679,8 +687,35 @@ namespace BannerlordAgents
             List<SettlementRow> own = s.Settlements.Where(h => h.Faction == me.Faction).ToList();
             ViewParty p = Party(s, me, null, "own", own);
             string size = p.ArmyMen > 0 ? "an army of " + Text.N(p.ArmyMen) + " men in " + p.ArmyParties + " parties" : Text.N(p.Men) + " men";
-            return p.Name + " [" + me.Id + "]: " + size + ", strength " + Text.N((int)p.Strength) + "; " + Where(p) + "; " + p.Doing
-                   + ". The ruler leads their own party: never give it orders.";
+            string line = p.Name + " [" + me.Id + "]: " + size + ", strength " + Text.N((int)p.Strength) + "; " + Where(p) + "; " + p.Doing
+                          + ". The ruler leads their own party: never give it orders.";
+            // the lords in the ruler's own army, by name (0.13.8)
+            List<ViewParty> members = p.ArmyMen > 0 ? ArmyMembers(s, me.Id, me.Faction) : null;
+            if (members == null || members.Count == 0) return line;
+            var sb = new StringBuilder(line);
+            MemberLines(sb, members, "In the ruler's army");
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>The realm's lords marching in this party's army (attached to it), strongest first (0.13.8).</summary>
+        public static List<ViewParty> ArmyMembers(Snapshot s, string leader, string fid)
+        {
+            return s.Parties.Where(r => r.Kind == "lord" && r.Attached && r.ArmyLeader == leader && r.Id != leader && r.Faction == fid)
+                    .Select(r => new ViewParty { Id = r.Id, Lord = r.Leader, Name = r.Name ?? r.Id, Faction = r.Faction, Relation = "own", Kind = r.Kind, Men = r.Men, Strength = r.Strength, X = r.X, Y = r.Y })
+                    .OrderByDescending(x => x.Strength).ToList();
+        }
+
+        /// <summary>Under an army's line: each lord marching in it, with his men and strength; an order to one takes him out of the army first.</summary>
+        private static void MemberLines(StringBuilder sb, List<ViewParty> members, string head = "In the army")
+        {
+            if (members == null || members.Count == 0) return;
+            if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.AppendLine();
+            sb.AppendLine("  " + head + " (" + members.Count + (members.Count == 1 ? " lord" : " lords") + " beside its leader, marching with it):");
+            foreach (ViewParty x in members)
+            {
+                Tools.ToolInstance held = Tools.Runner.ForParty(x.Id);
+                sb.AppendLine("  - " + x.Name + Tag(x) + ": " + Text.N(x.Men) + " men, strength " + Text.N((int)x.Strength) + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
+            }
         }
 
         /// <summary>The player's realm, compactly, for each recorded decision.</summary>

@@ -20,9 +20,11 @@ namespace BannerlordAgents
     ///   player did with the last one (notes);
     /// - its war room (LieutenantRoom) answers in orders\chat-N.json: a few words, maybe a proposal, maybe the orders the player
     ///   has just agreed to in words, maybe a longer text (shown in the window);
-    /// - it never acts unasked: orders are carried out when the player presses Approve on the proposal waiting, or when the
-    ///   player's words answered that proposal (the war room says which, from chat.json; LieutenantRules.Gate); any others
-    ///   become the proposal and wait;
+    /// - it never acts unasked: since 0.13.8 (Mert, Oct 29: "I should only have to approve them in the chat since many times I
+    ///   approve some but have comments on others") it answers only the player's words, and carries out the orders those words
+    ///   asked for or agreed to ("carry_out"), all or some of the waiting proposal, or new ones he told it to give; what it would do
+    ///   of its own idea, and what he wants changed, becomes the proposal and waits for his next words (LieutenantRules.Gate). The
+    ///   Approve and Decline buttons are gone;
     /// - its orders go through the door every agent's go through (Orders.FromAgent), for the player's realm's lords, the player
     ///   and lords holding a Party AI Controls order excepted, and wait for the clock as every agent's do; what becomes of them
     ///   comes into the window.
@@ -317,33 +319,26 @@ namespace BannerlordAgents
             if (!string.IsNullOrWhiteSpace(say)) { LieutenantWindow.Add(Name + ": " + say.Trim(), Voice, true); Keep("lt", say.Trim(), n); }
             if (!string.IsNullOrWhiteSpace(detail)) { LieutenantWindow.Add(detail.Trim(), Voice, false); Keep("detail", detail.Trim(), n); }
             double now = Campaign.Current != null ? CampaignTime.Now.ToHours : 0;
-            string gate = LieutenantRules.Gate(_pending?.Chat, answered, carry, (orders?.Count ?? 0) + (carry ? extras : 0), (propose?.Count ?? 0) + (carry ? 0 : extras), drop);
-            switch (gate)
+            string gate = LieutenantRules.Gate(carry, (orders?.Count ?? 0) + (carry ? extras : 0), (propose?.Count ?? 0) + (carry ? 0 : extras), drop);
+            // the orders the player's words asked for or agreed to: given now (0.13.8: in words only, no buttons)
+            if (gate == "carry" || gate == "carry+propose")
             {
-                case "carry":
-                {
-                    Proposal agreed = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
-                    Background.ToMain.Enqueue(() => Carry(agreed, n, realmId));
-                    Keep("carried", agreed.List, n);
-                    _pending = null;
-                    break;
-                }
-                case "wait":
-                    // orders the player has not agreed to: they wait for the yes, as a proposal
-                    _pending = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
-                    LieutenantWindow.Add("(Your lieutenant waits for your yes before giving those orders.)", Aside, false);
-                    Keep("aside", "(Your lieutenant waits for your yes before giving those orders.)", n);
-                    Keep("proposal", _pending.List, n, _pending.Orders, say, _pending);
-                    Diag.Count("lieutenant:orders held for a yes");
-                    break;
-                case "propose":
-                    _pending = Make(n, say, propose ?? new JArray(), now, tools, diplomacy, letters);
-                    Keep("proposal", _pending.List, n, _pending.Orders, say, _pending);
-                    break;
-                case "drop":
-                    if (_pending != null) Keep("dropped", "", _pending.Chat);
-                    _pending = null;
-                    break;
+                Proposal agreed = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
+                Background.ToMain.Enqueue(() => Carry(agreed, n, realmId));
+                Keep("carried", agreed.List, n);
+                Recorder.OnLieutenantAgreed(n, agreed.List);
+                _pending = null;
+            }
+            // what waits for the player's next words: a proposal of its own, or what he wanted changed, changed (beside the orders given)
+            if (gate == "propose" || gate == "carry+propose")
+            {
+                _pending = gate == "propose" ? Make(n, say, propose ?? new JArray(), now, tools, diplomacy, letters) : Make(n, say, propose ?? new JArray(), now);
+                Keep("proposal", _pending.List, n, _pending.Orders, say, _pending);
+            }
+            if (gate == "drop")
+            {
+                if (_pending != null) Keep("dropped", "", _pending.Chat);
+                _pending = null;
             }
             LieutenantWindow.Refresh();
             Diag.Count("lieutenant:answers");
@@ -504,13 +499,17 @@ namespace BannerlordAgents
     internal static class LieutenantRules
     {
         /// <summary>
-        /// What the bridge does with an answer: carry out its orders only when the player's words answered the proposal still waiting
-        /// (answered: the waiting proposal's chat number, as the war room took it from chat.json); orders without that wait for a yes
-        /// ("wait"); a new proposal replaces the waiting one ("propose"); "drop" forgets it; anything else leaves it as it is ("none").
+        /// What the bridge does with an answer (since 0.13.8; Mert, Oct 29: approve in the chat only, some orders yes and others with
+        /// comments): every answer is to the player's words, so its "carry_out" orders, the ones those words asked for or agreed to,
+        /// are given ("carry"); its proposal waits for the next words, beside them or alone ("carry+propose", "propose"); "drop"
+        /// forgets the proposal waiting; anything else leaves it as it is ("none"). (Until 0.13.7 orders were given only when the
+        /// words answered a proposal still waiting, else they waited for a button: a ruler's "give those orders now" after a declined
+        /// proposal was held, Oct 29.)
         /// </summary>
-        public static string Gate(int? pending, int answered, bool carry, int orders, int proposed, bool drop)
+        public static string Gate(bool carry, int orders, int proposed, bool drop)
         {
-            if (carry && orders > 0) return pending.HasValue && pending.Value == answered ? "carry" : "wait";
+            bool give = carry && orders > 0;
+            if (give) return proposed > 0 ? "carry+propose" : "carry";
             if (proposed > 0) return "propose";
             return drop ? "drop" : "none";
         }

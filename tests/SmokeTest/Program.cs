@@ -480,6 +480,13 @@ namespace SmokeTest
             Check(thens.Any(t => t.Key == 907), "once no lord is marching to join, the army is formed and its next order starts");
             Runner.Start(909, new ToolOrder { Tool = "join", Lord = "lord_far2", LordName = "Radbug", Party = "p_far", Target = "p_vanished" });
             Check(released.Contains(909), "a join order whose army's leader is gone fails, and frees the lord");
+            // 0.13.8 (Mert, Oct 29: "my liutenant is not able to see folks in armies"): each army's lords are named under it in the report
+            Snapshot armyWorld = ToolWorld(4005, leader, member, far);
+            string armyReport = Views.Report(Views.Build(armyWorld, "orcs", armyWorld.WatchedSees, armyWorld.HostileToWatched, new Brain.Memory()), new List<Trigger>());
+            int armyLine = armyReport.IndexOf("- Mauhur [lord_ldr]: army of 450 men in 2 parties", StringComparison.Ordinal);
+            Check(armyLine >= 0 && armyReport.IndexOf("  In the army (1 lord beside its leader, marching with it):", armyLine, StringComparison.Ordinal) > armyLine
+                  && armyReport.Contains("  - Snaga [lord_mem]: 150 men, strength 200."),
+                  "an army's lords are named under it in the report, so they can be ordered by name");
 
             // the realm in sum, the captured lords (where, by whom, since when) and the muster, in the report and the look-ups
             Snapshot s2 = ToolWorld(4010, leader, member, far, inside);
@@ -1921,9 +1928,11 @@ namespace SmokeTest
             ch.WriteChat(5, new { Number = 5, Said = "hold Goblin Town with dwarves", Pending = (object)null }, "hold Goblin Town with dwarves");
             Check(ReadIf(Path.Combine(channel, "chat.json")).Contains("\"said\":\"hold Goblin Town with dwarves\"") && ch.LastChatNumber() == 5,
                   "the player's words go into the lieutenant's channel (chat.json, chats.log), numbered on from the last");
-            Check(LieutenantRules.Gate(6, 6, true, 2, 0, false) == "carry" && LieutenantRules.Gate(null, -1, true, 2, 0, false) == "wait" && LieutenantRules.Gate(6, 5, true, 2, 0, false) == "wait"
-                  && LieutenantRules.Gate(null, -1, false, 0, 3, false) == "propose" && LieutenantRules.Gate(6, 6, false, 0, 0, true) == "drop" && LieutenantRules.Gate(6, 6, false, 0, 0, false) == "none",
-                  "the lieutenant carries out orders only when the player's words answered the proposal still waiting; any others wait for a yes");
+            // 0.13.8 (Mert, Oct 29: approve in the chat only, some orders yes and others with comments): the orders the words asked for or
+            // agreed to are given, and a changed proposal can wait beside them in the same answer; no buttons
+            Check(LieutenantRules.Gate(true, 2, 0, false) == "carry" && LieutenantRules.Gate(true, 2, 3, false) == "carry+propose" && LieutenantRules.Gate(false, 0, 3, false) == "propose"
+                  && LieutenantRules.Gate(true, 0, 3, false) == "propose" && LieutenantRules.Gate(false, 0, 0, true) == "drop" && LieutenantRules.Gate(false, 0, 0, false) == "none",
+                  "the lieutenant gives the orders the player's words agreed to, and what he wanted changed waits beside them as the new proposal");
             Settings.AgentFolders.Clear();
             Settings.AgentDir = agentDir;
         }

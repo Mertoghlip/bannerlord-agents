@@ -326,7 +326,7 @@ namespace BannerlordAgents.WarRoom
             ((JsonObject)chat["pending"])["letters"] = new JsonArray(JsonNode.Parse("{\"to\": \"rohan\", \"text\": \"We come too.\"}"));
             string m3 = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string>());
             Check(m3.Contains("LETTERS FROM YOUR RULER'S ALLIES SINCE YOUR LAST ANSWER") && m3.Contains("We ride for Lasgalor") && m3.Contains("letters: [{\"to\":\"rohan\"")
-                  && m3.Contains("and its tools, diplomacy and letters, as they stand or changed"),
+                  && m3.Contains("with its tools, diplomacy and letters in") && m3.Contains("what they want changed goes, changed, in \"propose\""),
                   "the lieutenant hears its ruler's allies' letters, and its proposal's letters, tools and diplomacy wait for the same yes as its orders");
             LieutenantRoom.ExtractAnswer("{\"say\": \"Writing to Rohan.\", \"carry_out\": true, \"orders\": [], \"letters\": [{\"to\": \"rohan\", \"text\": \"We come too.\"}], \"tools\": [{\"name\": \"x\"}], \"diplomacy\": [{\"act\": \"propose_trade\", \"with\": \"rohan\"}]}", out JsonObject withAll);
             LieutenantRoom.WriteAnswer(channel, 8, withAll, 7);

@@ -765,6 +765,13 @@ namespace BannerlordAgents
                  null, detail: new { chat, approved, list });
         }
 
+        /// <summary>The orders the player's words asked for or agreed to, given by the lieutenant (0.13.8: approval in words, no buttons).</summary>
+        public static void OnLieutenantAgreed(int chat, string list)
+        {
+            if (!On) return;
+            Emit("lieutenant_agreed", "Your lieutenant gave the orders your words asked for or agreed to" + (string.IsNullOrEmpty(list) ? "." : ":\n" + list), null, detail: new { chat, list });
+        }
+
         // ---------- writing ----------
 
         private static void Emit(string kind, string text, TargetInfo target, string lord = null, string verb = null, object detail = null)

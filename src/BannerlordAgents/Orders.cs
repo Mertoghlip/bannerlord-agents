@@ -283,7 +283,12 @@ namespace BannerlordAgents
             }
             if (party == null || party.LeaderHero != lord || !party.IsActive) return name + " is not leading a party right now.";
             if (verb == "wages") return WagesOrder(lord, party, a, realm, shadow, live, ref status);
-            if (party.AttachedTo != null && party.Army?.LeaderParty != party)
+            bool armyVerb = verb == "adjust" || verb == "add" || verb == "release" || verb == "disband";
+            // the ruler's lieutenant may order a lord marching in an army: he is taken out of it first, once his order has passed its
+            // checks (0.13.8; Mert, Oct 29: lords "that should be controlled by my liutenant keep escaping to the game's AI"); an agent
+            // still orders the army's leader (release, disband)
+            bool takeOut = lieutenant && !armyVerb && party.Army != null && party.Army.LeaderParty != party;
+            if (!takeOut && party.AttachedTo != null && party.Army?.LeaderParty != party)
                 return name + " marches in " + Names.Party(party.Army?.LeaderParty) + "'s army. Order the army's leader instead.";
 
             if (verb == "adjust")
@@ -313,6 +318,7 @@ namespace BannerlordAgents
             o.Source = source;
             string words = ((a.Lord ?? "") + " " + verb + " " + (a.At ?? a.Target ?? "")).Trim();
             o.Words = words;
+            if (takeOut && live && !shadow) notes.Add(LeaveArmy(party));
             if (def.Name == "gather") return Gather(lord, party, def, o, a, realm, shadow, live, notes, ref status);
             string text = DescribeTool(def, o);
             if (shadow)
@@ -632,6 +638,16 @@ namespace BannerlordAgents
             return null;
         }
 
+        /// <summary>A lord taken out of the army he marches in, for an order of the lieutenant's (0.13.8); says so for the receipt.</summary>
+        private static string LeaveArmy(MobileParty party)
+        {
+            string from = Names.Party(party.Army?.LeaderParty);
+            party.Army = null;   // as release does
+            Diag.Count("army:left for an order");
+            Diag.Event("order", "left an army", new { lord = party.LeaderHero?.StringId, army = from });
+            return "taken out of " + from + "'s army first";
+        }
+
         /// <summary>Whatever order the party held before ends here, quietly: the new one replaces it.</summary>
         private static void ReplaceHeld(MobileParty party, int byId)
         {
@@ -877,12 +893,15 @@ namespace BannerlordAgents
             {
                 if (shadow) { status = "checked"; return "valid: " + name + "'s army would break up (shadow mode: not carried out)"; }
                 if (!live) return NotYours(lord);
+                // who is in it, named in the receipt (0.13.8): each goes back to the game's own AI unless given an order of his own
+                List<string> inIt = army.Parties.Where(p => p != null && p != lp && p.LeaderHero != null).Select(p => Names.Hero(p.LeaderHero) + " [" + p.LeaderHero.StringId + "]").ToList();
                 Witness.Ours = true;
                 try { DisbandArmyAction.ApplyByObjectiveFinished(army); }
                 finally { Witness.Ours = false; }
                 Diag.Count("army:disbanded");
                 status = "applied";
-                return name + "'s army breaks up; its lords go back to the game's own AI";
+                return name + "'s army breaks up. " + name + (inIt.Count > 0 ? " and its lords (" + string.Join(", ", inIt) + ")" : "")
+                       + " go back to the game's own AI, unless each is given an order of his own";
             }
             if (a.Lords.Count == 0) return verb + " needs lords, for example \"lords\": [\"lord_X\"].";
             var ids = new List<string>();

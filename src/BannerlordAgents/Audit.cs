@@ -50,7 +50,7 @@ namespace BannerlordAgents
             foreach (ViewHolding h in v.Holdings)
                 if (h.Faction != v.Faction) problems.Add("a holding of another realm among its own: " + h.Name);
             var allowed = new HashSet<string>(StringComparer.Ordinal);
-            foreach (ViewParty p in v.Forces.Concat(v.Seen).Concat(v.LastSeen))
+            foreach (ViewParty p in v.Forces.Concat(v.Seen).Concat(v.LastSeen).Concat(v.Forces.Where(f => f.Members != null).SelectMany(f => f.Members)))
             {
                 allowed.Add(p.Id);
                 if (p.Lord != null) allowed.Add(p.Lord);
