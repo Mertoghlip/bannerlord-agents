@@ -272,7 +272,9 @@ namespace BannerlordAgents
         public static void OnSaved(string name)
         {
             if (_run == null || (_run.Status != "running" && _run.Status != "armed") || string.IsNullOrEmpty(name)) return;
-            if (!_run.Saves.Contains(name)) _run.Saves.Add(name);
+            // the newest save last (0.13.12), so "load ... to carry it on" names the one saved most recently
+            _run.Saves.Remove(name);
+            _run.Saves.Add(name);
             // written at every save (0.13.5), so the hour it stands at is on disk: a load of the save after hours played and lost says so
             RunFiles.Write(_run);
         }

@@ -2014,7 +2014,11 @@ namespace BannerlordAgents
                 case "garrison":
                 case "enter": return lord + " goes inside " + Names.Settlement(o.Place);
                 case "near": return lord + " goes close to " + Names.Settlement(o.Place);
-                case "toward": return lord + " marches to where " + Names.Party(o.Target) + " was last seen";
+                // no party (0.13.12): a tool's lord falling back across open ground, to a point away from a danger
+                case "toward":
+                    if (o.Target != null) return lord + " marches to where " + Names.Party(o.Target) + " was last seen";
+                    string spot = SpotText(o.X, o.Y);
+                    return lord + " falls back across open ground, toward a point " + (spot.StartsWith("at ", StringComparison.Ordinal) ? "near " + spot.Substring(3) : spot);
                 case "post": return lord + " keeps watch " + SpotText(o.X, o.Y);
                 case "shadow": return lord + " shadows " + Names.Party(o.Target) + " from about " + Text.D(o.Radius);
                 case "leave": return lord + " leaves the holding";
