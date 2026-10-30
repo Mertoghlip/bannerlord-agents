@@ -969,7 +969,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>An order naming a tool of its answer runs that very tool, else the realm's kept tool of that name; a next order (then) naming one carries its fingerprint.</summary>
-        private void Attach(AgentChannel.AgentOrder o, Dictionary<string, Tools.ToolDef> written)
+        internal void Attach(AgentChannel.AgentOrder o, Dictionary<string, Tools.ToolDef> written)
         {
             string verb = (o.Do ?? "").Trim().ToLowerInvariant();
             if (written != null && written.TryGetValue(verb, out Tools.ToolDef d)) o.Tool = d;

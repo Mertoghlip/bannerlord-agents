@@ -77,6 +77,26 @@ namespace SmokeTest
             var then = AgentChannel.OrderFrom(JObject.Parse("{\"lord\": \"lord_bolg\", \"do\": \"sweep\", \"tool_hash\": \"" + sweep?.Hash + "\"}"), null, poke, "then");
             Check(sweep != null && sweep.OneOff && then.Tool == sweep, "a next order (then) naming a tool its answer wrote starts that very tool, by its fingerprint");
 
+            // 0.13.13 (Oct 30, the lieutenant's chat-18: recruit_pair written and ordered in one answer, the orders refused as unknown and the
+            // tool kept after them): the lieutenant's orders wait for its answer's tools, then carry their definitions or are refused with them
+            var held = new List<AgentChannel.AgentOrder>
+            {
+                AgentChannel.OrderFrom(JObject.Parse("{\"lord\": \"lord_bolg\", \"do\": \"sweep\", \"at\": \"castle_orc\"}"), null, -1, "chat-18.json"),
+                AgentChannel.OrderFrom(JObject.Parse("{\"lord\": \"lord_azog\", \"do\": \"broken\", \"at\": \"castle_orc\"}"), null, -1, "chat-18.json")
+            };
+            for (int k = 0; k < held.Count; k++) { held[k].Index = k + 1; held[k].Realm = "orcs"; }
+            var givenNow = new List<AgentChannel.AgentOrder>();
+            var saidNow = new List<string>();
+            int before18 = ReadIf(receipts).Length;
+            int gave = Lieutenant.GiveAfterTools(held, new Dictionary<string, ToolDef>(StringComparer.OrdinalIgnoreCase) { ["sweep"] = sweep },
+                                                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["broken"] = "the checker found a problem" },
+                                                 Agents.Of("orcs")?.Channel, givenNow.Add, saidNow.Add);
+            Files.FlushAll();
+            string said18 = ReadIf(receipts).Substring(before18);
+            Check(gave == 1 && givenNow.Count == 1 && givenNow[0].Tool == sweep && saidNow.Count == 1 && saidNow[0].Contains("broken")
+                  && said18.Contains("(lord_azog broken): REFUSED. its tool broken was refused (the checker found a problem)"),
+                  "the lieutenant's orders follow its answer's tools: one naming the tool it just wrote carries that tool, one naming a refused tool is refused with it: " + said18);
+
             // a change: v2 kept while an order on v1 runs on with v1; the same definition again changes nothing
             ToolDef v1 = OwnLibrary.Find("orcs", "circuit");
             var onV1 = new ToolOrder { Tool = "circuit", Def = v1, Lord = "lord_bolg", LordName = "Bolg", Party = "p_bolg", At = "castle_orc", Realm = "orcs" };

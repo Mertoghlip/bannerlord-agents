@@ -440,17 +440,27 @@ namespace BannerlordAgents
         {
             string file = "chat-" + chat + ".json";
             void Say(string text, uint colour) => Background.ToUi.Enqueue(() => { LieutenantWindow.Add(text, colour, true); Keep(colour == Refused ? "refused" : "heard", text.Trim('(', ')'), chat); });
-            int i = 0;
-            foreach (JObject o in (p.Orders ?? new JArray()).OfType<JObject>())
+            void Give(AgentChannel.AgentOrder order)
             {
-                AgentChannel.AgentOrder order = AgentChannel.OrderFrom(o, null, -1, file);
-                order.Index = ++i;
-                order.Realm = realmId;
                 string lord = order.Lord;
                 Orders.FromAgent(order, (status, reason) =>
                 {
                     if (status == "refused") Say("(" + (reason ?? "an order for " + lord + " was refused") + ")", Refused);
                 });
+            }
+            // an answer with tools of its own (0.13.13): its tools first, on the helper's thread where the realm's library lives, then its
+            // orders, so an order can name a tool written in the same answer, as an agent's answer does (AgentChannel, A8). Oct 30,
+            // chat-18: recruit_pair was written and ordered in one answer; the orders were refused as unknown and the tool kept after them.
+            bool toolsFirst = (p.Tools?.Count ?? 0) > 0;
+            int i = 0;
+            var orders = new List<AgentChannel.AgentOrder>();
+            foreach (JObject o in (p.Orders ?? new JArray()).OfType<JObject>())
+            {
+                AgentChannel.AgentOrder order = AgentChannel.OrderFrom(o, null, -1, file);
+                order.Index = ++i;
+                order.Realm = realmId;
+                if (toolsFirst) orders.Add(order);
+                else Give(order);
             }
             Diag.Count("lieutenant:orders carried out", i);
             int d = 0;
@@ -466,6 +476,8 @@ namespace BannerlordAgents
             Background.Post("lieutenant's tools and letters", () =>
             {
                 RealmAgent ag = Agents.Of(realmId);
+                var written = new Dictionary<string, Tools.ToolDef>(StringComparer.OrdinalIgnoreCase);
+                var refused = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 int t = 0;
                 foreach (JToken tool in tools ?? new JArray())
                 {
@@ -476,7 +488,12 @@ namespace BannerlordAgents
                     ag?.Channel.ToolReceipt(-1, file, t, r, Diag.Hours);
                     if (r.Status == "kept" || r.Status == "changed" || r.Status == "retired") AgentChannel.WriteLibrary(realmId);
                     Say("(" + (r.Name ?? "a tool") + ": " + r.Status.Replace('_', ' ') + ". " + r.Reason + ")", r.Status == "refused" ? Refused : Aside);
+                    if (r.Name == null) continue;
+                    if (r.Usable) written[r.Name] = r.Def;
+                    else if (r.Status == "refused") refused[r.Name] = r.Reason;
                 }
+                // then the orders that waited for them (0.13.13), to the game's thread
+                GiveAfterTools(orders, written, refused, ag?.Channel, o => Background.ToMain.Enqueue(() => Give(o)), s => Say(s, Refused));
                 int l = 0;
                 foreach (JToken letter in letters ?? new JArray())
                 {
@@ -486,6 +503,31 @@ namespace BannerlordAgents
                     Say("(" + (status == "sent" ? "Sent: " : "Not sent: ") + reason + ")", status == "sent" ? Aside : Refused);
                 }
             });
+        }
+
+        /// <summary>
+        /// Worker (0.13.13): an answer's orders once its tools are taken. One naming a tool of the answer that was refused is refused for it
+        /// (receipts.log, and said in the window); the others carry the answer's own definitions (a tool used once is in no library) and
+        /// are given. Returns how many were given.
+        /// </summary>
+        internal static int GiveAfterTools(List<AgentChannel.AgentOrder> orders, Dictionary<string, Tools.ToolDef> written, Dictionary<string, string> refused,
+                                           Channel channel, Action<AgentChannel.AgentOrder> give, Action<string> sayRefused)
+        {
+            int given = 0;
+            foreach (AgentChannel.AgentOrder order in orders)
+            {
+                string verb = (order.Do ?? "").Trim();
+                if (refused != null && refused.TryGetValue(verb, out string why))
+                {
+                    AgentChannel.Receipt(order, "refused", "its tool " + verb.ToLowerInvariant() + " was refused (" + why + ")", Diag.Hours);
+                    sayRefused("(An order using " + verb.ToLowerInvariant() + " was not given: that tool was refused.)");
+                    continue;
+                }
+                channel?.Attach(order, written);
+                give(order);
+                given++;
+            }
+            return given;
         }
 
         /// <summary>A letter from an ally's agent to your realm (0.13, B5): into the window, and told to the lieutenant with your next words.</summary>

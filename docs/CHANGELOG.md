@@ -1761,3 +1761,14 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `Run.OnSaved`: the save just made goes to the end of the run's list of saves, so the watch's "load ... to carry it on" names the newest. It named BACKUPS (21:21:53), not TEST CONTINUOUS SAVE (21:22:04).
 - **Checks:** the build passed, along with the smoke test (426 pass, 0 fail), the war room's self-test and the dashboard's. RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 816 member references checked, 0 missing. The war rooms were stopped before the build and started after it (orcs, Dol Guldur, the lieutenant, the kingdom's council, the dashboard).
 - **Installed:** 21:31:54. `BannerlordAgents.dll` sha256 `CA6D4E504E3E8BC2CA10F3B4A338EC0AA25E5C0A43B5447064DB5DE394CEACA1`, SubModule v0.13.12.
+
+
+### 12:52 (Oct 30) · Version 0.13.13 built: the lieutenant's orders wait for its answer's own tools; to be installed when the game is next closed · commit (next)
+- **Seen in the run** (session 20261029-232345, Autumn 9, 15:00): Mert asked for Himrion and Theorin to recruit together, each taking half at every stop. The lieutenant wrote a new tool, `recruit_pair` (the first tool it has written itself in a run). In the same answer (chat-18.json) it ordered both lords onto it and told Mert "Done, sire". The orders were refused as unknown ("'recruit_pair' is not an order ... and your own: recruit_round"), and the tool was kept in the realm's library a moment after (receipts.log 12:41:04). On Mert's next words ("Place the orders") the lieutenant gave a different plan with tools already kept (recruit_round for Theorin; Himrion, already full, to follow), so nothing was lost in the game.
+- **Cause:** `Lieutenant.Carry` gave the answer's orders on the game's thread first, and only then posted its tools to the helper. An agent's answer takes its tools first (`Channel`, docs/PLAN-0.13.md A8).
+- **Changed:**
+  - `Lieutenant.Carry`: an answer with tools of its own holds its orders, takes the tools on the helper's thread, then gives the orders through `GiveAfterTools`.
+  - `GiveAfterTools` (new): an order naming a refused tool is refused for it, with a receipt and a line in the window. The others carry the answer's own definitions (`Channel.Attach`, now internal; a tool used once is in no library) and go to the game's thread as before.
+  - An answer without tools is carried out exactly as before.
+- **Checks:** smoke test 427 (new: the lieutenant's orders follow its answer's tools; one naming the tool it just wrote carries that tool, and one naming a refused tool is refused with it). The war room's and the dashboard's self-tests, the speed test and the game references wait for the install (the game was running, the war rooms with it).
+- **Install:** when the game is next closed (`scripts\deploy.ps1`, the war rooms stopped and started around it).
