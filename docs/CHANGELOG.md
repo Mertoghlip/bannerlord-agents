@@ -1724,7 +1724,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with `scripts\deploy.ps1` at 20:42, the game closed and the war rooms stopped: DLL sha256 `24993e6968d1ee66…`, `SubModule.xml` v0.13.9. War rooms and dashboard stopped at about 20:38 and started at 20:43.
 - **Not yet seen in the game:** the ruler's army formed or added to by the lieutenant, its influence charge, a far lord joining it; the report written on the spot.
 
-### 20:45 · Version 0.13.10: no false "caught by the save" alarm for orders carried on; installed · commit (next)
+### 20:45 · Version 0.13.10: no false "caught by the save" alarm for orders carried on; installed · commit c0f1c4e
 - **Found by the run's watch** (the game closed after the 20:29 session): the 20:29 load raised `load_frozen` (serious, on screen): "After loading, 99 lords we once held have the game's AI switched off ... A save may have caught them." They were the lords whose orders 0.13.5 had just carried on. The saves were clean: at 20:12 98 lords were handed back before the game wrote and taken back after, at 20:34 108, each "all free while saving".
 - **Why:** the load's sweep of lords with the game's AI off (`Orders.FrozenAtLoad`) ran after `CarryOn.AtLoad` had held them again, and the past hand-backs' check (`CheckPastHandbacks`, later on the game's tick) counted every lord we ever handed back that is held now, our own carried-on orders included.
 - **Fixed:** the sweep runs on the save as loaded, before any order is carried on (`Bridge.Start`); the check passes over a lord an order of ours holds now (`Orders.Holds`). Its words say the orders written at the save are carried on next.
