@@ -308,6 +308,10 @@ namespace BannerlordAgents.WarRoom
             string bad = LieutenantRoom.ExtractAnswer("{\"say\":\"ok\",\"orders\":[{\"lord\":\"x\"}]}", out JsonObject none);
             string good = LieutenantRoom.ExtractAnswer("thinking it over... {\"say\":\"Riding out.\",\"carry_out\":true,\"orders\":[{\"lord\":\"lord_dain\",\"do\":\"defend\",\"at\":\"town_gt\"}],\"pending_chat\":99}", out JsonObject ok);
             Check(bad != null && none == null && good == null && ok != null, "an answer is read from the last JSON object with \"say\", and an order without \"do\" is refused (" + bad + ")");
+            // 0.13.9: the ruler's own army names no lord of its own; any other order still needs one
+            string army = LieutenantRoom.ExtractAnswer("{\"say\":\"Your army forms.\",\"carry_out\":true,\"orders\":[{\"do\":\"my_army\",\"lords\":[\"lord_a\",\"lord_b\"]}]}", out JsonObject armyOk);
+            string noLord = LieutenantRoom.ExtractAnswer("{\"say\":\"ok\",\"orders\":[{\"do\":\"defend\",\"at\":\"town_gt\"}]}", out JsonObject noLordAnswer);
+            Check(army == null && armyOk != null && noLord != null && noLordAnswer == null, "the ruler's own army (my_army) needs no lord, and every other order still does (" + army + ")");
             LieutenantRoom.WriteAnswer(channel, 7, ok, 6);
             var written = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(channel, "orders", "chat-7.json")));
             Check((int)written["pending_chat"] == 6 && (int)written["chat"] == 7 && (bool)written["carry_out"] && LieutenantRoom.LastAnsweredOnDisk(channel) == 7,

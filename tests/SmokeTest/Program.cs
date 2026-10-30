@@ -1904,6 +1904,25 @@ namespace SmokeTest
             var me = new PartyRow { Id = "main_party", Leader = "main_hero", Name = "Aragorn", Faction = "player_k", Kind = "lord", Men = 500, Strength = 900, X = 165, Y = 105, Doing = "Hold", Spottable = true };
             var vassal = new PartyRow { Id = "p_vas", Leader = "lord_vas", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 300, Strength = 450, X = 168, Y = 100, Doing = "Hold", Spottable = true, InSettlement = "castle_men" };
             var orc = new PartyRow { Id = "p_ug", Leader = "lord_ug", Name = "Ugluk", Faction = "orcs", Kind = "lord", Men = 400, Strength = 500, X = 150, Y = 104, Doing = "Hold", Spottable = true };
+            Snapshot Seated(double h)
+            {
+                Snapshot s = ToolWorld(h, me, vassal, orc);
+                s.Seats = new List<SeatSight>
+                {
+                    new SeatSight { Realm = "orcs", Sees = s.WatchedSees, Inspected = s.InspectedByWatched, Hostile = s.HostileToWatched },
+                    new SeatSight { Realm = "player_k", Sees = new Dictionary<string, Sighting> { ["p_ug"] = new Sighting { Party = "p_ug", By = "Halbarad", Distance = 18f } },
+                                    Inspected = new HashSet<string> { "castle_men", "village_men" }, Hostile = new HashSet<string> { "orcs" } }
+                };
+                return s;
+            }
+            // 0.13.9: before any hour since the load, the ruler's words bring a report written on the spot (Oct 29: the lieutenant had read the
+            // report the session before wrote); nothing else of an hour happens with it
+            int pokedBefore6 = Brain.PokesWatched;
+            Brain.LieutenantReportNow(Seated(8999), "player_k");
+            Files.FlushAll();
+            string spot = ReadIf(Path.Combine(lt, "warroom", "report.txt"));
+            Check(spot.StartsWith("SITUATION AT " + Text.When(8999)) && spot.Contains("Aragorn [main_party]") && spot.Contains("Halbarad") && Brain.PokesWatched == pokedBefore6,
+                  "before any hour since the load, the lieutenant's report is written on the spot from a copy of now, and nobody is poked");
             for (int h = 9000; h <= 9001; h++)
             {
                 Snapshot s = ToolWorld(h, me, vassal, orc);

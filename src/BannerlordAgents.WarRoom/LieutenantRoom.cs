@@ -215,7 +215,10 @@ namespace BannerlordAgents.WarRoom
                 foreach (JsonNode n in a)
                 {
                     i++;
-                    if (n is not JsonObject ord || ord["lord"] == null || ord["do"] == null) { answer = null; return "order " + i + " of \"" + list + "\" needs \"lord\" and \"do\""; }
+                    // the ruler's own army (my_army, 0.13.9) names no lord of its own: the ruler leads it
+                    JsonObject ord = n as JsonObject;
+                    bool myArmy = ord?["do"] is JsonValue dv && dv.TryGetValue(out string verb) && string.Equals(verb.Trim(), "my_army", StringComparison.OrdinalIgnoreCase);
+                    if (ord == null || ord["do"] == null || (ord["lord"] == null && !myArmy)) { answer = null; return "order " + i + " of \"" + list + "\" needs \"lord\" and \"do\""; }
                 }
             }
             return null;

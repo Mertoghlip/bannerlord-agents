@@ -240,6 +240,19 @@ namespace BannerlordAgents
             Thinking = true;
             LieutenantWindow.Refresh();
             Channel ch = ag.Channel;
+            // no hour copied since this load (the clock has not run since the save was loaded): copy one now and write the realm's report
+            // first, so the lieutenant never answers from the report of the session or save before (0.13.9; Oct 29, chat 11 read the
+            // report written before the load, which did not yet list Stein's army's lords)
+            if (ag.Latest == null && Bridge.Running)
+            {
+                try
+                {
+                    Snapshot now = Capture.Take(Bridge.Seats, true);
+                    string seat = realm.StringId;
+                    Background.Post("lieutenant report on the spot", () => Brain.LieutenantReportNow(now, seat));
+                }
+                catch (Exception e) { Diag.Error("copying the hour for the lieutenant's report", e); }
+            }
             Background.Post("lieutenant chat", () => ch.WriteChat(n, chat, text, whole));
             Diag.Count("lieutenant:said");
             Diag.Event("lieutenant", "said", new { chat = n, text, pending = _pending?.Chat });
@@ -373,6 +386,14 @@ namespace BannerlordAgents
                 if (string.Equals(what, "party_ai", StringComparison.OrdinalIgnoreCase))
                 {
                     lines.Add("- " + (h != null ? Names.Hero(h) : lord) + ": " + PartyAiWords(o));
+                    continue;
+                }
+                // the ruler's own army (0.13.9)
+                if (string.Equals(what, "my_army", StringComparison.OrdinalIgnoreCase))
+                {
+                    var called = (o["lords"] as JArray ?? new JArray()).Select(x => Str(x)).Where(x => x != null).Select(x => Hero.Find(x) is Hero c ? Names.Hero(c) : x).ToList();
+                    Settlement gather = Str(o["at"]) is string g ? Settlement.Find(g) : null;
+                    lines.Add("- Your army" + (gather != null ? " (gathering at " + Names.Settlement(gather) + ")" : "") + ": call " + (called.Count > 0 ? string.Join(", ", called) : "no one"));
                     continue;
                 }
                 string at = Str(o["at"] ?? o["place"]), target = Str(o["target"]);

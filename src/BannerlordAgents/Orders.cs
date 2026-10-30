@@ -240,6 +240,8 @@ namespace BannerlordAgents
         /// </summary>
         private static string Issue(AgentChannel.AgentOrder a, Kingdom realm, string source, bool forceLive, ref string status)
         {
+            // the ruler's own army, formed or added to by the lieutenant (0.13.9): the order needs no lord of its own
+            if (string.Equals((a.Do ?? "").Trim(), "my_army", StringComparison.OrdinalIgnoreCase)) return RulersArmy(a, realm, source, forceLive, ref status);
             if (string.IsNullOrWhiteSpace(a.Lord)) return "the order names no lord";
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;
@@ -638,6 +640,91 @@ namespace BannerlordAgents
             return null;
         }
 
+        /// <summary>
+        /// The ruler's own army (0.13.9; Mert, Oct 29: "the liutenant should be able to form an army for me, under my name (so for example if I ask it to get
+        /// every lord stationed at imnagath to join my army, it should be able to form an army for me and automatically have them join it"): "my_army" with
+        /// "lords" (and "at", where it gathers, else the ruler's home). The player's party leads it: formed as the game's own army screen forms one when the
+        /// ruler leads none (Kingdom.CreateArmy, a defending army), else added to; each lord named is called in at the game's price
+        /// (CalculatePartyInfluenceCost), paid from the ruler's clan's influence as that screen charges it (the game charges nothing itself for a lord joining
+        /// the player's army); a lord held by an order is let go so the game marches him to the ruler; one marching in another lord's army is taken out of it
+        /// first (never that army's own leader); one too far to be called yet marches to join and is called once close enough. Only the lieutenant.
+        /// </summary>
+        private static string RulersArmy(AgentChannel.AgentOrder a, Kingdom realm, string source, bool forceLive, ref string status)
+        {
+            if (!forceLive && !(source == "agent" && Lieutenant.IsRealm(realm.StringId))) return "my_army is only for the ruler's lieutenant";
+            string mode = ModeOf(realm);
+            bool shadow = !forceLive && mode == "shadow", live = forceLive || mode == "live";
+            MobileParty me = MobileParty.MainParty;
+            Hero ruler = Hero.MainHero;
+            if (me == null || ruler == null || !me.IsActive || ruler.IsPrisoner || me.LeaderHero != ruler) return "the ruler leads no party now";
+            if (me.MapFaction != realm) return "the ruler's party is not of " + Names.Faction(realm);
+            if (me.Army != null && me.Army.LeaderParty != me) return "the ruler marches in " + Names.Party(me.Army.LeaderParty) + "'s army, so cannot lead one";
+            if (me.Army == null && !Campaign.Current.Models.ArmyManagementCalculationModel.CanPlayerCreateArmy(out TaleWorlds.Localization.TextObject cannot))
+                return "the game does not let the ruler form an army now: " + cannot;
+            if (a.Lords.Count == 0) return "my_army needs the lords to call, for example \"lords\": [\"lord_X\", \"lord_Y\"].";
+            var ids = new List<string>();
+            foreach (string w in a.Lords)
+            {
+                Hero h = FindLord(realm, w, out string error);
+                if (h == null) return error;
+                if (h == ruler) continue;
+                MobileParty p = h.PartyBelongedTo;
+                if (p == null || p.LeaderHero != h || !p.IsActive) return Names.Hero(h) + " is not leading a party right now.";
+                if (!forceLive && !shadow && !ObeysAgent(h)) return NotYours(h);
+                if (!ids.Contains(p.StringId)) ids.Add(p.StringId);
+            }
+            List<MobileParty> members = Callable(me, ids, realm, out List<string> leftOut, out int cost, out List<MobileParty> far, fromOtherArmies: true);
+            if (members.Count == 0 && far.Count == 0) return "none of these lords can come: " + string.Join("; ", leftOut) + ".";
+            var notes = new List<string>();
+            if (leftOut.Count > 0) notes.Add("cannot come: " + string.Join("; ", leftOut));
+            float influence = ruler.Clan?.Influence ?? 0;
+            if (cost > influence) return "calling them costs " + cost + " influence, and your clan has " + (int)influence + ". Call fewer lords, or nearer ones.";
+            int farCost = CostNow(me, far);
+            if (far.Count > 0)
+                notes.Add("too far to be called yet, so they march to join and are called once close enough (about " + farCost + " influence more, less as they come nearer): "
+                          + string.Join(", ", far.Select(m => Names.Hero(m.LeaderHero))));
+            Settlement place = !string.IsNullOrWhiteSpace(a.At) ? Settlement.Find(a.At.Trim().Trim('[', ']')) : null;
+            bool forms = me.Army == null;
+            string who = members.Count > 0 ? string.Join(", ", members.Select(m => Names.Hero(m.LeaderHero))) : "no lord at once";
+            string text = (forms ? "Your army is formed; " : "Into your army: ") + who + " called for " + cost + " influence (your clan had " + (int)influence + ")";
+            if (shadow) { status = "checked"; return "valid: " + text + Notes(notes) + " (shadow mode: not carried out)"; }
+            if (!live) return "your lieutenant is not in command";
+            if (forms)
+            {
+                // where it gathers: the holding named, else the ruler's home (as the game's army screen), else the realm's nearest castle or town
+                Settlement gatherAt = place ?? ruler.HomeSettlement ?? Settlement.All.Where(s => s != null && s.MapFaction == realm && s.IsFortification)
+                                                                                    .OrderBy(s => s.GetPosition2D.DistanceSquared(me.GetPosition2D)).FirstOrDefault();
+                if (gatherAt == null) return "the realm has no castle or town to name as your army's gathering place";
+                Witness.Ours = true;
+                FormingAt = gatherAt;
+                FormingBy = source;
+                try { realm.CreateArmy(ruler, gatherAt, Army.ArmyTypes.Defender); }   // as the game's army screen does
+                finally
+                {
+                    Witness.Ours = false;
+                    FormingAt = null;
+                    FormingBy = null;
+                }
+                if (me.Army == null) return "the game did not form your army (no reason given)";
+            }
+            Army army = me.Army;
+            foreach (MobileParty m in members)
+            {
+                if (m.Army != null && m.Army != army) notes.Add(Names.Hero(m.LeaderHero) + " " + LeaveArmy(m));
+                ReleaseHeld(m, "called to your army");
+                Witness.Ours = true;
+                try { m.Army = army; }   // the game marches him to you
+                finally { Witness.Ours = false; }
+            }
+            // the game charges nothing for lords joining the player's army: its army screen charges the clan, and so does this
+            if (cost > 0) ChangeClanInfluenceAction.Apply(ruler.Clan, -cost);
+            Diag.Count("army:ruler's", members.Count);
+            Diag.Event("army", forms ? "ruler's formed" : "ruler's added", new { members = members.Select(m => m.LeaderHero?.StringId).ToList(), far = far.Select(m => m.LeaderHero?.StringId).ToList(), cost, influence_before = (int)influence, place = place?.StringId });
+            if (far.Count > 0) SendToJoin(far, me, new ToolOrder { Poke = a.Poke, Source = source }, realm);
+            status = "applied";
+            return text + Notes(notes);
+        }
+
         /// <summary>A lord taken out of the army he marches in, for an order of the lieutenant's (0.13.8); says so for the receipt.</summary>
         private static string LeaveArmy(MobileParty party)
         {
@@ -960,7 +1047,7 @@ namespace BannerlordAgents
         /// only too far away to be called yet come back in far (they can march to join); the others are left out, each
         /// with why: one lord in a battle no longer stops the whole army (first live test, Oct 9).
         /// </summary>
-        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out List<string> leftOut, out int cost, out List<MobileParty> far)
+        private static List<MobileParty> Callable(MobileParty leader, List<string> partyIds, Kingdom realm, out List<string> leftOut, out int cost, out List<MobileParty> far, bool fromOtherArmies = false)
         {
             leftOut = new List<string>();
             far = new List<MobileParty>();
@@ -970,7 +1057,7 @@ namespace BannerlordAgents
             foreach (string id in partyIds)
             {
                 MobileParty m = FindPartyById(id);
-                string why = CannotCall(leader, m, realm, range, out bool tooFar);
+                string why = CannotCall(leader, m, realm, range, out bool tooFar, fromOtherArmies);
                 if (why != null)
                 {
                     if (!tooFar) leftOut.Add(why);
@@ -985,14 +1072,16 @@ namespace BannerlordAgents
         }
 
         /// <summary>Why a lord cannot be called into the leader's army now, or null. tooFar: the only reason is distance, so the lord can march to join.</summary>
-        private static string CannotCall(MobileParty leader, MobileParty m, Kingdom realm, float range, out bool tooFar)
+        private static string CannotCall(MobileParty leader, MobileParty m, Kingdom realm, float range, out bool tooFar, bool fromOtherArmies = false)
         {
             tooFar = false;
             if (m == null || !m.IsActive || m.LeaderHero == null) return "one of them is not leading a party";
             string n = Names.Hero(m.LeaderHero);
             if (m == leader) return n + " leads the army";
             if (m.MapFaction != realm) return n + " is not of " + Names.Faction(realm);
-            if (m.Army != null) return n + " is already in an army";
+            if (m.Army != null && m.Army == leader.Army) return n + " is already in this army";
+            // the ruler's army (0.13.9) may take a lord out of another lord's army, never that army's own leader
+            if (m.Army != null && (!fromOtherArmies || m.Army.LeaderParty == m)) return n + (m.Army.LeaderParty == m ? " leads an army of his own: break it up first (disband)" : " is already in an army");
             if (m.LeaderHero == realm.Leader) return n + " rules the realm and cannot be called into another lord's army";
             if (m.MapEvent != null) return n + " is in a battle";
             if (m.CurrentSettlement?.SiegeEvent != null) return n + " is inside a besieged holding";
@@ -1079,6 +1168,8 @@ namespace BannerlordAgents
             Witness.Ours = true;
             try { p.Army = army; }   // the game charges the influence and marches the lord to the leader
             finally { Witness.Ours = false; }
+            // the game charges nothing for a lord joining the player's army (Army.OnAddPartyInternal); its army screen charges the clan itself, and so does this (0.13.9)
+            if (leader == MobileParty.MainParty && cost > 0) ChangeClanInfluenceAction.Apply(Clan.PlayerClan, -cost);
             Diag.Count("army:joined");
             Diag.Event("army", "joined", new { lord = o.Lord?.StringId, leader = leader.LeaderHero?.StringId, cost, influence_before = (int)influence });
             return true;

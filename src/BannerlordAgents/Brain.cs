@@ -386,6 +386,30 @@ namespace BannerlordAgents
             });
         }
 
+        /// <summary>
+        /// The lieutenant's report on the spot (0.13.9): when the ruler speaks before any hour has been copied since the load (the game is loaded
+        /// paused, and the lieutenant's window holds the clock), the game's thread copies one and this writes the lieutenant's report and look-ups
+        /// from it, and nothing else of an hour: no orders stepped, no pokes, no day lines. Before, the lieutenant read the report the last session
+        /// wrote (Oct 29, chat 11: written before the load, by the version before army lords were listed).
+        /// </summary>
+        public static void LieutenantReportNow(Snapshot s, string realm)
+        {
+            foreach (Snapshot v in s.SeatViews().Where(x => x.Watched == realm))
+            {
+                RealmAgent ag = Agents.Serving(v.Watched);
+                if (ag == null || !ag.On || !ag.Config.IsLieutenant || v.WatchedSees == null || ag.Latest != null) continue;   // an hour came meanwhile: its report stands
+                Memory m = Get(v.Watched);
+                View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
+                Tools.World w = Tools.Runner.WorldFor(v);
+                string report = Views.Report(view, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true, Ruler = Views.RulerLine(v) });
+                Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "report written on the spot", Known(v, v.Watched, v.WatchedSees, m, w));
+                ag.Channel.OnHour(v.Hours, report);
+                ag.Channel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails));
+                Diag.Count("lieutenant:report on the spot");
+                Diag.Event("lieutenant", "report on the spot", new { hours = v.Hours, chars = report.Length });
+            }
+        }
+
         /// <summary>One watched realm's report of its newest hour: its view, its poke if anything waits, the lieutenant's hourly report.</summary>
         private static void PublishSeat(string realm, Dictionary<string, double> ms, FileTally files)
         {
