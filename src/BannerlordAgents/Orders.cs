@@ -1580,7 +1580,7 @@ namespace BannerlordAgents
             });
             return total + " parties in the game have the game's AI switched off in this save"
                    + (total > 0 ? " (" + string.Join(", ", byRealm.Select(kv => kv.Key + " " + kv.Value)) + ")" : "")
-                   + (lords.Count > 0 ? "; lords among them: " + string.Join(", ", lords) : "") + ". No orders of ours are active after a load.";
+                   + (lords.Count > 0 ? "; lords among them: " + string.Join(", ", lords) : "") + ". No orders of ours are active yet (those written at the save are carried on next).";
         }
 
         private static void CheckPastHandbacks(List<string> ids)
@@ -1593,7 +1593,8 @@ namespace BannerlordAgents
                 MobileParty p = h?.PartyBelongedTo;
                 if (p == null || p.LeaderHero != h) continue;
                 found++;
-                if (p.Ai.DoNotMakeNewDecisions && PacReader.OrderOf(h) == null) frozen.Add(Names.Hero(h));
+                // a lord an order of ours holds now (carried on from the save, 0.13.5) is held on purpose, not caught by the save
+                if (p.Ai.DoNotMakeNewDecisions && PacReader.OrderOf(h) == null && !Holds(p)) frozen.Add(Names.Hero(h));
             }
             Diag.Event("load", "past hand-backs checked", new { lords = ids.Count, leading_parties = found, still_frozen = frozen });
             if (frozen.Count == 0) Log.Line("load check: all " + found + " lords we handed back at earlier saves (and who still lead parties) are free.");

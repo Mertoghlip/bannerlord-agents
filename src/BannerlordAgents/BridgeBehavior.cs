@@ -142,6 +142,9 @@ namespace BannerlordAgents
             try { Run.OnLoad(save, loadedAt, LoadId); }
             catch (Exception e) { Diag.Error("the test run at the load", e); }
             Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories, history));
+            // the lords whose game AI is off in the save as loaded, before any order of ours is carried on (0.13.10: after it, the sweep counted
+            // the carried-on lords as caught by the save, and the past hand-backs' check raised load_frozen for 99 of them, Oct 29)
+            string frozenAtLoad = Orders.FrozenAtLoad();
             // the orders written down at this save carried on (0.13.5, CarryOn; after the reset, which clears the tools in force)
             try { CarryOn.AtLoad(save, loadedAt); }
             catch (Exception e) { Diag.Error("carrying on the orders written at the save", e); }
@@ -156,7 +159,7 @@ namespace BannerlordAgents
                      + Settlement.All.Count + " settlements; " + warmed + " names prepared in " + warmMs.ToString("0", Text.Inv) + " ms");
             Log.Line("watching: " + WatchedSummary());
             Log.Line("history: " + history);
-            Log.Line("at load: " + Orders.FrozenAtLoad());
+            Log.Line("at load: " + frozenAtLoad);
             Log.Line("files for this campaign: " + Paths.Data(id));
             for (int i = 0; i < configs.Count; i++)
                 Log.Line("agent for " + Names.Faction(Seats[i]) + ": " + AgentChannel.ModeText(configs[i].Mode, configs[i].Lords) + " Folder: " + (configs[i].Workspace ?? configs[i].ChannelDir));
