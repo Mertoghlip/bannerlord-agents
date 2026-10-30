@@ -1772,3 +1772,11 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - An answer without tools is carried out exactly as before.
 - **Checks:** smoke test 427 (new: the lieutenant's orders follow its answer's tools; one naming the tool it just wrote carries that tool, and one naming a refused tool is refused with it). The war room's and the dashboard's self-tests, the speed test and the game references wait for the install (the game was running, the war rooms with it).
 - **Install:** when the game is next closed (`scripts\deploy.ps1`, the war rooms stopped and started around it).
+- **Installed:** 13:38 (Oct 30), with the game closed after Mert stormed Glad Thaw.
+  - The war rooms were stopped before the build and started after it: orcs, Dol Guldur, the lieutenant, the kingdom's council and the dashboard.
+  - `scripts\deploy.ps1` built the mod with 0 warnings, and the smoke test, the war room's self-test and the dashboard's all passed.
+  - RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 816 member references, 0 missing.
+  - `BannerlordAgents.dll` sha256 `AB143E555E2D07CDA530E35036C94C612677AA5F5C62D0FEAF1B61552A765556`, SubModule v0.13.13.
+- **Also seen working on 0.13.12, in the same session:**
+  - The fall-back step's new wording: "Skarvûk falls back across open ground, toward a point 24 south-east of Gwígar".
+  - The run's watch now names the newest save: "load TEST CONTINUOUS SAVE to carry it on".
