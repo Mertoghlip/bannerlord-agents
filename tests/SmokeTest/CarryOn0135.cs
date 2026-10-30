@@ -100,6 +100,11 @@ namespace SmokeTest
             JObject broken = JObject.Parse(guard.ToString());
             broken["state"] = "no_such_state";
             Check(Runner.Resume(broken, null)?.Contains("not one of its tool's") == true, "a run whose state its tool no longer has is not carried on, and says why");
+
+            // 0.13.7 (Mert, Oct 29: on screen only his lieutenant's and the game's own): an order's line goes to the game's message log
+            // only for the lieutenant's realm or his own orders (the console's, his vassal orders), never another agent's
+            Check(Orders.Shown("agent", true) && Orders.Shown("hand", false) && Orders.Shown("you", false) && !Orders.Shown("agent", false) && !Orders.Shown("then", false),
+                  "an order's line goes on screen for the lieutenant's orders and your own, never for another agent's");
         }
     }
 }

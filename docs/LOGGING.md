@@ -251,6 +251,8 @@ The agent cannot read any of this: a war room call can read only the channel fol
 | `agents.detail full` or `everyday` | the detail level |
 | `agents.hooks on` or `off`; `agents.hooks witness` or `reasons on` or `off` | the two game hooks |
 | `agents.alarms on` or `off` | red alarms on screen |
+
+**What reaches the game's message log** (since 0.13.7; Mert, Oct 29: "I only want to see the stuff from my liutenant and the normal game logs and updates in-game, the dashboard should stay the same"): the game's own messages; the lieutenant's answers and what became of its orders (when its window is closed); the lines of your own orders (the console's `agents.order`, your vassal orders) as they start, arrive and end; the test run's lines (readied, carried on, day 60); and the red alarms (above). The other agents' pokes and orders no longer go there; they are in the logs, the run's events and on the dashboard as before.
 | `agents.recruits` | why the watched realm's parties do or do not refill, as of now and for the last whole day |
 | `agents.map` or `agents.map again` | where the copy of the walking map stands, and the dashboard's frames this session; again: copy the map anew (0.7) |
 

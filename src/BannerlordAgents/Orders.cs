@@ -557,7 +557,7 @@ namespace BannerlordAgents
             Diag.Count("order:issued");
             Diag.Count("order source:" + h.Source);
             Note(h, "issued", h.ToolText, new { words, before, tool = def.Name, at = o.At, target = o.Target, lords = o.Lords, settings = o.Settings, then = o.Then?.ToString(Newtonsoft.Json.Formatting.None) });
-            Say("Order: " + h.ToolText + ".", Colors.Cyan);
+            if (OnScreen(h)) Say("Order: " + h.ToolText + ".", Colors.Cyan);
             Background.PostFirst("tool start", () => Runner.Start(id, o));
             string shown = null;
             try { shown = PacLink.OnOrderStarted(h.Id, lord, party, h.Source, realm, def.Name, o.At, o.Target); }
@@ -1152,7 +1152,7 @@ namespace BannerlordAgents
             Diag.Count("order:issued");
             Diag.Count("order source:" + o.Source);
             Note(o, "issued", text, new { words, before, after = State(o.Party, o), took });
-            Say("Order: " + text + ".", Colors.Cyan);
+            if (OnScreen(o)) Say("Order: " + text + ".", Colors.Cyan);
             if (!took)
             {
                 Diag.Count("order:not taken");
@@ -1238,7 +1238,7 @@ namespace BannerlordAgents
                         else
                         {
                             Note(o, "arrived", Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place), new { hours_taken = Math.Round(now - o.Since, 1) });
-                            Say(Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place) + ".", Colors.Cyan);
+                            if (OnScreen(o)) Say(Names.Hero(o.Lord) + " reached " + Names.Settlement(o.Place) + ".", Colors.Cyan);
                         }
                     }
                     Hold(p);
@@ -1724,7 +1724,7 @@ namespace BannerlordAgents
             Note(o, "ended", why, new { key, hours_held = Math.Round(CampaignTime.Now.ToHours - o.Since, 1), state = State(o.Party, o) }, quiet: key == "tool done",
                  recordOnly: (key == "joined an army" && o.Verb == "join") || key == "called to an army");
             // the lieutenant's orders end in its own words, in the chat box (Lieutenant.Heard)
-            if (!Lieutenant.IsRealm(o.Realm?.StringId)) Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
+            if (!Lieutenant.IsRealm(o.Realm?.StringId) && OnScreen(o)) Say("Order for " + Names.Hero(o.Lord) + " ended: " + why + ".", Colors.Cyan);
             if (stillOff)
                 Diag.Alarm("release_failed", Names.Hero(o.Lord) + "'s order ended, but the game's AI could not be switched back on for this lord.", true, new { id = o.Id });
             // a lord who left the realm is no longer ours to watch (0.11.3)
@@ -2007,6 +2007,16 @@ namespace BannerlordAgents
         {
             if (Settings.Notify) Ui.Say(text, color);
         }
+
+        /// <summary>
+        /// Is this order's line for the game's message log? (0.13.7, Mert, Oct 29: "remove the other agents' orders from the logs that show
+        /// up in-game. I only want to see the stuff from my liutenant and the normal game logs and updates in-game, the dashboard should
+        /// stay the same.") Only your lieutenant's orders and your own (the console's, your vassal orders); the agents' orders are in the
+        /// logs and on the dashboard, not on screen.
+        /// </summary>
+        private static bool OnScreen(HandOrder o) => Shown(o.Source, Lieutenant.IsRealm(o.Realm?.StringId));
+
+        internal static bool Shown(string source, bool lieutenantsRealm) => lieutenantsRealm || source == "hand" || source == "you";
 
         private static string FirstWord(string s) => string.IsNullOrEmpty(s) ? "" : s.Split(' ')[0];
     }

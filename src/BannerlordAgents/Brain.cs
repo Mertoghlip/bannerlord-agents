@@ -708,11 +708,8 @@ namespace BannerlordAgents
             Log.Line("poke: " + line);
             RecentPokes.Add(line);
             if (RecentPokes.Count > 50) RecentPokes.RemoveAt(0);
-            if (Settings.Notify && !ch.IsLieutenant)
-            {
-                string say = v.FactionName + ": " + triggers[0].Text + (triggers.Count > 1 ? " (+" + (triggers.Count - 1) + ")" : "");
-                Background.ToMain.Enqueue(() => Ui.Say(say, Colors.Yellow));
-            }
+            // since 0.13.7 an agent's poke is not put in the game's message log (Mert, Oct 29: on screen only his lieutenant's and the
+            // game's own; the dashboard and the logs keep every poke)
         }
 
         /// <summary>
