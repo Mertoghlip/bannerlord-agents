@@ -126,6 +126,7 @@ These are the only two pieces that hook into the game's code instead of reading 
 
 ### Saves
 - At every save: which lords were handed back, checked free before the game wrote, and taken back after. `handbacks.jsonl` keeps the list.
+- At every save (since 0.13.5): the orders in force, written down beside the save's history note (`data\<campaign>\orders\<save>.json`, one file per save name, overwritten with it): each tool run with the definition it runs, its settings, state, remembered values, move in force and its record so far, and the agents' wage caps. A load of that save at that hour carries them on (`CarryOn`; "orders carried on" and each "order carried on" or "not carried on" in the trace and the run's events; `run_resumed` in the toolbook). The test run's `run.json` is written at every save and when the game closes, with the hour it stands at.
 - At every load: every party in the game whose AI is switched off, by realm, and a check that every lord we ever handed back is free.
 - Once a day: lords whose AI is switched off by anyone but us (Party AI Controls is named).
 

@@ -109,6 +109,11 @@ namespace BannerlordAgents
         /// Runs.exe copies the records folder and every agent's folder there, after the run's bundle. Empty: no backup.
         /// </summary>
         public static string Backup = "";
+        /// <summary>
+        /// The war room's program (0.13.5): at each load, an agent switched on whose war room is not running is started with it, with no
+        /// window (WarRooms.Check). Empty: an alarm says which is not running.
+        /// </summary>
+        public static string WarRoom = "";
 
         /// <summary>Lines of settings.txt that were not understood, for the start-up self-check.</summary>
         public static readonly List<string> Unknown = new List<string>();
@@ -183,12 +188,13 @@ namespace BannerlordAgents
                         case "run_rivals": RunRivals = value.Split(';', ',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList(); break;
                         case "run_kingdom": RunKingdom = value; break;
                         case "backup": Backup = value; break;
+                        case "war_room": WarRoom = value; break;
                         default: Unknown.Add(line); break;
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
                 foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause",
-                                             "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom", "backup" })
+                                             "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom", "backup", "war_room" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
             }
@@ -237,6 +243,8 @@ namespace BannerlordAgents
                 sb.AppendLine("run_kingdom = " + RunKingdom);
                 sb.AppendLine("# the backup (docs/LOGGING.md): where Runs.exe copies the records and the agents' folders when a run ends (empty: none)");
                 sb.AppendLine("backup = " + Backup);
+                sb.AppendLine("# the war room's program (docs/WARROOM.md): at each load, an agent switched on whose war room is not running is started with it (empty: an alarm says so)");
+                sb.AppendLine("war_room = " + WarRoom);
                 File.WriteAllText(FilePath, sb.ToString());
             }
             catch (Exception e) { Log.Line("settings could not be saved: " + e.Message); }

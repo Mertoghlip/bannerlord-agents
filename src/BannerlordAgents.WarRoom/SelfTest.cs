@@ -434,6 +434,14 @@ namespace BannerlordAgents.WarRoom
                   "every check is logged with the definition, its problems and the answer (" + logged.Length + ")");
             Check(Claude.RunawayLimit("{\"poke\": 3, \"orders\": []}") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\": 3, \"tools\": [{\"name\":") == Claude.RunawayCharsWithTools,
                   "the runaway limit is raised for an answer that writes tools (" + Claude.RunawayCharsWithTools + " characters)");
+            // 0.13.5 (Mert, Oct 29: "remove the time limit on the liutenant's thinking"): a time limit of 0 is none, and the lieutenant's
+            // proposal, which may name every lord of the realm, gets the longer runaway limit
+            string limits = Path.Combine(root, "limits");
+            Directory.CreateDirectory(limits);
+            File.WriteAllText(Path.Combine(limits, "warroom.txt"), "timeout_seconds = 0\nthinking_cap = 0\n");
+            Config none = Config.Load(limits);
+            Check(none.TimeoutSeconds == 0 && none.ThinkingCap == 0 && Claude.RunawayLimit("{\"say\": \"My proposal\", \"propose\": [{\"lord\":") == Claude.RunawayCharsWithTools,
+                  "a time limit and a thinking cap of 0 are read as none, and a proposal gets the longer runaway limit");
         }
 
         private static void RecordTests(string root)

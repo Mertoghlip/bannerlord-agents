@@ -190,6 +190,162 @@ namespace BannerlordAgents.Tools
             }
         }
 
+        // ---------- carried across a reload of the same save (0.13.5, CarryOn) ----------
+
+        /// <summary>A tool run's id from an earlier session carried on now: new runs are numbered past it (any thread).</summary>
+        public static void NoteUsedId(int id)
+        {
+            int seen;
+            while ((seen = _lastId) < id && System.Threading.Interlocked.CompareExchange(ref _lastId, id, seen) != seen) { }
+        }
+
+        /// <summary>
+        /// A tool run as it stands, for the save's carry-on file (CarryOn): its order, the very definition it runs, its settings, its state
+        /// and remembered values, the move in force and the safety and food rules' places. Null when there is no such run.
+        /// </summary>
+        public static JObject Export(int id)
+        {
+            if (!ById.TryGetValue(id, out ToolInstance t) || t.Finished || t.Def?.Json == null || t.State == null) return null;
+            ToolOrder o = t.Order;
+            var settings = new JObject();
+            foreach (var kv in o.Settings) settings[kv.Key] = kv.Value;
+            var live = new JObject();
+            foreach (var kv in t.Settings) live[kv.Key] = kv.Value;
+            return new JObject
+            {
+                ["id"] = t.Id, ["owner"] = t.Owner?.Config?.ChannelDir, ["realm"] = t.Owner?.Realm ?? o.Realm,
+                ["def"] = new JObject
+                {
+                    ["json"] = t.Def.Json, ["name"] = t.Def.Name, ["author"] = t.Def.Author, ["version"] = t.Def.Version, ["written_at"] = t.Def.WrittenAt, ["one_off"] = t.Def.OneOff,
+                    ["hash"] = t.Def.Hash, ["given_with"] = o.Def != null
+                },
+                ["order"] = new JObject
+                {
+                    ["tool"] = o.Tool, ["lord"] = o.Lord, ["lord_name"] = o.LordName, ["party"] = o.Party, ["at"] = o.At, ["target"] = o.Target, ["why"] = o.Why, ["source"] = o.Source,
+                    ["words"] = o.Words, ["realm"] = o.Realm, ["lords"] = new JArray(o.Lords), ["places"] = new JArray(o.Places), ["settings"] = settings, ["then"] = o.Then, ["poke"] = o.Poke
+                },
+                ["settings"] = live, ["memory"] = ToJson(new Dictionary<string, object>(t.Memory, StringComparer.OrdinalIgnoreCase)),
+                ["state"] = t.State, ["state_since"] = Num(t.StateSince), ["started"] = Num(t.Started), ["move_since"] = Num(t.MoveSince),
+                ["current"] = t.HasCurrent ? MoveJson(t.Current) : null, ["pending"] = t.HasPending ? MoveJson(t.Pending) : null,
+                ["shelter"] = t.Shelter, ["shelter_from"] = t.ShelterFrom, ["supply_at"] = t.SupplyAt, ["running"] = t.Running, ["aside_since"] = Num(t.AsideSince),
+                ["steps"] = t.Steps, ["last_step"] = t.LastStep, ["still_x"] = t.StillX, ["still_y"] = t.StillY, ["still_since"] = Num(t.StillSince), ["stall_told"] = Num(t.StallTold),
+                ["call_back_day"] = t.CallBackDay, ["day_call_backs"] = t.DayCallBacks, ["slow_hours"] = t.SlowHours, ["held"] = new JArray(t.Held)
+            };
+        }
+
+        /// <summary>
+        /// A tool run carried on from the save just loaded (CarryOn): the game's thread already holds its lord again under the same id;
+        /// here the tool takes up where it was, its move in force given again. Null when carried on, else why not (the caller lets
+        /// the lord go).
+        /// </summary>
+        public static string Resume(JObject j, JObject record)
+        {
+            int id = (int?)j?["id"] ?? 0;
+            if (id <= 0 || !(j["def"] is JObject dj) || !(j["order"] is JObject oj)) return "its record is incomplete";
+            string state = (string)j["state"];
+            ToolDef def = ToolDef.FromJson((string)dj["json"] ?? "", (string)dj["name"], (string)dj["author"] ?? "ours");
+            if (!def.Valid) return "its tool no longer reads (" + def.Problems[0] + ")";
+            def.Version = (int?)dj["version"] ?? 1;
+            def.WrittenAt = (int?)dj["written_at"] ?? -1;
+            def.OneOff = (bool?)dj["one_off"] ?? false;
+            def.Hash = (string)dj["hash"];
+            if (state == null || !def.States.ContainsKey(state)) return "its state (" + (state ?? "none") + ") is not one of its tool's";
+            var o = new ToolOrder
+            {
+                Tool = (string)oj["tool"], Lord = (string)oj["lord"], LordName = (string)oj["lord_name"], Party = (string)oj["party"], At = (string)oj["at"], Target = (string)oj["target"],
+                Why = (string)oj["why"], Source = (string)oj["source"] ?? "agent", Words = (string)oj["words"], Realm = (string)oj["realm"], Then = oj["then"] as JObject,
+                Poke = (int?)oj["poke"] ?? -1, Id = id,
+                // ours by name stay so (the order's fingerprint is as it was given); an agent's own keeps the version it was given with
+                Def = (bool?)dj["given_with"] == true ? def : null
+            };
+            foreach (JToken x in oj["lords"] as JArray ?? new JArray()) o.Lords.Add((string)x);
+            foreach (JToken x in oj["places"] as JArray ?? new JArray()) o.Places.Add((string)x);
+            if (oj["settings"] is JObject os) foreach (JProperty p in os.Properties()) o.Settings[p.Name] = (double)p.Value;
+            RealmAgent owner = o.Realm == null ? Agents.For(null) : Agents.Serving(o.Realm);
+            if (owner == null) return "no agent serves the realm";
+            var t = new ToolInstance
+            {
+                Id = id, Order = o, Def = def, Owner = owner, State = def.States[state].Name, Entered = true,
+                StateSince = Dbl(j["state_since"]), Started = Dbl(j["started"]), MoveSince = Dbl(j["move_since"]),
+                Shelter = (string)j["shelter"], ShelterFrom = (string)j["shelter_from"], SupplyAt = (string)j["supply_at"], Running = (bool?)j["running"] ?? false,
+                AsideSince = Dbl(j["aside_since"]), Steps = (int?)j["steps"] ?? 0, LastStep = (string)j["last_step"],
+                StillX = (float?)j["still_x"] ?? 0, StillY = (float?)j["still_y"] ?? 0, StillSince = Dbl(j["still_since"]), StallTold = Dbl(j["stall_told"]),
+                CallBackDay = (long?)j["call_back_day"] ?? long.MinValue, DayCallBacks = (int?)j["day_call_backs"] ?? 0, SlowHours = (int?)j["slow_hours"] ?? 0
+            };
+            foreach (SettingDef s in def.Settings.Values)
+                t.Settings[s.Name] = j["settings"]?[s.Name] is JValue v && v.Type != JTokenType.Null ? (double)v : o.Settings.TryGetValue(s.Name, out double g) ? g : s.Default;
+            if (FromJson(j["memory"]) is Dictionary<string, object> mem) foreach (var kv in mem) t.Memory[kv.Key] = kv.Value;
+            foreach (JToken x in j["held"] as JArray ?? new JArray()) t.Held.Add((string)x);
+            foreach (ToolInstance old in ById.Values.Where(x => x.Order.Party == o.Party && x.Id != id).ToList())
+            {
+                ById.Remove(old.Id);
+                old.Owner?.Tools.Remove(old.Id);
+            }
+            ById[id] = t;
+            owner.Tools[id] = t;
+            NoteUsedId(id);
+            // the move in force at the save (or the one about to be given) is given again: the lord was only held until now
+            Move? m = MoveOf(j["pending"]) ?? MoveOf(j["current"]);
+            if (m != null)
+            {
+                t.Current = m.Value;
+                t.HasCurrent = true;
+                MoveSink(id, m.Value);
+            }
+            Diag.Count("tool:carried on");
+            Diag.Event("tool", "carried on", new { id, tool = def.Name, version = def.VersionText, author = def.Author, lord = o.Lord, party = o.Party, state = t.State, move = m?.ToString() });
+            Outcomes.Resume(t, record, Diag.Hours);
+            return null;
+        }
+
+        private static JToken Num(double d) => double.IsNaN(d) || double.IsInfinity(d) ? JValue.CreateNull() : new JValue(d);
+        private static double Dbl(JToken t) => t is JValue v && v.Type != JTokenType.Null ? (double)v : double.NaN;
+
+        private static JObject MoveJson(Move m) => new JObject { ["verb"] = m.Verb, ["place"] = m.Place, ["party"] = m.Party, ["x"] = m.X, ["y"] = m.Y, ["r"] = m.R };
+
+        private static Move? MoveOf(JToken t)
+        {
+            if (!(t is JObject o) || (string)o["verb"] == null) return null;
+            return new Move { Verb = (string)o["verb"], Place = (string)o["place"], Party = (string)o["party"], X = (float?)o["x"] ?? 0, Y = (float?)o["y"] ?? 0, R = (float?)o["r"] ?? 0 };
+        }
+
+        /// <summary>A remembered value as JSON (none, yes/no, a number, words, a list, a table) and back: a table is the only JSON object.</summary>
+        internal static JToken ToJson(object v)
+        {
+            switch (v)
+            {
+                case null: return JValue.CreateNull();
+                case bool b: return new JValue(b);
+                case double d: return Num(d);
+                case string s: return new JValue(s);
+                case List<object> l: return new JArray(l.Select(ToJson));
+                case Dictionary<string, object> table:
+                    var o = new JObject();
+                    foreach (var kv in table) o[kv.Key] = ToJson(kv.Value);
+                    return o;
+                default: return new JValue(Expr.Show(v));
+            }
+        }
+
+        internal static object FromJson(JToken t)
+        {
+            switch (t?.Type)
+            {
+                case null:
+                case JTokenType.Null: return null;
+                case JTokenType.Boolean: return (bool)t;
+                case JTokenType.Integer:
+                case JTokenType.Float: return (double)t;
+                case JTokenType.String: return (string)t;
+                case JTokenType.Array: return ((JArray)t).Select(FromJson).ToList();
+                case JTokenType.Object:
+                    var table = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                    foreach (JProperty p in ((JObject)t).Properties()) table[p.Name] = FromJson(p.Value);
+                    return table;
+                default: return (string)t;
+            }
+        }
+
         /// <summary>The game's thread ended the hold (the lord was captured, released, replaced...): forget the tool.</summary>
         public static void Ended(int id, string why)
         {

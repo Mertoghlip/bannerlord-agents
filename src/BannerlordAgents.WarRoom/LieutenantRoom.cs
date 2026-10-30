@@ -42,7 +42,8 @@ namespace BannerlordAgents.WarRoom
         public int Run(CancellationToken stop)
         {
             Say("Lieutenant " + typeof(LieutenantRoom).Assembly.GetName().Version + ": answering the player's words in " + _c.ChannelDir);
-            Say("Model " + _c.Model + ", effort " + _c.Effort + ", thinking up to " + _c.ThinkingCap + " tokens, Claude Code at " + _claude);
+            Say("Model " + _c.Model + ", effort " + _c.Effort + ", " + (_c.ThinkingCap > 0 ? "thinking up to " + _c.ThinkingCap + " tokens" : "thinking as long as it needs") + ", "
+                + (_c.TimeoutSeconds > 0 ? "at most " + _c.TimeoutSeconds + " s a call" : "no time limit") + ", Claude Code at " + _claude);
             _lastAnswered = LastAnsweredOnDisk(_c.ChannelDir);
             int said = -2;
             while (!stop.IsCancellationRequested)

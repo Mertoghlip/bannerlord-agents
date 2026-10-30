@@ -271,9 +271,21 @@ namespace BannerlordAgents
         /// </summary>
         public static void OnSaved(string name)
         {
-            if (_run == null || (_run.Status != "running" && _run.Status != "armed") || string.IsNullOrEmpty(name) || _run.Saves.Contains(name)) return;
-            _run.Saves.Add(name);
+            if (_run == null || (_run.Status != "running" && _run.Status != "armed") || string.IsNullOrEmpty(name)) return;
+            if (!_run.Saves.Contains(name)) _run.Saves.Add(name);
+            // written at every save (0.13.5), so the hour it stands at is on disk: a load of the save after hours played and lost says so
             RunFiles.Write(_run);
+        }
+
+        /// <summary>
+        /// The game closing or the campaign ending (0.13.5): the run as it stands is written, its last hour with it, so a later load of
+        /// one of its saves knows how far it had gone (the hours played after that save are marked "replayed" when played again).
+        /// </summary>
+        public static void OnStop()
+        {
+            if (_run == null || _run.Status != "running") return;
+            RunFiles.Write(_run);
+            Diag.Event("run", "left", new { run = _run.Id, hours = _run.LastHours, day = RunRules.Day(_run.LastHours, _run.H0) });
         }
 
         // ---------- what happens ----------
@@ -845,7 +857,9 @@ namespace BannerlordAgents
             {
                 string dir = Path.Combine(Paths.Runs, id);
                 if (!Directory.Exists(dir)) return;
-                if (Directory.GetFiles(dir).Any(f => !string.Equals(Path.GetFileName(f), "run.json", StringComparison.OrdinalIgnoreCase)) || Directory.GetDirectories(dir).Length > 0) return;
+                // Runs.exe watch's own cursor does not keep it (0.13.5: a watch while the run was being set up left the folder behind on Oct 29)
+                if (Directory.GetFiles(dir).Any(f => !string.Equals(Path.GetFileName(f), "run.json", StringComparison.OrdinalIgnoreCase) && !string.Equals(Path.GetFileName(f), "watch.json", StringComparison.OrdinalIgnoreCase))
+                    || Directory.GetDirectories(dir).Length > 0) return;
                 Directory.Delete(dir, true);
             }
             catch (Exception e) { Diag.Swallowed("removing the readied run's folder", e); }

@@ -148,6 +148,7 @@ namespace SmokeTest
             Check(released.Any(r => r.Key == 9401 && r.Value == "the rest_here is done"), "six hours on, the wait has arrived and the tool is done");
 
             CircuitTests(circuit, moves, released);
+            CarryOnTests(moves, released);
             Settings.AgentDir = agentDir;
             InstructionExampleTests();
         }

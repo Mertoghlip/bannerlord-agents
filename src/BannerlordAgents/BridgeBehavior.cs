@@ -142,6 +142,12 @@ namespace BannerlordAgents
             try { Run.OnLoad(save, loadedAt, LoadId); }
             catch (Exception e) { Diag.Error("the test run at the load", e); }
             Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories, history));
+            // the orders written down at this save carried on (0.13.5, CarryOn; after the reset, which clears the tools in force)
+            try { CarryOn.AtLoad(save, loadedAt); }
+            catch (Exception e) { Diag.Error("carrying on the orders written at the save", e); }
+            // every agent switched on has its war room (0.13.5), started now when it was not running
+            try { WarRooms.Check(configs); }
+            catch (Exception e) { Diag.Error("checking the war rooms", e); }
             AgentChannel.Start();
             GameHooks.Apply();
             MapExport.Start();
@@ -168,6 +174,9 @@ namespace BannerlordAgents
             Seats = new List<Kingdom>();
             Configs = new List<AgentConfig>();
             History = null;
+            // the test run's state as it stands, its last hour included (0.13.5), before the flush
+            try { Run.OnStop(); }
+            catch (Exception e) { Diag.Error("writing the test run at the campaign's end", e); }
             Diag.Event("session", "campaign ended");
             Background.Post("flush", Files.FlushAll);
             Background.Post("summary", () => Diag.Summary(false));
@@ -445,6 +454,8 @@ namespace BannerlordAgents
             Orders.TakeBackAfterSave(saved, name);
             Wages.TakeBackAfterSave();
             if (saved) Run.OnSaved(name);
+            // the orders in force written down for this save, so a load of it carries them on (0.13.5, CarryOn)
+            if (saved) CarryOn.OnSaved(name);
             // the save's history note (History): which records its world has lived through, so loading it later finds exactly those
             if (!saved || Bridge.History == null || string.IsNullOrEmpty(name)) return;
             object note = Bridge.History.NoteFor(name, CampaignTime.Now.ToHours);

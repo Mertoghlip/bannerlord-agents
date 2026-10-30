@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using BannerlordAgents.Tools;
+using Newtonsoft.Json.Linq;
 
 namespace BannerlordAgents
 {
@@ -274,7 +275,7 @@ namespace BannerlordAgents
             public double Started;
             public LordNumbers Start;
             public int Fought, Won, Lost, MenLost, EnemyFallen, LordsTaken, LordsLost, Gained, LostHoldings, CallBacks, Steps;
-            public readonly List<object> States = new List<object>();
+            public List<object> States = new List<object>();
             public string State;
             public double StateSince;
         }
@@ -316,6 +317,36 @@ namespace BannerlordAgents
                 Type = "run_start", Realm = k.Realm, Run = RunTags.Id, Arm = RunTags.Arm, Wall = Wall(), Hours = hours, ToolRun = t.Id, k.Tool, k.Version, k.Author, Source = t.Order.Source,
                 k.Lord, k.Party, k.At, k.Target, Places = k.Places.Count > 0 ? k.Places : null, Lords = k.Lords.Count > 0 ? k.Lords : null, k.Settings, k.Poke, t.Order.Why, k.Start
             });
+        }
+
+        /// <summary>A tool run's record so far, for the save's carry-on file (CarryOn, 0.13.5): its counts carry on with it.</summary>
+        public static JObject Export(int id) => Tracks.TryGetValue(id, out Track k) ? JObject.FromObject(k) : null;
+
+        /// <summary>
+        /// A tool run carried on from the save just loaded (0.13.5): its record goes on from the save's (the hours played after that save
+        /// and lost are not in it), else starts afresh at the lord's numbers now; the toolbook says it was carried on.
+        /// </summary>
+        public static void Resume(ToolInstance t, JObject saved, double hours)
+        {
+            Track k = null;
+            try { k = saved?.ToObject<Track>(); }
+            catch (Exception e) { Diag.Swallowed("reading a carried-on tool run's record", e); }
+            if (k == null || k.Id != t.Id)
+            {
+                Snapshot s = t.Owner?.Latest ?? Brain.LatestFor(t.Order.Realm);
+                PartyRow me = null;
+                if (s != null && t.Order.Party != null) s.PartyById.TryGetValue(t.Order.Party, out me);
+                k = new Track
+                {
+                    Id = t.Id, Realm = t.Owner?.Realm ?? t.Order.Realm, Tool = t.Def.Name, Version = t.Def.VersionText, Author = t.Def.Author, Lord = t.Order.Lord, Party = t.Order.Party,
+                    At = t.Order.At, Target = t.Order.Target, Poke = t.Order.Poke, Started = double.IsNaN(t.Started) ? hours : t.Started, Start = LordNumbers.Of(me),
+                    Settings = new Dictionary<string, double>(t.Settings), State = t.State, StateSince = t.StateSince
+                };
+                k.Places.AddRange(t.Order.Places);
+                k.Lords.AddRange(t.Order.Lords);
+            }
+            Tracks[t.Id] = k;
+            Write(new { Type = "run_resumed", Realm = k.Realm, Run = RunTags.Id, Arm = RunTags.Arm, Wall = Wall(), Hours = hours, ToolRun = t.Id, k.Tool, k.Version, State = t.State, RecordKept = saved != null });
         }
 
         public static void Step(ToolInstance t, string from, string to, string why, double hours)

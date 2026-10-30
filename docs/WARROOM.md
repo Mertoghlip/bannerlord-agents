@@ -40,6 +40,7 @@ powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1
 - **What it does:** it runs in that window until Ctrl+C. It answers the newest poke whenever one is newer than its last answer, and waits otherwise.
 - **Pokes that arrive during a call** are not lost: the next poke's WHAT CHANGED SINCE YOUR LAST ANSWER covers them.
 - **Setting up and starting:** `scripts\setup-agent.ps1` makes an agent's folder ([below](#agents-are-folders-since-09)). `scripts\agents.ps1 start` starts every agent's war room and the dashboard.
+- **Started by the game when missing (since 0.13.5):** a running war room holds a lock named after its folder; at each load the bridge looks for it for every agent switched on, and starts any that is not running, with no window, when `war_room` in settings.txt names `WarRoom.exe` (`WarRooms.Check`); with no `war_room` it raises the alarm `war_room_down` instead. So after the laptop restarts, loading the save is enough. The dashboard is not started this way.
 - **The old agent chat:** close it. It watched the old channel folder, which the bridge no longer writes.
 
 ### Agents are folders (since 0.9)
@@ -76,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 | `effort`, `urgent_effort` | high, high | Claude Code's effort level for an ordinary poke and an urgent one |
 | `thinking_cap`, `urgent_thinking_cap` | 3000, 5000 | the most it may think, in tokens (0: no cap) |
 | `urgent` | is besieged, laid siege, passed from, declared war, Enemy army in view, was taken prisoner, army has formed, fell, striking the besiegers | words in a poke's reasons that make it urgent |
-| `timeout_seconds` | 120 | the longest a call may take |
+| `timeout_seconds` | 240 | the longest a call may take; since 0.13.5, 0 is no limit (a call that goes silent for 45 s is still stopped, and one writing far past any answer: 16,000 characters, 48,000 once it writes tools or, since 0.13.5, the lieutenant's proposal). The lieutenant has 0 since Oct 29 |
 | `lookups` | on | let the agent read its look-up files during a call |
 | `route_tool` | on | offer the agent the "ask the way" tool in its answers and councils (0.7), and since 0.7.4 the "battle odds" and "roads in" questions beside it (since 0.9.3 "can catch" too, [TOOLS.md](TOOLS.md#the-chase-question-before-a-hunt-since-093)), once the walking map is copied ([ROUTES.md](ROUTES.md), [TOOLS.md](TOOLS.md#siege-control-the-storm-rule-the-relief-bars-and-battles-run-ahead-before-they-begin-since-074)) |
 | `max_lessons` | 12 | lessons kept in the notes; past it, the chronicler merges them |

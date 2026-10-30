@@ -347,9 +347,12 @@ namespace BannerlordAgents
         /// <summary>Who obeys the agent playing that realm (all, or ids and names).</summary>
         private static string LordsOf(IFaction realm) => Agents.Of(realm?.StringId)?.Config.Lords ?? Settings.AgentLords;
 
-        private static bool ObeysAgent(Hero lord)
+        private static bool ObeysAgent(Hero lord) => Obeys(LordsOf(lord.MapFaction), lord);
+
+        /// <summary>Does this lord obey an agent whose agent.txt names these lords (all, or ids and names)?</summary>
+        internal static bool Obeys(string lords, Hero lord)
         {
-            string list = (LordsOf(lord.MapFaction) ?? "all").Trim();
+            string list = (lords ?? "all").Trim();
             if (list.Length == 0 || Text.Plain(list) == "all") return true;
             string name = Text.Plain(Names.Hero(lord));
             char[] separators = list.Contains(",") ? new[] { ',' } : new[] { ' ' };
@@ -560,6 +563,73 @@ namespace BannerlordAgents
             try { shown = PacLink.OnOrderStarted(h.Id, lord, party, h.Source, realm, def.Name, o.At, o.Target); }
             catch (Exception e) { Diag.Error("showing an order in Party AI Controls", e); }
             return shown ?? "";
+        }
+
+        // ---------- carried across a reload of the same save (0.13.5, CarryOn) ----------
+
+        /// <summary>The tool orders held now, as plain rows for the save's carry-on file (CarryOn; game's thread).</summary>
+        public static List<JObject> KeepForSave()
+        {
+            var list = new List<JObject>();
+            foreach (HandOrder o in Active)
+            {
+                if (o.ToolId <= 0 || o.Party == null || o.Lord == null) continue;
+                list.Add(new JObject
+                {
+                    ["tool_id"] = o.ToolId, ["party"] = o.Party.StringId, ["lord"] = o.Lord.StringId, ["realm"] = o.Realm?.StringId, ["source"] = o.Source, ["poke"] = o.Poke,
+                    ["tool"] = o.Tool, ["text"] = o.ToolText, ["signature"] = o.Signature, ["since"] = o.Since, ["arrived"] = o.Arrived, ["arrived_at"] = o.ArrivedAt
+                });
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// A tool order carried on from the save just loaded (CarryOn, 0.13.5): checked as at its start (the lord alive, free, leading his
+        /// party in the realm, obeying its agent, on no Party AI Controls order unless the lieutenant's, holding no other order), then
+        /// held again under its old tool run's id; the runner takes the tool up where it was. Null when carried on, else why not, in
+        /// the agent's words. at and target: the order's, for Party AI Controls' panel.
+        /// </summary>
+        public static string Resume(JObject row, string lords, string at, string target)
+        {
+            string id = (string)row["lord"];
+            Hero lord = string.IsNullOrEmpty(id) ? null : Hero.Find(id);
+            string who = lord != null ? Names.Hero(lord) : id ?? "a lord";
+            if (lord == null || !lord.IsAlive) return who + " is no longer alive";
+            if (lord.IsPrisoner) return who + " is a prisoner";
+            Kingdom realm = Bridge.SeatOf((string)row["realm"]);
+            if (realm == null || lord.MapFaction != realm) return who + " no longer serves the realm";
+            if (lord == Hero.MainHero) return who + " takes no orders from an agent";
+            MobileParty party = lord.PartyBelongedTo;
+            if (party == null || party.LeaderHero != lord || !party.IsActive) return who + " is not leading a party";
+            string source = (string)row["source"] ?? "agent";
+            if (!(source == "agent" && Lieutenant.IsRealm(realm.StringId)))
+            {
+                string pac = PacReader.OrderOf(lord);
+                if (pac != null) return who + " follows an order from his ruler's own dialogue (" + pac + ")";
+            }
+            if (!Obeys(lords, lord)) return who + " is not among the lords who obey you";
+            if (Active.Any(x => x.Party == party)) return who + " holds another order already";
+            int toolId = (int?)row["tool_id"] ?? 0;
+            if (toolId <= 0) return who + "'s order has no tool run";
+            double now = CampaignTime.Now.ToHours;
+            Runner.NoteUsedId(toolId);
+            var h = new HandOrder
+            {
+                Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = source, Poke = (int?)row["poke"] ?? -1, Verb = "hold", ToolId = toolId,
+                Tool = (string)row["tool"], ToolText = (string)row["text"], Signature = (string)row["signature"], Since = (double?)row["since"] ?? now,
+                Arrived = (bool?)row["arrived"] ?? false, ArrivedAt = (double?)row["arrived_at"] ?? -1
+            };
+            LordTours.Drop(party);   // off TFAOMFixes' recruiting trip, as at any order's start
+            Apply(h);
+            Active.Add(h);
+            AfterRelease.RemoveAll(r => r.Party == party);
+            Changed();
+            h.LastProgressAt = now;
+            Diag.Count("order:carried on");
+            Diag.Event("order", "carried on", new { id = h.Id, tool_run = toolId, lord = lord.StringId, tool = h.Tool, source, since = h.Since, text = h.ToolText });
+            try { PacLink.OnOrderStarted(h.Id, lord, party, source, realm, h.Tool, at, target); }
+            catch (Exception e) { Diag.Error("showing a carried-on order in Party AI Controls", e); }
+            return null;
         }
 
         /// <summary>Whatever order the party held before ends here, quietly: the new one replaces it.</summary>

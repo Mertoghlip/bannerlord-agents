@@ -75,11 +75,11 @@ namespace BannerlordAgents.WarRoom
         /// <summary>No answer is this long (the longest so far was under 6,000 characters); past it, the call is stopped.</summary>
         public const int RunawayChars = 16000;
 
-        /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8): each tool's definition is long, so it may run longer.</summary>
+        /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8): each tool's definition is long, so it may run longer; and (0.13.5) for the lieutenant's proposal, which may name every lord of the realm (Oct 29: 64 orders in about 6,000 characters).</summary>
         public const int RunawayCharsWithTools = 48000;
 
         /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools".</summary>
-        internal static int RunawayLimit(string written) => written.Contains("\"tools\"") ? RunawayCharsWithTools : RunawayChars;
+        internal static int RunawayLimit(string written) => written.Contains("\"tools\"") || written.Contains("\"propose\"") ? RunawayCharsWithTools : RunawayChars;
 
         /// <summary>
         /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on
@@ -217,7 +217,8 @@ namespace BannerlordAgents.WarRoom
                 while (!got.Wait(500))
                 {
                     if (cancel.IsCancellationRequested) { stopped = "cancelled"; break; }
-                    if (sw.Elapsed.TotalSeconds > timeoutSeconds) { stopped = "the call took over " + timeoutSeconds + " s and was stopped"; break; }
+                    // 0: no time limit (0.13.5, the lieutenant, Mert: "remove the time limit"); a call that hangs is still caught by the stall rule
+                    if (timeoutSeconds > 0 && sw.Elapsed.TotalSeconds > timeoutSeconds) { stopped = "the call took over " + timeoutSeconds + " s and was stopped"; break; }
                     if (sw.ElapsedMilliseconds - Interlocked.Read(ref lastEvent) > StallSeconds * 1000L) { stopped = "stalled: nothing came for " + StallSeconds + " s"; break; }
                     lock (events)
                     {

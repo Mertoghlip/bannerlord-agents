@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.MapEvents;
@@ -278,6 +279,23 @@ namespace BannerlordAgents
         public static bool Has(MobileParty p) => p != null && Caps.ContainsKey(p);
         public static int Count => Caps.Count;
         public static void Reset() => Caps.Clear();
+
+        /// <summary>The caps in force, for the save's carry-on file (CarryOn, 0.13.5): each party and the cap its agent set.</summary>
+        public static List<JObject> KeepForSave()
+            => Caps.Where(kv => kv.Key != null && kv.Key.IsActive).Select(kv => new JObject { ["party"] = kv.Key.StringId, ["lord"] = kv.Key.LeaderHero?.StringId, ["cap"] = kv.Value.Value }).ToList();
+
+        /// <summary>A cap carried on from the save just loaded: the save's own cap kept to hand back at the next save, the agent's put on. Null when carried on, else why not.</summary>
+        public static string Resume(JObject row)
+        {
+            MobileParty p = Orders.PartyById((string)row["party"]);
+            int cap = (int?)row["cap"] ?? -1;
+            if (p == null || !p.IsActive || p.LeaderHero == null) return "the party of " + ((string)row["lord"] ?? "a lord") + " is gone";
+            if (!Bridge.IsSeat(p.MapFaction) || cap < 0) return Names.Hero(p.LeaderHero) + "'s wage cap no longer applies";
+            Caps[p] = new Cap { Game = p.PaymentLimit, Value = Math.Min(cap, None) };
+            p.SetWagePaymentLimit(Caps[p].Value);
+            Diag.Event("wages", "cap carried on", new { lord = p.LeaderHero.StringId, cap = Caps[p].Value, game = Caps[p].Game });
+            return null;
+        }
 
         /// <summary>Sets his cap (null: the game's own again), and says what changed.</summary>
         public static string Set(MobileParty p, int? cap)

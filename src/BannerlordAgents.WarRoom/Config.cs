@@ -114,7 +114,7 @@ namespace BannerlordAgents.WarRoom
                     case "thinking_cap": if (int.TryParse(v, out int tc) && tc >= 0) c.ThinkingCap = tc; break;
                     case "urgent_thinking_cap": if (int.TryParse(v, out int utc) && utc >= 0) c.UrgentThinkingCap = utc; break;
                     case "urgent": if (v.Length > 0) c.Urgent = v.Split('|').Select(x => x.Trim()).Where(x => x.Length > 0).ToArray(); break;
-                    case "timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int t) && t > 10) c.TimeoutSeconds = t; break;
+                    case "timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int t) && (t > 10 || t == 0)) c.TimeoutSeconds = t; break;   // 0: no limit (0.13.5)
                     case "claude_path": c.ClaudePath = v; break;
                     case "max_lessons": if (int.TryParse(v, out int m) && m >= 0) c.MaxLessons = m; break;
                     case "lookups": c.Lookups = v == "on" || v == "true" || v == "yes"; break;
@@ -159,6 +159,7 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("# the most it may think, in tokens (0: no cap); its answer time follows its thinking almost exactly");
             sb.AppendLine("thinking_cap = " + ThinkingCap.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("urgent_thinking_cap = " + UrgentThinkingCap.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# the longest a call may take, in seconds (0: no limit; a call that goes silent for " + Claude.StallSeconds + " s is stopped all the same)");
             sb.AppendLine("timeout_seconds = " + TimeoutSeconds.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("# empty: the newest Claude Code in VS Code's extension folder, else claude on the path");
             sb.AppendLine("claude_path = " + ClaudePath);

@@ -525,7 +525,8 @@ namespace BannerlordAgents
             if (first)
             {
                 m.Started = s.Hours;
-                triggers.Add(new Trigger { Hours = s.Hours, Kind = "first_look", Text = "First look since the campaign was loaded." });
+                // what became of the orders in force at the save, when it was loaded from one (0.13.5, CarryOn)
+                triggers.Add(new Trigger { Hours = s.Hours, Kind = "first_look", Text = "First look since the campaign was loaded." + CarryOn.NoteFor(fid) });
             }
 
             var close = new HashSet<string>();
