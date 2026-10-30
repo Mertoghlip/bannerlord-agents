@@ -18,6 +18,7 @@ namespace BannerlordAgents
     internal static class Audit
     {
         private static readonly Regex Brackets = new Regex(@"\[([^\]\s]+)\]", RegexOptions.Compiled);
+        private static readonly Regex VoteNumber = new Regex(@"^[vo][0-9]+$", RegexOptions.Compiled);
         // each agent's realm's own (since 0.9 the sight check runs for every agent)
         private static readonly Dictionary<string, double> _lastSawEnemy = new Dictionary<string, double>();
         private static readonly HashSet<string> _blindAlarmed = new HashSet<string>();
@@ -66,6 +67,7 @@ namespace BannerlordAgents
                 string id = m.Groups[1].Value;
                 if (id == "brackets") continue;   // the report's own Ids in [brackets] line
                 if (Tools.Spots.Is(id)) continue;   // a spot is a point on the map, plain geography (0.11.3: its own watch posts in its past orders flagged 61 reports in run C1)
+                if (VoteNumber.IsMatch(id)) continue;   // our own numbering of the votes and offers held for it ([v3], [o2]), named in its news after they close (0.13.6)
                 if (!allowed.Contains(id)) problems.Add("an id it should not know, [" + id + "], in the line \"" + LineAt(report, m.Index) + "\"");
             }
             return problems;

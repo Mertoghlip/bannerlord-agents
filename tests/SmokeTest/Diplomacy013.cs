@@ -105,6 +105,12 @@ namespace SmokeTest
             string report = Views.Report(view, new List<Trigger>());
             Check(report.Contains("OPEN VOTES AND OFFERS (2; answer them in \"diplomacy\"") && report.Contains("DIPLOMACY, AS YOUR RULER'S SCREENS SHOW IT") && report.Contains("- [o2] A peace offered by Dale"),
                   "the realm's report carries both sections");
+            // 0.13.6: the ids of the ruler's own screens pass the fog check (run 20261029-1903-A flagged every report on the realms' ids);
+            // without what the realm knows they would not, so the check still bites
+            List<string> fog = Audit.Fog(view, report, world.WatchedSees, world.InspectedByWatched, Brain.Known(world, "orcs", world.WatchedSees, new Brain.Memory(), null));
+            List<string> bare = Audit.Fog(view, report, world.WatchedSees, world.InspectedByWatched);
+            Check(fog.Count == 0 && bare.Any(p => p.Contains("[player_k]")) && bare.Any(p => p.Contains("[policy_levy]")),
+                  "the realms, clans, policies, votes and offers of the ruler's own screens pass the fog check (" + string.Join("; ", fog) + ")");
 
             // an answer's acts: refused with their reason here, checked only in shadow mode, handed to the game's thread when live
             string dir = Path.Combine(root, "diplomacy-agent");

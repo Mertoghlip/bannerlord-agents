@@ -170,7 +170,7 @@ namespace BannerlordAgents
         /// about (triggers), which the game's own news named to it whether or not its eyes saw them (Oct 22: a raider of its
         /// village, gone before the hour's look).
         /// </summary>
-        private static IEnumerable<string> Known(Snapshot s, string realm, Dictionary<string, Sighting> sees, Memory m, Tools.World w, List<Trigger> triggers = null)
+        internal static IEnumerable<string> Known(Snapshot s, string realm, Dictionary<string, Sighting> sees, Memory m, Tools.World w, List<Trigger> triggers = null)
         {
             foreach (PartyRow r in s.Parties)
             {
@@ -202,6 +202,9 @@ namespace BannerlordAgents
             // the holding of a siege or a battle the realm sees (0.11.3: a siege seen by its camp, the walls just beyond sight, flagged the place's id)
             foreach (SiegeRow g in s.Sieges) if (g.Besieger != null && sees.ContainsKey(g.Besieger)) yield return g.Settlement;
             foreach (BattleRow b in s.Battles) if (b.Settlement != null && b.Attackers.Parties.Concat(b.Defenders.Parties).Any(sees.ContainsKey)) yield return b.Settlement;
+            // the realms, clans, policies, votes and offers of its ruler's own screens: its DIPLOMACY and OPEN VOTES sections (0.13.6)
+            if (s.Diplomacy != null && realm != null && s.Diplomacy.TryGetValue(realm, out DiploView dv))
+                foreach (string id in DiploRules.Ids(dv)) if (id != null) yield return id;
             // the player's own party, in the player's realm's report (the lieutenant's, 0.10)
             if (s.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow me) && me.Faction != null && me.Faction == s.Watched)
             {

@@ -295,6 +295,28 @@ namespace BannerlordAgents
         // ---------- the report's sections (B3) ----------
 
         /// <summary>DIPLOMACY: the ruler's influence and what each act costs, the War of the Ring, each realm's stance and the war's tally, the realm's clans, those for hire, the policies.</summary>
+        /// <summary>
+        /// Every id the DIPLOMACY and OPEN VOTES AND OFFERS sections may name: the realms, clans, policies, votes and offers of the ruler's own
+        /// screens, which the fog check allows (0.13.6: until then it flagged every report from the first hour of run 20261029-1903-A, the
+        /// realms' ids in the stances' lines).
+        /// </summary>
+        public static IEnumerable<string> Ids(DiploView v)
+        {
+            if (v == null) yield break;
+            yield return v.Realm;
+            yield return v.RulerClan;
+            foreach (DiploStance s in v.Stances) yield return s.Id;
+            foreach (DiploVote x in v.Votes) yield return x.Id;
+            foreach (DiploOffer o in v.Offers)
+            {
+                yield return o.Id;
+                yield return o.From;
+                yield return o.Against;
+            }
+            foreach (DiploClan c in v.Clans.Concat(v.ForHire)) yield return c.Id;
+            foreach (DiploPolicy p in v.Policies) yield return p.Id;
+        }
+
         public static List<string> Diplomacy(DiploView v, double now, Func<double, string> when)
         {
             var lines = new List<string>();
