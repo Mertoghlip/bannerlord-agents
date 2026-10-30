@@ -143,7 +143,9 @@ namespace BannerlordAgents.Tools
             ["sale_text"] = 1,
             // 0.13: lists, time, bandits, towns
             ["count"] = 1, ["first"] = 1, ["last"] = 1, ["item"] = 2, ["contains"] = 2, ["next"] = 2, ["nearest_of"] = 1, ["next_due"] = 3,
-            ["hours_since"] = 1, ["weakest_bandit_near"] = 2, ["bandits_near"] = 2, ["nearest_town"] = 0, ["nearest_town_of_realm"] = 0
+            ["hours_since"] = 1, ["weakest_bandit_near"] = 2, ["bandits_near"] = 2, ["nearest_town"] = 0, ["nearest_town_of_realm"] = 0,
+            // 0.13.11: the party the realm's ruler attacks in person
+            ["ruler_target"] = 0
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -155,7 +157,8 @@ namespace BannerlordAgents.Tools
             ["nearest_of"] = "nearest_of(list): the item nearest the lord", ["next_due"] = "next_due(places, table, hours): the place of the list nearest the lord whose entry in the table is none or at least that many hours old (none when every one is done)",
             ["hours_since"] = "hours_since(x): hours from the hour x (a remembered now) to now, none when x is none",
             ["weakest_bandit_near"] = "weakest_bandit_near(place, r): the weakest band of bandits in view within r of a place", ["bandits_near"] = "bandits_near(place, r): how many bands of bandits are in view within r",
-            ["nearest_town"] = "nearest_town(): the nearest town of yours or an ally's not under siege", ["nearest_town_of_realm"] = "nearest_town_of_realm(): the nearest town of your own, not under siege"
+            ["nearest_town"] = "nearest_town(): the nearest town of yours or an ally's not under siege", ["nearest_town_of_realm"] = "nearest_town_of_realm(): the nearest town of your own, not under siege",
+            ["ruler_target"] = "ruler_target(): the enemy party your realm's ruler is attacking in person now, none when he is not"
         };
 
         private static readonly Regex NamePattern = new Regex("^[a-z][a-z0-9_]{1,31}$", RegexOptions.Compiled);

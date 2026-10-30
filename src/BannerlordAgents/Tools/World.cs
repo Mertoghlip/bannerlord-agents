@@ -254,6 +254,9 @@ namespace BannerlordAgents.Tools
             if (!Where(place, out float px, out float py)) return 0;
             List<PartyRow> near = bandits ? ThreatsInView(place, r) : EnemiesNear(place, r);
             var counted = new HashSet<string>(near.Select(e => e.Id));
+            // an enemy the realm's ruler is attacking in person with the stronger force is his fight, not a threat (0.13.11)
+            HashSet<string> hunted = RulerHunts();
+            if (hunted.Count > 0) except = except == null ? hunted : new HashSet<string>(except.Concat(hunted));
             double sum = near.Where(e => except == null || !except.Contains(e.Id)).Sum(StrengthOf);
             if (joinHours > 0)
                 foreach (PartyRow m in Joiners(px, py, joinHours))
@@ -325,12 +328,30 @@ namespace BannerlordAgents.Tools
                 if (r.InSettlement != null || (r.InBattle && HoursTo(r, x, y) > 1) || joinHours <= 0 || HoursTo(r, x, y) > joinHours) continue;
                 if (me != null && Views.JoiningHead(S, r)?.Id == me.Id) { list.Add(r); continue; }
                 if (objectives == null || objectives.Count == 0) continue;
+                // since 0.13.11 also a lord attacking the same target (Mert, Oct 29, chasing Mauhur with 3,865 men: his realm's guards struck
+                // beside him weighing only themselves)
                 bool bound = (r.Besieging != null && objectives.Contains(r.Besieging))
+                             || (r.Doing == "EngageParty" && r.TargetParty != null && objectives.Contains(r.TargetParty))
                              || ((r.Doing == "BesiegeSettlement" || r.Doing == "DefendSettlement") && r.TargetSettlement != null && objectives.Contains(r.TargetSettlement))
                              || (Runner.ForParty(r.Id) is ToolInstance ti && ((ti.Order.At != null && objectives.Contains(ti.Order.At)) || (ti.Order.Target != null && objectives.Contains(ti.Order.Target))));
                 if (bound) list.Add(r);
             }
             return list;
+        }
+
+        /// <summary>
+        /// The party the realm's ruler is attacking in person now, or null (0.13.11; Mert, Oct 29: "I am currently chasing mauhur, who has 700
+        /// men, with my army of more than 4000, but allied lords around me are still not engaging him ... They should be engaging him normally
+        /// since they know I am around"): the ruling clan's leader's own party, of this realm, set on attacking a party (EngageParty).
+        /// </summary>
+        public string RulerTarget()
+        {
+            string ruler = S.Clans?.FirstOrDefault(c => c.Ruler)?.Leader;
+            if (ruler == null) return null;
+            PartyRow r = S.Parties.FirstOrDefault(p => p.Kind == "lord" && p.Leader == ruler && Own(p) && !p.Attached);
+            if (r == null || r.Doing != "EngageParty" || r.TargetParty == null) return null;
+            PartyRow t = Party(r.TargetParty);
+            return t != null && HostileFaction(t.Faction) ? t.Id : null;   // an enemy only
         }
 
         /// <summary>A lord with our side of a fight: his own strength and every friend's (Friends) together.</summary>
@@ -360,11 +381,40 @@ namespace BannerlordAgents.Tools
             List<PartyRow> near = ThreatsInView(me, r);
             if (lord == null || near.Count == 0) return list;
             var seen = new HashSet<string>();
-            foreach (PartyRow e in near) if (!spared(e) && seen.Add(e.Id)) list.Add(e);
+            // an enemy the realm's ruler is attacking in person with the stronger force is no danger to flee (0.13.11)
+            HashSet<string> hunted = RulerHunts();
+            foreach (PartyRow e in near) if (!spared(e) && !hunted.Contains(e.Id) && seen.Add(e.Id)) list.Add(e);
             foreach (PartyRow m in Joiners(lord.X, lord.Y, joinHours))
-                if (m.Id != me && !spared(m) && seen.Add(m.Id)) list.Add(m);
+                if (m.Id != me && !spared(m) && !hunted.Contains(m.Id) && seen.Add(m.Id)) list.Add(m);
             return list;
         }
+
+        /// <summary>
+        /// The enemy the realm's ruler is attacking in person (RulerTarget) and every hostile lord and army that could join that fight within
+        /// RulerHuntHours, when the ruler's force (his army, if he leads one) is the stronger; else none (0.13.11). Their threat is the ruler's fight:
+        /// a guard nearby joins it rather than shelters or flees from it (Mert, Oct 29, chasing Mauhur: his realm's guards turned back).
+        /// </summary>
+        public HashSet<string> RulerHunts() => _hunts ?? (_hunts = FindRulerHunts());
+
+        // once per hour's world: the threat and danger counts ask for it many times an hour
+        private HashSet<string> _hunts;
+
+        private HashSet<string> FindRulerHunts()
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            string target = RulerTarget();
+            if (target == null) return set;
+            string ruler = S.Clans?.FirstOrDefault(c => c.Ruler)?.Leader;
+            PartyRow rp = ruler == null ? null : S.Parties.FirstOrDefault(p => p.Kind == "lord" && p.Leader == ruler && Own(p) && !p.Attached);
+            List<PartyRow> company = Company(target, RulerHuntHours);
+            if (rp == null || company.Count == 0 || StrengthOf(rp) <= company.Sum(StrengthOf)) return set;
+            foreach (PartyRow e in company) set.Add(e.Id);
+            set.Add(target);
+            return set;
+        }
+
+        /// <summary>The hours within which an enemy is counted as joining the ruler's fight (the default join_hours).</summary>
+        public const double RulerHuntHours = 8;
 
         /// <summary>One enemy lord or army counted as coming to a place's relief.</summary>
         internal sealed class Comer

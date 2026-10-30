@@ -105,6 +105,43 @@ namespace SmokeTest
             // only for the lieutenant's realm or his own orders (the console's, his vassal orders), never another agent's
             Check(Orders.Shown("agent", true) && Orders.Shown("hand", false) && Orders.Shown("you", false) && !Orders.Shown("agent", false) && !Orders.Shown("then", false),
                   "an order's line goes on screen for the lieutenant's orders and your own, never for another agent's");
+            RulerChaseTests(moves);
+        }
+
+        /// <summary>
+        /// 0.13.11 (Mert, Oct 29, chasing Mauhur with 3,865 men: "allied lords around me are still not engaging him ... They should be engaging him
+        /// normally since they know I am around"): a guard joins its realm ruler's own attack on an enemy near it, weighing the ruler's force on its
+        /// side, follows it past its own area (up to three times its radius from the holding) while the ruler chases, and goes back once he stops.
+        /// </summary>
+        private static void RulerChaseTests(List<KeyValuePair<int, Move>> moves)
+        {
+            var guard = new PartyRow { Id = "p_grd", Leader = "lord_grd", Name = "Amarie", Faction = "orcs", Kind = "lord", Men = 160, SizeLimit = 200, Strength = 300, Speed = 5, FoodDays = 10, X = 160, Y = 100, Doing = "Hold", Spottable = true };
+            var ruler = new PartyRow { Id = "p_rul", Leader = "lord_rul", Name = "Azog", Faction = "orcs", Kind = "lord", Men = 900, ArmyLeader = "p_rul", ArmyMen = 3865, ArmyParties = 6, ArmyStrength = 10800, Strength = 2000, Speed = 5, FoodDays = 10, X = 166, Y = 100, Doing = "EngageParty", TargetParty = "p_foe", Spottable = true };
+            var foe = new PartyRow { Id = "p_foe", Leader = "lord_foe", Name = "Mauhur", Faction = "player_k", Kind = "lord", Men = 686, Strength = 1600, Speed = 5, FoodDays = 10, X = 170, Y = 100, Doing = "GoToPoint", Spottable = true };
+            Snapshot World(double h)
+            {
+                Snapshot s = ToolWorld(h, guard, ruler, foe);
+                s.Clans.Add(new ClanRow { Id = "clan_rul", Name = "Azog's clan", Leader = "lord_rul", Ruler = true });
+                return s;
+            }
+            Move? Last(int id) => moves.Where(m => m.Key == id).Select(m => (Move?)m.Value).LastOrDefault();
+            double h0 = 43000;
+            Diag.Hours = h0;
+            Brain.OnHour(World(h0));
+            moves.Clear();
+            Runner.Start(9810, new ToolOrder { Tool = "defend", Lord = "lord_grd", LordName = "Amarie", Party = "p_grd", At = "castle_two", Realm = "orcs" });
+            bool joins = Last(9810)?.Verb == "engage" && Last(9810)?.Party == "p_foe";
+            // the enemy runs on past the guard's area (45 from the holding, radius 20): the guard keeps up the chase while the ruler does
+            foe.X = 185; ruler.X = 180; guard.X = 176;
+            Brain.OnHour(World(h0 + 1));
+            bool keeps = Last(9810)?.Verb == "engage";
+            // the ruler stops: the guard goes back to its area
+            ruler.Doing = "Hold"; ruler.TargetParty = null;
+            Brain.OnHour(World(h0 + 2));
+            Check(joins && keeps && Last(9810)?.Verb == "patrol" && Last(9810)?.Place == "castle_two",
+                  "a guard joins its ruler's attack on an enemy just outside its area, keeps up the chase past its area while the ruler does, and goes back once he stops ("
+                  + joins + ", " + keeps + ", " + Last(9810) + ")");
+            Runner.Ended(9810, "test over");
         }
     }
 }

@@ -1322,6 +1322,7 @@ namespace BannerlordAgents.Tools
                     case "gone": return _w.Gone(Id(a[0]));
                     case "nearest_fort": return _w.NearestFort(_t.Order.Party)?.Id;
                     case "nearest_supply": return _w.NearestSupply(_t.Order.Party)?.Id;
+                    case "ruler_target": return _w.RulerTarget();
                     case "next_village": return _w.NextVillage(Id(a[0]), Expr.Number(a[1]))?.Id;
                     case "lords_count": return (double)_t.Order.Lords.Count(p => _w.Party(p) != null);
                     case "lords_arrived":
