@@ -1731,7 +1731,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test 424, war room and dashboard self-tests passed (in `deploy.ps1`); 816 game references, 0 missing.
 - **Installed** with `scripts\deploy.ps1` at 20:44, the game closed and the war rooms stopped (about 20:44, started again 20:45): DLL sha256 `f82e4b9de6ca972d…`, `SubModule.xml` v0.13.10.
 
-### 21:04 · Version 0.13.11 built: guards join the ruler's own attack; to be installed when the game is next closed · commit (next)
+### 21:04 · Version 0.13.11 built: guards join the ruler's own attack; to be installed when the game is next closed · commit a47f195
 - **Mert, Oct 29**, in the game: "I am currently chasing mauhur, who has 700 men, with my army of more than 4000, but allied lords around me are still not engaging him and are instead running from him. They should be engaging him normally since they know I am around and that their strength is greater than mauhur. WHy are they not giving chase with me?"
 - **What the record showed** (session 20261029-204801): at Autumn 5, 09:00, the hour Mert went after Mauhur (Gundabad, 685 men against his 3,865), 13 guards of Lasgalor (Alenon, Oropherion, Lothuial, Amarië, Orophin, Anairë, Elladan, Celebrían, Elrohir, Chägermeister, Iminyar, Nimrien, Elbereth) struck him; at 12:00 all broke off together by the guard's leash (`distance(target, at) > radius`: Mauhur had run more than 20 from Lasgalor), and patrolled back toward it. None fled: no safety or shelter step named Mauhur. Mert's own party broke off two hours later. A guard weighed only itself and lords bound for its holding or target: a lord attacking the same enemy, the ruler included, did not count.
 - **Changed** (the same for every realm):
