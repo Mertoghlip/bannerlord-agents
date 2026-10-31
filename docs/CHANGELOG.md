@@ -1782,7 +1782,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The run's watch now names the newest save: "load TEST CONTINUOUS SAVE to carry it on".
 
 
-### 19:07 (Oct 30) · Version 0.13.14 installed: a lord's side counts the lords following him inside the holding he is in · commit (next)
+### 19:07 (Oct 30) · Version 0.13.14 installed: a lord's side counts the lords following him inside the holding he is in · commit 4334b79
 - **Mert, Oct 30:** "The logic for our orders might still be discounting the strength of nearby lords/lords following other lords when deciding whether to attack or retreat. Can you please check and verify from my liutenant's readings on the torech emel - gwigar corridor's defence?" (The lieutenant had just reported the corridor's defence going "badly": Alenon, Oropherion and Arien sheltering in Gwígar, Glin-edhel and Tinnulas raided.)
 - **What the record showed** (session 20261030-155534, the lieutenant's report of Winter 1, 1087, 17:00):
   - At 12:00 the lieutenant ordered "Group A": Alenon to defend Tinnulas (radius 30, strike_below 1, shelter_at 1.5, join_hours 12), with Oropherion and Arien to follow him (caution 0).
