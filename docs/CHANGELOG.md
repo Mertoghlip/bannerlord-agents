@@ -1780,3 +1780,21 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Also seen working on 0.13.12, in the same session:**
   - The fall-back step's new wording: "Skarvûk falls back across open ground, toward a point 24 south-east of Gwígar".
   - The run's watch now names the newest save: "load TEST CONTINUOUS SAVE to carry it on".
+
+
+### 19:07 (Oct 30) · Version 0.13.14 installed: a lord's side counts the lords following him inside the holding he is in · commit (next)
+- **Mert, Oct 30:** "The logic for our orders might still be discounting the strength of nearby lords/lords following other lords when deciding whether to attack or retreat. Can you please check and verify from my liutenant's readings on the torech emel - gwigar corridor's defence?" (The lieutenant had just reported the corridor's defence going "badly": Alenon, Oropherion and Arien sheltering in Gwígar, Glin-edhel and Tinnulas raided.)
+- **What the record showed** (session 20261030-155534, the lieutenant's report of Winter 1, 1087, 17:00):
+  - At 12:00 the lieutenant ordered "Group A": Alenon to defend Tinnulas (radius 30, strike_below 1, shelter_at 1.5, join_hours 12), with Oropherion and Arien to follow him (caution 0).
+  - The same hour, Alenon's step "patrol → shelter" fired on `threat_near(at, radius) >= side_strength(at) * shelter_at`: "Forces too strong for Alenon are near Tinnulas: strength 2,087 against your side's 1,135".
+  - 1,135 was Alenon alone (1,137). Oropherion (961) and Arien (860) were inside Gwígar with him, and `World.Friends` skipped every lord inside a holding before it asked who marches with him, so they were not counted. With them, 2,958 × 1.5 stands well above 2,087.
+  - All three stayed inside Gwígar, every hour, by the same count. Azgar (163 men) looted Tinnulas.
+- **Changed** (`World.Friends`, the same for every realm and for both the defend rules and the safety rule, which share it):
+  - A lord who marches with him counts in the field within `join_hours`, as before, and now also inside the very holding he is in, which that lord leaves with him.
+  - "Marches with him" (`World.MarchesWith`, new) means our `follow` order aimed at his party, the game's `EscortParty` toward him, or joining his army.
+  - Another lord inside that holding on no order with him still does not count; nor do guards of other places, which by design join no fight by themselves.
+- **Checks:**
+  - The build passed, along with the smoke test (428; new: a lord's side counts his two followers inside the same castle, 2,958 as Alenon with Oropherion and Arien, but not another lord there on no order with him, nor a follower beyond the hours given), the war room's self-test and the dashboard's.
+  - RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 816 member references, 0 missing.
+  - The war rooms were stopped before the build and started after it.
+- **Installed:** 19:07, with the game closed (it closed at 19:06). `BannerlordAgents.dll` sha256 `1EDACBFD829F136BE8BF5E540E7A357E532DF9DAC3509E43F6E193AC107F01D7`, SubModule v0.13.14. `docs/TOOLS.md` updated (our side of a fight).

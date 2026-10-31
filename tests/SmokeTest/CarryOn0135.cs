@@ -149,6 +149,35 @@ namespace SmokeTest
                   "a guard joins its ruler's attack on an enemy just outside its area, keeps up the chase past its area while the ruler does, and goes back once he stops ("
                   + joins + ", " + keeps + ", " + Last(9810) + ")");
             Runner.Ended(9810, "test over");
+            FollowerTests();
+        }
+
+        /// <summary>
+        /// 0.13.14 (Mert, Oct 30: "The logic for our orders might still be discounting the strength of nearby lords/lords following other
+        /// lords"): Alenon (1,137), to guard Tinnulas, weighed 2,087 near it against himself alone and sheltered in Gwígar, though Oropherion
+        /// (961) and Arien (860), ordered to follow him, were inside Gwígar with him. A lord following another counts on his side, in the field
+        /// within the hours given and inside the very holding he is in; another lord inside that holding, on no order with him, does not.
+        /// </summary>
+        private static void FollowerTests()
+        {
+            var leader = new PartyRow { Id = "p_ale", Leader = "lord_ale", Name = "Alenon", Faction = "orcs", Kind = "lord", Men = 377, Strength = 1137, Speed = 5, FoodDays = 10, X = 140, Y = 100, InSettlement = "castle_two", Doing = "Hold", Spottable = true };
+            var oro = new PartyRow { Id = "p_oro", Leader = "lord_oro", Name = "Oropherion", Faction = "orcs", Kind = "lord", Men = 374, Strength = 961, Speed = 5, FoodDays = 10, X = 140, Y = 100, InSettlement = "castle_two", Doing = "Hold", Spottable = true };
+            var ari = new PartyRow { Id = "p_ari", Leader = "lord_ari", Name = "Arien", Faction = "orcs", Kind = "lord", Men = 386, Strength = 860, Speed = 5, FoodDays = 10, X = 140, Y = 100, InSettlement = "castle_two", Doing = "Hold", Spottable = true };
+            var idle = new PartyRow { Id = "p_idl", Leader = "lord_idl", Name = "Haldir", Faction = "orcs", Kind = "lord", Men = 300, Strength = 700, Speed = 5, FoodDays = 10, X = 140, Y = 100, InSettlement = "castle_two", Doing = "Hold", Spottable = true };
+            var far = new PartyRow { Id = "p_far", Leader = "lord_far", Name = "Galdor", Faction = "orcs", Kind = "lord", Men = 300, Strength = 650, Speed = 5, FoodDays = 10, X = 40, Y = 100, Doing = "EscortParty", TargetParty = "p_ale", Spottable = true };
+            Snapshot s = ToolWorld(43100, leader, oro, ari, idle, far);
+            Diag.Hours = 43100;
+            Brain.OnHour(s);
+            Runner.Start(9820, new ToolOrder { Tool = "follow", Lord = "lord_oro", LordName = "Oropherion", Party = "p_oro", Target = "p_ale", Realm = "orcs" });
+            Runner.Start(9821, new ToolOrder { Tool = "follow", Lord = "lord_ari", LordName = "Arien", Party = "p_ari", Target = "p_ale", Realm = "orcs" });
+            var w = new World(s, "orcs", s.WatchedSees, new Dictionary<string, ViewParty>());
+            var with = new List<PartyRow>();
+            double side = w.SideStrength(leader, 140, 100, 12, null, new HashSet<string> { "castle_two" }, with);
+            Check(Math.Abs(side - (1137 + 961 + 860)) < 0.5 && with.Count == 2 && with.Any(p => p.Id == "p_oro") && with.Any(p => p.Id == "p_ari"),
+                  "a lord's side counts the lords following him inside the very holding he is in (2,958, as Alenon with Oropherion and Arien), not another lord there on no order with him, nor a follower beyond the hours given: "
+                  + side + " with " + string.Join(", ", with.Select(p => p.Name)));
+            Runner.Ended(9820, "test over");
+            Runner.Ended(9821, "test over");
         }
     }
 }

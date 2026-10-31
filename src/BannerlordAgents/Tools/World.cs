@@ -325,8 +325,18 @@ namespace BannerlordAgents.Tools
             {
                 if (r.Kind != "lord" || r.Attached || (me != null && r.Id == me.Id) || !(Own(r) || (Ally(r.Faction) && Visible(r)))) continue;
                 if (besieging != null && r.Besieging == besieging) { list.Add(r); continue; }
+                // a lord marching with him (following him, by our order or the game's escort, or joining his army) counts in the field within
+                // joinHours, and inside the very holding he is in, which he leaves with him (0.13.14; Mert, Oct 30: "The logic for our orders
+                // might still be discounting the strength of nearby lords/lords following other lords"). Winter 1, 12:00: Alenon (1,137),
+                // to guard Tinnulas, weighed 2,087 near it against himself alone (1,135) and sheltered in Gwígar; Oropherion (961) and Arien
+                // (860), ordered to follow him, were inside Gwígar with him and not counted, 2,958 together. Tinnulas was looted by 163 men.
+                if (me != null && MarchesWith(r, me))
+                {
+                    bool beside = r.InSettlement != null && r.InSettlement == me.InSettlement;
+                    if (beside || (r.InSettlement == null && !(r.InBattle && HoursTo(r, x, y) > 1) && joinHours > 0 && HoursTo(r, x, y) <= joinHours)) list.Add(r);
+                    continue;
+                }
                 if (r.InSettlement != null || (r.InBattle && HoursTo(r, x, y) > 1) || joinHours <= 0 || HoursTo(r, x, y) > joinHours) continue;
-                if (me != null && Views.JoiningHead(S, r)?.Id == me.Id) { list.Add(r); continue; }
                 if (objectives == null || objectives.Count == 0) continue;
                 // since 0.13.11 also a lord attacking the same target (Mert, Oct 29, chasing Mauhur with 3,865 men: his realm's guards struck
                 // beside him weighing only themselves)
@@ -338,6 +348,11 @@ namespace BannerlordAgents.Tools
             }
             return list;
         }
+
+        /// <summary>Does r march with me (0.13.14): joining my army, escorting me in the game, or holding our order to follow me?</summary>
+        private bool MarchesWith(PartyRow r, PartyRow me)
+            => Views.JoiningHead(S, r)?.Id == me.Id
+               || (Runner.ForParty(r.Id) is ToolInstance ti && string.Equals(ti.Order.Tool, "follow", StringComparison.OrdinalIgnoreCase) && ti.Order.Target == me.Id);
 
         /// <summary>
         /// The party the realm's ruler is attacking in person now, or null (0.13.11; Mert, Oct 29: "I am currently chasing mauhur, who has 700
