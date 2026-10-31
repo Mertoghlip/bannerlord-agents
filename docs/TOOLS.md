@@ -34,7 +34,24 @@ A tool calls the agent back, with a poke, only when its plan may need to change.
 
 6. **Across a save and a load of it** (since 0.13.5, `CarryOn`): the orders live in memory only and every load clears them, so at every save each tool run is written down beside the save's history note (`data\<campaign>\orders\<save>.json`: the very definition it runs, its order, settings, state and the hour it entered it, remembered values, the move in force, the safety and food rules' places, its record so far), with the agents' wage caps. A load of that save at that hour holds each lord again under the same tool run's id once he passes the checks of step 2 (alive, free, leading his party in the realm, obeying its agent, which must be the same folder and live), and the runner takes the tool up where it was and gives its move again; the agent's first look says how many carried on and which could not, and why. An order given after the save is not in it, as nothing else of those hours is.
 
-## Two rules every order carries
+## Three rules every order carries
+
+Relief (since 0.13.15) is checked first each hour, then safety, then food.
+
+- **Relief.** A held lord rides with all haste to relieve a lord of his realm or an ally's in a fight (`Runner.Relief`, `ReliefPlans`, `CanRide`). Mert, Oct 30: "lords under any order and not in an army should always ride with all haste to relieve lords in a fight if their combined strength beats the enemies' in the area's combined strength for the expected duration of the fight ... Armies should still try to relieve lords if they are close enough to reach them before the fight is done and combined strength is stronger than enemies' in the area's combined strength, but should never break up because of this". Before it, no order did: a guard struck enemies near its own holding only, and every other order left a lord in a fight alone.
+  - **The fights:** a battle in the field, at a siege camp (`siege_outside`) or over a raid, with a lord of the realm (or an ally's, in view) on one side and an enemy realm's on the other. Not a storm or a sally behind walls.
+  - **How long it lasts:** the battle clock (`Forecast.Measured` once it has run two rounds, else `Forecast.Battle` at middling morale), at most `Library.MaxReliefHours` (24). A fight the clock does not see ending within five days counts as 24 hours.
+  - **The riders:** every held lord of the realm, whatever his order, who can get there before it ends, at his own pace as the crow flies (`World.HoursTo`). An army's leader rides with his whole army (its strength, its pace); the army is never broken up.
+    - **Who does not ride:** a lord marching in another's army (he goes where his army goes); one in a fight already; one camped in a siege (leaving would lift his part of it); one inside a besieged castle or town (he cannot leave); one on his way to buy food with under two days of it.
+  - **The weighing:** our side is each party in the fight on our side (each by itself: an army's lords fight party by party) and every rider. Theirs is each party in the fight on theirs, and every enemy lord and army in view who could join it within its hours (`World.Joiners`). Our side must be the stronger.
+  - **The ride:**
+    - Each rider rides to the nearest such fight he can get to, striking the enemy side's leader (else its strongest party).
+    - He does so whether he was sheltering or not; the safety rule does not run while he rides.
+    - The agent is told once a fight (who, where, when he gets there, how long the fight should last, both sides' strengths, how many lords ride and how many enemies could join).
+    - In the fight, the order waits.
+    - Once the fight is over, no longer outweighed, or out of his reach, the order resumes.
+  - **Every realm:** the same for every realm's held lords, rival agents' included. The library tells the agents so (`Library.Text`).
+  - **Not covered:** lords on the game's own AI (the game decides for them), and lords holding a Party AI Controls order.
 
 - **Safety.** The game switches off a held lord's quick reactions, so that lord does not flee by itself. (One reaction survives, the game's own exception: a held lord may still attack, or pull back from, an enemy fighting at or besieging the very holding it was sent to; `MobilePartyAi.GetBehaviors`.)
   - When the enemy lords, armies and bands of bandits (since 0.6.1) within `danger_radius` (default 8) of the lord, counted together (since 0.12.2) with every enemy lord and army in view that could reach him within the order's `join_hours` (since 0.12.3, default 8; below), are `caution` times stronger (default 1.5), the lord shelters, or runs (since 0.6.2, Mert: shelter where the defence would hold, else run):

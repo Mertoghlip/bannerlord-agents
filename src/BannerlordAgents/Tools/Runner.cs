@@ -70,6 +70,8 @@ namespace BannerlordAgents.Tools
         public bool HasCurrent, HasPending;
         /// <summary>The safety rule: where the lord shelters and from whom (Running: no refuge would hold, so it falls back outside); or where it buys food.</summary>
         public string Shelter, ShelterFrom, SupplyAt;
+        /// <summary>The relief rule (0.13.15): the fight the lord rides to relieve (its battle's key) and the enemy party he strikes there.</summary>
+        public string ReliefOf, ReliefTarget;
         public bool Running;
         public double AsideSince;
         public int Steps;
@@ -97,6 +99,9 @@ namespace BannerlordAgents.Tools
     ///   within danger_radius, with the hosts they march with (counted together since 0.12.2), are caution times
     ///   stronger, it shelters in the nearest friendly castle or town and resumes when the danger has passed;
     /// - food: with under two days of food it goes to the nearest friendly town or village to buy more, then resumes.
+    /// - relief (0.13.15, before both): it rides to relieve a lord of the realm's or an ally's fighting in the field, when it can get
+    ///   there before the fight ends (the battle clock) and the side there, with every held lord who can get there in time, outweighs
+    ///   the enemies in the fight and every enemy lord and army in view who could join it by then; it resumes once the fight is over.
     /// Worker thread only (docs/TOOLS.md).
     /// </summary>
     internal static class Runner
@@ -228,6 +233,7 @@ namespace BannerlordAgents.Tools
                 ["state"] = t.State, ["state_since"] = Num(t.StateSince), ["started"] = Num(t.Started), ["move_since"] = Num(t.MoveSince),
                 ["current"] = t.HasCurrent ? MoveJson(t.Current) : null, ["pending"] = t.HasPending ? MoveJson(t.Pending) : null,
                 ["shelter"] = t.Shelter, ["shelter_from"] = t.ShelterFrom, ["supply_at"] = t.SupplyAt, ["running"] = t.Running, ["aside_since"] = Num(t.AsideSince),
+                ["relief_of"] = t.ReliefOf, ["relief_target"] = t.ReliefTarget,
                 ["steps"] = t.Steps, ["last_step"] = t.LastStep, ["still_x"] = t.StillX, ["still_y"] = t.StillY, ["still_since"] = Num(t.StillSince), ["stall_told"] = Num(t.StallTold),
                 ["call_back_day"] = t.CallBackDay, ["day_call_backs"] = t.DayCallBacks, ["slow_hours"] = t.SlowHours, ["held"] = new JArray(t.Held)
             };
@@ -268,6 +274,7 @@ namespace BannerlordAgents.Tools
                 Id = id, Order = o, Def = def, Owner = owner, State = def.States[state].Name, Entered = true,
                 StateSince = Dbl(j["state_since"]), Started = Dbl(j["started"]), MoveSince = Dbl(j["move_since"]),
                 Shelter = (string)j["shelter"], ShelterFrom = (string)j["shelter_from"], SupplyAt = (string)j["supply_at"], Running = (bool?)j["running"] ?? false,
+                ReliefOf = (string)j["relief_of"], ReliefTarget = (string)j["relief_target"],
                 AsideSince = Dbl(j["aside_since"]), Steps = (int?)j["steps"] ?? 0, LastStep = (string)j["last_step"],
                 StillX = (float?)j["still_x"] ?? 0, StillY = (float?)j["still_y"] ?? 0, StillSince = Dbl(j["still_since"]), StallTold = Dbl(j["stall_told"]),
                 CallBackDay = (long?)j["call_back_day"] ?? long.MinValue, DayCallBacks = (int?)j["day_call_backs"] ?? 0, SlowHours = (int?)j["slow_hours"] ?? 0
@@ -467,8 +474,9 @@ namespace BannerlordAgents.Tools
                 Enter(t, t.Def.Start, scope, w);
                 Log(t, "start", t.Def.Start, null);
             }
-            // the rules run in the hour a tool starts too, so a first step that decides at once (go in, or stop close) does
-            if (!Safety(t, me, w, scope) && !Supply(t, me, w, scope) && !t.Finished)
+            // the rules run in the hour a tool starts too, so a first step that decides at once (go in, or stop close) does;
+            // riding to relieve a lord in a fight comes before both (0.13.15)
+            if (!Relief(t, me, w, scope) && !Safety(t, me, w, scope) && !Supply(t, me, w, scope) && !t.Finished)
             {
                 Rules(t, scope, w);
                 // a shadow follows its target: its point is worked out again every hour (sent only when it moved)
@@ -847,7 +855,140 @@ namespace BannerlordAgents.Tools
             return m.Verb + place + party + point + r;
         }
 
-        // ---------- the two rules every order carries ----------
+        // ---------- the three rules every order carries ----------
+
+        /// <summary>One fight a realm's held lords could ride to relieve, worked out once for the realm's hour (0.13.15).</summary>
+        private sealed class ReliefPlan
+        {
+            public BattleRow Battle;
+            /// <summary>The strongest lord of ours or an ally's in it (named in the call-back), and the enemy party the riders strike: its side's leader, else its strongest.</summary>
+            public PartyRow Friend;
+            public string Enemy;
+            /// <summary>Hours left by the battle clock (at most Library.MaxReliefHours).</summary>
+            public double EndsIn;
+            /// <summary>Our side: the parties in it and every rider; theirs: the parties in it and every enemy lord and army in view who could join it within EndsIn.</summary>
+            public double Ours, Theirs;
+            public int Joiners;
+            /// <summary>Each held lord who can get there before it ends: his tool's id, and his hours to it.</summary>
+            public readonly Dictionary<int, double> Riders = new Dictionary<int, double>();
+            public bool Outweighs => Ours > Theirs;
+        }
+
+        [ThreadStatic] private static World _reliefFor;
+        [ThreadStatic] private static List<ReliefPlan> _reliefPlans;
+
+        /// <summary>
+        /// The fights the realm's held lords could ride to this hour (0.13.15; Mert, Oct 30: "lords under any order and not in an army should
+        /// always ride with all haste to relieve lords in a fight if their combined strength beats the enemies' in the area's combined strength
+        /// for the expected duration of the fight ... Armies should still try to relieve lords if they are close enough to reach them before the
+        /// fight is done and combined strength is stronger ... but should never break up because of this"). A fight in the field (or at a
+        /// siege camp, or a raid) with a lord of ours or an ally's on one side and an enemy realm's on the other; its hours left by the battle
+        /// clock (Forecast: as measured once it has run two rounds, else by the rules at middling morale); the riders, every held lord out of
+        /// an army or leading one (CanRide) who can get there before it ends at his own pace; our side there, the parties in it and every
+        /// rider, against theirs, the parties in it and every enemy lord and army in view who could join it within those hours. Once a world.
+        /// </summary>
+        private static List<ReliefPlan> ReliefPlans(World w)
+        {
+            if (ReferenceEquals(_reliefFor, w) && _reliefPlans != null) return _reliefPlans;
+            _reliefFor = w;
+            _reliefPlans = new List<ReliefPlan>();
+            if (w.S.Battles == null || w.S.Battles.Count == 0) return _reliefPlans;
+            List<ToolInstance> held = InForceOf(w).Where(x => !x.Finished).ToList();
+            if (held.Count == 0) return _reliefPlans;
+            bool Friendly(BattleSideRow side) => side.Faction != null && (side.Faction == w.Realm || w.Ally(side.Faction));
+            List<PartyRow> Rows(BattleSideRow side) => side.Parties.Select(id => w.S.PartyById.TryGetValue(id, out PartyRow r) ? r : null).Where(r => r != null).ToList();
+            foreach (BattleRow b in w.S.Battles)
+            {
+                if (b.Kind != "field" && b.Kind != "siege_outside" && b.Kind != "raid") continue;   // not a storm or a sally behind walls
+                bool att = Friendly(b.Attackers), def = Friendly(b.Defenders);
+                if (att == def) continue;
+                BattleSideRow ours = att ? b.Attackers : b.Defenders, theirs = att ? b.Defenders : b.Attackers;
+                if (!w.HostileFaction(theirs.Faction)) continue;
+                List<PartyRow> ourRows = Rows(ours), theirRows = Rows(theirs);
+                PartyRow friend = ourRows.Where(r => r.Kind == "lord" && (w.Own(r) || (w.Ally(r.Faction) && w.Visible(r)))).OrderByDescending(r => r.Strength).FirstOrDefault();
+                string enemy = theirRows.Any(r => r.Id == theirs.Leader) ? theirs.Leader : theirRows.OrderByDescending(r => r.Strength).FirstOrDefault()?.Id;
+                if (friend == null || enemy == null) continue;
+                Forecast.BattleClock c = Forecast.Measured(b, w.Hours, att) ?? Forecast.Battle(b, w.Hours, null, 50f, 50f);
+                double endsIn = double.IsNaN(c.EndsAt) ? Library.MaxReliefHours : Math.Min(Library.MaxReliefHours, c.EndsAt - w.Hours);
+                if (endsIn < 0.5) continue;
+                var inIt = new HashSet<string>(b.Attackers.Parties.Concat(b.Defenders.Parties));
+                List<PartyRow> joiners = w.Joiners(b.X, b.Y, endsIn).Where(e => !inIt.Contains(e.Id)).ToList();
+                // each party in a fight is counted by itself (an army's lords fight in it party by party); outside it, a lord with his army
+                var p = new ReliefPlan { Battle = b, Friend = friend, Enemy = enemy, EndsIn = endsIn, Joiners = joiners.Count,
+                                         Ours = ourRows.Sum(r => r.Strength), Theirs = theirRows.Sum(r => r.Strength) + joiners.Sum(World.StrengthOf) };
+                foreach (ToolInstance x in held)
+                {
+                    PartyRow r = w.Party(x.Order.Party);
+                    if (r == null || inIt.Contains(r.Id) || !CanRide(x, r, w)) continue;
+                    double hours = w.HoursTo(r, b.X, b.Y);
+                    if (hours > endsIn) continue;
+                    p.Riders[x.Id] = hours;
+                    p.Ours += World.StrengthOf(r);
+                }
+                _reliefPlans.Add(p);
+            }
+            return _reliefPlans;
+        }
+
+        /// <summary>
+        /// Can a held lord ride to a fight (0.13.15)? Out of an army or leading one (a lord marching in another's army goes where it goes, and
+        /// an army moves whole, never broken up), not in a fight already, not camped in a siege (leaving it would lift his part of it), not
+        /// inside a besieged castle or town (he cannot leave), and not on his way to buy food with under two days of it.
+        /// </summary>
+        private static bool CanRide(ToolInstance t, PartyRow me, World w)
+        {
+            if (me == null || me.Kind != "lord" || me.Attached || me.InBattle || me.Besieging != null || t.SupplyAt != null || t.Finished) return false;
+            SettlementRow inside = w.Holding(me.InSettlement);
+            return !(inside != null && World.IsFort(inside) && w.Besieged(inside));
+        }
+
+        /// <summary>
+        /// The relief rule (0.13.15): a held lord rides with all haste to the nearest fight he can relieve (ReliefPlans: he gets there before it
+        /// ends, and our side there with every lord who can get there in time outweighs the enemies in it and those who could join it by then),
+        /// striking the enemy side's leader; sheltering or not. In the fight, the game fights it and the order waits. Once the fight is over, or
+        /// no longer outweighed, or out of his reach, the order resumes.
+        /// </summary>
+        private static bool Relief(ToolInstance t, PartyRow me, World w, Scope scope)
+        {
+            if (t.ReliefOf != null && me.InBattle) return true;
+            ReliefPlan best = null;
+            double bestHours = double.MaxValue;
+            if (CanRide(t, me, w))
+                foreach (ReliefPlan p in ReliefPlans(w))
+                    if (p.Outweighs && p.Riders.TryGetValue(t.Id, out double h) && h < bestHours) { best = p; bestHours = h; }
+            if (best == null)
+            {
+                if (t.ReliefOf == null) return false;
+                string was = t.ReliefOf;
+                bool over = w.S.Battles == null || !w.S.Battles.Any(b => b.Key == was);
+                t.ReliefOf = t.ReliefTarget = null;
+                Log(t, "relieving", t.State, over ? "the fight is over" : "the fight is no longer one to relieve (our side no longer outweighs, or it is out of reach)");
+                Diag.Event("tool", "relief over", new { id = t.Id, lord = t.Order.Lord, battle = was, over });
+                Resume(t, scope, w);
+                return false;
+            }
+            bool first = t.ReliefOf != best.Battle.Key;
+            if (t.Shelter != null) { t.Shelter = t.ShelterFrom = null; t.Running = false; }
+            t.ReliefOf = best.Battle.Key;
+            if (first || t.ReliefTarget != best.Enemy || !(t.HasCurrent && t.Current.Verb == "engage" && t.Current.Party == best.Enemy))
+            {
+                t.ReliefTarget = best.Enemy;
+                t.Pending = new Move { Verb = "engage", Party = best.Enemy };
+                t.HasPending = true;
+            }
+            if (!first) return true;
+            t.AsideSince = w.Hours;
+            Diag.Count("tool:reliefs");
+            Diag.Event("tool", "relief", new { id = t.Id, lord = t.Order.Lord, battle = best.Battle.Key, enemy = best.Enemy, hours = Math.Round(bestHours, 1), ends_in = Math.Round(best.EndsIn, 1),
+                                               ours = Math.Round(best.Ours), theirs = Math.Round(best.Theirs), riders = best.Riders.Count, joiners = best.Joiners });
+            string where = best.Battle.Settlement != null ? "at " + w.Name(best.Battle.Settlement) : Spots.Describe(w.S, best.Battle.X, best.Battle.Y);
+            Poke(t, t.Order.LordName + " rides with all haste to relieve " + w.Name(best.Friend.Id) + ", fighting " + w.Name(best.Enemy) + " " + where
+                    + " (there in about " + Forecast.HoursText(bestHours) + "; the fight should last about " + Forecast.HoursText(best.EndsIn) + " more): your side there, with the "
+                    + best.Riders.Count + " of your lords who can reach it before it ends, " + Text.N((int)best.Ours) + ", against " + Text.N((int)best.Theirs)
+                    + (best.Joiners > 0 ? " with the " + best.Joiners + " enemy lords or armies who could join it by then" : "") + ". The order resumes once the fight is over.", w);
+            Log(t, t.State, "relieving", "a lord of ours fighting, and our side with every lord who can reach it before it ends outweighs the enemies there and those who could join it");
+            return true;
+        }
 
         /// <summary>The shelter of a lord running straight away from a danger, with no place to make for.</summary>
         private const string Away = "(away)";
@@ -1133,7 +1274,8 @@ namespace BannerlordAgents.Tools
         {
             var scope = new Scope(t, w);
             StateDef st = t.State != null && t.Def.States.TryGetValue(t.State, out StateDef s) ? s : null;
-            string doing = t.Shelter != null ? (t.Shelter == Away ? "falling back, away from " + w.Name(t.ShelterFrom) : (t.Running ? "falling back toward " : "sheltering in ") + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom)) + " (resumes once it has passed)"
+            string doing = t.ReliefOf != null ? "riding to relieve a fight against " + w.Name(t.ReliefTarget) + " (resumes once it is over)"
+                         : t.Shelter != null ? (t.Shelter == Away ? "falling back, away from " + w.Name(t.ShelterFrom) : (t.Running ? "falling back toward " : "sheltering in ") + w.Name(t.Shelter) + " from " + w.Name(t.ShelterFrom)) + " (resumes once it has passed)"
                          : t.SupplyAt != null ? "buying food at " + w.Name(t.SupplyAt) + " (resumes after)"
                          : st?.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : (t.State ?? "starting");
             var what = new StringBuilder(t.Def.Name);

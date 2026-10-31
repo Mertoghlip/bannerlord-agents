@@ -150,6 +150,68 @@ namespace SmokeTest
                   + joins + ", " + keeps + ", " + Last(9810) + ")");
             Runner.Ended(9810, "test over");
             FollowerTests();
+            ReliefTests(moves);
+        }
+
+        /// <summary>
+        /// 0.13.15 (Mert, Oct 30: "lords under any order and not in an army should always ride with all haste to relieve lords in a fight if
+        /// their combined strength beats the enemies' in the area's combined strength for the expected duration of the fight ... Armies should
+        /// still try to relieve lords ... but should never break up because of this"): held lords out of an army, and an army's leader with his
+        /// army, ride to a lord of ours fighting in the field when they can get there before it ends and our side with them outweighs the
+        /// enemies in it and those who could join it; a lord in another's army, one camped in a siege and one too far do not; none rides when
+        /// the enemy outweighs; each goes back to his order once the fight is over.
+        /// </summary>
+        private static void ReliefTests(List<KeyValuePair<int, Move>> moves)
+        {
+            var friend = new PartyRow { Id = "p_fr", Leader = "lord_fr", Name = "Grishnakh", Faction = "orcs", Kind = "lord", Men = 150, Strength = 300, Speed = 5, FoodDays = 10, X = 150, Y = 100, InBattle = true, Doing = "Hold", Spottable = true };
+            var foe = new PartyRow { Id = "p_en", Leader = "lord_en", Name = "Halbarad", Faction = "player_k", Kind = "lord", Men = 450, Strength = 900, Speed = 5, FoodDays = 10, X = 150, Y = 100, InBattle = true, Doing = "EngageParty", TargetParty = "p_fr", Spottable = true };
+            var coming = new PartyRow { Id = "p_cm", Leader = "lord_cm", Name = "Beregond", Faction = "player_k", Kind = "lord", Men = 150, Strength = 300, Speed = 5, FoodDays = 10, X = 170, Y = 100, Doing = "Hold", Spottable = true };
+            var guard = new PartyRow { Id = "p_ga", Leader = "lord_ga", Name = "Lugdush", Faction = "orcs", Kind = "lord", Men = 250, Strength = 500, Speed = 5, FoodDays = 10, X = 140, Y = 100, InSettlement = "castle_two", Doing = "Hold", Spottable = true };
+            var waiter = new PartyRow { Id = "p_wa", Leader = "lord_wa", Name = "Mauhur", Faction = "orcs", Kind = "lord", Men = 200, Strength = 400, Speed = 5, FoodDays = 10, X = 160, Y = 104, Doing = "Hold", Spottable = true };
+            var head = new PartyRow { Id = "p_hd", Leader = "lord_hd", Name = "Bolg", Faction = "orcs", Kind = "lord", Men = 300, Strength = 450, ArmyLeader = "p_hd", ArmyMen = 500, ArmyParties = 2, ArmyStrength = 800, Speed = 4, FoodDays = 10, X = 135, Y = 96, Doing = "Hold", Spottable = true };
+            var member = new PartyRow { Id = "p_mb", Leader = "lord_mb", Name = "Snaga", Faction = "orcs", Kind = "lord", Men = 200, Strength = 350, ArmyLeader = "p_hd", Attached = true, Speed = 4, FoodDays = 10, X = 135, Y = 96, Doing = "EscortParty", Spottable = true };
+            var camped = new PartyRow { Id = "p_sg", Leader = "lord_sg", Name = "Gorbag", Faction = "orcs", Kind = "lord", Men = 300, Strength = 600, Speed = 5, FoodDays = 10, X = 168, Y = 108, Besieging = "castle_men", Doing = "BesiegeSettlement", Spottable = true };
+            var far = new PartyRow { Id = "p_fa", Leader = "lord_fa", Name = "Shagrat", Faction = "orcs", Kind = "lord", Men = 300, Strength = 600, Speed = 5, FoodDays = 10, X = 10, Y = 100, Doing = "Hold", Spottable = true };
+            BattleRow Fight(double h, int foeMen) => new BattleRow
+            {
+                Key = "p_en@" + (h - 1).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), Kind = "field", X = 150, Y = 100, StartHours = h - 1,
+                Attackers = new BattleSideRow { Leader = "p_en", Faction = "player_k", Healthy = foeMen, StartHealthy = foeMen, Power = 1f, Advantage = 1f, Morale = 60f, Parties = { "p_en" } },
+                Defenders = new BattleSideRow { Leader = "p_fr", Faction = "orcs", Healthy = 1500, StartHealthy = 1500, Power = 1f, Advantage = 1f, Morale = 60f, Parties = { "p_fr" } }
+            };
+            Snapshot World(double h, bool fighting, int foeMen = 2000)
+            {
+                Snapshot s = ToolWorld(h, friend, foe, coming, guard, waiter, head, member, camped, far);
+                if (fighting) s.Battles.Add(Fight(h, foeMen));
+                return s;
+            }
+            Move? Last(int id) => moves.Where(m => m.Key == id).Select(m => (Move?)m.Value).LastOrDefault();
+            double h0 = 43200;
+            Diag.Hours = h0;
+            Brain.OnHour(World(h0, false));
+            Runner.Start(9830, new ToolOrder { Tool = "defend", Lord = "lord_ga", LordName = "Lugdush", Party = "p_ga", At = "castle_two", Realm = "orcs" });
+            Runner.Start(9831, new ToolOrder { Tool = "hold", Lord = "lord_wa", LordName = "Mauhur", Party = "p_wa", Realm = "orcs" });
+            Runner.Start(9832, new ToolOrder { Tool = "hold", Lord = "lord_hd", LordName = "Bolg", Party = "p_hd", Realm = "orcs" });
+            Runner.Start(9833, new ToolOrder { Tool = "hold", Lord = "lord_mb", LordName = "Snaga", Party = "p_mb", Realm = "orcs" });
+            Runner.Start(9834, new ToolOrder { Tool = "besiege", Lord = "lord_sg", LordName = "Gorbag", Party = "p_sg", At = "castle_men", Realm = "orcs" });
+            Runner.Start(9835, new ToolOrder { Tool = "hold", Lord = "lord_fa", LordName = "Shagrat", Party = "p_fa", Realm = "orcs" });
+            moves.Clear();
+            // the enemy outweighs (900 in the fight and 300 coming, against 300 with every lord who can get there): nobody rides
+            foe.Strength = 5000;
+            Brain.OnHour(World(h0 + 1, true));
+            bool noneWhenOutweighed = !moves.Any(m => m.Value.Verb == "engage" && m.Value.Party == "p_en");
+            // ours outweighs: 300 in it, 500 + 400 + 800 riding, against 900 and Beregond's 300 who could join
+            foe.Strength = 900;
+            Brain.OnHour(World(h0 + 2, true));
+            bool rides = Last(9830)?.Verb == "engage" && Last(9830)?.Party == "p_en" && Last(9831)?.Verb == "engage" && Last(9832)?.Verb == "engage" && Last(9832)?.Party == "p_en";
+            bool staysOut = !moves.Any(m => (m.Key == 9833 || m.Key == 9834 || m.Key == 9835) && m.Value.Verb == "engage");
+            bool marked = Runner.All().Any(t => t.Id == 9830 && t.ReliefOf != null) && Runner.All().Any(t => t.Id == 9832 && t.ReliefOf != null);
+            // the fight is over: each goes back to his order (the lord holding, to holding)
+            Brain.OnHour(World(h0 + 3, false));
+            bool back = Last(9831)?.Verb == "hold" && Last(9832)?.Verb == "hold" && Runner.All().Where(t => t.Id >= 9830 && t.Id <= 9835).All(t => t.ReliefOf == null);
+            Check(noneWhenOutweighed && rides && staysOut && marked && back,
+                  "held lords ride to relieve a lord of ours in a fight when they outweigh the enemy with those who could join it (a guard from inside its castle, a lord holding, an army whole); a lord in another's army, one camped in a siege and one too far do not; none rides when the enemy outweighs; each goes back to his order once it is over ("
+                  + noneWhenOutweighed + ", " + rides + ", " + staysOut + ", " + marked + ", " + back + ")");
+            foreach (int id in new[] { 9830, 9831, 9832, 9833, 9834, 9835 }) Runner.Ended(id, "test over");
         }
 
         /// <summary>

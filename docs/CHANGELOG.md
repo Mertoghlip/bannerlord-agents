@@ -1798,3 +1798,26 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 816 member references, 0 missing.
   - The war rooms were stopped before the build and started after it.
 - **Installed:** 19:07, with the game closed (it closed at 19:06). `BannerlordAgents.dll` sha256 `1EDACBFD829F136BE8BF5E540E7A357E532DF9DAC3509E43F6E193AC107F01D7`, SubModule v0.13.14. `docs/TOOLS.md` updated (our side of a fight).
+
+
+### 19:19 (Oct 30) · Version 0.13.15 installed: every held lord rides to relieve a lord of ours in a fight he can reach and win · commit (next)
+- **Mert, Oct 30:** "lords under any order and not in an army should always ride with all haste to relieve lords in a fight if their combined strength beats the enemies' in the area's combined strength for the expected duration of the fight. Verify if this happens now, and if not, make sure it does and tell me exactly which orders you changed, how, and how lords in armies behave. Arfmies should still try to relieve lords if they are close enough to reach them before the fight is done and combined strength is stronger than enemies' in the area's combined strength, but should never break up because of this."
+- **Before:** it did not happen. No order sent a lord to a friendly lord's fight. The one partial case was defend's strike, which attacks enemies near its own holding (within its radius, weighed with the lords bound for that holding or target), and so sometimes an enemy already fighting a lord of ours there. Every other order (patrol, garrison, recruit, sell, follow, hold, wait, raid, besiege's camp and the rest) left a lord in a fight alone.
+- **Changed** (a third rule every order carries, in `Runner`, checked each hour before safety and food; the same for every realm's held lords):
+  - `Runner.ReliefPlans` (new), once a realm's hour, for each battle in the field, at a siege camp or over a raid, with a lord of ours or an ally's on one side and an enemy realm's on the other:
+    - **Its hours left** by the battle clock (`Forecast.Measured`, else `Forecast.Battle` at middling morale), at most `Library.MaxReliefHours` (24).
+    - **Its riders:** every held lord who can get there in that time at his own pace (`CanRide`: out of an army or leading one, not in a fight, not camped in a siege, not inside a besieged castle or town, not on his way to buy food).
+    - **Our side** (the parties in it on ours, each by itself, and every rider, an army leader with his army's strength) against **theirs** (the parties in it on theirs, and every enemy lord and army in view who could join within those hours, `World.Joiners`).
+  - `Runner.Relief` (new): a rider whose nearest such fight is outweighed in our favour rides to strike the enemy side's leader (else its strongest party), leaving shelter if he was in it. The agent is told once a fight. In the fight the order waits; once it is over, no longer outweighed, or out of reach, the order resumes.
+  - `ToolInstance.ReliefOf`, `ReliefTarget`: carried across save and load (CarryOn). The order in force reads "riding to relieve a fight against X (resumes once it is over)".
+  - `Library.Text`: the agents' library says so (every realm's agents, the lieutenant's too).
+  - **Armies:** the leader's ride moves the whole army, members attached as they were. Nothing detaches or disbands it. A lord marching in another's army does not ride by himself.
+- **Checks:**
+  - Smoke test 429 (new: in a made-up fight, a guard from inside its castle, a lord holding and an army's leader with his army ride to strike the enemy's leader. A lord in that army, one camped in a siege and one 28 hours away do not. None rides while the enemy with its joiners outweighs. Each goes back to his order once the fight is over).
+  - The war room's and the dashboard's self-tests passed. RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 816 member references, 0 missing.
+- **On the way:**
+  - The first `deploy.ps1` at 19:18 failed to build: the war room compiles `ToolDef.cs` without `Runner`, and the library text read `Runner.MaxReliefHours`. Nothing was installed (0.13.14 stayed), and the war rooms were started again. The constant moved to `Library.MaxReliefHours`.
+  - I then built the war room project once with the war rooms running. Its copy step failed on the locked `WarRoom.exe`, the running one untouched; the rule is to stop them first.
+  - The second deploy, with the war rooms stopped, went through.
+- **Installed:** 19:19, with the game closed. `BannerlordAgents.dll` sha256 `1FA917ABCB1A4BECE88EB91881040B708BDC88BF90A255F561ECCBB199DEE0D4`, SubModule v0.13.15. `docs/TOOLS.md` updated ("Three rules every order carries").
+- **Not yet seen in the game:** that a held lord striking an enemy already in a battle joins that battle on our side. The game's encounter rules should make him join it; to watch in the run.
