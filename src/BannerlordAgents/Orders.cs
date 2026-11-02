@@ -69,6 +69,12 @@ namespace BannerlordAgents
             /// <summary>A join order has seen its army (so an army missing later broke up, rather than not having formed yet).</summary>
             public bool JoinedSeen;
             public readonly List<double> ReissueTimes = new List<double>();
+            /// <summary>A tool order's settings as given (0.13.19: garrison_floor for its recruiting stops, the supply order's days and keep_days); a default where one is not given.</summary>
+            public Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            /// <summary>The supply move's holding (0.13.19), while Place is the market he buys at on the way.</summary>
+            public Settlement SupplyFor;
+
+            public double Setting(string name, double otherwise) => Settings.TryGetValue(name, out double v) ? v : otherwise;
         }
 
         private sealed class Released
@@ -123,6 +129,7 @@ namespace BannerlordAgents
             LastCulprit.Clear();
             HandedBack.Clear();
             RecruitTour.Reset();
+            Supply.Reset();
             Mirror();
         }
 
@@ -556,6 +563,9 @@ namespace BannerlordAgents
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = o.Source, Poke = o.Poke, Verb = "hold",
                 ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours, Signature = o.Signature()
             };
+            // its settings as the runner keeps them (0.13.19): each given one within its range, the tool's default for the rest
+            foreach (SettingDef sd in def.Settings.Values)
+                h.Settings[sd.Name] = o.Settings.TryGetValue(sd.Name, out double sv) ? Math.Max(sd.Min, Math.Min(sd.Max, sv)) : sd.Default;
             object before = State(party, null);
             ReplaceHeld(party, h.Id);
             LordTours.Drop(party);   // off TFAOMFixes' recruiting trip: ours alone steers him now (0.11.3)
@@ -587,7 +597,8 @@ namespace BannerlordAgents
                 list.Add(new JObject
                 {
                     ["tool_id"] = o.ToolId, ["party"] = o.Party.StringId, ["lord"] = o.Lord.StringId, ["realm"] = o.Realm?.StringId, ["source"] = o.Source, ["poke"] = o.Poke,
-                    ["tool"] = o.Tool, ["text"] = o.ToolText, ["signature"] = o.Signature, ["since"] = o.Since, ["arrived"] = o.Arrived, ["arrived_at"] = o.ArrivedAt
+                    ["tool"] = o.Tool, ["text"] = o.ToolText, ["signature"] = o.Signature, ["since"] = o.Since, ["arrived"] = o.Arrived, ["arrived_at"] = o.ArrivedAt,
+                    ["settings"] = JObject.FromObject(o.Settings)
                 });
             }
             return list;
@@ -629,6 +640,10 @@ namespace BannerlordAgents
                 Tool = (string)row["tool"], ToolText = (string)row["text"], Signature = (string)row["signature"], Since = (double?)row["since"] ?? now,
                 Arrived = (bool?)row["arrived"] ?? false, ArrivedAt = (double?)row["arrived_at"] ?? -1
             };
+            // its settings (0.13.19; a save of 0.13.18 or before has none: garrison_floor 0, the supply order's defaults)
+            if (row["settings"] is JObject set)
+                foreach (JProperty sp in set.Properties())
+                    if (sp.Value.Type == JTokenType.Integer || sp.Value.Type == JTokenType.Float) h.Settings[sp.Name] = (double)sp.Value;
             LordTours.Drop(party);   // off TFAOMFixes' recruiting trip, as at any order's start
             Apply(h);
             Active.Add(h);
@@ -769,6 +784,12 @@ namespace BannerlordAgents
             o.ArrivedAt = -1;
             o.ReissueTimes.Clear();
             o.StuckAlarmed = o.FightAlarmed = false;
+            // the supply move (0.13.19): its holding stays while Place becomes a market on the way; it starts by choosing
+            if (o.Verb == "supply")
+            {
+                o.SupplyFor = o.Place;
+                Supply.Started(o);
+            }
             if (!Possible(o)) o.Verb = "hold";
             Apply(o);
             o.BestDistance = Distance(o) ?? float.MaxValue;
@@ -837,6 +858,10 @@ namespace BannerlordAgents
                 case "sell":
                     return o.Place != null && (realm == null || o.Place.MapFaction == null || !FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm));
                 case "tour": return true;   // a stop that fell or emptied: the tour picks the next one itself
+                // the supply move (0.13.19): its holding must still be friendly; Supply.Step ends it when the holding is lost or besieged
+                case "supply":
+                    Settlement fed = o.SupplyFor ?? o.Place;
+                    return fed != null && (realm == null || fed.MapFaction == null || !FactionManager.IsAtWarAgainstFaction(fed.MapFaction, realm));
                 case "wait": return true;
                 case "besiege":
                 case "raid":
@@ -1307,6 +1332,31 @@ namespace BannerlordAgents
                     continue;
                 }
                 if (p.MapEvent != null || (p.BesiegedSettlement != null && o.Verb != "besiege")) continue;   // busy fighting; look again next hour
+                if (o.Verb == "supply")
+                {
+                    // the supply order (0.13.19): buys at a market on the way when he carries too little, then hands the food over
+                    string supplyEnd = Supply.Step(o, now, out string supplyKey, out bool movedOn);
+                    if (supplyEnd != null)
+                    {
+                        End(o, supplyEnd, supplyKey);
+                        Active.RemoveAt(i);
+                        changed = true;
+                        continue;
+                    }
+                    if (movedOn)
+                    {
+                        o.Arrived = false;
+                        o.ArrivedAt = -1;
+                        o.ReissueTimes.Clear();
+                        o.StuckAlarmed = o.FightAlarmed = false;
+                        Apply(o);
+                        o.BestDistance = Distance(o) ?? float.MaxValue;
+                        o.LastProgressAt = now;
+                        Note(o, "next stop", Describe(o), quiet: true);
+                        changed = true;
+                        continue;
+                    }
+                }
                 if (o.Verb == "tour")
                 {
                     // a recruit order (0.9.2): it takes what it may where it stands, ends when done, else rides on to the next place
@@ -1338,7 +1388,7 @@ namespace BannerlordAgents
                     if (o.Verb != "hold") { o.Verb = "hold"; Apply(o); }
                     continue;
                 }
-                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour" || o.Verb == "sell") && At(p, o.Place))
+                if ((o.Verb == "garrison" || o.Verb == "goto" || o.Verb == "recruit" || o.Verb == "enter" || o.Verb == "tour" || o.Verb == "sell" || o.Verb == "supply") && At(p, o.Place))
                 {
                     if (o.Verb == "recruit") RecruitTour.SweepAt(o, now);   // a refill stop buys the same way as a tour (0.9.2)
                     if (!o.Arrived)
@@ -1658,6 +1708,7 @@ namespace BannerlordAgents
                     case "enter":
                     case "recruit":
                     case "sell":
+                    case "supply":
                     case "tour": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
                     // wait (0.13): he stands where he is, inside the holding when he is in one
                     case "wait": if (p.CurrentSettlement == null) p.SetMoveModeHold(); break;
@@ -1726,6 +1777,7 @@ namespace BannerlordAgents
                 case "enter":
                 case "recruit":
                 case "sell":
+                case "supply":
                 case "tour": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || At(p, o.Place);
                 case "wait": return p.CurrentSettlement != null || b == AiBehavior.Hold;
                 // on the way to a spot close to the place (its target there), or standing close to it
@@ -2032,6 +2084,10 @@ namespace BannerlordAgents
                 case "raid": return lord + " raids " + Names.Settlement(o.Place);
                 case "recruit": return lord + " fills the ranks at " + Names.Settlement(o.Place);
                 case "tour": return lord + " recruits place by place, now bound for " + Names.Settlement(o.Place);
+                case "supply":
+                    return o.SupplyFor != null && o.Place != o.SupplyFor
+                        ? lord + " rides to " + Names.Settlement(o.Place) + " to buy food for " + Names.Settlement(o.SupplyFor)
+                        : lord + " brings food to " + Names.Settlement(o.Place);
                 case "sell": return lord + " goes to sell his loot at " + Names.Settlement(o.Place);
                 case "wait": return lord + " waits " + ToolDef.Num(o.Radius) + " hours where he is";
                 default: return lord + " holds position";

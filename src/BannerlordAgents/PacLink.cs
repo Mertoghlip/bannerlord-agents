@@ -947,7 +947,8 @@ namespace BannerlordAgents
                 case "screen":
                 case "watch": return atIsHolding ? "PatrolAroundPoint" : null;
                 case "goto":
-                case "sell": return atIsHolding ? "VisitSettlement" : null;
+                case "sell":
+                case "supply": return atIsHolding ? "VisitSettlement" : null;
                 case "recruit": return "RecruitFromTemplate";
                 case "engage":
                 case "hunt": return "AttackParty";

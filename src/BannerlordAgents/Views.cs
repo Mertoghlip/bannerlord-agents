@@ -126,6 +126,8 @@ namespace BannerlordAgents
         /// <summary>The realm's own castles and towns: wall level, the defenders' strength (garrison, militia, lords inside), and the besiegers' strength it holds against.</summary>
         public int WallLevel;
         public float Defence, LordsInside, HoldsUpTo;
+        /// <summary>The realm's own castles and towns only (0.13.19): the garrison's strength, and its food now, its most and what it eats a day under siege (-1: not shown).</summary>
+        public float GarrisonStrength = -1, Food = -1, FoodCap, FoodPerDay;
     }
 
     /// <summary>The sections a poke adds before the report: what changed since the agent's last answer, its orders in force, ready-made facts.</summary>
@@ -198,6 +200,14 @@ namespace BannerlordAgents
             foreach (SettlementRow h in own)
             {
                 ViewHolding vh = Holding(s, h, true);
+                // the realm's own only (0.13.19): its garrison's strength (what a garrison_floor is weighed in) and its food (the supply order)
+                if (Tools.World.IsFort(h))
+                {
+                    vh.GarrisonStrength = h.GarrisonStrength;
+                    vh.Food = h.Food;
+                    vh.FoodCap = h.FoodCap;
+                    vh.FoodPerDay = h.FoodPerDay;
+                }
                 // the enemy in view that could reach it soonest: by road where the game's table knows the way
                 float ThreatRoad(ViewParty x) => s.PartyById.TryGetValue(x.Id, out PartyRow xr) ? Roads.To(s, xr, h) : float.NaN;
                 ViewParty threat = v.Seen.Where(x => x.Relation == "enemy" && x.Kind == "lord")
@@ -559,10 +569,16 @@ namespace BannerlordAgents
                               + "siege towers built. Lords you shelter inside add their strength. Besiegers above that may storm, the sooner the stronger they are; "
                               + "below it they wait, but after four days of siege the bar falls hour by hour, to the defenders' bare strength by about the sixth day. "
                               + "SIEGES AND BATTLES runs each siege's clock.");
+            if (v.Holdings.Any(h => h.Food >= 0))
+                sb.AppendLine("A castle's or town's food comes from its lands and its unraided villages each day, and none while it is besieged; its garrison and its people eat it, "
+                              + "and once it is out a tenth of the garrison falls to hunger each day. The supply order brings it food.");
             foreach (ViewHolding h in v.Holdings)
             {
                 var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ")");
-                if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + ", militia " + Text.N(h.Militia));
+                if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + (h.GarrisonStrength >= 0 ? " (strength " + Text.N((int)Math.Round(h.GarrisonStrength)) + ")" : "") + ", militia " + Text.N(h.Militia));
+                if (h.Food >= 0)
+                    line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap)
+                                + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : ""));
                 if (h.WallLevel > 0)
                     line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
                                 + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")

@@ -92,6 +92,8 @@ namespace BannerlordAgents.Tools
             ["besiege"] = "holding", ["raid"] = "holding", ["recruit"] = "holding", ["tour"] = "holding",
             // 0.13: into a town or castle to sell his loot there (the sell order's sale), and to wait where he stands
             ["sell"] = "holding",
+            // 0.13.19: the supply order's errand, buying food at a market on the way when he carries too little, then into the holding
+            ["supply"] = "holding",
             ["engage"] = "party", ["follow"] = "party", ["toward"] = "party", ["join"] = "party", ["shadow"] = "party",
             ["post"] = "spot",
             ["wait"] = "number",
@@ -107,6 +109,7 @@ namespace BannerlordAgents.Tools
             ["recruit"] = "goes to one town, castle or village and takes its volunteers there, by the recruit order's rules (his gold, his standing, his wage cap, his clan's troop lines past 80% of his ranks); it stays there taking new ones as they come until another move; write it \"recruit at X\" or \"recruit X\"",
             ["recruit_here"] = "takes the volunteers where he stands, the same way", ["tour"] = "the recruit order's tour: from a place onward, place by place",
             ["sell"] = "goes into a town or castle of yours or an ally's and sells his loot there (a town buys loot, a castle does not; prisoners are handed over by the game's rule); write it \"sell at X\"",
+            ["supply"] = "the supply order's errand: brings food into a castle or town of yours or an ally's, buying it at the nearest market first when he carries too little; write it \"supply at X\"",
             ["engage"] = "attacks a lord, army or band", ["follow"] = "follows a party", ["toward"] = "marches to where a party is, or was last seen",
             ["join"] = "marches to join a lord's army", ["shadow"] = "trails a party at a distance (the tool's keep setting)", ["post"] = "stands at a spot [pX_Y] or a holding's gate, watching",
             ["wait"] = "stays where he is (inside a holding if he is in one) for that many hours; arrived turns true once they have passed; write it \"wait 6\"",
@@ -273,6 +276,8 @@ namespace BannerlordAgents.Tools
                 if (!d.Settings.ContainsKey("danger_radius")) d.Settings["danger_radius"] = Library.DangerRadius;
                 if (!d.Settings.ContainsKey("join_hours")) d.Settings["join_hours"] = Library.JoinHours;
             }
+            // taking men from the clan's own garrisons while recruiting (0.13.19), on every tool
+            if (!d.Settings.ContainsKey("garrison_floor")) d.Settings["garrison_floor"] = Library.GarrisonFloor;
             return d;
         }
 
@@ -336,7 +341,7 @@ namespace BannerlordAgents.Tools
             }
             if (Own)
             {
-                int own = Settings.Keys.Count(k => k != "caution" && k != "danger_radius" && k != "join_hours");
+                int own = Settings.Keys.Count(k => !Library.Shared(k));
                 if (own > MaxSettings) Problems.Add(own + " settings, more than the " + MaxSettings + " a tool of your own may have");
                 if (States.Count > MaxStates) Problems.Add(States.Count + " states, more than the " + MaxStates + " a tool of your own may have");
                 int rules = States.Values.Sum(st => st.When.Count);
@@ -426,7 +431,7 @@ namespace BannerlordAgents.Tools
             }.Where(x => x != null));
             sb.Append("- **" + Name + "**" + (Own ? " (yours, " + VersionText + ")" : "") + (takes.Length > 0 ? " (" + takes + ")" : "") + ": " + About);
             if (!string.IsNullOrEmpty(CallsBack)) sb.Append(" Calls you back when " + CallsBack + ".");
-            var shown = Settings.Values.Where(s => s.Name != "caution" && s.Name != "danger_radius" && s.Name != "join_hours").ToList();
+            var shown = Settings.Values.Where(s => !Library.Shared(s.Name)).ToList();
             if (shown.Count > 0)
                 sb.Append(" Settings: " + string.Join("; ", shown.Select(s => s.Name + " " + Num(s.Default) + " (" + Num(s.Min) + " to " + Num(s.Max) + ")" + (s.About != null ? ": " + s.About : ""))) + ".");
             return sb.ToString();
@@ -482,6 +487,18 @@ namespace BannerlordAgents.Tools
         /// against Kisha (about 450).
         /// </summary>
         public const double ReliefWinBar = 1.5;
+
+        /// <summary>
+        /// Men from the clan's own garrisons while recruiting (0.13.19; Mert, Nov 1: "lets also allow orders to get lords to go to their clan's
+        /// settlements and take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the
+        /// agent"), on every move and tool: at a castle or town of his own clan, a recruiting lord (the recruit order's tour, a recruit stop)
+        /// takes healthy men from its garrison, best first, while the garrison's strength stays at or above this; the tour counts such places
+        /// as stops. 0, the default, takes none.
+        /// </summary>
+        public static readonly SettingDef GarrisonFloor = new SettingDef { Name = "garrison_floor", Default = 0, Min = 0, Max = 100000, About = "at a castle or town of his own clan, while he recruits there (the recruit order's tour, or a recruit stop), he also takes healthy men from its garrison, the best first, by the recruit order's rules (all kinds until 80% of his ranks, then his clan's own troop lines, his wage cap), as long as the garrison's strength (YOUR HOLDINGS shows it) stays at or above this; the recruit order's tour also stops at such places. 0 takes none" };
+
+        /// <summary>The settings every move and tool carries, described once in the library rather than with each (0.13.19).</summary>
+        public static bool Shared(string name) => name == "caution" || name == "danger_radius" || name == "join_hours" || name == "garrison_floor";
 
         public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, at its own pace as the crow flies, counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
 
@@ -547,6 +564,7 @@ namespace BannerlordAgents.Tools
             sb.AppendLine("Every move and tool also takes caution (default " + ToolDef.Num(Caution.Default) + ") and danger_radius (default " + ToolDef.Num(DangerRadius.Default)
                           + "): " + Caution.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");
             sb.AppendLine("And join_hours (default " + ToolDef.Num(JoinHours.Default) + "): " + JoinHours.About + ".");
+            sb.AppendLine("And garrison_floor (default " + ToolDef.Num(GarrisonFloor.Default) + "): " + GarrisonFloor.About + ".");
             sb.AppendLine("Every lord holding your orders, out of an army or leading one, also rides with all haste to relieve a lord of yours or an ally's fighting in the field (or at a siege camp, or over a raid), "
                           + "when he can get there with time to spare (a fifth of the fight's hours left, at least an hour) before it ends by the game's battle rules (at most " + ToolDef.Num(MaxReliefHours) + " hours ahead), "
                           + "the fight run ahead with the enemies who could join it coming in, and your side there, with every lord of yours who can get there in time, "

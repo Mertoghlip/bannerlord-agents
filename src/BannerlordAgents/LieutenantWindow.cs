@@ -39,6 +39,13 @@ namespace BannerlordAgents
         private static readonly List<KeyValuePair<string, uint>> Lines = new List<KeyValuePair<string, uint>>();
         private const int MaxLines = 200;
 
+        /// <summary>
+        /// What the player had typed and not sent, kept while the window is closed (0.13.19; Mert, Nov 1: "what I have written into the prompt
+        /// menu should not be wiped when I close the liutenant screen. Sometimes I look at the map to name settlements as I write my prompts").
+        /// Back in the box when it opens again; gone once sent.
+        /// </summary>
+        private static string _draft = "";
+
         public static bool IsOpen => _layer != null;
 
         /// <summary>Enter was pressed on the campaign map (from the game's chat box's look at its keys, mid-frame): the window opens next frame.</summary>
@@ -117,6 +124,7 @@ namespace BannerlordAgents
         {
             _vm = new LieutenantVM();
             _vm.Show(Lines);
+            _vm.InputText = _draft;
             _screen = ScreenManager.TopScreen;
             _layer = new GauntletLayer("BannerlordAgentsLieutenant", 4000);
             _movie = _layer.LoadMovie("LieutenantWindow", _vm);
@@ -144,6 +152,8 @@ namespace BannerlordAgents
 
         public static void Close()
         {
+            // the words typed and not sent wait for the window's next opening
+            if (_vm != null) _draft = _vm.InputText ?? "";
             try
             {
                 _layer.InputRestrictions.ResetInputRestrictions();
@@ -187,7 +197,7 @@ namespace BannerlordAgents
         [DataSourceProperty] public string CloseText => "Close";
         [DataSourceProperty] public string ApproveText => "Approve";
         [DataSourceProperty] public string DeclineText => "Decline";
-        [DataSourceProperty] public string HintText => "Type to your lieutenant and press Enter. Scroll for earlier lines. Esc closes. The game is paused while this is open.";
+        [DataSourceProperty] public string HintText => "Type to your lieutenant and press Enter. Scroll for earlier lines. Esc closes, and keeps what you have typed for when you open it again. The game is paused while this is open.";
 
         [DataSourceProperty]
         public MBBindingList<LieutenantLineVM> Lines

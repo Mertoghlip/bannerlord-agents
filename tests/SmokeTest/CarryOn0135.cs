@@ -155,6 +155,7 @@ namespace SmokeTest
             TipTheBalanceTests(moves);
             ThenIdsTests();
             RecentHistoryTests();
+            SupplyAndGarrisonTests();
         }
 
         /// <summary>

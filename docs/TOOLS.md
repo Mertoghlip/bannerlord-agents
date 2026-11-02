@@ -80,12 +80,41 @@ The agent reads it in every call as `tools.txt` (written from the same code; `ag
 
 | Group | Orders |
 |---|---|
-| Moves | goto, patrol, engage, follow, leave, recruit, hold, free |
+| Moves | goto, patrol, engage, follow, leave, recruit, supply (0.13.19), hold, free |
 | Tools | defend, garrison, besiege (its relief alarm counts lords too since 0.7.2), raid, hunt, screen, rest, watch, shadow (0.7.1) |
 | Armies | gather, relieve, join, add, release, disband |
 | Changing orders | a new order replaces the old one; adjust (settings only); no orders at all is a valid answer; then |
 
 What each one does, takes, sets and calls back on is in `tools.txt`. The definitions are the JSON files in `src/BannerlordAgents/Tools/Library`, built into the DLL.
+
+### Food for a holding, and men from the clan's garrisons (since 0.13.19)
+
+Mert, Nov 1:
+- "I'm seeing a lot of castles at my fronts with zero food due to raids on their villages, and I think agents and the liutenant should be able to order lords to donate extra food to settlements to make sure they can outlast sieges." Then "Lets do that": the lord buys first, and every realm's agents get the order.
+- "lets also allow orders to get lords to go to their clan's settlements and take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the agent."
+
+**The game's food rules** (1.4.8, `DefaultSettlementFoodModel`):
+- A castle or town's daily change is its lands (+15 a town, +10 a castle), each unraided bound village ((hearth level + 1) x 6) and its buildings, less its people (prosperity / 40) and its garrison (men / 20).
+- Food items sold to its market that day add one each (the `BonusToFoodStores` categories). Castles have no market.
+- Under siege nothing comes in. The stores hold at most 300 (a castle 450, more with a granary: `Town.FoodStocksUpperLimit`).
+- No game action hands food to a holding. Lords buy food for themselves in towns and unraided villages (`PartiesBuyFoodCampaignBehavior`: `PartyFoodBuyingModel.FindItemToBuy`, `SellItemsAction`).
+
+**supply** (a move, `Supply.cs`, verb `supply`):
+- **What the place needs:** enough to last `days` (default 10) of siege at what it eats then (people and garrison), at most its stores' limit, less what it has.
+- **What he can spare:** what he carries beyond `keep_days` (default 3) of his own men's eating (`MobileParty.FoodChange`).
+- **Buying first:** with too little to spare (once an order), he rides to the market costing the least detour on the way, and buys there as the game's lords buy food. That is a town not besieged and not an enemy's, or an unraided village not an enemy's, with food for sale, within four town gaps. He keeps half his gold and stays within `InventoryCapacity`.
+- **Handing over:** inside the holding, one food item goes into its stores for one day's portion (the market's rate), up to its limit.
+- **Ends:** handed over, the place needing nothing, nothing to bring, or the place besieged or lost before he gets in. A besieged place is not supplied: the food would have to pass the besiegers.
+- The safety rule and the relief rule ride along as with every order. Supply is not free to ride, so he relieves a fight only to tip the balance.
+- The report shows each own castle's and town's food ("food 64 of 450, about 2 days under siege (it eats 32 a day)") and its garrison's strength, never an enemy's (`SettlementRow.Food/FoodCap/FoodPerDay`, `ViewHolding`).
+
+**garrison_floor** (on every move and tool, like caution; `Library.GarrisonFloor`, default 0 = takes none; `RecruitTour.GarrisonGives`, `FromGarrison`):
+- **Where:** at a castle or town of his own clan, not besieged.
+- **Who it applies to:** a recruiting lord, meaning the recruit order's tour or a recruit stop (`recruit at`, which defend's and patrol's refills use).
+- **What he takes:** healthy men from its garrison, the highest tier first, one at a time. They follow the recruit order's rules: any kind under 80% of his ranks, then his clan's own troop lines, within his wage cap, never past his ranks' limit.
+- **How far:** as long as the garrison's strength (the game's estimate, worked out again after each man) stays at or above the floor.
+- **The tour:** it counts such places as stops even with no volunteers there.
+- The settings go to the game's thread with the order (`HandOrder.Settings`) and across a reload (the carry-on file's `settings`).
 
 ### The recruit order tours (since 0.9.2)
 Mert, Oct 22: a lord with a recruit order from an agent "also follows the logic as my own parties". The same rules as his own parties' recruit orders and the computer's lords (both in TFAOMFixes); the agents' copy is `RecruitTour.cs`, on the game's thread:

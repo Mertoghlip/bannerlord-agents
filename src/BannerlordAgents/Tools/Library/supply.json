@@ -1,0 +1,15 @@
+{
+  "tool": "supply",
+  "kind": "move",
+  "about": "Brings food into a castle or town of yours or an ally's, so it can last a siege. When he carries too little to spare, he first rides to the nearest market not under siege (a town of yours, an ally's or a realm at peace with you, or an unraided village) and buys food there with his own gold, as much as the place needs and he can carry without slowing down, keeping at least half of his gold. Then he rides in and hands over all the food he carries beyond keep_days of his own, up to what the place needs to last days of siege and what its stores hold (YOUR HOLDINGS shows each one's food). It ends once he has, or when the place is besieged or lost before he gets there, or when there is nothing he could bring, and you are told which.",
+  "calls_back": "it ends, with the food handed over and how long the place can now last a siege",
+  "at": "friendly_fort",
+  "settings": {
+    "days": [10, 1, 30, "fill the place's food to last this many days of siege, at what it eats a day, at most what its stores hold"],
+    "keep_days": [3, 0, 10, "days of food he keeps for his own men"]
+  },
+  "start": "supply",
+  "states": {
+    "supply": { "about": "bringing food to {at}", "do": "supply at" }
+  }
+}

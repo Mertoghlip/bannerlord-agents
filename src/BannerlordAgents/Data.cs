@@ -144,6 +144,12 @@ namespace BannerlordAgents
         /// <summary>A village's health, 0 to 1 (0.7.4): a raid takes it down hour by hour and loots the village at 0.</summary>
         public float HitPoints = 1f;
         public string Bound;
+        /// <summary>
+        /// A castle's or town's food (0.13.19, the supply order): its store now (Town.FoodStocks, -1 for a village), the most it holds
+        /// (FoodStocksUpperLimit) and what it eats a day under siege, when nothing comes in (the game's food model: its people's
+        /// prosperity / 40 and its garrison's men / 20). Only the realm's own are shown (Views).
+        /// </summary>
+        public float Food = -1, FoodCap, FoodPerDay;
     }
 
     /// <summary>

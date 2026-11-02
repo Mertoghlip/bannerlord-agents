@@ -113,6 +113,12 @@ namespace BannerlordAgents
                     MobileParty militia = s.MilitiaPartyComponent?.MobileParty;
                     if (militia != null && militia.IsActive) r.MilitiaStrength = (float)Math.Round(militia.Party.EstimatedStrength);
                     r.WallLevel = s.Town.GetWallLevel();
+                    // its food (0.13.19): the store, its most, and what it eats a day under siege (the food model's two eaters)
+                    SettlementFoodModel food = Campaign.Current.Models.SettlementFoodModel;
+                    r.Food = (float)Math.Round(s.Town.FoodStocks, 1);
+                    r.FoodCap = s.Town.FoodStocksUpperLimit();
+                    r.FoodPerDay = (float)Math.Round(s.Town.Prosperity / Math.Max(1, food.NumberOfProsperityToEatOneFood)
+                                                     + (g?.NumberOfAllMembers ?? 0) / (float)Math.Max(1, food.NumberOfMenOnGarrisonToEatOneFood), 1);
                 }
                 if (s.Village != null)
                 {

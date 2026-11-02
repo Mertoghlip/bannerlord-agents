@@ -93,12 +93,16 @@ namespace BannerlordAgents
             int limit = p.Party.PartySizeLimit;
             if (limit <= 0) return null;
             Func<CharacterObject, bool> lines = LinesOf(p);
+            double floor = o.Setting("garrison_floor", 0);
             // a village is entered and left at once: where he stands is the game's own reckoning (0.11.3, Orders.Where)
             Settlement here = Orders.Where(p);
-            if (here != null && MayRecruitHere(p, here) && !SweptWithin(o.Id, here, ResweepHours, now))
+            if (here != null && !SweptWithin(o.Id, here, ResweepHours, now))
             {
-                Sweep(p, here, limit, lines);
-                Mark(o.Id, here, now);
+                bool swept = false;
+                if (MayRecruitHere(p, here)) { Sweep(p, here, limit, lines); swept = true; }
+                // his clan's own garrison, down to the order's floor (0.13.19)
+                if (GarrisonGives(p, here, floor, lines)) { FromGarrison(p, here, floor, lines); swept = true; }
+                if (swept) Mark(o.Id, here, now);
             }
             int men = p.Party.NumberOfAllMembers;
             if (men >= limit && !HasOffLines(p, lines))
@@ -108,7 +112,8 @@ namespace BannerlordAgents
             }
             Settlement target = o.Place;
             Array.Clear(Unpaid, 0, Unpaid.Length);
-            if (target == null || target == here || !MayRecruitHere(p, target) || SweptWithin(o.Id, target, SweepMemoryHours, now) || !AnyOffer(p, target, limit, lines))
+            if (target == null || target == here || SweptWithin(o.Id, target, SweepMemoryHours, now)
+                || !((MayRecruitHere(p, target) && AnyOffer(p, target, limit, lines)) || GarrisonGives(p, target, floor, lines)))
                 target = FindNext(o, p, now, limit, lines);
             if (target == null) return Stopped(p, men, limit, out key);
             if (target != o.Place) { o.Place = target; moved = true; }
@@ -120,9 +125,74 @@ namespace BannerlordAgents
         {
             MobileParty p = o.Party;
             Settlement here = Orders.Where(p);
-            if (here == null || p.Party.PartySizeLimit <= 0 || !MayRecruitHere(p, here) || SweptWithin(o.Id, here, ResweepHours, now)) return;
-            Sweep(p, here, p.Party.PartySizeLimit, LinesOf(p));
-            Mark(o.Id, here, now);
+            if (here == null || p.Party.PartySizeLimit <= 0 || SweptWithin(o.Id, here, ResweepHours, now)) return;
+            Func<CharacterObject, bool> lines = LinesOf(p);
+            double floor = o.Setting("garrison_floor", 0);
+            bool swept = false;
+            if (MayRecruitHere(p, here)) { Sweep(p, here, p.Party.PartySizeLimit, lines); swept = true; }
+            if (GarrisonGives(p, here, floor, lines)) { FromGarrison(p, here, floor, lines); swept = true; }
+            if (swept) Mark(o.Id, here, now);
+        }
+
+        /// <summary>
+        /// Can the lord take men from the garrison of this place (0.13.19, garrison_floor)? A castle or town of his own clan, not besieged,
+        /// whose garrison's strength (the game's estimate) is above the order's floor, with a healthy man he may take by the recruit order's
+        /// rules (any kind under 80% of his ranks, his clan's lines above it, his wage cap, never past his ranks' limit). Floor 0: never.
+        /// </summary>
+        private static bool GarrisonGives(MobileParty p, Settlement s, double floor, Func<CharacterObject, bool> lines)
+        {
+            if (floor <= 0 || s == null || !s.IsFortification || s.IsUnderSiege || s.Town == null) return false;
+            Clan clan = p.LeaderHero?.Clan;
+            if (clan == null || s.OwnerClan != clan) return false;
+            PartyBase g = s.Town.GarrisonParty?.Party;
+            if (g == null || g.EstimatedStrength <= floor) return false;
+            int limit = p.Party.PartySizeLimit, men = p.Party.NumberOfAllMembers;
+            if (limit <= 0 || men >= limit) return false;
+            foreach (TroopRosterElement e in g.MemberRoster.GetTroopRoster())
+                if (Takes(p, e, men, limit, lines)) return true;
+            return false;
+        }
+
+        private static bool Takes(MobileParty p, TroopRosterElement e, int men, int limit, Func<CharacterObject, bool> lines)
+        {
+            CharacterObject c = e.Character;
+            if (c == null || c.IsHero || e.Number - e.WoundedNumber <= 0) return false;
+            if (men >= FillTo * limit && !lines(c)) return false;
+            return !(p.HasLimitedWage() && p.GetAvailableWageBudget() < Campaign.Current.Models.PartyWageModel.GetCharacterWage(c));
+        }
+
+        /// <summary>
+        /// Takes healthy men from his clan's garrison where he stands, the highest tier first, one at a time, as long as the garrison's strength
+        /// (the game's estimate, worked out again after each) stays at or above the floor (Mert, Nov 1: "take troops from those garrisons as they
+        /// recruit up until the strength of the garrison falls to a floor set by the agent"). Returns how many.
+        /// </summary>
+        private static int FromGarrison(MobileParty p, Settlement s, double floor, Func<CharacterObject, bool> lines)
+        {
+            PartyBase g = s.Town.GarrisonParty.Party;
+            int limit = p.Party.PartySizeLimit, got = 0;
+            float before = g.EstimatedStrength;
+            while (p.Party.NumberOfAllMembers < limit)
+            {
+                int men = p.Party.NumberOfAllMembers;
+                CharacterObject pick = null;
+                int tier = -1;
+                foreach (TroopRosterElement e in g.MemberRoster.GetTroopRoster())
+                    if (Takes(p, e, men, limit, lines) && e.Character.Tier > tier) { pick = e.Character; tier = e.Character.Tier; }
+                if (pick == null) break;
+                g.MemberRoster.AddToCounts(pick, -1);
+                if (g.EstimatedStrength < floor) { g.MemberRoster.AddToCounts(pick, 1); break; }
+                p.MemberRoster.AddToCounts(pick, 1);
+                got++;
+            }
+            if (got == 0) return 0;
+            // his last stop's recruits count them (recruited_last)
+            double now = CampaignTime.Now.ToHours;
+            if (!LastStop.TryGetValue(p, out Stop last) || last.Place != s.StringId || now - last.Hours > 1) LastStop[p] = last = new Stop { Place = s.StringId, Hours = now };
+            last.Men += got;
+            last.Hours = now;
+            Diag.Count("recruit order:garrison men taken", got);
+            Diag.Event("order", "from garrison", new { lord = p.LeaderHero?.StringId, place = s.StringId, got, floor, strength_before = Math.Round(before), strength_after = Math.Round(g.EstimatedStrength), men = p.Party.NumberOfAllMembers, limit });
+            return got;
         }
 
         /// <summary>
@@ -193,7 +263,7 @@ namespace BannerlordAgents
             }
             places.Sort((a, b) => a.Key.CompareTo(b.Key));
             foreach (var kv in places)
-                if (MayRecruitHere(p, kv.Value) && AnyOffer(p, kv.Value, limit, lines)) return kv.Value;
+                if ((MayRecruitHere(p, kv.Value) && AnyOffer(p, kv.Value, limit, lines)) || GarrisonGives(p, kv.Value, o.Setting("garrison_floor", 0), lines)) return kv.Value;
             return null;
         }
 

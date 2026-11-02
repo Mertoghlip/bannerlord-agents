@@ -277,7 +277,7 @@ namespace SmokeTest
 
             List<string> problems = Library.Problems();
             Check(problems.Count == 0, "the tool library passes its own checks" + (problems.Count > 0 ? ": " + string.Join("; ", problems) : ""));
-            Check(Library.All.Count == 20, "the library holds 20 orders (7 moves, 10 tools, 3 for armies), got " + Library.All.Count);
+            Check(Library.All.Count == 21, "the library holds 21 orders (8 moves, 10 tools, 3 for armies), got " + Library.All.Count);
             Check(Library.Text().Contains("**join** (target: one of your lords)") && Library.Text().Contains("more than 1.5 times the besiegers' strength"),
                   "the library has the join order, and relieve says when the defenders inside sally out");
             var scope = new TestScope();
@@ -830,7 +830,7 @@ namespace SmokeTest
             Check(cv.Seen.Count == 40 && cv.SeenNotListed == 6 && cv.Seen[0].Id == "p_aragorn" && report.Contains("army of 5,532 men, strength 14,695"),
                   "the report lists an enemy army in view first, whatever the bandits near the holdings (" + cv.Seen.Count + " listed, " + cv.SeenNotListed + " not)");
             // and what each castle would hold against: garrison 600 behind level-1 walls (worth 2.43) holds against up to 1,457
-            Check(report.Contains("Orc Castle [castle_orc] (castle): garrison 450, militia 120; walls level 1; defenders' strength 600, so it holds against besiegers up to strength 1,457"),
+            Check(report.Contains("Orc Castle [castle_orc] (castle): garrison 450 (strength 600), militia 120; walls level 1; defenders' strength 600, so it holds against besiegers up to strength 1,457"),
                   "the report says what each castle or town would hold against");
         }
 
