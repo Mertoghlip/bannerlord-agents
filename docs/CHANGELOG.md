@@ -1966,3 +1966,17 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Not done, waiting for Mert:**
   - the late-answer warning (what changed at the places an answer's orders name while it was being written);
   - the "can they cut me off" check in the race question.
+
+### 19:24 · Version 0.13.21 installed after the Zulgora battle crash, realm instructions updated, pushed · commit (next)
+- **The crash first** (TFAOMFixes' to fix, not ours; told to its session with the bundle):
+  - Mert's battle against Dol Guldur's Zulgora (about 6,000 soldiers and horses) hung at Winter 17, 19:18 real time. TAOM caught an AccessViolationException in `Agent.ParallelUpdateCachedAndFormationValuesForAIAgent` (bundle `taom_crash_20261102_031828_653c8d22.zip`).
+  - The game's log had three "as_spider does not contain act_warg_attack_running" lines less than a second before the first engine fault (+0x6f909d reading 0x25c0, then +0x5f132d reading 0x88, the same pair as Oct 29 23:18). The main thread then spun at TaleWorlds.Native+0x1f3344 (our freeze probe at 19:18:50).
+  - Mert closed the game at 19:19:34. The session had not saved: the run carries on from TEST CONTINUOUS SAVE, Winter 14, 08:00.
+- **Installed:**
+  - With the game closed, war rooms and dashboard stopped first.
+  - `scripts\deploy.ps1`: smoke test (439), war room and dashboard self-tests all passed.
+  - `BannerlordAgents.dll` sha256 `73A72475F3F72E9E4F9CB5CE9CA75CEEBAF66BF6D978EF8A779CB159CBD0DE82`, SubModule v0.13.21.
+  - RefCheck: 271 game types, 834 member references, 0 missing.
+  - War rooms and dashboard started again (19:24, detached).
+- **Outside the repo:** the three realm agents' `warroom-system.md` rebuilt from the template as before (each keeps its title and opening line). Two lines changed in each: the Recruiting line on clans. The old copies are `.bak-20261101-before-clans`.
+- **Pushed:** this entry with 2027e50 and 3a7824e.
