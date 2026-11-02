@@ -1824,7 +1824,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Sunday, November 1
 
-### 16:53 · Version 0.13.16 built: the lieutenant reads the whole chronicle, the report's recent history keeps the news, battle lines say who fought, the relief counts bands and wants time to spare; to be installed when the game is next closed · commit (next)
+### 16:53 · Version 0.13.16 built: the lieutenant reads the whole chronicle, the report's recent history keeps the news, battle lines say who fought, the relief counts bands and wants time to spare; to be installed when the game is next closed · commit 43642e2
 - **Mert, Nov 1:** "the liutenant said that it was not able to see what happened at nanduhirion. Can you diagnose why?"; then "Make the fixes for the liutenant. I like your other proposed fixes as well, please make them and install them once the game is closed."
 - **Why the lieutenant could not tell** (its call of Oct 30, 18:58, chat 33, "What happened at the siege of nanduhirion? Was it relieved by the dol guldur?"):
   - It answered "I can't confirm Dol Guldur helped". The notices had all reached the realm and its chronicle: Dáin, Náth, Lek, Isvan and Malthorn taken by Dramthak (Dol Guldur), Asta, Durin and Tyaska by three other Dol Guldur lords, Svedorn, Ask, Daeron and Iridi by orc lords, all at Autumn 21, 22:00.
