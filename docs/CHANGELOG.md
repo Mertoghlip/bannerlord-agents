@@ -1848,7 +1848,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The war room's self-test passed (built into the scratchpad, since the running war rooms lock their own folder). New: the lieutenant's chronicle line, its place in the message, and the instructions' text.
 - **Not installed:** the game is running (Mert's test since 16:19). To go in with the game closed, the war rooms stopped first.
 
-### 17:14 · Version 0.13.16 installed · commit (next)
+### 17:14 · Version 0.13.16 installed · commit f1f2126
 - **What:** the 0.13.16 build of 16:53 (commit 43642e2), unchanged.
 - **When:** Mert closed the game at 17:12 (its last save, TEST CONTINUOUS SAVE at Winter 5, 1087, 22:00, wrote the orders in force down). The war rooms and the dashboard were stopped first (`scripts\agents.ps1 stop`, 5 processes), and started again after (17:13, detached; each waiting for its next poke or words).
 - **Installed:** `scripts\deploy.ps1`: build, smoke test (433), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `87BA751D020B502972EE0906E8F6290A1D9667AD6E96EB663D70C30DDA328401`, SubModule v0.13.16. RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 817 member references, 0 missing.
