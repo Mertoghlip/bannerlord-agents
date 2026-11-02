@@ -116,6 +116,12 @@ Mert, Nov 1:
 - **The tour:** it counts such places as stops even with no volunteers there.
 - The settings go to the game's thread with the order (`HandOrder.Settings`) and across a reload (the carry-on file's `settings`).
 
+**Since 0.13.20** (Mert, Nov 1: "I also like all the optional extras you proposed"):
+- **The hunger warning** (`Brain.LowFood`, a poke of kind `low_food`, in each realm's hourly look). It fires for an own castle or town that is not besieged, has food for under `LowFoodDays` (3) days of siege, and has an enemy lord or army in view within `LowFoodNear` (40). It names the nearest enemy and the strength near. It is told again after a day, or sooner once its food has fallen by a day more (`Memory.HungerTold`).
+- **The order language** reads an own castle's or town's food: `food_at(h)` and `food_days_at(h)`, the days of siege it lasts. Both are none for a village or another realm's holding (its food is not known).
+- **Doctrine principle 19,** "Victual your castles before the siege" (docs/DOCTRINE.md).
+- **The realm agents' instructions now name these:** the shared settings line names `garrison_floor`, the moves list has `supply at X`, the functions list has `food_at` and `food_days_at`, and Recruiting describes the garrison floor.
+
 ### The recruit order tours (since 0.9.2)
 Mert, Oct 22: a lord with a recruit order from an agent "also follows the logic as my own parties". The same rules as his own parties' recruit orders and the computer's lords (both in TFAOMFixes); the agents' copy is `RecruitTour.cs`, on the game's thread:
 - **Where:** the order's place (a town, castle or village of the realm or an ally; castles give recruits in this pack), then the nearest town, castle or village of the realm, an ally or a realm at peace with it, within reach (four times the usual gap between neighbouring towns), that the order has not swept in the last day; one after another. The move is `tour`, and the stop it is bound for is the order's place.

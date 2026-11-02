@@ -148,7 +148,9 @@ namespace BannerlordAgents.Tools
             ["count"] = 1, ["first"] = 1, ["last"] = 1, ["item"] = 2, ["contains"] = 2, ["next"] = 2, ["nearest_of"] = 1, ["next_due"] = 3,
             ["hours_since"] = 1, ["weakest_bandit_near"] = 2, ["bandits_near"] = 2, ["nearest_town"] = 0, ["nearest_town_of_realm"] = 0,
             // 0.13.11: the party the realm's ruler attacks in person
-            ["ruler_target"] = 0
+            ["ruler_target"] = 0,
+            // 0.13.20: a castle's or town's food (the supply order)
+            ["food_at"] = 1, ["food_days_at"] = 1
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -161,7 +163,9 @@ namespace BannerlordAgents.Tools
             ["hours_since"] = "hours_since(x): hours from the hour x (a remembered now) to now, none when x is none",
             ["weakest_bandit_near"] = "weakest_bandit_near(place, r): the weakest band of bandits in view within r of a place", ["bandits_near"] = "bandits_near(place, r): how many bands of bandits are in view within r",
             ["nearest_town"] = "nearest_town(): the nearest town of yours or an ally's not under siege", ["nearest_town_of_realm"] = "nearest_town_of_realm(): the nearest town of your own, not under siege",
-            ["ruler_target"] = "ruler_target(): the enemy party your realm's ruler is attacking in person now, none when he is not"
+            ["ruler_target"] = "ruler_target(): the enemy party your realm's ruler is attacking in person now, none when he is not",
+            ["food_at"] = "food_at(h): the food in a castle or town of yours now (none for a village or another realm's)",
+            ["food_days_at"] = "food_days_at(h): how many days a castle or town of yours would last a siege on its food now, at what it eats under siege (none for a village or another realm's)"
         };
 
         private static readonly Regex NamePattern = new Regex("^[a-z][a-z0-9_]{1,31}$", RegexOptions.Compiled);

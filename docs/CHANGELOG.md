@@ -1911,3 +1911,22 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (436), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `B07746A4F0034B9D6823F862BF9826826785B6D990C3992D607E98FCE12E03B1`, SubModule v0.13.19. RefCheck: 271 game types, 834 member references, 0 missing (the food store, the stores' limit, the food-buying model, `SellItemsAction`, the item roster's counts, `InventoryCapacity`, `TotalWeightCarried`, the estimated strength). War rooms and dashboard started again (18:31, detached).
 - **Pushed:** this entry and commits 4e98819, 8245c14 to `origin/main` (Mert had asked for the last batch to be pushed once done).
 - **To watch in the game:** supply orders (the market stop, "handed over N food at X"), garrison men taken ("from garrison" in the trace), the food line in YOUR HOLDINGS, the lieutenant's window keeping unsent words.
+
+### 18:47 · Version 0.13.20 built: the hunger warning, food in the order language, doctrine principle 19, and the realm agents' instructions brought up to date · commit (next)
+- **Mert, Nov 1** ("Do the agents' system prompts and the liutenant's prompt contain instructions for these orders? Do they have the needed context?"; on the three fixes and three extras I proposed): "I like your fix proposals. I also like all the optional extras you proposed, so please implement them as well."
+- **What I found:**
+  - The order library (`tools.txt`, written by the bridge at every load, `AgentChannel.WriteLibrary`, and put into every call's system prompt by the war room) carries the supply order and `garrison_floor` from the next load.
+  - The report carries food and garrison strength (0.13.19).
+  - The lieutenant needs nothing more: it acts on the ruler's words, from the library.
+  - The realm template's own lines were out of date (the moves list, the shared settings, Recruiting).
+- **Changed:**
+  - **The realm agents' template** (`agent/warroom-system.template.md`):
+    - Writing your own tools: `garrison_floor` among the shared settings, `supply at X` among the moves, `food_at(h)` and `food_days_at(h)` among the functions.
+    - Recruiting: the garrison floor.
+    - Doctrine principle 19, "Victual your castles before the siege" (Vegetius IV.7; Calais 1347, Rouen 1419, Kenilworth 1266, Harlech 1295; in the doctrine's own words, naming nothing of this war). Its study is in `docs/DOCTRINE.md`, which now says 19 principles.
+  - **The hunger warning** (`Brain.LowFood`, `Memory.HungerTold`, `LowFoodDays` 3, `LowFoodNear` 40, `LowFoodEvery` 24): a `low_food` poke for an own castle or town not besieged, short of food for a siege, with an enemy lord or army in view near it.
+  - **The order language:** `food_at`, `food_days_at` (`ToolDef.Functions`/`FunctionWords`, `Runner`'s scope), for own holdings only.
+  - Version 0.13.20.
+- **Checks:** smoke test 438, all passed. New:
+  - The warning fires for a castle with 1 day of food and Kralza 20 away. It is not told again the next hour, is told again once the food falls a day more, and stays silent with the enemy far off.
+  - An agent-style tool reading `food_days_at(at)` and `food_at(at)` moves on a castle short of food.

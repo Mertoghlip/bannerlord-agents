@@ -1493,6 +1493,14 @@ namespace BannerlordAgents.Tools
                             if (h?.Besieger == null) return null;
                             return h.Faction == _w.Realm || _w.InView(h.Besieger) ? h.Besieger : null;
                         }
+                    // a castle's or town's food (0.13.20): the realm's own only (another's is not known), none for a village
+                    case "food_at": { SettlementRow h = H(a[0]); return h != null && h.Faction == _w.Realm && h.Food >= 0 ? (object)(double)h.Food : null; }
+                    case "food_days_at":
+                        {
+                            SettlementRow h = H(a[0]);
+                            if (h == null || h.Faction != _w.Realm || h.Food < 0) return null;
+                            return h.FoodPerDay > 0 ? (object)Math.Round(h.Food / h.FoodPerDay, 1) : 999.0;
+                        }
                     case "raided": return H(a[0])?.VillageState == "BeingRaided";
                     case "looted": return H(a[0])?.VillageState == "Looted";
                     case "ours": return H(a[0])?.Faction == _w.Realm;

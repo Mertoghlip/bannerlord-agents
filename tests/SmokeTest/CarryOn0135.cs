@@ -156,6 +156,7 @@ namespace SmokeTest
             ThenIdsTests();
             RecentHistoryTests();
             SupplyAndGarrisonTests();
+            HungerTests();
         }
 
         /// <summary>

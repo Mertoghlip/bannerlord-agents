@@ -1,6 +1,6 @@
 # Doctrine: the study behind the agent's instructions
 
-Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 18 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17, the 18th since Oct 25; the 7th corrected on Oct 29), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
+Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 19 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17, the 18th since Oct 25, the 19th since Nov 1; the 7th corrected on Oct 29), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
 
 ## Why, and the rule
 
@@ -61,7 +61,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 **The doctrine's answer** (principle 3) is the research's working rule: the side that time works against (far from home, its allies about to leave, weaker in the long run) must seek battle, on ground it chooses. The side that time favours can refuse it. Either way, fight only with an edge, or when forced, and strike at once when the edge is yours.
 
-## The 18 principles, and what each rests on
+## The 19 principles, and what each rests on
 
 | # | Principle (as the agent reads it, shortened) | What it rests on | What it means in this game |
 |---|---|---|---|
@@ -83,6 +83,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 | 16 | A besieger keeps eyes on the roads: warned in time, lift the siege, close the ways, or meet the relief on your ground. (Oct 17) | Kekaumenos xxvi ("You can't find out about the enemy except by having many scouts"); *Strategikon* VIII.1.34 (a besieging army "should keep sending out patrols"); Mountsorrel 1217 (siege raised on the scouts' word); Calais 1347 (the dunes and the bridge of Nieulay held); Antioch 1098 (foot kept the lines, the knights met the relief); against: Lincoln 1217 (the warning laughed at), Nicopolis 1396 (the bringers of the news flogged and cropped). See [below](#principles-16-and-17-oct-17-the-besiegers-eyes-and-the-weaker-sides-one-blow). | The siege order's alarm counts every enemy lord near or heading for the place (0.7.2); watch and shadow (0.7.1) put a lord on a road or on an army. |
 | 17 | The weaker side's one blow: when time is on the enemy's side, pass the lesser prize by, mass on the one blow that decides, strike before his parts join; when time is on yours, wait. Time is on your side only while waiting costs him more than you; an enemy taking your places while you wait has time on his side, however strong you are. (Oct 17; the time test since Oct 25) | Edward IV 1471 (Coventry passed by, London, Barnet, the march of "xxx myle and more" to Tewkesbury, *Arrivall*); Lincoln 1217 (every castellan's knights gathered against the larger force; Wendover); *Strategikon* IX.1; Kekaumenos lxvi; Vegetius III.26 for the other side. | Big armies walk slowly and sieges take days (TOOLS.md, "What a siege costs in hours"); every detour is hours the enemy uses. |
 | 18 | The enemy's main army first: when you can beat it, gather an overwhelming force and meet it in the field, or strike as soon as you hold the advantage if gathering all would take too long, rather than wait for it to sit down before a castle; lesser prizes wait, raiders go to small forces; then take his places quickly while he regroups. When you cannot yet beat it, principles 4 and 17. (Oct 25) | Saladin 1187 (the forces of Egypt and Syria gathered; Hattin, 4 July; Acre in about a week; Jerusalem by 2 October); Mohi, 11 April 1241, then Hungary overrun; "The Mongols preferred to deal with all field armies before moving deep into enemy territory" (May 2015). See [below](#principle-18-and-the-raiders-oct-25-the-enemys-main-army-first). | An AI realm's great army takes castle after castle while it stands (run 20261024-2110-C2: four in 34 days); the battle odds give each side's remnant. |
+| 19 | Victual the castles before the siege: a castle lives on its lands and villages, raids cut that, a siege stops it, and hunger then takes a tenth of the garrison a day; stock the places on a threatened front while the roads are open, above all those whose villages are raided, and read their food beside their walls. (Nov 1) | Vegetius IV.7 (provisions into the strongholds before the siege); Calais 1346–47 and Rouen 1418–19 (taken by hunger); Kenilworth 1266 (gave up when its food ran out); Harlech 1294–95 (held, supplied by sea). See [below](#principle-19-nov-1-victual-the-castles-before-the-siege). | Castles at the fronts with no food after their villages were raided (Mert, Nov 1, run 20261029-1903-A); the supply order and the hunger warning (0.13.19, 0.13.20). |
 
 ## Principle 15 (Oct 16): reading an army's aim
 
@@ -286,6 +287,31 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 - Small groups of lords sent at raiders already at work on a village, or at raiders they can reach before they get back among their own.
 - Fewer hunts that end with the raider gone or back among its own.
 - No lord drawn after a raider into its main army, and no army waiting for an enemy main army to stop, as with the raiders.
+
+## Principle 19 (Nov 1): victual the castles before the siege
+
+**Mert, Nov 1.** He saw "a lot of castles at my fronts with zero food due to raids on their villages". The supply order came out of it (0.13.19, docs/TOOLS.md). I proposed, among three extras, "A rule of thumb on stocking castles before a siege", written like the existing ones with historical examples, saying nothing about this war, and noted that the doctrine is his call. He answered: "I also like all the optional extras you proposed, so please implement them as well." It is in the doctrine's own words, the same for every realm agent, and names nothing of this war (no front, no place, no enemy).
+
+**The game's side** (1.4.8, `DefaultSettlementFoodModel`; docs/TOOLS.md "Food for a holding"):
+- A castle or town lives on its lands and its unraided bound villages.
+- Under siege nothing comes in, and its people and garrison go on eating.
+- Out of food, a tenth of the garrison falls to hunger each day. The game's storm test (`StartingAssaultOnBesiegedSettlementIsLogical`) weighs the defenders as they are, so a starving garrison is soon one a besieger storms.
+- YOUR HOLDINGS gives each own castle's and town's food in days of siege (0.13.19). The hunger warning pokes when one is short with enemies near (0.13.20).
+
+**The principle** (19): stock the places on a threatened front while the roads are open, above all those whose villages are raided; read their food beside their walls, since a place that would hold against any storm still falls once its food runs out.
+
+**What it rests on:**
+- **Vegetius, *Epitoma rei militaris* IV.7:** before a siege, bring the provisions into the strongholds, and leave nothing outside for the besieger.
+- **Calais, 1346–47:** Edward III held it close for about eleven months. It surrendered to hunger once Philip VI's relief army had turned away without fighting.
+- **Rouen, 1418–19:** Henry V blockaded it from the summer of 1418. The city, starving (it had put its poor and its useless mouths out into the ditch), surrendered in January 1419.
+- **Kenilworth, 1266:** the longest siege of medieval England, from June to December. Its garrison held off every assault, and gave up only when food ran short and sickness spread.
+- **Harlech, 1294–95:** cut off by land in Madog ap Llywelyn's rising. It held because it was supplied by sea, as Edward I's coastal castles were meant to be.
+
+**Caveats:**
+- The game has no blockade runner. A besieged place cannot be supplied (the supply order ends there), so the principle says "before the siege", and Harlech's sea road stands for the open road, not a way in.
+- It is a rule for a threatened front, not for every place. The order spends a lord's time and half his gold at most, and principle 12 (hold what you can support) still decides which places are worth it.
+
+**What would show it working:** supply orders to threatened castles before sieges begin, fewer sieges won by hunger against the agent's realm, and food lines in councils' notes.
 
 ## What was left out on purpose
 

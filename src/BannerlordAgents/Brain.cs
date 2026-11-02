@@ -42,7 +42,16 @@ namespace BannerlordAgents
             public int Pokes, PokedHoursRunning;
             /// <summary>What the hourly look found to poke about (sightings, the first look), waiting for the next report round (0.12.0).</summary>
             public readonly List<Trigger> Waiting = new List<Trigger>();
+            /// <summary>Each own holding last warned about for hunger (0.13.20, LowFood): the hour, and the days of food it had then.</summary>
+            public readonly Dictionary<string, KeyValuePair<double, double>> HungerTold = new Dictionary<string, KeyValuePair<double, double>>();
         }
+
+        /// <summary>
+        /// The hunger warning (0.13.20; Mert, Nov 1, on "a low-food warning ... X has only N days of food for a siege, and enemies are near": "I
+        /// also like all the optional extras you proposed"): an own castle or town not besieged with food for under LowFoodDays of siege, and an
+        /// enemy lord or army in view within LowFoodNear of it. Told again after LowFoodEvery hours, or sooner once its food falls by a day more.
+        /// </summary>
+        public const double LowFoodDays = 3, LowFoodNear = 40, LowFoodEvery = 24;
 
         /// <summary>An enemy army's trail: a new point after this many map units marched, or this many hours; kept two days, at most 12 points.</summary>
         private const float TrailStep = 10f;
@@ -592,6 +601,7 @@ namespace BannerlordAgents
             }
             foreach (string id in close) m.LastClose[id] = s.Hours;
             foreach (string id in m.LastClose.Where(x => s.Hours - x.Value > ForgetHours).Select(x => x.Key).ToList()) m.LastClose.Remove(id);
+            if (!first) triggers.AddRange(LowFood(s, m, sees, hostile, own));
 
             m.SeenLastHour = new HashSet<string>(sees.Keys);
             foreach (KeyValuePair<string, Sighting> kv in sees)
@@ -615,6 +625,46 @@ namespace BannerlordAgents
             PokesPlayer++;
             Files.Append(Path.Combine(Dir, "record", "pokes_you.jsonl"),
                 Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = mine, Seat = false }));
+        }
+
+        /// <summary>The hunger warnings of this hour (LowFoodDays): one line per own castle or town short of food with an enemy in view near it.</summary>
+        internal static List<Trigger> LowFood(Snapshot s, Memory m, Dictionary<string, Sighting> sees, HashSet<string> hostile, List<SettlementRow> own)
+        {
+            var found = new List<Trigger>();
+            foreach (SettlementRow h in own)
+            {
+                if (h.Food < 0 || h.FoodPerDay <= 0 || h.BesiegedBy != null) continue;
+                double days = h.Food / h.FoodPerDay;
+                if (days >= LowFoodDays)
+                {
+                    m.HungerTold.Remove(h.Id);
+                    continue;
+                }
+                if (m.HungerTold.TryGetValue(h.Id, out KeyValuePair<double, double> told) && s.Hours - told.Key < LowFoodEvery && days > told.Value - 1) continue;
+                // the enemy lords and armies in view near it, nearest first
+                var near = new List<KeyValuePair<double, PartyRow>>();
+                foreach (string id in sees.Keys)
+                {
+                    if (!s.PartyById.TryGetValue(id, out PartyRow r) || r.Kind != "lord" || r.Attached || !hostile.Contains(r.Faction ?? "")) continue;
+                    double d = Math.Sqrt((r.X - h.X) * (r.X - h.X) + (r.Y - h.Y) * (r.Y - h.Y));
+                    if (d <= LowFoodNear) near.Add(new KeyValuePair<double, PartyRow>(d, r));
+                }
+                if (near.Count == 0) continue;
+                near.Sort((a, b) => a.Key.CompareTo(b.Key));
+                PartyRow first = near[0].Value;
+                double strength = near.Sum(x => x.Value.ArmyStrength > 0 ? x.Value.ArmyStrength : x.Value.Strength);
+                m.HungerTold[h.Id] = new KeyValuePair<double, double>(s.Hours, days);
+                Diag.Count("notice:hunger warnings");
+                found.Add(new Trigger
+                {
+                    Hours = s.Hours, Kind = "low_food", Place = h.Id, Party = first.Id,
+                    Text = "Hunger at " + h.Name + ": its food would last only " + Text.N((int)Math.Floor(days)) + (Math.Floor(days) == 1 ? " day" : " days") + " of siege ("
+                           + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap) + ", it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day), and enemies are near: "
+                           + (first.Name ?? first.Id) + (first.ArmyMen > 0 ? "'s army" : "") + ", " + Text.D((float)near[0].Key) + " away"
+                           + (near.Count > 1 ? ", and " + (near.Count - 1) + " more" : "") + ", strength " + Text.N((int)Math.Round(strength)) + " in all. The supply order brings it food."
+                });
+            }
+            return found;
         }
 
         /// <summary>
