@@ -2010,7 +2010,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
     - both templates list every move, name and function of the language (`ToolDef.Verbs`, `Functions`, `BuiltIns`).
   - **War room self-test, all passed.** New: on the made-up map, Hirgon standing on Bolg's road east can be on it about 7 along an hour before him, and Aragorn's slow army near its end about 48 along; nobody can reach the pass road south first.
 
-### 20:32 · Version 0.13.22 installed, the realm agents' and the lieutenant's instructions replaced, pushed · commit (next)
+### 20:32 · Version 0.13.22 installed, the realm agents' and the lieutenant's instructions replaced, pushed · commit 88c59b2
 - **What:** the 0.13.22 build (commit 4e31f60), unchanged, with the game closed.
 - **Installed:**
   - War rooms and dashboard stopped first (5 processes).
