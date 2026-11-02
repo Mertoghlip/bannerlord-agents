@@ -158,6 +158,8 @@ namespace SmokeTest
             SupplyAndGarrisonTests();
             HungerTests();
             FoodComingTests();
+            LateAnswerTests();
+            LanguageWordsTests();
         }
 
         /// <summary>

@@ -724,7 +724,7 @@ namespace BannerlordAgents
             ReportExtras extras = null;
             Timed(ms, "facts", () => extras = new ReportExtras
             {
-                Since = ch.On ? ch.SinceLastAnswer(number) : null, LastAnswered = ch.LastAnswered,
+                Since = ch.On ? ch.SinceLastAnswer(number, v) : null, LastAnswered = ch.LastAnswered,
                 InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On
             });
             string report = null;
@@ -754,7 +754,7 @@ namespace BannerlordAgents
             // the player's lieutenant is never poked (0.10): it speaks when spoken to; what became of its orders goes into the chat box
             if (ch.IsLieutenant) Lieutenant.Heard(triggers);
             if (ch.On && !ch.IsLieutenant)
-                ch.OnPoke(number, s.Hours, triggers, report, stale: stale, meta: new
+                ch.OnPoke(number, s.Hours, triggers, report, stale: stale, view: v, meta: new
                 {
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,

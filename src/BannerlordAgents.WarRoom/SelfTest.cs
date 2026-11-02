@@ -232,6 +232,17 @@ namespace BannerlordAgents.WarRoom
             Check(a3 != null && a3.Contains("knows no lord, army or holding called \"p_hidden\""), "a party the realm never saw is refused: " + a3);
             string[] logged = File.Exists(Path.Combine(logs, "routes.jsonl")) ? File.ReadAllLines(Path.Combine(logs, "routes.jsonl")) : new string[0];
             Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
+            // 0.13.22 (Mert, Nov 1: Zulgora's army ran for Westoft, 8 hours ahead by the race, and was caught on the way about 16 hours later):
+            // can the other side cut the way? Hirgon stands on Bolg's road east, Aragorn's slow army at its end; nobody can reach the pass road south first
+            string c1 = Call("{\"from\":\"lord_bolg\",\"to\":\"town_b\",\"also_from\":[\"lord_sc\",\"lord_ar\"]}");
+            string c2 = Call("{\"from\":\"lord_bolg\",\"to\":\"castle_c\",\"also_from\":[\"lord_sc\"]}");
+            System.Text.RegularExpressions.Match hirgon = System.Text.RegularExpressions.Regex.Match(c1 ?? "", @"Hirgon \[lord_sc\] could be on the way about (\d+) along");
+            System.Text.RegularExpressions.Match aragorn = System.Text.RegularExpressions.Regex.Match(c1 ?? "", @"Aragorn \[lord_ar\] could be on the way about (\d+) along");
+            Check(c1 != null && c1.Contains("CAN THEY CUT THE WAY?") && hirgon.Success && int.Parse(hirgon.Groups[1].Value) <= 12 && aragorn.Success && int.Parse(aragorn.Groups[1].Value) >= 35
+                  && c1.Contains("could not keep to this way without meeting it")
+                  && c2 != null && c2.Contains("Hirgon [lord_sc] could reach no point of the way before Bolg passes there"),
+                  "the way says where an enemy could get onto it first (Hirgon on the road early, Aragorn's army near its end) and when none can: "
+                  + c1?.Replace("\n", " | ") + " || " + c2?.Replace("\n", " | "));
             // 0.7.4: the battle odds and the roads in, served beside the way
             string Ask(string name, string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
             Check((list?["result"]?["tools"] as JsonArray)?.Count == 6 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"

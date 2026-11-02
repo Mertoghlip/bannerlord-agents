@@ -377,6 +377,9 @@ namespace BannerlordAgents
             public int Answers;
         }
 
+        /// <summary>The late answer's record of this channel's pokes (0.13.22, LateAnswer).</summary>
+        private readonly LateAnswer.Book _late = new LateAnswer.Book();
+
         /// <summary>The agent whose channel this is (Agents).</summary>
         private readonly RealmAgent _agent;
 
@@ -468,6 +471,7 @@ namespace BannerlordAgents
             _silenceAlarmed = false;
             _lastAnswered = -1;
             PokeReasons.Clear();
+            _late.Clear();
             Lines.Clear();
             AnswerFiles = OrdersReceived = Applied = Checked = Refused = 0;
             _shownFile = dataDir != null ? Path.Combine(dataDir, Realm == null ? "ids_shown.txt" : "ids_shown_" + Realm + ".txt") : null;
@@ -521,11 +525,14 @@ namespace BannerlordAgents
         /// What the agent has not heard since its last answer: the reasons of the pokes that came after the one it
         /// answered (the current poke's own reasons are in WHY YOU ARE ASKED NOW), and what became of its orders.
         /// </summary>
-        public string SinceLastAnswer(int current)
+        public string SinceLastAnswer(int current, View now = null)
         {
             if (_lastAnswered < 0 || !Pokes.TryGetValue(_lastAnswered, out PokeInfo last))
                 return "- This is the first poke you answer in this game session; the report below has everything.";
             var sb = new StringBuilder();
+            // 0.13.22: an answer that took effect hours after its report comes first, with what changed meanwhile where its orders act
+            string late = now != null ? _late.Tell(now, current, Realm) : null;
+            if (late != null) sb.AppendLine(late);
             var seen = new HashSet<string>();
             int shown = 0, more = 0;
             foreach (KeyValuePair<int, List<string>> kv in PokeReasons)
@@ -556,10 +563,11 @@ namespace BannerlordAgents
         /// A poke for the agent: poke.json (for the war room: the number, the in-game hour, the campaign, the realm and
         /// this load, by which it tells a reloaded save), then poke.txt, then its line in pokes.log, each swapped in whole.
         /// </summary>
-        public void OnPoke(int n, double hours, List<Trigger> triggers, string report, object meta = null, string stale = null)
+        public void OnPoke(int n, double hours, List<Trigger> triggers, string report, object meta = null, string stale = null, View view = null)
         {
             _lastPoke = n;
             Pokes[n] = new PokeInfo { Wall = DateTime.Now, Hours = hours };
+            _late.Poked(n, hours, view);
             PokeReasons.Add(new KeyValuePair<int, List<string>>(n, triggers.Select(t => t.Text).ToList()));
             if (PokeReasons.Count > 300) PokeReasons.RemoveRange(0, PokeReasons.Count - 300);
             if (_waitingSince == DateTime.MinValue) { _waitingSince = DateTime.Now; _waitingFor = n; }
@@ -845,6 +853,8 @@ namespace BannerlordAgents
                 Receipt(o, "refused", "its tool " + o.Do.Trim().ToLowerInvariant() + " was refused (" + refusedTools[o.Do.Trim()] + ")", Diag.Hours);
             orders = orders.Except(refused).ToList();
             if (orders.Count == 0) return;
+            // what this answer's orders name, for a late answer's note in the next poke (0.13.22); a council answers from its own briefing, not the poke's report
+            if (ans == null || ans.Kind == "answer") _late.Answered(poke, orders);
             if (!Watchdog.ClockRunning)
             {
                 Diag.Count("agent:waited for clock", orders.Count);
@@ -1096,6 +1106,8 @@ namespace BannerlordAgents
             {
                 seconds = (a.Received - t.Wall).TotalSeconds;
                 gameHours = hours - t.Hours;
+                // when the answer took effect (0.13.22); a next order (then) starts later by design, so it does not count
+                if (status == "applied" && a.File != "then") _late.Applied(a.Poke, hours);
                 delay = " Answered " + seconds.ToString("0", Text.Inv) + " s after poke #" + a.Poke + " (" + gameHours.ToString("0.0", Text.Inv) + " in-game hours).";
             }
             else if (a.Poke < 0) delay = " (The file gave no poke number, so the answer time is unknown.)";

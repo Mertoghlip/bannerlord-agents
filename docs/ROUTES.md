@@ -73,7 +73,8 @@ Version 0.7 (Oct 16). Mert: "the pathfinding for the game is also an important f
   - the crossings in order, with what closing each would cost (from the atlas);
   - the narrowest place;
   - for an enemy seen earlier, that this is if it marched on at once;
-  - with `also_from`, who would get there first.
+  - with `also_from`, who would get there first;
+  - and, since 0.13.22 (`CutOff.cs`; Mert, Nov 1, after Zulgora's army ran for Westoft 8 hours ahead by the race and was caught on the way about 16 hours later), CAN THEY CUT THE WAY?: for each lord or army in `also_from` of the other side, the first point of the way it could reach before the one asked about passes there, each marching at once by its own shortest way at its own pace ("could be on the way about 48 along, 12 west of Bree [p68_30], by about ...: 4 hours before Bolg would pass there"), or that it could reach no point first. The asked army's hourly places along its way (`GamePace.March`'s marks), at most 24 of them (`CutPoints`), the end always among them; a point the other could not reach even at 1.3 times its open-ground pace is passed by without a search. A chase from behind shows too, since the faster army reaches the points ahead first.
   - The first answer in a call adds HOW MARCHING WORKS. `marching.txt` in the channel holds it for the agent to read.
 - **The log:** every question and answer goes to `logs\warroom\routes.jsonl` (the poke, the call, from, to, the answer's lines, ms). The war room's `calls.jsonl` gives each call's `ways_asked`. The dashboard's log shows each question.
 - **Checks:** `WarRoom selftest` checks it on the made-up map: the protocol, a lord over the bridge, an enemy with its trail's pace and who first, an unseen party refused, the log, the instructions with and without the tool, `marching.txt`. `WarRoom toolcheck` makes one real, short call with a small model through the whole path. Oct 16: passed, 1 question, 2.8 s.

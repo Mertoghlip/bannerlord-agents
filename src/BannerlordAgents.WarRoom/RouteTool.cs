@@ -146,7 +146,8 @@ namespace BannerlordAgents.WarRoom
             ["name"] = ToolName,
             ["description"] = "The way one army would march to a holding or to another army, found as the game itself finds ways: its length, the hours it takes at "
                               + "that army's pace (an enemy's from where your realm last saw it), the ground it crosses, and the bridges, fords and narrow passes on it with "
-                              + "what closing each would cost, and spots [pX_Y] on the way where a watch can be posted. Optionally, who would get there first. How marching works is in the first answer, and in marching.txt.",
+                              + "what closing each would cost, and spots [pX_Y] on the way where a watch can be posted. Optionally, who would get there first, and whether a lord or army of the other "
+                              + "side could get onto the way before the first one passes there (cut it off), and where. How marching works is in the first answer, and in marching.txt.",
             ["inputSchema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -154,7 +155,7 @@ namespace BannerlordAgents.WarRoom
                 {
                     ["from"] = new JsonObject { ["type"] = "string", ["description"] = "The id in [brackets] of one of your lords or armies, of an enemy your report shows, or of a holding." },
                     ["to"] = new JsonObject { ["type"] = "string", ["description"] = "The id in [brackets] of a holding, or of a lord or army your report shows." },
-                    ["also_from"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Optional: other lords' or armies' ids, to see who would get there first." }
+                    ["also_from"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Optional: other lords' or armies' ids, to see who would get there first; for each of the other side, also whether and where it could cut the way off." }
                 },
                 ["required"] = new JsonArray("from", "to")
             }
@@ -243,6 +244,8 @@ namespace BannerlordAgents.WarRoom
                     foreach ((string who, double a, string note) in race.OrderBy(x => x.arrive))
                         lines.Add("- " + who + ": about " + cal.When(a) + note + ".");
                 }
+                // 0.13.22: whether one of the other side could get onto the way before it passes (CutOff.cs)
+                lines.AddRange(CutOff(m, known, from, r, also, start, now, cal));
             }
             return lines;
         }

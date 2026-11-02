@@ -1980,3 +1980,32 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - War rooms and dashboard started again (19:24, detached).
 - **Outside the repo:** the three realm agents' `warroom-system.md` rebuilt from the template as before (each keeps its title and opening line). Two lines changed in each: the Recruiting line on clans. The old copies are `.bak-20261101-before-clans`.
 - **Pushed:** this entry with 2027e50 and 3a7824e.
+
+### 20:30 · Version 0.13.22 built: the late-answer warning, the cut-off check in the race question, the tool language for the lieutenant · commit (next)
+- **Mert, Nov 1**, on the two proposals left from the Zulgora analysis and the lieutenant's gap: "I like both ideas, implement them. Fix the gap for the liutenant as well."
+- **The late answer** (`LateAnswer.cs`, new; `Channel`'s `LateAnswer.Book`; `Brain.Poke` passes each poke's view):
+  - Measured first in the channels' receipts (last 400 orders each): answers took effect a median 6 in-game hours after their poke for the orcs (one in ten 18 or more, the most 33) and 8 for Dol Guldur (one in ten 24 or more, the most 52).
+  - When an answer's orders took effect 6 hours or more after its poke (`LateAnswer.Hours`), the next poke's WHAT CHANGED SINCE YOUR LAST ANSWER opens with it: "Your answer to poke #N took effect late: it answered the report of ..., and its orders took effect ..., 18 in-game hours later. Since that report, at the places and lords those orders named:", then a line for each.
+    - A holding: its owner, siege or raid, garrison, food, food coming, the nearest enemy in view.
+    - An enemy lord or army: in view or not, its men, what it does, where.
+    - A lord of the realm: only his men and capture, never his own moves (the orders' doing).
+  - It covers the next orders (`then`) too, and lords named by name. It is told once per answer, the newest two, and only when something changed.
+  - A council's answers are left out (they answer their own briefing). A next order's later start does not count as the answer taking effect.
+  - Each channel keeps the notes of its newest 30 pokes (`LateAnswer.PokesKept`), copied, since the realm's memory changes its sightings in place.
+  - The trace gets `late` events, plus the counter `agent:late answer told`.
+- **Can they cut the way** (`src/BannerlordAgents.WarRoom/CutOff.cs`, new, in `ask_the_way`):
+  - The check: for each lord or army of the other side in `also_from`, the first point of the way it could reach before the one asked about passes there ("could be on the way about 48 along, 12 west of Bree [p68_30], by about ...: 4 hours before Bolg would pass there ... From there on, Bolg could not keep to this way without meeting it"), or "could reach no point of the way".
+  - How: the asked army's hourly places along its way, at most 24 (`CutPoints`). A point out of reach even at 1.3 times the other's open-ground pace is skipped without a search. It is facts only, like the rest of the tool.
+  - The tool's description, and its `also_from`, say so. So do the realm template's Asking the way and the lieutenant's.
+- **The lieutenant's tool language** (`agent/lieutenant-system.template.md`, new section The tool language):
+  - It carries the form, takes, settings, init, states, moves, values, names, functions and limits as the realm agents have them, with a tool's call-backs told in the ruler's window.
+  - Until now it was only told to copy the library's tools. `ToolDef.FunctionWords`/`VerbWords` are printed nowhere, so it knew nothing of words such as `food_days_at`.
+  - The realm template's lists gain the two words they had missed: `army_joining` (since gather) and `ruler_target()` (0.13.11).
+  - The realm template's poke section says what the late-answer lines are.
+- **Docs:** ROUTES.md (the cut), TOOLS.md (the late answer), LIEUTENANT.md (the tool language).
+- Version 0.13.22.
+- **Checks:**
+  - **Smoke test 442, all passed.** New:
+    - an answer that took effect 18 hours after its report is told once, with a castle's food 0 then 219, its lord's 300 men then 200, and the enemy its next order named marching on Orc Keep, never a lord it did not name; an answer on time, or one where nothing it named changed, is not told;
+    - both templates list every move, name and function of the language (`ToolDef.Verbs`, `Functions`, `BuiltIns`).
+  - **War room self-test, all passed.** New: on the made-up map, Hirgon standing on Bolg's road east can be on it about 7 along an hour before him, and Aragorn's slow army near its end about 48 along; nobody can reach the pass road south first.
