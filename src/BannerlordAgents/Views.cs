@@ -128,6 +128,8 @@ namespace BannerlordAgents
         public float Defence, LordsInside, HoldsUpTo;
         /// <summary>The realm's own castles and towns only (0.13.19): the garrison's strength, and its food now, its most and what it eats a day under siege (-1: not shown).</summary>
         public float GarrisonStrength = -1, Food = -1, FoodCap, FoodPerDay;
+        /// <summary>The realm's own castles and towns only (0.13.21): the clan that owns it, and the food its supply orders are bringing.</summary>
+        public string Clan, FoodComing;
     }
 
     /// <summary>The sections a poke adds before the report: what changed since the agent's last answer, its orders in force, ready-made facts.</summary>
@@ -207,6 +209,8 @@ namespace BannerlordAgents
                     vh.Food = h.Food;
                     vh.FoodCap = h.FoodCap;
                     vh.FoodPerDay = h.FoodPerDay;
+                    vh.Clan = h.OwnerClanName;
+                    vh.FoodComing = FoodComing(s, fid, h);
                 }
                 // the enemy in view that could reach it soonest: by road where the game's table knows the way
                 float ThreatRoad(ViewParty x) => s.PartyById.TryGetValue(x.Id, out PartyRow xr) ? Roads.To(s, xr, h) : float.NaN;
@@ -571,14 +575,18 @@ namespace BannerlordAgents
                               + "SIEGES AND BATTLES runs each siege's clock.");
             if (v.Holdings.Any(h => h.Food >= 0))
                 sb.AppendLine("A castle's or town's food comes from its lands and its unraided villages each day, and none while it is besieged; its garrison and its people eat it, "
-                              + "and once it is out a tenth of the garrison falls to hunger each day. The supply order brings it food.");
+                              + "and once it is out a tenth of the garrison falls to hunger each day. The supply order brings it food. "
+                              + "Lords sheltering inside never eat a holding's food: each lord's men eat what he carries. A town's market sells them food every hour while it has any, "
+                              + "besieged or not; a castle has no market, so lords shut in a castle live on what they brought. "
+                              + "The clan named with each one owns it: a lord's garrison_floor takes men only from his own clan's (his look-up file names his clan).");
             foreach (ViewHolding h in v.Holdings)
             {
-                var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ")");
+                var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + (string.IsNullOrEmpty(h.Clan) ? "" : " of " + h.Clan) + ")");
                 if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + (h.GarrisonStrength >= 0 ? " (strength " + Text.N((int)Math.Round(h.GarrisonStrength)) + ")" : "") + ", militia " + Text.N(h.Militia));
                 if (h.Food >= 0)
                     line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap)
-                                + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : ""));
+                                + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : "")
+                                + (h.FoodComing != null ? "; food coming: " + h.FoodComing : ""));
                 if (h.WallLevel > 0)
                     line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
                                 + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")
@@ -822,6 +830,36 @@ namespace BannerlordAgents
                 vp.HoldingRoad = byRoad != null ? Text.R1(best) : float.NaN;
             }
             return vp;
+        }
+
+        /// <summary>
+        /// The food on its way to an own castle or town (0.13.21; Mert, Nov 1: Dol Guldur's agent left Gwígar as "no food" while its own
+        /// Dûrnia was seven hours from handing over 219, since the report said only "bringing food to Gwígar"): each of the realm's supply
+        /// orders to it, with what the lord can spare beyond his keep_days (when he rides there now), or what it needs (when he buys on the
+        /// way first), and when he gets there. Null when none.
+        /// </summary>
+        private static string FoodComing(Snapshot s, string fid, SettlementRow h)
+        {
+            var parts = new List<string>();
+            foreach (Tools.ToolInstance t in Tools.Runner.All())
+            {
+                if (t.Finished || t.Order?.Realm != fid || t.Def?.Name != "supply" || t.Order.At != h.Id) continue;
+                if (!s.PartyById.TryGetValue(t.Order.Party ?? "", out PartyRow r)) continue;
+                double days = t.Settings.TryGetValue("days", out double dd) ? dd : 10, keep = t.Settings.TryGetValue("keep_days", out double kd) ? kd : 3;
+                int need = Math.Max(0, (int)Math.Ceiling(Math.Min(h.FoodCap, days * h.FoodPerDay) - h.Food));
+                int spare = r.FoodItems >= 0 ? Math.Max(0, r.FoodItems - (int)Math.Ceiling(keep * r.FoodEats)) : -1;
+                string who = r.Name ?? t.Order.LordName ?? r.Id;
+                if (r.TargetSettlement == h.Id || r.InSettlement == h.Id)
+                {
+                    int brings = spare >= 0 ? Math.Min(spare, need) : need;
+                    Forecast.Arrival a = r.InSettlement == h.Id ? null : Forecast.ToHolding(s, r, h);
+                    parts.Add(who + " with about " + Text.N(brings) + (h.FoodPerDay > 0 ? " (about " + Text.N((int)Math.Floor(brings / h.FoodPerDay)) + " days more)" : "")
+                              + (a != null && a.Reached ? ", there about " + Text.When(a.At) : ""));
+                }
+                else
+                    parts.Add(who + ", buying food on the way first, with up to " + Text.N(need) + (spare > 0 ? " (he carries " + Text.N(spare) + " to spare now)" : ""));
+            }
+            return parts.Count > 0 ? string.Join("; ", parts) : null;
         }
 
         public static ViewHolding Holding(Snapshot s, SettlementRow h, bool counted)

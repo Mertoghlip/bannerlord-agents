@@ -271,7 +271,7 @@ Lords fill their ranks with volunteers, by the game's own rules:
 - A town has the most notables, about five, so towns are the centres of recruiting; a castle or a village has about three.
 - Which of a notable's men a lord may take depends on his standing with that notable, and each man must fit his gold and his wage cap (Money).
 - A besieged town or castle gives no recruits, nor does a village being raided or looted, nor any place of an enemy's.
-- A lord recruiting at a castle or town of his own clan can also take men from its garrison, the best first, as long as its strength stays at or above the floor you set (`garrison_floor`, on any order; YOUR HOLDINGS shows each garrison's strength).
+- A lord recruiting at a castle or town of his own clan can also take men from its garrison, the best first, as long as its strength stays at or above the floor you set (`garrison_floor`, on any order; YOUR HOLDINGS shows each garrison's strength and the clan that owns it, and a lord's look-up file names his clan).
 
 ## Money
 

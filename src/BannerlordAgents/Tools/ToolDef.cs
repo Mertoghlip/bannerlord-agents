@@ -499,7 +499,7 @@ namespace BannerlordAgents.Tools
         /// takes healthy men from its garrison, best first, while the garrison's strength stays at or above this; the tour counts such places
         /// as stops. 0, the default, takes none.
         /// </summary>
-        public static readonly SettingDef GarrisonFloor = new SettingDef { Name = "garrison_floor", Default = 0, Min = 0, Max = 100000, About = "at a castle or town of his own clan, while he recruits there (the recruit order's tour, or a recruit stop), he also takes healthy men from its garrison, the best first, by the recruit order's rules (all kinds until 80% of his ranks, then his clan's own troop lines, his wage cap), as long as the garrison's strength (YOUR HOLDINGS shows it) stays at or above this; the recruit order's tour also stops at such places. 0 takes none" };
+        public static readonly SettingDef GarrisonFloor = new SettingDef { Name = "garrison_floor", Default = 0, Min = 0, Max = 100000, About = "at a castle or town of his own clan (YOUR HOLDINGS names the clan that owns each one; his look-up file names his), while he recruits there (the recruit order's tour, or a recruit stop), he also takes healthy men from its garrison, the best first, by the recruit order's rules (all kinds until 80% of his ranks, then his clan's own troop lines, his wage cap), as long as the garrison's strength (YOUR HOLDINGS shows it) stays at or above this; the recruit order's tour also stops at such places. 0 takes none" };
 
         /// <summary>The settings every move and tool carries, described once in the library rather than with each (0.13.19).</summary>
         public static bool Shared(string name) => name == "caution" || name == "danger_radius" || name == "join_hours" || name == "garrison_floor";

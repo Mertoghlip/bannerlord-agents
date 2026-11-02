@@ -119,6 +119,9 @@ namespace BannerlordAgents
                     r.FoodCap = s.Town.FoodStocksUpperLimit();
                     r.FoodPerDay = (float)Math.Round(s.Town.Prosperity / Math.Max(1, food.NumberOfProsperityToEatOneFood)
                                                      + (g?.NumberOfAllMembers ?? 0) / (float)Math.Max(1, food.NumberOfMenOnGarrisonToEatOneFood), 1);
+                    // its owning clan (0.13.21, for garrison_floor)
+                    r.OwnerClan = s.OwnerClan?.StringId;
+                    r.OwnerClanName = s.OwnerClan?.Name?.ToString();
                 }
                 if (s.Village != null)
                 {
@@ -332,6 +335,8 @@ namespace BannerlordAgents
             {
                 r.SizeLimit = party.PartySizeLimit;
                 r.FoodDays = p.GetNumDaysForFoodToLast();
+                r.FoodItems = p.TotalFoodAtInventory;
+                r.FoodEats = Math.Max(0f, -p.FoodChange);
                 r.Clan = leader?.Clan?.StringId;
                 if (leader != null) Purse.Fill(r, p);
             }

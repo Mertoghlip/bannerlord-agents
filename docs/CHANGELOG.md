@@ -1945,3 +1945,24 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The lieutenant's `warroom-system.md` is unchanged.
 - **The order libraries** (`tools.txt`) in the agents' channels are rewritten by the bridge at the next load, with the supply order, `garrison_floor` and the food functions.
 - **Pushed:** this entry, 9875256 and 799c15c to `origin/main`.
+
+### 19:23 · Version 0.13.21 built: food coming and each holding's clan in the report, the lords-eat-their-own rule, no hunger warning for full stores · commit (next)
+- **Mert, Nov 1:**
+  - Asking why Zulgora's army left Gwígar: "the castle actually had food since it had already been restocked. Why did it not see that?"
+  - The lieutenant before that, on Oropher's loop with `garrison_floor` 600: "The game only lets him do this in your clan's own holdings; the report does not show me which ones those are."
+- **What happened** (Dol Guldur's call on poke 2344, report of Winter 16, 10:00, answered after 79 s; its order took effect about Winter 17, 06:00):
+  - The report showed Gwígar at "food 0 of 450", with Dûrnia "bringing food to Gwígar, there in about 7 hours", but not how much. Dûrnia handed over 219 at about 17:00 (`supplied`, h 2193281).
+  - The agent wondered whether lords inside eat the castle's food, and planned as if Gwígar would stay empty: "Gwígar has no food to shelter his 17 lords". It fell back to Westoft, and Aragorn caught it.
+  - In 1.4.8 a lord's party eats only what it carries (`DoesPartyConsumeFood`: lords yes, garrisons no). A town's market sells to parties inside every hour while it has food, besieged or not (`PartiesBuyFoodCampaignBehavior.HourlyTickParty`). A castle has none.
+- **Changed:**
+  - **YOUR HOLDINGS** (`Views.FoodComing`, `ViewHolding.Clan/FoodComing`; `SettlementRow.OwnerClan/OwnerClanName`; `PartyRow.FoodItems/FoodEats` for own lords):
+    - Each own castle or town shows its clan: "(castle of House X)".
+    - It shows the food coming with each supply order to it: "food coming: Dûrnia with about 219 (about 9 days more), there about …". When he still buys first: "buying food on the way first, with up to N".
+    - The food note adds that lords inside eat their own food, that a town's market sells to them, that a castle has none, and that the owning clan is what `garrison_floor` goes by.
+  - **The hunger warning** (`Brain.LowFood`) is not given for stores too full to take another day's food. Caras Galadhon, 800 of 800, eating 284 a day, had been warned.
+  - **`garrison_floor`'s description** (`Library.GarrisonFloor`) and the realm template's Recruiting line now say where the clans are shown.
+  - Version 0.13.21.
+- **Checks:** smoke test 439, all passed. New: a castle with 0 food and a supply lord carrying 225 (3 days of 2 kept) reads "(castle of House of Durbag)" and "food coming: Durnia with about 219 (about 9 days more)", with the rule. A full store gives no warning.
+- **Not done, waiting for Mert:**
+  - the late-answer warning (what changed at the places an answer's orders name while it was being written);
+  - the "can they cut me off" check in the race question.

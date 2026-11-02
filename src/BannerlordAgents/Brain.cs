@@ -634,6 +634,8 @@ namespace BannerlordAgents
             foreach (SettlementRow h in own)
             {
                 if (h.Food < 0 || h.FoodPerDay <= 0 || h.BesiegedBy != null) continue;
+                // stores too full to take another day's food (0.13.21: Caras Galadhon, 800 of 800, eating 284 a day, was warned): nothing to bring
+                if (h.FoodCap - h.Food < h.FoodPerDay) continue;
                 double days = h.Food / h.FoodPerDay;
                 if (days >= LowFoodDays)
                 {

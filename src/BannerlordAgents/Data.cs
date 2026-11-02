@@ -60,6 +60,9 @@ namespace BannerlordAgents
         /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts, and the lord's clan.</summary>
         public int SizeLimit, FoodDays = -1;
         public string Clan;
+        /// <summary>Own lords (0.13.21): the food items he carries and what his men eat a day, for what a supply order brings.</summary>
+        public int FoodItems = -1;
+        public float FoodEats;
         /// <summary>
         /// The watched realms' own lords too (0.9.4, Purse): his gold; his wages a day and their cap (-1: no cap; CapOurs: the
         /// agent set it); the loot he carries (its worth at base value, and pieces); his prisoners (soldiers, lords, and their
@@ -150,6 +153,8 @@ namespace BannerlordAgents
         /// prosperity / 40 and its garrison's men / 20). Only the realm's own are shown (Views).
         /// </summary>
         public float Food = -1, FoodCap, FoodPerDay;
+        /// <summary>The clan that owns it (0.13.21: a garrison_floor takes men only from a lord's own clan's holdings), id and name.</summary>
+        public string OwnerClan, OwnerClanName;
     }
 
     /// <summary>

@@ -157,6 +157,7 @@ namespace SmokeTest
             RecentHistoryTests();
             SupplyAndGarrisonTests();
             HungerTests();
+            FoodComingTests();
         }
 
         /// <summary>
