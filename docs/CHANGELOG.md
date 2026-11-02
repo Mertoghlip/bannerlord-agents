@@ -1866,3 +1866,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The case: Dol Guldur's Dramthak (gather at Caradhras, then besiege Sirannon), about 7,000 strong, rode 17 hours to relieve Vugra (2,731) against Kisha (about 450) on Winter 4-5. Now a gather is not free to ride and Vugra won alone: he stays.
   - Version 0.13.17.
 - **Checks:** smoke test 434, all passed (new: a defend lord rides to a fight his side would not win alone and the one goto lord nearest goes with him, enough for 1.5 times, the two farther ones do not; with the fight won alone, the defend lord still goes and no goto lord does; which orders are free). The war room's self-test passed (scratch build).
+
+### 17:20 · Version 0.13.17 installed · commit (next)
+- **What:** the 0.13.17 build (commit 72fd200), unchanged, with the game closed (since 17:12).
+- **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (434), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `CA942B6D883271000CE3B729053DDBD834D3A559A0B674A5F1478AE16D4FB477`, SubModule v0.13.17. RefCheck: 269 game types, 817 member references, 0 missing. War rooms and dashboard started again (17:20, detached).
+- **To watch in the game:** relief call-backs saying "so they win it bigger" (a lord free to ride, the fight won alone) or "to tip the balance" (another order); no gather, garrison or other busy lord riding to a fight won alone; enough riders for 1.5 times the enemy.
