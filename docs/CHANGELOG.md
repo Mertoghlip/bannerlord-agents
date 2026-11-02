@@ -1881,3 +1881,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Each tick sends the ones left. With nothing waiting, the tick costs one count check.
 - **Checks:** smoke test 434, all passed (no game objects in the smoke test, so the case itself is to be seen in the game: the next holding stormed).
 - Version 0.13.18.
+
+### 17:45 · Version 0.13.18 installed · commit (next)
+- **What:** the 0.13.18 build (commit 3b36086), unchanged, with the game closed.
+- **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (434), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `B176FD48CAE5C9AB1117817F84A228EAD0FE00F7F15188EFFD4EC325C5060A6B`, SubModule v0.13.18. RefCheck: 269 game types, 817 member references, 0 missing. War rooms and dashboard started again (17:45, detached).
+- **The watch** (outside the repo, Claude Code's session; Mert, Nov 1: "make your watchers work such that they only wake you when the game is running and not all the time"): the 10-minute watch now runs only while the game is up. While it is closed, one silent background check (every 30 s, no output) waits for `Bannerlord.BLSE.Launcher` and wakes the session once when it starts; the watch and the battle alarms then run until the alarms see the game close, and the silent check takes over again.
