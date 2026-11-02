@@ -2025,7 +2025,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## 2026-11-02
 
-### 00:08 · Version 0.13.23 built and installed: the late note names no id its report no longer shows; the game killed for the battle helper's freeze fix, pushed · commit (next)
+### 00:08 · Version 0.13.23 built and installed: the late note names no id its report no longer shows; the game killed for the battle helper's freeze fix, pushed · commit d77ccc9
 - **The fog check flagged two late notes** (Nov 1, the orcs' pokes #6258 and #6295): "Osven [lord_2_121_party_1]: no longer in your report." and the same for Silivren. Both were lords of Mert's that an order had named, captured meanwhile. The agent had seen those ids in the report it answered, so nothing it could not know reached it, but a report names only the ids it shows.
 - **Changed** (`LateAnswer.For`): each line names the place or lord by the id the newest report shows (a captured lord's own, not his party's), and with no id at all when it has gone from the report. Version 0.13.23.
 - **Checks:** smoke test 443, all passed (new: Baranthir gone from the newest report reads "- Baranthir: no longer in your report." with neither of his ids). War room and dashboard self-tests passed. RefCheck: 271 game types, 834 member references, 0 missing.
