@@ -1981,7 +1981,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repo:** the three realm agents' `warroom-system.md` rebuilt from the template as before (each keeps its title and opening line). Two lines changed in each: the Recruiting line on clans. The old copies are `.bak-20261101-before-clans`.
 - **Pushed:** this entry with 2027e50 and 3a7824e.
 
-### 20:30 · Version 0.13.22 built: the late-answer warning, the cut-off check in the race question, the tool language for the lieutenant · commit (next)
+### 20:30 · Version 0.13.22 built: the late-answer warning, the cut-off check in the race question, the tool language for the lieutenant · commit 4e31f60
 - **Mert, Nov 1**, on the two proposals left from the Zulgora analysis and the lieutenant's gap: "I like both ideas, implement them. Fix the gap for the liutenant as well."
 - **The late answer** (`LateAnswer.cs`, new; `Channel`'s `LateAnswer.Book`; `Brain.Poke` passes each poke's view):
   - Measured first in the channels' receipts (last 400 orders each): answers took effect a median 6 in-game hours after their poke for the orcs (one in ten 18 or more, the most 33) and 8 for Dol Guldur (one in ten 24 or more, the most 52).
@@ -2009,3 +2009,16 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
     - an answer that took effect 18 hours after its report is told once, with a castle's food 0 then 219, its lord's 300 men then 200, and the enemy its next order named marching on Orc Keep, never a lord it did not name; an answer on time, or one where nothing it named changed, is not told;
     - both templates list every move, name and function of the language (`ToolDef.Verbs`, `Functions`, `BuiltIns`).
   - **War room self-test, all passed.** New: on the made-up map, Hirgon standing on Bolg's road east can be on it about 7 along an hour before him, and Aragorn's slow army near its end about 48 along; nobody can reach the pass road south first.
+
+### 20:32 · Version 0.13.22 installed, the realm agents' and the lieutenant's instructions replaced, pushed · commit (next)
+- **What:** the 0.13.22 build (commit 4e31f60), unchanged, with the game closed.
+- **Installed:**
+  - War rooms and dashboard stopped first (5 processes).
+  - `scripts\deploy.ps1`: smoke test (442), war room and dashboard self-tests all passed.
+  - `BannerlordAgents.dll` sha256 `B1680E26F72FDB4AEAFDB91446030CC5CE853C0FF95120F86565D20395D4831D`, SubModule v0.13.22.
+  - RefCheck: 271 game types, 834 member references, 0 missing.
+  - War rooms and dashboard started again (20:32, detached). Each reads its instructions afresh at its next call, and serves the new cut-off check from its new build.
+- **Outside the repo:**
+  - Each realm agent's `warroom-system.md` (`orc-war-council`, `dolguldur-war-council`, `kingdom-war-council`) rebuilt from the template, keeping its title and opening line. Four lines changed in each (the poke section, the names, the functions, Asking the way), CRLF kept; the old copies are `warroom-system.md.bak-20261101-before-late-answer`.
+  - The lieutenant's `warroom-system.md` (`C:\Users\karab\Projects\lieutenant`) replaced by its template (The tool language, Asking the way); the old copy is `warroom-system.md.bak-20261101-before-language`.
+- **Pushed:** this entry with 4e31f60 and the follow-up naming it.
