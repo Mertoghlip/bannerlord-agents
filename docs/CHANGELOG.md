@@ -1905,3 +1905,9 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - **The lieutenant's window** (`LieutenantWindow._draft`): what is typed and not sent is kept when it closes and put back when it opens; the hint says so.
   - Version 0.13.19.
 - **Checks:** smoke test 436, all passed (new: the report's food and garrison strength for the realm's own and none for an enemy's; garrison_floor on every order and described once; the supply order in the library). The two checks the new parts changed were updated (21 orders, the holding line's strength). The game-thread parts (buying, handing over, taking from a garrison, the window) are to be seen in the game.
+
+### 18:32 · Version 0.13.19 installed, and pushed with 0.13.19's commits · commit (next)
+- **What:** the 0.13.19 build (commit 4e98819), unchanged, with the game closed (since 18:25; its last save, TEST CONTINUOUS SAVE at Winter 14, 1087, 08:00, wrote the orders in force down).
+- **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (436), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `B07746A4F0034B9D6823F862BF9826826785B6D990C3992D607E98FCE12E03B1`, SubModule v0.13.19. RefCheck: 271 game types, 834 member references, 0 missing (the food store, the stores' limit, the food-buying model, `SellItemsAction`, the item roster's counts, `InventoryCapacity`, `TotalWeightCarried`, the estimated strength). War rooms and dashboard started again (18:31, detached).
+- **Pushed:** this entry and commits 4e98819, 8245c14 to `origin/main` (Mert had asked for the last batch to be pushed once done).
+- **To watch in the game:** supply orders (the market stop, "handed over N food at X"), garrison men taken ("from garrison" in the trace), the food line in YOUR HOLDINGS, the lieutenant's window keeping unsent words.
