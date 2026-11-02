@@ -1931,7 +1931,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The warning fires for a castle with 1 day of food and Kralza 20 away. It is not told again the next hour, is told again once the food falls a day more, and stays silent with the enemy far off.
   - An agent-style tool reading `food_days_at(at)` and `food_at(at)` moves on a castle short of food.
 
-### 18:47 · Version 0.13.20 installed, the realm agents' instructions replaced, pushed · commit (next)
+### 18:47 · Version 0.13.20 installed, the realm agents' instructions replaced, pushed · commit 04a44c6
 - **What:** the 0.13.20 build (commit 9875256), unchanged, with the game closed.
 - **Installed:**
   - War rooms and dashboard stopped first (5 processes).
