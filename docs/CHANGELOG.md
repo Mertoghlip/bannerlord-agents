@@ -1967,7 +1967,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the late-answer warning (what changed at the places an answer's orders name while it was being written);
   - the "can they cut me off" check in the race question.
 
-### 19:24 · Version 0.13.21 installed after the Zulgora battle crash, realm instructions updated, pushed · commit (next)
+### 19:24 · Version 0.13.21 installed after the Zulgora battle crash, realm instructions updated, pushed · commit 48316e4
 - **The crash first** (TFAOMFixes' to fix, not ours; told to its session with the bundle):
   - Mert's battle against Dol Guldur's Zulgora (about 6,000 soldiers and horses) hung at Winter 17, 19:18 real time. TAOM caught an AccessViolationException in `Agent.ParallelUpdateCachedAndFormationValuesForAIAgent` (bundle `taom_crash_20261102_031828_653c8d22.zip`).
   - The game's log had three "as_spider does not contain act_warg_attack_running" lines less than a second before the first engine fault (+0x6f909d reading 0x25c0, then +0x5f132d reading 0x88, the same pair as Oct 29 23:18). The main thread then spun at TaleWorlds.Native+0x1f3344 (our freeze probe at 19:18:50).
