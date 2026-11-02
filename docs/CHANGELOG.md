@@ -1946,7 +1946,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The order libraries** (`tools.txt`) in the agents' channels are rewritten by the bridge at the next load, with the supply order, `garrison_floor` and the food functions.
 - **Pushed:** this entry, 9875256 and 799c15c to `origin/main`.
 
-### 19:23 · Version 0.13.21 built: food coming and each holding's clan in the report, the lords-eat-their-own rule, no hunger warning for full stores · commit (next)
+### 19:23 · Version 0.13.21 built: food coming and each holding's clan in the report, the lords-eat-their-own rule, no hunger warning for full stores · commit 2027e50
 - **Mert, Nov 1:**
   - Asking why Zulgora's army left Gwígar: "the castle actually had food since it had already been restocked. Why did it not see that?"
   - The lieutenant before that, on Oropher's loop with `garrison_floor` 600: "The game only lets him do this in your clan's own holdings; the report does not show me which ones those are."
