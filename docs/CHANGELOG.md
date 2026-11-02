@@ -1912,7 +1912,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Pushed:** this entry and commits 4e98819, 8245c14 to `origin/main` (Mert had asked for the last batch to be pushed once done).
 - **To watch in the game:** supply orders (the market stop, "handed over N food at X"), garrison men taken ("from garrison" in the trace), the food line in YOUR HOLDINGS, the lieutenant's window keeping unsent words.
 
-### 18:47 · Version 0.13.20 built: the hunger warning, food in the order language, doctrine principle 19, and the realm agents' instructions brought up to date · commit (next)
+### 18:47 · Version 0.13.20 built: the hunger warning, food in the order language, doctrine principle 19, and the realm agents' instructions brought up to date · commit 9875256
 - **Mert, Nov 1** ("Do the agents' system prompts and the liutenant's prompt contain instructions for these orders? Do they have the needed context?"; on the three fixes and three extras I proposed): "I like your fix proposals. I also like all the optional extras you proposed, so please implement them as well."
 - **What I found:**
   - The order library (`tools.txt`, written by the bridge at every load, `AgentChannel.WriteLibrary`, and put into every call's system prompt by the war room) carries the supply order and `garrison_floor` from the next load.
