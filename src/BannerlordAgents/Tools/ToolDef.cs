@@ -475,6 +475,14 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public static double ReliefSpare(double hoursLeft) => Math.Max(1, 0.2 * hoursLeft);
 
+        /// <summary>
+        /// The relief rule's winning margin (0.13.17): the lords in a fight win alone at this many times the enemy with every enemy who could
+        /// join it, and lords sent from orders other than defend, patrol, hold, recruiting and rest bring our side up to it, nearest first. On
+        /// Winter 4-5 (Nov 1) Dol Guldur's Dramthak, about 7,000 strong and gathering for Sirannon, rode 17 hours to relieve Vugra (2,731)
+        /// against Kisha (about 450).
+        /// </summary>
+        public const double ReliefWinBar = 1.5;
+
         public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, at its own pace as the crow flies, counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
 
         public static Dictionary<string, ToolDef> All
@@ -543,6 +551,9 @@ namespace BannerlordAgents.Tools
                           + "when he can get there with time to spare (a fifth of the fight's hours left, at least an hour) before it ends by the game's battle rules (at most " + ToolDef.Num(MaxReliefHours) + " hours ahead), "
                           + "the fight run ahead with the enemies who could join it coming in, and your side there, with every lord of yours who can get there in time, "
                           + "outweighs the enemies in the fight and every enemy lord and army in view who could join it by then (and every band of bandits of the same kind, when it is bandits fighting). "
+                          + "A lord on defend, patrol, hold, recruit or rest, or on one of your own recruiting tools, rides to every such fight, however it goes: a bigger win costs fewer men. "
+                          + "A lord on any other order rides only when your lords in the fight would not win alone (under " + ToolDef.Num(ReliefWinBar) + " times the enemy with those who could join), "
+                          + "and only as many of them as it takes, nearest first, to bring your side there to " + ToolDef.Num(ReliefWinBar) + " times the enemy. "
                           + "He strikes the enemy side's leader; his order resumes once the fight is over. "
                           + "An army goes whole. Lords marching in another's army, camped in a siege, inside a besieged castle or town, or on their way to buy food do not ride.");
             return sb.ToString();

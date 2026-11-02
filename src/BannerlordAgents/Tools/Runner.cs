@@ -871,8 +871,12 @@ namespace BannerlordAgents.Tools
             /// <summary>Our side: the parties in it and every rider; theirs: the parties in it and every enemy lord and army in view who could join it within EndsIn.</summary>
             public double Ours, Theirs;
             public int Joiners;
-            /// <summary>Each held lord who can get there before it ends: his tool's id, and his hours to it.</summary>
+            /// <summary>Each held lord sent to it: his tool's id, and his hours to it.</summary>
             public readonly Dictionary<int, double> Riders = new Dictionary<int, double>();
+            /// <summary>Of the riders, those free to ride (FreeToRide) and those sent from other orders to tip the balance (0.13.17).</summary>
+            public int Free, Busy;
+            /// <summary>Would the lords in it on our side not win alone: under Library.ReliefWinBar times the enemy with its joiners (0.13.17)?</summary>
+            public bool Needed;
             public bool Outweighs => Ours > Theirs;
         }
 
@@ -922,14 +926,37 @@ namespace BannerlordAgents.Tools
                 // each party in a fight is counted by itself (an army's lords fight in it party by party); outside it, a lord with his army
                 var p = new ReliefPlan { Battle = b, Friend = friend, Enemy = enemy, EndsIn = endsIn, Joiners = joiners.Count,
                                          Ours = ourRows.Sum(r => r.Strength), Theirs = theirRows.Sum(r => r.Strength) + joiners.Sum(World.StrengthOf) };
+                // who can get there in time with time to spare
+                var can = new List<Tuple<ToolInstance, PartyRow, double>>();
                 foreach (ToolInstance x in held)
                 {
                     PartyRow r = w.Party(x.Order.Party);
                     if (r == null || inIt.Contains(r.Id) || !CanRide(x, r, w)) continue;
                     double hours = w.HoursTo(r, b.X, b.Y);
                     if (hours > endsIn - Library.ReliefSpare(endsIn)) continue;
-                    p.Riders[x.Id] = hours;
-                    p.Ours += World.StrengthOf(r);
+                    can.Add(Tuple.Create(x, r, hours));
+                }
+                // who is sent (0.13.17; Mert, Nov 1): none while our side there, with every one of them, would not outweigh the enemy; else every
+                // lord free to ride, however the fight goes ("a crushing victory reduces losses compared to a close victory"); and, only while the
+                // lords in it would not win alone, lords from other orders, nearest first (one already riding to it first), until our side is
+                // Library.ReliefWinBar times the enemy ("make sure the logic assigns enough lords to tip the balance")
+                double bar = Library.ReliefWinBar * p.Theirs;
+                p.Needed = p.Ours < bar;
+                if (p.Ours + can.Sum(c => World.StrengthOf(c.Item2)) > p.Theirs)
+                {
+                    foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => FreeToRide(c.Item1)))
+                    {
+                        p.Riders[c.Item1.Id] = c.Item3;
+                        p.Ours += World.StrengthOf(c.Item2);
+                        p.Free++;
+                    }
+                    foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => !FreeToRide(c.Item1)).OrderByDescending(c => c.Item1.ReliefOf == b.Key).ThenBy(c => c.Item3))
+                    {
+                        if (!p.Needed || p.Ours >= bar) break;
+                        p.Riders[c.Item1.Id] = c.Item3;
+                        p.Ours += World.StrengthOf(c.Item2);
+                        p.Busy++;
+                    }
                 }
                 _reliefPlans.Add(p);
             }
@@ -944,6 +971,19 @@ namespace BannerlordAgents.Tools
         {
             Forecast.BattleClock c = Forecast.Measured(b, w.Hours, ownAttackers, joiners) ?? Forecast.Battle(b, w.Hours, joiners, 50f, 50f);
             return double.IsNaN(c.EndsAt) ? Library.MaxReliefHours : Math.Min(Library.MaxReliefHours, c.EndsAt - w.Hours);
+        }
+
+        /// <summary>
+        /// Is a held lord free to ride to any fight his side can win, however it goes (0.13.17; Mert, Nov 1: "lords that have a
+        /// defend/patrol/recruit order (so lords that are basically not doing anything important) still go to relieve another lord regardless
+        /// of how the battle is going, since a crushing victory reduces losses compared to a close victory")? An order to defend, patrol, hold,
+        /// recruit or rest, or a realm's own recruiting tool (one with "recruit" in its name: recruit_round, home_recruit, safe_recruit). Any
+        /// other order rides only when the lords in the fight would not win alone (ReliefPlans).
+        /// </summary>
+        internal static bool FreeToRide(ToolInstance t)
+        {
+            string tool = (t?.Order?.Tool ?? "").Trim().ToLowerInvariant();
+            return tool == "defend" || tool == "patrol" || tool == "hold" || tool == "rest" || tool.Contains("recruit");
         }
 
         /// <summary>
@@ -978,7 +1018,7 @@ namespace BannerlordAgents.Tools
                 string was = t.ReliefOf;
                 bool over = w.S.Battles == null || !w.S.Battles.Any(b => b.Key == was);
                 t.ReliefOf = t.ReliefTarget = null;
-                Log(t, "relieving", t.State, over ? "the fight is over" : "the fight is no longer one to relieve (our side no longer outweighs, or it is out of reach)");
+                Log(t, "relieving", t.State, over ? "the fight is over" : "the fight is no longer one to relieve (our side no longer outweighs, it is out of reach, or he is no longer needed to tip the balance)");
                 Diag.Event("tool", "relief over", new { id = t.Id, lord = t.Order.Lord, battle = was, over });
                 Resume(t, scope, w);
                 return false;
@@ -996,12 +1036,17 @@ namespace BannerlordAgents.Tools
             t.AsideSince = w.Hours;
             Diag.Count("tool:reliefs");
             Diag.Event("tool", "relief", new { id = t.Id, lord = t.Order.Lord, battle = best.Battle.Key, enemy = best.Enemy, hours = Math.Round(bestHours, 1), ends_in = Math.Round(best.EndsIn, 1),
-                                               ours = Math.Round(best.Ours), theirs = Math.Round(best.Theirs), riders = best.Riders.Count, joiners = best.Joiners });
+                                               ours = Math.Round(best.Ours), theirs = Math.Round(best.Theirs), riders = best.Riders.Count, joiners = best.Joiners,
+                                               free = best.Free, busy = best.Busy, needed = best.Needed, free_to_ride = FreeToRide(t) });
             string where = best.Battle.Settlement != null ? "at " + w.Name(best.Battle.Settlement) : FightPlace(Spots.Describe(w.S, best.Battle.X, best.Battle.Y));
+            // why he goes (0.13.17): a lord free to ride goes to a fight his side wins, to win it bigger; one from another order only to tip the balance
+            string why = FreeToRide(t)
+                ? (best.Needed ? "" : " Your lords there should win alone; he goes so they win it bigger, with fewer losses.")
+                : " He leaves his order for it: your lords there would not win alone" + (best.Busy > 1 ? ", and he is one of the " + best.Busy + " nearest lords sent from other orders to tip the balance" : "") + ".";
             Poke(t, t.Order.LordName + " rides with all haste to relieve " + w.Name(best.Friend.Id) + ", fighting " + w.Name(best.Enemy) + " " + where
                     + " (there in about " + Forecast.HoursText(bestHours) + "; the fight should last about " + Forecast.HoursText(best.EndsIn) + " more): your side there, with the "
-                    + best.Riders.Count + " of your lords who can reach it with time to spare, " + Text.N((int)best.Ours) + ", against " + Text.N((int)best.Theirs)
-                    + (best.Joiners > 0 ? " with the " + best.Joiners + " enemy lords, armies or bands who could join it by then" : "") + ". The order resumes once the fight is over.", w);
+                    + best.Riders.Count + " of your lords riding to it, " + Text.N((int)best.Ours) + ", against " + Text.N((int)best.Theirs)
+                    + (best.Joiners > 0 ? " with the " + best.Joiners + " enemy lords, armies or bands who could join it by then" : "") + "." + why + " The order resumes once the fight is over.", w);
             Log(t, t.State, "relieving", "a lord of ours fighting, and our side with every lord who can reach it before it ends outweighs the enemies there and those who could join it");
             return true;
         }

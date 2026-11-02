@@ -152,6 +152,7 @@ namespace SmokeTest
             FollowerTests();
             ReliefTests(moves);
             BandReliefTests(moves);
+            TipTheBalanceTests(moves);
             ThenIdsTests();
             RecentHistoryTests();
         }
