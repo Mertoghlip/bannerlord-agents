@@ -367,6 +367,7 @@ namespace BannerlordAgents
             {
                 Background.DrainToMain();
                 if (!Bridge.Running || !Settings.Bridge) return;
+                Notices.Flush();
                 Recorder.Poll();
                 LordWatch.Tick();
             }

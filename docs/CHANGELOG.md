@@ -1871,3 +1871,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** the 0.13.17 build (commit 72fd200), unchanged, with the game closed (since 17:12).
 - **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (434), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `CA942B6D883271000CE3B729053DDBD834D3A559A0B674A5F1478AE16D4FB477`, SubModule v0.13.17. RefCheck: 269 game types, 817 member references, 0 missing. War rooms and dashboard started again (17:20, detached).
 - **To watch in the game:** relief call-backs saying "so they win it bigger" (a lord free to ride, the fight won alone) or "to tip the balance" (another order); no gather, garrison or other busy lord riding to a fight won alone; enough riders for 1.5 times the enemy.
+
+### 17:44 · Version 0.13.18 built: a holding taken by storm no longer has its siege "lifted" · commit (next)
+- **Mert, Nov 1:** "Yes please, make the siege fix." (I had told him that the record said "The siege of Felegoth was lifted; Aragorn had laid it" right before "Felegoth passed from Gundabad to Kingdom of Arnor and Gondor, taken by Aragorn", at Winter 5, when he stormed it.)
+- **Why:** in 1.4.8 a storm won ends the siege before the holding changes hands. `KingdomManager.SiegeCompleted` removes the besiegers (`BesiegerCamp.RemoveAllSiegeParties`, which ends the siege and fires `OnSiegeEventEnded`), and only then calls `ChangeOwnerOfSettlementAction.ApplyBySiege`. So in `Notices.OnSiegeEnded` the holding was still its old owner's, and its test "taken: the change of hands says it" never held for a storm.
+- **Changed** (`Notices.OnSiegeEnded`, `Flush` new, `OnOwnerChanged`, `Send`'s `hours`, `BridgeBehavior.OnTick`):
+  - The "lifted" notice waits for the end of the game's step, kept by holding, with the hour of the siege's end.
+  - The holding changing hands drops it (its own notice says who took it).
+  - Each tick sends the ones left. With nothing waiting, the tick costs one count check.
+- **Checks:** smoke test 434, all passed (no game objects in the smoke test, so the case itself is to be seen in the game: the next holding stormed).
+- Version 0.13.18.

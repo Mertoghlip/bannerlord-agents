@@ -45,6 +45,7 @@ namespace BannerlordAgents
             Battles.Clear();
             Raids.Clear();
             Sieges.Clear();
+            LiftedWaiting.Clear();
         }
 
         private static List<string> Involved(params IFaction[] factions)
@@ -61,10 +62,10 @@ namespace BannerlordAgents
             return list;
         }
 
-        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null, bool recordOnly = false)
+        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null, bool recordOnly = false, double? hours = null)
         {
             if (!Bridge.Running || (factions.Count == 0 && kind != "party_destroyed")) return;
-            var n = new Notice { Id = NoticeIds.Next(), Hours = CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place, RecordOnly = recordOnly };
+            var n = new Notice { Id = NoticeIds.Next(), Hours = hours ?? CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place, RecordOnly = recordOnly };
             Background.Post(() => Brain.OnNotice(n));
         }
 
@@ -116,7 +117,13 @@ namespace BannerlordAgents
             Sieges[s.StringId] = new KeyValuePair<string, IFaction>(Names.Party(lead), lead?.MapFaction);
         }
 
-        /// <summary>A siege over. Taken, the holding's change of hands says it; otherwise it was lifted, which both sides hear.</summary>
+        /// <summary>
+        /// A siege over. Taken, the holding's change of hands says it; otherwise it was lifted, which both sides hear. Since 0.13.18 the
+        /// "lifted" waits for the end of the game's step (Flush, each tick): a holding taken by storm ends its siege before it changes hands
+        /// (1.4.8 KingdomManager.SiegeCompleted: the besiegers are removed, which ends the siege, and then ChangeOwnerOfSettlementAction.
+        /// ApplyBySiege), so the holding was still its old owner's here, and Felegoth, stormed by Aragorn on Winter 5 (Nov 1), read "The siege
+        /// of Felegoth was lifted; Aragorn had laid it" just before "Felegoth passed from Gundabad to Kingdom of Arnor and Gondor".
+        /// </summary>
         public static void OnSiegeEnded(SiegeEvent se)
         {
             Settlement s = se?.BesiegedSettlement;
@@ -125,9 +132,24 @@ namespace BannerlordAgents
             Sieges.Remove(s.StringId);
             IFaction besiegers = laid.Value ?? se.BesiegerCamp?.LeaderParty?.MapFaction;
             if (besiegers != null && s.MapFaction == besiegers) return;
-            Send("siege_ended", "The siege of " + Names.Settlement(s) + " (" + F(s.MapFaction) + ") was lifted"
-                 + (laid.Key != null ? "; " + laid.Key + (besiegers != null ? " (" + F(besiegers) + ")" : "") + " had laid it" : "") + ".",
-                 Involved(s.MapFaction, besiegers), place: s.StringId);
+            string text = "The siege of " + Names.Settlement(s) + " (" + F(s.MapFaction) + ") was lifted"
+                          + (laid.Key != null ? "; " + laid.Key + (besiegers != null ? " (" + F(besiegers) + ")" : "") + " had laid it" : "") + ".";
+            List<string> involved = Involved(s.MapFaction, besiegers);
+            string place = s.StringId;
+            double at = CampaignTime.Now.ToHours;
+            LiftedWaiting[place] = () => Send("siege_ended", text, involved, place: place, hours: at);
+        }
+
+        /// <summary>The sieges ended in the game's step now running, by holding, their "lifted" held until it is over (OnSiegeEnded).</summary>
+        private static readonly Dictionary<string, Action> LiftedWaiting = new Dictionary<string, Action>();
+
+        /// <summary>Game's thread, each tick: the sieges that ended without their holding changing hands were lifted.</summary>
+        public static void Flush()
+        {
+            if (LiftedWaiting.Count == 0) return;
+            List<Action> lifted = LiftedWaiting.Values.ToList();
+            LiftedWaiting.Clear();
+            foreach (Action a in lifted) a();
         }
 
         /// <summary>A lord dead: in battle, executed, of age or otherwise.</summary>
@@ -207,6 +229,8 @@ namespace BannerlordAgents
                                           ChangeOwnerOfSettlementAction.ChangeOwnerOfSettlementDetail detail)
         {
             IFaction now = newOwner?.MapFaction, before = oldOwner?.MapFaction;
+            // a holding taken by storm: its siege was not lifted (OnSiegeEnded, 0.13.18)
+            if (s != null && now != before) LiftedWaiting.Remove(s.StringId);
             if (s == null || now == before) return;
             Send("holding_changed", Names.Settlement(s) + " passed from " + F(before) + " to " + F(now)
                  + (capturer != null ? ", taken by " + Names.Hero(capturer) : "") + ".", Involved(now, before), place: s.StringId);
