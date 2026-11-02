@@ -58,6 +58,17 @@ namespace SmokeTest
             Check(says && again == null && onTime.Tell(v2, 601, "orcs") == null && quiet.Tell(v1, 701, "orcs") == null,
                   "an answer that took effect 18 in-game hours after its report is told in the next poke, once, with what changed since that report at the places and lords "
                   + "its orders (and their next orders) named, and not for a lord not named; an answer on time, or one where nothing it named changed, is not: " + told?.Replace("\n", " | "));
+            // the same answer weighed once Baranthir is gone from the report (Nov 1, poke #6258: Osven, taken prisoner, was still named by his party's id,
+            // which the fog check caught): the line names him without an id the report no longer shows
+            Snapshot s3 = ToolWorld(43922, dur, other);
+            View v3 = Views.Build(s3, "orcs", s3.WatchedSees, s3.HostileToWatched, null);
+            var gone = new LateAnswer.Book();
+            gone.Poked(800, 43900, v1);
+            gone.Answered(800, orders);
+            gone.Applied(800, 43918);
+            string goneText = gone.Tell(v3, 801, "orcs");
+            Check(goneText != null && goneText.Contains("- Baranthir: no longer in your report.") && !goneText.Contains("p_cel") && !goneText.Contains("lord_cel"),
+                  "a lord gone from the newest report is named in the late note without an id that report no longer shows: " + goneText?.Replace("\n", " | "));
         }
 
         /// <summary>

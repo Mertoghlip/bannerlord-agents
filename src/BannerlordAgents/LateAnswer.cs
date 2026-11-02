@@ -161,7 +161,9 @@ namespace BannerlordAgents
                 if (!now.TryGetValue(a.Id ?? id, out b) && (a.Lord == null || !now.TryGetValue(a.Lord, out b)) && !now.TryGetValue(id, out b)) b = null;
                 List<string> changes = Changes(a, b, nowHours);
                 if (changes.Count == 0) continue;
-                lines.Add("- " + a.Name + " [" + a.Id + "]: " + string.Join("; ", changes) + ".");
+                // the id as the newest report shows it (a captured lord's own, not his party's); none for one gone from it: a report names only the ids
+                // it shows (Nov 1, poke #6258: "Osven [lord_2_121_party_1]: no longer in your report" was caught by the fog check)
+                lines.Add("- " + a.Name + (b?.Id != null ? " [" + b.Id + "]" : "") + ": " + string.Join("; ", changes) + ".");
                 if (lines.Count >= MostShown) break;
             }
             if (lines.Count == 0) return null;
