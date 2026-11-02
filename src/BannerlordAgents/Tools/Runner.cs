@@ -102,6 +102,8 @@ namespace BannerlordAgents.Tools
     /// - relief (0.13.15, before both): it rides to relieve a lord of the realm's or an ally's fighting in the field, when it can get
     ///   there before the fight ends (the battle clock) and the side there, with every held lord who can get there in time, outweighs
     ///   the enemies in the fight and every enemy lord and army in view who could join it by then; it resumes once the fight is over.
+    ///   Since 0.13.16 the clock runs with those enemies coming in (and bands of the enemy's own kind when it is bandits fighting), and a
+    ///   rider must get there with time to spare (Library.ReliefSpare).
     /// Worker thread only (docs/TOOLS.md).
     /// </summary>
     internal static class Runner
@@ -908,11 +910,15 @@ namespace BannerlordAgents.Tools
                 PartyRow friend = ourRows.Where(r => r.Kind == "lord" && (w.Own(r) || (w.Ally(r.Faction) && w.Visible(r)))).OrderByDescending(r => r.Strength).FirstOrDefault();
                 string enemy = theirRows.Any(r => r.Id == theirs.Leader) ? theirs.Leader : theirRows.OrderByDescending(r => r.Strength).FirstOrDefault()?.Id;
                 if (friend == null || enemy == null) continue;
-                Forecast.BattleClock c = Forecast.Measured(b, w.Hours, att) ?? Forecast.Battle(b, w.Hours, null, 50f, 50f);
-                double endsIn = double.IsNaN(c.EndsAt) ? Library.MaxReliefHours : Math.Min(Library.MaxReliefHours, c.EndsAt - w.Hours);
-                if (endsIn < 0.5) continue;
+                // its clock run first as it stands, then with the enemies who could join it within those hours coming in as they would arrive
+                // (0.13.16): the enemy lords and armies in view, and bands of the enemy's own kind when it is one (World.BandsOf)
+                double alone = EndsIn(b, w, att, null);
+                if (alone < 0.5) continue;
                 var inIt = new HashSet<string>(b.Attackers.Parties.Concat(b.Defenders.Parties));
-                List<PartyRow> joiners = w.Joiners(b.X, b.Y, endsIn).Where(e => !inIt.Contains(e.Id)).ToList();
+                List<PartyRow> joiners = w.Joiners(b.X, b.Y, alone).Concat(w.BandsOf(theirs.Faction, b.X, b.Y, alone)).Where(e => !inIt.Contains(e.Id)).ToList();
+                double endsIn = joiners.Count == 0 ? alone
+                    : Math.Min(alone, EndsIn(b, w, att, joiners.Select(e => Tuple.Create(!att, World.MenOf(e), w.Hours + w.HoursTo(e, b.X, b.Y))).ToList()));
+                if (endsIn < 0.5) continue;
                 // each party in a fight is counted by itself (an army's lords fight in it party by party); outside it, a lord with his army
                 var p = new ReliefPlan { Battle = b, Friend = friend, Enemy = enemy, EndsIn = endsIn, Joiners = joiners.Count,
                                          Ours = ourRows.Sum(r => r.Strength), Theirs = theirRows.Sum(r => r.Strength) + joiners.Sum(World.StrengthOf) };
@@ -921,13 +927,23 @@ namespace BannerlordAgents.Tools
                     PartyRow r = w.Party(x.Order.Party);
                     if (r == null || inIt.Contains(r.Id) || !CanRide(x, r, w)) continue;
                     double hours = w.HoursTo(r, b.X, b.Y);
-                    if (hours > endsIn) continue;
+                    if (hours > endsIn - Library.ReliefSpare(endsIn)) continue;
                     p.Riders[x.Id] = hours;
                     p.Ours += World.StrengthOf(r);
                 }
                 _reliefPlans.Add(p);
             }
             return _reliefPlans;
+        }
+
+        /// <summary>
+        /// A fight's hours left by its clock, at most Library.MaxReliefHours (also when it would not end within the clock's five days): as
+        /// measured once it has run two rounds, else by the rules at middling morale; joiners (side, men, the hour each arrives) run in.
+        /// </summary>
+        private static double EndsIn(BattleRow b, World w, bool ownAttackers, List<Tuple<bool, int, double>> joiners)
+        {
+            Forecast.BattleClock c = Forecast.Measured(b, w.Hours, ownAttackers, joiners) ?? Forecast.Battle(b, w.Hours, joiners, 50f, 50f);
+            return double.IsNaN(c.EndsAt) ? Library.MaxReliefHours : Math.Min(Library.MaxReliefHours, c.EndsAt - w.Hours);
         }
 
         /// <summary>
@@ -981,13 +997,26 @@ namespace BannerlordAgents.Tools
             Diag.Count("tool:reliefs");
             Diag.Event("tool", "relief", new { id = t.Id, lord = t.Order.Lord, battle = best.Battle.Key, enemy = best.Enemy, hours = Math.Round(bestHours, 1), ends_in = Math.Round(best.EndsIn, 1),
                                                ours = Math.Round(best.Ours), theirs = Math.Round(best.Theirs), riders = best.Riders.Count, joiners = best.Joiners });
-            string where = best.Battle.Settlement != null ? "at " + w.Name(best.Battle.Settlement) : Spots.Describe(w.S, best.Battle.X, best.Battle.Y);
+            string where = best.Battle.Settlement != null ? "at " + w.Name(best.Battle.Settlement) : FightPlace(Spots.Describe(w.S, best.Battle.X, best.Battle.Y));
             Poke(t, t.Order.LordName + " rides with all haste to relieve " + w.Name(best.Friend.Id) + ", fighting " + w.Name(best.Enemy) + " " + where
                     + " (there in about " + Forecast.HoursText(bestHours) + "; the fight should last about " + Forecast.HoursText(best.EndsIn) + " more): your side there, with the "
-                    + best.Riders.Count + " of your lords who can reach it before it ends, " + Text.N((int)best.Ours) + ", against " + Text.N((int)best.Theirs)
-                    + (best.Joiners > 0 ? " with the " + best.Joiners + " enemy lords or armies who could join it by then" : "") + ". The order resumes once the fight is over.", w);
+                    + best.Riders.Count + " of your lords who can reach it with time to spare, " + Text.N((int)best.Ours) + ", against " + Text.N((int)best.Theirs)
+                    + (best.Joiners > 0 ? " with the " + best.Joiners + " enemy lords, armies or bands who could join it by then" : "") + ". The order resumes once the fight is over.", w);
             Log(t, t.State, "relieving", "a lord of ours fighting, and our side with every lord who can reach it before it ends outweighs the enemies there and those who could join it");
             return true;
+        }
+
+        /// <summary>
+        /// A fight's place after "fighting X" (0.13.16): "the spot 2 north-west of Düglar-mauz" read "fighting Mirkwood Stalkers the spot 2
+        /// north-west of Düglar-mauz"; now "2 north-west of Düglar-mauz", "at Brak-gash", or "at the spot p673_994".
+        /// </summary>
+        internal static string FightPlace(string spot)
+        {
+            const string head = "the spot ";
+            if (spot == null || !spot.StartsWith(head, StringComparison.Ordinal)) return spot;
+            string rest = spot.Substring(head.Length);
+            if (rest.StartsWith("at ", StringComparison.Ordinal)) return rest;
+            return rest.Length > 0 && char.IsDigit(rest[0]) ? rest : "at " + spot;
         }
 
         /// <summary>The shelter of a lord running straight away from a danger, with no place to make for.</summary>
@@ -1309,6 +1338,14 @@ namespace BannerlordAgents.Tools
                 if (t.Order.At != null) yield return t.Order.At;
                 if (t.Order.Target != null) yield return w.Tag(t.Order.Target);
                 foreach (string p in t.Order.Lords) yield return w.Tag(p);
+                // the next orders it carries, as the agent wrote them (0.13.16: Dol Guldur's "Dramthak gather at Caradhras, then besiege
+                // [castle_MM7]", Sirannon's id from its ally's joint plan, flagged every report from Nov 1, 16:32)
+                for (JObject n = t.Order.Then; n != null; n = n["then"] as JObject)
+                {
+                    if (n["at"] is JValue at && at.Type == JTokenType.String) yield return (string)at;
+                    if (n["target"] is JValue tg && tg.Type == JTokenType.String) yield return (string)tg;
+                    if (n["lords"] is JArray ls) foreach (JToken l in ls) if (l.Type == JTokenType.String) yield return (string)l;
+                }
             }
         }
 

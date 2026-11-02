@@ -151,6 +151,9 @@ namespace SmokeTest
             Runner.Ended(9810, "test over");
             FollowerTests();
             ReliefTests(moves);
+            BandReliefTests(moves);
+            ThenIdsTests();
+            RecentHistoryTests();
         }
 
         /// <summary>

@@ -336,6 +336,33 @@ namespace BannerlordAgents.WarRoom
             LieutenantRoom.WriteAnswer(channel, 8, withAll, 7);
             var written2 = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(channel, "orders", "chat-8.json")));
             Check(written2["letters"] is JsonArray wl && wl.Count == 1 && written2["tools"] is JsonArray && written2["diplomacy"] is JsonArray, "the answer file carries the lieutenant's tools, diplomacy and letters to the bridge");
+            // 0.13.16 (Mert, Nov 1: the lieutenant "was not able to see what happened at Nanduhirion"): each message says how long the realm's
+            // whole chronicle is and at which line each of its last days begins, so it can read just that day
+            File.WriteAllText(Path.Combine(channel, "chronicle.txt"), "THE CHRONICLE OF THE KINGDOM\nEverything your realm has learned.\n\n"
+                + "Autumn 21, 1087, 22:00 · Dáin II Ironfoot (Kingdom of Arnor and Gondor) was taken prisoner by Dramthak (Dol Guldur).\n"
+                + "Autumn 21, 1087, 23:00 · Amarië is sheltering in Torech Emel.\n"
+                + "Winter 1, 1087, 02:00 · Fight over a raid at Tinnulas: Azgar (Gundabad) against Tinnulas (Kingdom of Arnor and Gondor); Azgar won.\n"
+                + "Winter 2, 1087, 05:00 · Ulf rides with all haste to relieve Osven.\n");
+            string index = LieutenantRoom.ChronicleIndex(channel);
+            string m4 = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string>(), index);
+            Check(index != null && index.Contains("chronicle.txt, 7 lines") && index.Contains("Winter 2, 1087 at line 7; Winter 1, 1087 at line 6; Autumn 21, 1087 at line 4")
+                  && m4.Contains("YOUR WHOLE CHRONICLE") && m4.IndexOf("YOUR WHOLE CHRONICLE", StringComparison.Ordinal) < m4.IndexOf("YOUR RULER SAYS", StringComparison.Ordinal)
+                  && LieutenantRoom.ChronicleIndex(Path.Combine(root, "no such folder")) == null,
+                  "the lieutenant's message says how long its realm's whole chronicle is and where each of its last days begins: " + index);
+            string system = File.Exists(TemplatePath("lieutenant-system.template.md")) ? File.ReadAllText(TemplatePath("lieutenant-system.template.md")) : "";
+            Check(system.Length == 0 || (system.Contains("`chronicle.txt`") && system.Contains("before you answer that you cannot tell")),
+                  "the lieutenant's instructions tell it of the realm's whole chronicle and to read it before saying it cannot tell what happened");
+        }
+
+        /// <summary>The repo's agent template of that name, from the war room's build folder up (null outside the repo).</summary>
+        private static string TemplatePath(string name)
+        {
+            for (DirectoryInfo d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+            {
+                string p = Path.Combine(d.FullName, "agent", name);
+                if (File.Exists(p)) return p;
+            }
+            return Path.Combine("agent", name);
         }
 
         private static Program.Trigger T(string kind, string text) => new Program.Trigger { Kind = kind, Text = text };

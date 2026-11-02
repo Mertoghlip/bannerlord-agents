@@ -18,6 +18,8 @@
     <!-- the game's marching rule, one file shared with the game module (src/Common) -->
     <Compile Include="..\Common\GamePace.cs" Link="Common\GamePace.cs" />
     <Compile Include="..\Common\GameBattle.cs" Link="Common\GameBattle.cs" />
+    <!-- which chronicle lines a report shows (0.13.16), one rule for the bridge and the war room -->
+    <Compile Include="..\Common\RecentHistory.cs" Link="Common\RecentHistory.cs" />
   </ItemGroup>
 
 </Project>

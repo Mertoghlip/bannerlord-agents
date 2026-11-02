@@ -25,6 +25,17 @@ namespace BannerlordAgents
         }
 
         public static string N(int n) => n.ToString("N0", Inv);
+
+        /// <summary>"a", "a and b", "a, b and c".</summary>
+        public static string List(IList<string> items)
+        {
+            if (items == null || items.Count == 0) return "";
+            if (items.Count == 1) return items[0];
+            var sb = new StringBuilder();
+            for (int i = 0; i < items.Count - 1; i++) sb.Append(i > 0 ? ", " : "").Append(items[i]);
+            return sb.Append(" and ").Append(items[items.Count - 1]).ToString();
+        }
+
         public static string D(float d) => d.ToString("0.0", Inv);
         public static float R1(float v) => (float)Math.Round(v, 1);
 

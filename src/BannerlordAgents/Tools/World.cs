@@ -292,6 +292,17 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
+        /// Bands of one bandit kind in view that could reach a point within so many hours, nearest first (0.13.16). Bandits join no lord's
+        /// fight, but they do join one their own kind is fighting: Osven (139 men) was beating a band of Mirkwood Stalkers (118) on Winter 2
+        /// when five more bands came in, 577 men by noon, and took him.
+        /// </summary>
+        public List<PartyRow> BandsOf(string faction, float x, float y, double hours)
+        {
+            if (hours <= 0 || faction == null) return new List<PartyRow>();
+            return _bandits.Where(b => b.Faction == faction && HoursTo(b, x, y) <= hours).OrderBy(b => HoursTo(b, x, y)).ToList();
+        }
+
+        /// <summary>
         /// The force an enemy party would be fought with (0.12.3): itself and every other hostile lord and army in view that could
         /// reach where it stands within joinHours. Alenon struck Narsha (strength 1,751 against his 8,505) because she was the
         /// weakest lord near Torech Emel; a dozen lords marching to join Thrurg, about 17,000 together, were a few hours from her.

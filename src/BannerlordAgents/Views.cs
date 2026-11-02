@@ -226,7 +226,7 @@ namespace BannerlordAgents
                 if (Chronicle.Holds(fid))
                 {
                     // the chronicle's last two days: the notices, and also the enemy armies sighted and the orders given
-                    v.News = Chronicle.For(fid).Recent(s.Hours, 48, 25);
+                    v.News = Chronicle.For(fid).Recent(s.Hours, Common.RecentHistory.Hours, Common.RecentHistory.Lines);
                     v.NewsFromChronicle = true;
                 }
                 else

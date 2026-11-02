@@ -454,7 +454,9 @@ namespace BannerlordAgents
                     if (h == null) return null;
                     MobileParty p = h.PartyBelongedTo;
                     if (p == null || p.LeaderHero != h) { error = Names.Hero(h) + " is not leading a party right now."; return null; }
-                    if (p == party) { error = Names.Hero(h) + " is the lord being ordered."; return null; }
+                    // the lord himself in his own list (0.13.16): left out with a note, not the whole order refused (Nov 1: the orcs' council gave 13
+                    // lords each a besiege of Sirannon naming all 13 to wait for, the lord himself among them, and all 13 were refused)
+                    if (p == party) { notes.Add(Names.Hero(h) + " was left out of \"lords\": he is the lord being ordered"); continue; }
                     if (!o.Lords.Contains(p.StringId)) o.Lords.Add(p.StringId);
                 }
             else if (a.Lords.Count > 0) notes.Add(def.Name + " takes no lords, so they were left out");

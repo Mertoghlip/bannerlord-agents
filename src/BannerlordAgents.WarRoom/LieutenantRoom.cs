@@ -79,7 +79,7 @@ namespace BannerlordAgents.WarRoom
             List<string> receipts = Tail(Path.Combine(_c.ChannelDir, "receipts.log"), 12);
             RouteTool routes = Routes(campaign, realm, n);
             string system = SystemFile(routes != null);
-            string prompt = Message(chat, history, report, receipts);
+            string prompt = Message(chat, history, report, receipts, ChronicleIndex(_c.ChannelDir));
             string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-chat-" + n);
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
@@ -120,7 +120,7 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>The message: the conversation so far, what became of its orders, the waiting proposal, the realm now, the player's words.</summary>
-        internal static string Message(JsonObject chat, List<JsonObject> history, string report, List<string> receipts)
+        internal static string Message(JsonObject chat, List<JsonObject> history, string report, List<string> receipts, string chronicle = null)
         {
             var sb = new StringBuilder();
             if (chat["history"] is JsonArray lines)
@@ -179,6 +179,7 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("THE REALM NOW");
             sb.AppendLine(report.Trim());
             sb.AppendLine();
+            if (!string.IsNullOrEmpty(chronicle)) sb.AppendLine(chronicle).AppendLine();
             if (Str(chat["party_ai"]) is string pac && pac.Trim().Length > 0)
             {
                 sb.AppendLine("PARTY AI CONTROLS NOW");
@@ -190,6 +191,43 @@ namespace BannerlordAgents.WarRoom
                 foreach (JsonNode e in earlier) sb.AppendLine("(said just before) \"" + Str(e) + "\"");
             sb.AppendLine("\"" + Str(chat["said"]) + "\"");
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Where the realm's whole chronicle is and where its last days begin in it (0.13.16; Mert, Nov 1: the lieutenant "was not able to
+        /// see what happened at Nanduhirion": the report's recent history had cut the battle and the twelve captures, which were all in
+        /// chronicle.txt, a file it was never told of). chronicle.txt is dated line by line, oldest first, too long to read whole, so the
+        /// line each of the last days begins at lets it read just that day (the Read tool's offset). Null without one.
+        /// </summary>
+        internal static string ChronicleIndex(string dir, int days = 10)
+        {
+            string path = Path.Combine(dir ?? "", "chronicle.txt");
+            if (!File.Exists(path)) return null;
+            var starts = new List<KeyValuePair<string, int>>();
+            int n = 0;
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var sr = new StreamReader(fs, Encoding.UTF8);
+                string line;
+                string last = null;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    n++;
+                    // "Winter 1, 1087, 09:00 · ...": the day is what comes before the hour
+                    int dot = line.IndexOf(" · ", StringComparison.Ordinal), comma = dot > 0 ? line.LastIndexOf(", ", dot, StringComparison.Ordinal) : -1;
+                    if (comma <= 0) continue;
+                    string day = line.Substring(0, comma);
+                    if (day == last) continue;
+                    last = day;
+                    starts.Add(new KeyValuePair<string, int>(day, n));
+                }
+            }
+            catch (IOException) { return null; }
+            if (n == 0) return null;
+            var where = starts.Skip(Math.Max(0, starts.Count - days)).Reverse().Select(s => s.Key + " at line " + s.Value.ToString("N0", CultureInfo.InvariantCulture));
+            return "YOUR WHOLE CHRONICLE: chronicle.txt, " + n.ToString("N0", CultureInfo.InvariantCulture) + " lines, oldest first, every line dated. "
+                   + "Where its last days begin: " + string.Join("; ", where) + ".";
         }
 
         /// <summary>The answer object: the last JSON object in the text with "say"; its order lists checked (each order names a lord and an order).</summary>

@@ -67,9 +67,6 @@ namespace BannerlordAgents.WarRoom
         private const double RecentOrderSeconds = 60;
         private string _councilNote;
 
-        /// <summary>Lines of the chronicle the bridge puts in the report's RECENT HISTORY: the last 25 of the last 48 hours (Views.Build).</summary>
-        private const double RecentHours = 48;
-        private const int RecentLines = 25;
         /// <summary>The most chronicle lines put before the poke; older ones wait for the story, or are read in chronicle.txt.</summary>
         private const int MaxGapLines = 80;
 
@@ -286,7 +283,8 @@ namespace BannerlordAgents.WarRoom
         {
             if (meta == null || double.IsNaN(meta.Hours)) return new List<ChronicleLine>();
             List<ChronicleLine> all = Memory.ReadChronicle(_c.ChannelDir).Where(l => l.Hours <= meta.Hours + 1).ToList();
-            var recent = new HashSet<ChronicleLine>(all.Where(l => l.Hours >= meta.Hours - RecentHours).Reverse().Take(RecentLines));
+            // the lines the report's RECENT HISTORY shows, by the bridge's own rule (Common.RecentHistory, 0.13.16)
+            var recent = new HashSet<ChronicleLine>(BannerlordAgents.Common.RecentHistory.Pick(all.Select(l => l.Hours).ToList(), all.Select(l => l.Kind).ToList(), meta.Hours).Select(i => all[i]));
             return all.Where(l => (double.IsNaN(storyHours) || l.Hours > storyHours + 1e-6) && !recent.Contains(l)).ToList();
         }
 

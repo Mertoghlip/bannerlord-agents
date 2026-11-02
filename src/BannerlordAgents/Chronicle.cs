@@ -199,13 +199,13 @@ namespace BannerlordAgents
             Diag.Count("chronicle:lines");
         }
 
-        /// <summary>The lines of the last hours (the report's RECENT HISTORY), newest last, at most max.</summary>
+        /// <summary>The lines of the last hours (the report's RECENT HISTORY), newest last: the news first, the orders' own lines in what room is left of max (Common.RecentHistory, 0.13.16).</summary>
         public List<string> Recent(double now, double withinHours, int max)
         {
             lock (Gate)
             {
-                List<string> lines = Entries.Where(e => e.Hours >= now - withinHours && e.Hours <= now + 1).Select(Show).ToList();
-                return lines.Count > max ? lines.Skip(lines.Count - max).ToList() : lines;
+                List<int> shown = Common.RecentHistory.Pick(Entries.Select(e => e.Hours).ToList(), Entries.Select(e => e.Kind).ToList(), now, withinHours, max);
+                return shown.Select(i => Show(Entries[i])).ToList();
             }
         }
 

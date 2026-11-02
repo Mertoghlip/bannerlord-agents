@@ -469,6 +469,12 @@ namespace BannerlordAgents.Tools
         /// <summary>The relief rule (0.13.15, Runner.Relief): the longest a fight is waited on; one the battle clock sees lasting longer (or not ending in five days) counts as this.</summary>
         public const double MaxReliefHours = 24;
 
+        /// <summary>
+        /// The time to spare a relief rider must arrive with (0.13.16): a fifth of the fight's hours left, at least an hour. The battle clock is
+        /// a forecast: on Winter 2, Nov 1, sixteen lords 16 to 24 hours from Osven's fight rode on a clock of 24 hours or more; it lasted 13.
+        /// </summary>
+        public static double ReliefSpare(double hoursLeft) => Math.Max(1, 0.2 * hoursLeft);
+
         public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, at its own pace as the crow flies, counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
 
         public static Dictionary<string, ToolDef> All
@@ -534,8 +540,10 @@ namespace BannerlordAgents.Tools
                           + "): " + Caution.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");
             sb.AppendLine("And join_hours (default " + ToolDef.Num(JoinHours.Default) + "): " + JoinHours.About + ".");
             sb.AppendLine("Every lord holding your orders, out of an army or leading one, also rides with all haste to relieve a lord of yours or an ally's fighting in the field (or at a siege camp, or over a raid), "
-                          + "when he can get there before the fight ends by the game's battle rules (at most " + ToolDef.Num(MaxReliefHours) + " hours ahead) and your side there, with every lord of yours who can get there in time, "
-                          + "outweighs the enemies in the fight and every enemy lord and army in view who could join it by then. He strikes the enemy side's leader; his order resumes once the fight is over. "
+                          + "when he can get there with time to spare (a fifth of the fight's hours left, at least an hour) before it ends by the game's battle rules (at most " + ToolDef.Num(MaxReliefHours) + " hours ahead), "
+                          + "the fight run ahead with the enemies who could join it coming in, and your side there, with every lord of yours who can get there in time, "
+                          + "outweighs the enemies in the fight and every enemy lord and army in view who could join it by then (and every band of bandits of the same kind, when it is bandits fighting). "
+                          + "He strikes the enemy side's leader; his order resumes once the fight is over. "
                           + "An army goes whole. Lords marching in another's army, camped in a siege, inside a besieged castle or town, or on their way to buy food do not ride.");
             return sb.ToString();
         }

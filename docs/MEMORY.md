@@ -45,7 +45,19 @@ The written memory is short, and the same size at every poke. The one-long-conve
   The first two poke. The last two only go into the chronicle (`Notice.RecordOnly`).
 - **Fog:** every line comes from what the realm was told or saw, or from the game's public history, which a player can read in the encyclopedia.
 
-The report's last section, **RECENT HISTORY, LAST TWO DAYS**, is the chronicle's last 25 lines within 48 hours. It replaces the old NEWS. `agents.chronicle [n]` prints the last lines in the game's console.
+The report's last section, **RECENT HISTORY, LAST TWO DAYS**, is drawn from the chronicle's lines within 48 hours. It replaces the old NEWS. `agents.chronicle [n]` prints the last lines in the game's console.
+
+- **Until 0.13.15:** the last 25 of those lines.
+- **Since 0.13.16** (`Common.RecentHistory`, shared by the bridge and the war room's `Room.Gap`):
+  - The news comes first, up to 40 lines: battles, captures, sieges, raids, holdings, lords killed or freed, armies, wars, votes. That is every line but the orders' own.
+  - The orders' own lines (given, called back, ended, refused) fill what is left of 25.
+  - Lines go by whole in-game hours, newest first. The newest hour of news is always shown.
+- **Why (Mert, Nov 1):** the lieutenant could not say who broke Dáin's siege of Nanduhirion.
+  - A day of lords sheltering and finding few recruits had pushed the battle and the twelve captures out of the last 25.
+  - The cut fell inside their very hour, between the battle and "the siege was lifted".
+- **The battle line:** since 0.13.16 it also says who fought on each side when a side was more than its leader (`Notices.WhoFought`: each side's lords by realm, up to three names, their men as they joined, the garrison, other parties). A capture names the captor's realm.
+
+The lieutenant is told of `chronicle.txt` too, and each of its messages says how long it is and where its last days begin (`LieutenantRoom.ChronicleIndex`).
 
 ### The ruler's notes (`Memory`, in the war room)
 - **Plan:** replaced by the answer's `plan`.

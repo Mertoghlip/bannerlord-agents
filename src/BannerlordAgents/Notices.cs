@@ -256,8 +256,52 @@ namespace BannerlordAgents
             string winner = me.WinningSide == BattleSideEnum.Attacker ? attacker : defender;
             string what = me.IsSiegeAssault ? "Assault" : me.IsRaid ? "Fight over a raid" : "Battle";
             string place = me.MapEventSettlement != null ? " at " + Names.Settlement(me.MapEventSettlement) : "";
-            Send("battle", what + place + ": " + attacker + " (" + F(a) + ") against " + defender + " (" + F(d) + "); " + winner + " won.", involved, null, Small(me, start),
+            Send("battle", what + place + ": " + attacker + " (" + F(a) + ") against " + defender + " (" + F(d) + "); " + winner + " won." + WhoFought(me, attacker, defender), involved, null, Small(me, start),
                  me.MapEventSettlement?.StringId);
+        }
+
+        /// <summary>
+        /// Who fought on each side, when a side was more than its leader (0.13.16; Mert, Nov 1: the lieutenant could not say whether Dol Guldur
+        /// had relieved Nanduhirion, and the line read "Dáin II Ironfoot against Nanduhirion; Nanduhirion won": the town's garrison led the side
+        /// that Dramthak's army and about twenty orc lords fought on). Each side's lords by realm, with up to three names and their men as they
+        /// joined, and its other parties. Read at the battle's end, when the beaten lords are already prisoners but their parties are still
+        /// in the side's list (Named gives them their lord's name).
+        /// </summary>
+        private static string WhoFought(MapEvent me, string attacker, string defender)
+        {
+            string at = SideText(me.AttackerSide, attacker, out int an), de = SideText(me.DefenderSide, defender, out int dn);
+            if (an < 2 && dn < 2) return "";
+            return " Who fought: " + at + "; " + de + ".";
+        }
+
+        private static string SideText(MapEventSide side, string leader, out int parties)
+        {
+            parties = 0;
+            var lords = new List<MapEventParty>();
+            int others = 0;
+            bool garrison = false;
+            if (side?.Parties != null)
+                foreach (MapEventParty mp in side.Parties)
+                {
+                    if (mp?.Party == null) continue;
+                    parties++;
+                    MobileParty m = mp.Party.MobileParty;
+                    if (m != null && m.IsLordParty) lords.Add(mp);
+                    else if (mp.Party.Settlement != null || m?.IsGarrison == true || m?.IsMilitia == true) garrison = true;
+                    else others++;
+                }
+            var parts = new List<string>();
+            if (garrison) parts.Add("the garrison");
+            foreach (IGrouping<IFaction, MapEventParty> g in lords.GroupBy(mp => mp.Party.MobileParty.MapFaction).OrderByDescending(g => g.Sum(mp => mp.HealthyManCountAtStart)))
+            {
+                List<string> names = g.OrderByDescending(mp => mp.Party.MobileParty.Army?.LeaderParty == mp.Party.MobileParty)
+                                      .ThenByDescending(mp => mp.HealthyManCountAtStart).Select(mp => Named(mp.Party, null)).ToList();
+                int n = names.Count;
+                string who = n <= 3 ? Text.List(names) : string.Join(", ", names.Take(3)) + " and " + (n - 3) + " more";
+                parts.Add(n + (n == 1 ? " lord" : " lords") + " of " + F(g.Key) + " (" + who + "; " + Text.N(g.Sum(mp => mp.HealthyManCountAtStart)) + " men)");
+            }
+            if (others > 0) parts.Add(others + (others == 1 ? " other party" : " other parties"));
+            return "on " + leader + "'s side, " + (parts.Count > 0 ? Text.List(parts) : "nobody named");
         }
 
         /// <summary>A side's leader by name; for a lord taken in the battle, the name from when it began.</summary>
@@ -312,7 +356,9 @@ namespace BannerlordAgents
         public static void OnPrisonerTaken(PartyBase capturer, Hero h)
         {
             if (h == null || !h.IsLord) return;
-            Send("captured", Names.Hero(h) + " (" + F(h.MapFaction) + ") was taken prisoner by " + P(capturer) + ".", Involved(h.MapFaction, capturer?.MapFaction));
+            // the captor's realm too (0.13.16): "taken prisoner by Dramthak" alone did not tell the lieutenant that Dol Guldur had fought at Nanduhirion
+            Send("captured", Names.Hero(h) + " (" + F(h.MapFaction) + ") was taken prisoner by " + P(capturer) + (capturer?.MapFaction != null ? " (" + F(capturer.MapFaction) + ")" : "") + ".",
+                 Involved(h.MapFaction, capturer?.MapFaction));
         }
 
         public static void OnDecisionAdded(KingdomDecision d, bool isPlayerInvolved)
