@@ -1891,7 +1891,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Mert, Nov 1:** "You can push them now, I'll restart playing once you are done."
 - **What:** the 12 commits from 43642e2 (0.13.16) to 990c46c (0.13.18's install entry), and this entry, to `origin/main` (github.com/Mertoghlip/bannerlord-agents, private).
 
-### 18:31 · Version 0.13.19 built: the supply order, the garrison floor, food and garrison strength in the report, the lieutenant keeps unsent words · commit (next)
+### 18:31 · Version 0.13.19 built: the supply order, the garrison floor, food and garrison strength in the report, the lieutenant keeps unsent words · commit 4e98819
 - **Mert, Nov 1:**
   - "Do you think we can also allow NPC lords to donate food to garrisons? I'm seeing a lot of castles at my fronts with zero food due to raids on their villages, and I think agents and the liutenant should be able to order lords to donate extra food to settlements to make sure they can outlast sieges." Then, on the two choices put to him (buy first; every realm's agents): "Alright. Lets do that."
   - "lets also allow orders to get lords to go to their clan's settlements and take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the agent."
