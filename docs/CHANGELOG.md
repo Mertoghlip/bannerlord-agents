@@ -1930,3 +1930,18 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test 438, all passed. New:
   - The warning fires for a castle with 1 day of food and Kralza 20 away. It is not told again the next hour, is told again once the food falls a day more, and stays silent with the enemy far off.
   - An agent-style tool reading `food_days_at(at)` and `food_at(at)` moves on a castle short of food.
+
+### 18:47 · Version 0.13.20 installed, the realm agents' instructions replaced, pushed · commit (next)
+- **What:** the 0.13.20 build (commit 9875256), unchanged, with the game closed.
+- **Installed:**
+  - War rooms and dashboard stopped first (5 processes).
+  - `scripts\deploy.ps1`: smoke test (438), war room and dashboard self-tests all passed.
+  - `BannerlordAgents.dll` sha256 `226B3356EA0C4DAF5D1AB8FDB195A66FCB7AE649A39FD4DAEAB3D1B3BAF2B5B6`, SubModule v0.13.20.
+  - RefCheck: 271 game types, 834 member references, 0 missing.
+  - War rooms and dashboard started again (18:47, detached). Each reads its instructions afresh at its next call.
+- **Outside the repo:** each realm agent's `warroom-system.md` (`C:\Users\karab\Projects\orc-war-council`, `dolguldur-war-council`, `kingdom-war-council`) was rebuilt from the new template.
+  - Each keeps its own two realm lines (the title and the opening line): the orcs' copy is the template word for word, and the other two differ only there, as before.
+  - Eight lines changed in each, CRLF kept. The old copies are `warroom-system.md.bak-20261101-before-supply`.
+  - The lieutenant's `warroom-system.md` is unchanged.
+- **The order libraries** (`tools.txt`) in the agents' channels are rewritten by the bridge at the next load, with the supply order, `garrison_floor` and the food functions.
+- **Pushed:** this entry, 9875256 and 799c15c to `origin/main`.
