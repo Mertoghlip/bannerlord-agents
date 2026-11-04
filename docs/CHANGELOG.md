@@ -13,7 +13,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Tuesday, October 6
 
-### 23:37 · The project set up · commit 94236cf
+### 23:37 · The project set up · commit b80f42e
 - **What:**
   - the separate BannerlordAgents game module: it loads, logs the session start and the real seconds per in-game day, and has `agents.status`;
   - the build reads the game's files from the local install, and none are committed;
@@ -21,12 +21,12 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the plan (`docs/PLAN.md`) and the notes for Claude (`CLAUDE.md`).
 - **Why:** the proposal was submitted on Oct 6. A mod of its own avoids mix-ups, and everything goes on GitHub.
 
-### 23:42 · The Oct 5 brief saved · commit 1fb2ef3
+### 23:42 · The Oct 5 brief saved · commit b840ec2
 - **What:** `docs/proposal/brief.md`, exported word for word from the Claude doc "CS 329M Project Brief: Bannerlord Agents".
 
 ## Wednesday, October 7
 
-### 14:52 · The plan updated · commit 7e548af
+### 14:52 · The plan updated · commit 24af906
 - **What:**
   - live play: the clock never stops for an agent;
   - first tests on the Misty Mountain Orcs in my own campaign;
@@ -35,13 +35,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `docs/FIRST-TESTS.md` written, in seven phases.
 - **Why:** my decisions of Oct 7.
 
-### 15:01 · The plan: a ruler's decisions and vassal orders · commit 149e293
+### 15:01 · The plan: a ruler's decisions and vassal orders · commit 9cfe7aa
 - **What:**
   - the recorder also covers realm decisions and the vassal orders I give in conversation, read from Party AI Controls without changing it;
   - phase 7 added (Opus runs the whole orc realm);
   - a drawing board for parked ideas.
 
-### 15:33 · Install 1, version 0.2.0, into the game · commit 731d76a (pushed 15:37)
+### 15:33 · Install 1, version 0.2.0, into the game · commit 1169b94 (pushed 15:37)
 - **What:**
   - the orcs' view and pokes, and the written report;
   - the play recorder;
@@ -54,7 +54,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** BannerlordAgents was enabled in the launcher's module list (`LauncherData.xml`), after RTSCameraUniversal.
 - **Backup:** `LauncherData.xml.bak-20261007-1910-before-agents`.
 
-### 19:28 · The agent channel and the agent chat · commit c21078f
+### 19:28 · The agent channel and the agent chat · commit c79eabe
 - **What:**
   - the agent channel: `pokes.log`, `poke.txt`, `report.txt`, answer files in, receipts out, in three modes (off, shadow, live);
   - orders get the recruit and free verbs, and `agents.vassal` orders my own lords;
@@ -67,7 +67,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, October 8
 
-### 00:36 · Version 0.3, the strategists' logs · commit b6a4c09 (installed about 00:35)
+### 00:36 · Version 0.3, the strategists' logs · commit fde68bd (installed about 00:35)
 - **What:**
   - a folder of detailed logs for every game launch;
   - a watchdog, the freeze probe, and alarms;
@@ -101,14 +101,14 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** 502 references, 0 missing.
 - **Still to check:** at the next load, the fixes mod's boot log should count the ghosts it found inside battles.
 
-### 15:54 · The first session's report · commit 69fa761
+### 15:54 · The first session's report · commit 856bd87
 - **What:** `docs/reports/2026-10-08-first-live-session.md`.
 
-### 16:56 · Why the orcs were poked 125 times · commit 0f3aec7
+### 16:56 · Why the orcs were poked 125 times · commit 5b8a3b1
 - **What:** `docs/reports/2026-10-08-pokes.md`: every poke by type, the battles by who fought whom, and what each cut would save.
 - **Finding:** 100 of the 122 battles were small fights, and the cuts would take the 125 pokes to 58.
 
-### 17:14 · Version 0.3.1, fewer pokes · commit f47a05b (installed 17:14)
+### 17:14 · Version 0.3.1, fewer pokes · commit 60ab031 (installed 17:14)
 - **What:**
   - a battle pokes only when fought at a town, castle or village (an assault, a sally, a raid) or with lords on both sides. Fights with bandits, caravans and villagers go to the logs only, marked as not poked;
   - an enemy lord pokes only within 30 of one of the realm's holdings (the new setting `sighting_distance`), or when heading for, besieging or raiding one, or chasing one of its parties. Armies always poke. A lord who comes close while already in view now pokes too, which the old rule missed;
@@ -128,7 +128,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the journal: the agent chat's journal is kept as `journal-chat-20261008.md`. `journal.md` carries over its plan in three sections (standing plan, lords and their tasks, lessons), reworded for the new orders, without its list of problems.
 - **Why:** my decision to turn the agent on and begin testing: Opus 5.5 commands every orc lord, live.
 
-### 21:14 · Version 0.4.0: tools, armies and the war room · commit 1f87367 (installed 20:59, again 21:10 and 21:14)
+### 21:14 · Version 0.4.0: tools, armies and the war room · commit 76910ac (installed 20:59, again 21:10 and 21:14)
 - **What:**
   - **The behavior language and the tool engine** (`src/BannerlordAgents/Tools`, [TOOLS.md](TOOLS.md)):
     - a tool is a small JSON file of settings, states, rules and call-backs, read by a checker before it runs;
@@ -204,7 +204,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The conversation was resumed each poke.
   - The notes changed with each answer.
 
-### 11:01 · Version 0.5.0: each realm's memory of the war · commit 999f913 (installed 11:01)
+### 11:01 · Version 0.5.0: each realm's memory of the war · commit dc40a2d (installed 11:01)
 - **What** ([MEMORY.md](MEMORY.md)):
   - **The chronicle (bridge):** every non-quiet notice the realm gets, every enemy army it sees come into view, and every order the agent gives (carried out or refused, with its reason).
     - At the first load, what the game's own history log still holds about the realm fills the time before the chronicle's own lines, marked as such.
@@ -257,7 +257,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - at the first poke (11:47:48) the war room took the old journal over as the notes of campaign `Ah2auppicLLJ` (`orc-war-council\memory\Ah2auppicLLJ\`) and renamed it `journal-before-memory-20261009-1147.md`;
   - the bridge started `chronicle_mistymountainorcs.jsonl` in the campaign's folder.
 
-### 11:55 · Version 0.5.1: army fixes · commit 8111644 (installed 11:55)
+### 11:55 · Version 0.5.1: army fixes · commit 2b652b5 (installed 11:55)
 - **What:**
   - gather judges its army from the next hour on, and a new "fail" ending keeps an army that truly broke up from starting its next order, setting its lord free;
   - gather and add form the army with the lords who can come, naming the ones left out;
@@ -302,7 +302,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - build the council of war (E1);
   - rewrite the agent's instructions as a medieval commander's, from a study of medieval doctrine, without giving it my own plan (E3).
 
-### 13:30 · Version 0.6.0: the council of war, the missing facts, a commander's doctrine · commit 71cbbcc (installed about 13:30)
+### 13:30 · Version 0.6.0: the council of war, the missing facts, a commander's doctrine · commit d6aed27 (installed about 13:30)
 - **What the agent now sees:**
   - **YOUR REALM IN SUM:** the field forces, the castles and towns, the villages, and how many lords are prisoners.
   - **YOUR CAPTURED LORDS:** each one, grouped by where they are held, and since when, from the game's own prisoner records (`Hero.PartyBelongedToAsPrisoner`, `CaptivityStartTime`).
@@ -351,7 +351,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a relief weighing the garrison;
   - a day of recruitment numbers.
 
-### 19:30 · Version 0.6.1: defend and patrol fixed · commit 013fd4d (installed 19:29, again 19:30)
+### 19:30 · Version 0.6.1: defend and patrol fixed · commit 03dc3d5 (installed 19:29, again 19:30)
 - **Why:** I asked how the defend and patrol orders work, and then, after the walkthrough, decided to fix the weak spots. The walkthrough read the game's patrol in the 1.4.8 code and found five:
   - the game's patrol ranges between half and all of half a day's march around a castle (20 to 41 map units at the orcs' median speed), beyond the 20 units defend watches, and defend had the danger rule off;
   - a chase did not watch for a big force coming;
@@ -386,7 +386,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Friday, October 16
 
-### 15:19 · Version 0.6.2: shelter where the defence would hold, else run · commit e4fc561 (installed 15:19)
+### 15:19 · Version 0.6.2: shelter where the defence would hold, else run · commit 7000b06 (installed 15:19)
 - **Why:** the danger rule: if the strength of all lords defending a place plus the garrison of the sheltering location is enough to defend it against the opposing force, they should shelter there. If not, they should run. 0.6.1 never weighed whether a place would hold: it simply kept lords out of the castle the enemy marched on, and out of defend's own holding.
 - **What:**
   - **Would it hold?** By the game's own test for whether besiegers should assault (read in 1.4.8): the defenders (garrison, militia, the realm's lords inside, the realm's lords holding a defend or garrison order for it within 20, and the lord itself), times what the walls are worth (2.4, 2.8 or 3.2 for wall levels 1 to 3, with a ram and two towers built), against the danger and every force threatening that place. The bridge now copies the militia's strength and the walls' level for the realm's and its allies' castles and towns.
@@ -420,7 +420,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - a lord sent to stand near a far place had its order given again every check until it got there; one call-back named a party by its code (`lord_4_18_party_1`).
 - **Western Moria against Aragorn, by the game's assault test:** garrison 767 and militia 280 (an estimated 1,500 strength; its wall level was not in the report) behind walls worth 2.4 to 3.2 hold against about 3,600 to 4,800, against Aragorn's 14,695. With both armies inside (about 2,000 more) it held against about 8,400 to 11,200, still too little. The muster showed 15 lords, strength 5,157, within two days, which would have held at any wall level. Aragorn never came into sight of Western Moria in the 70 hours played.
 
-### 16:10 · Version 0.6.3: held lords kept held, refilling only when not needed, every enemy army in the report · commit b6e2a9f (installed 16:10)
+### 16:10 · Version 0.6.3: held lords kept held, refilling only when not needed, every enemy army in the report · commit 00c5261 (installed 16:10)
 - **Why:** the live session above. On refilling: some lords might be needed urgently and may be weak individually, but massing them together still makes them strong. The agent should be able to order them to mass together and fight if it needs to, rather than being forced to recruit. It is still a good idea for lords to be recruiting if they are not needed urgently.
 - **What:**
   - **Held lords kept held:** a hook right after Party AI Controls' hourly look at a party (`PartyAIThinker.OnHourlyTickParty`) holds again a lord one of our orders holds. That look switches the game's AI back on for every lord it does not manage that stands still with the AI off (read in its decompile); the game puts lords into that state in some 36 places, so our own moves could not avoid it. A new self-check says whether the hook attached.
@@ -449,7 +449,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `scripts/setup-agent.ps1 -Mode live` rewrote `tools.txt` at 16:13 (defend's new refilling); the bridge's settings were unchanged.
 - **Not yet seen in a game:** the hook attaching and holding a lord; a refill broken off; the new report lines.
 
-### 16:56 · Version 0.6.4: each enemy army's trail, and a 15th principle of doctrine · commit 5c8950d (installed 16:55)
+### 16:56 · Version 0.6.4: each enemy army's trail, and a 15th principle of doctrine · commit 545c0b2 (installed 16:55)
 - **Why:** in an army, I might deviate slightly off course on my way to an objective to recruit or gather supplies, or maybe to engage an enemy I find vulnerable. The AI should still be getting the information it needs to infer what my main objective is, and slight deviations should not have it readjust its main strategy. Of seven ways proposed, I chose two together: 6 and 1 at the same time.
 - **What:**
   - **Each enemy army's trail** (proposal 1): a new report section, ENEMY ARMIES' TRAILS, gives, for each enemy army, where the realm saw it in the last two days, oldest first: when, where (and how far from the realm's nearest holding), and what it was doing.
@@ -479,7 +479,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The council of war (19:43:23 to 19:44:42, 7,462 tokens of thinking) gave one order, Grakmaw to hunt Ulf and then defend Hollin Gate, and a new plan.
 - **A gap found:** the army dropped out of the report's SEEN EARLIER list, cut by bands seen since (its cap of 25 kept the most recent). Fixed in 0.7.0.
 
-### 21:10 · Version 0.7.0: the dashboard, ways and crossings, and the agent's "ask the way" tool · commit f80d788 (installed about 21:03)
+### 21:10 · Version 0.7.0: the dashboard, ways and crossings, and the agent's "ask the way" tool · commit 2a9f7b4 (installed about 21:03)
 - **Why:** diagnostics and monitoring by me should be a lot easier, with a dashboard with a live map of the game. I wanted to be able to see exactly what each agent sees, have everything they see depicted by icons with a legend, switch between agents, and have a log on the side depicting the moves of the agent I am following. When I click on a given icon on the map, I should be able to see where it is moving. On pathfinding: clicking an icon should show how the army would find its way, and the agent should know how pathfinding works, exposed to it only after it specifically asks for it for a specific army. I approved the plan, all to be implemented now, and all its recommendations: a real tool rather than ready-made pages, no doctrine principle on crossings for now, and the rewind built now.
 - **What:**
   - **The dashboard** (`src/BannerlordAgents.Dashboard`, `scripts\dashboard.ps1`, http://localhost:7329/; [DASHBOARD.md](DASHBOARD.md)):
@@ -527,7 +527,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the bridge writes its two new settings into `settings.txt` at its next load.
 - **Not yet seen in a game:** the map copy (its time, and whether north is up); the frames' real size; the accuracy check's numbers; the atlas on the real map; the agent asking the way.
 
-### 21:15 to 21:45 · First session on 0.7.0, and two fixes · commit 7c61e4d (war room and dashboard rebuilt; the game module unchanged)
+### 21:15 to 21:45 · First session on 0.7.0, and two fixes · commit 877191a (war room and dashboard rebuilt; the game module unchanged)
 - **Seen working:**
   - the walking map copied in 4 s (272 ms of the game's thread over 68 frames): 1,638 x 1,550 cells, 147 bridge and ford faces;
   - the self-check passed 12 of 12;
@@ -554,7 +554,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room's self-test passed (46);
   - `toolcheck --big` passed.
 
-### 22:10 · Version 0.7.1: watch, shadow, and every distance by road too · commit 359149f (installed 22:09)
+### 22:10 · Version 0.7.1: watch, shadow, and every distance by road too · commit e1e7ab9 (installed 22:09)
 - **Why:** on the agent screening round Western Moria to find Aragorn's army: it would be a much smarter move to send a weaker lord to scout on the road to Western Moria from Hollin Gate, to keep tabs on Aragorn's army. I think the AI is smart enough to do this, but just does not have the tools to do so.
   - Checked against the night's frames: every order that places a lord was tied to a holding, and the report gave distances as the crow flies (Hollin Gate to Western Moria 53, by road about 260 north round the mountains).
   - My decision: implement 1 and 2. In the report, distances should be given both as the crow flies and as the actual travel distance.
@@ -593,7 +593,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Saturday, October 17
 
-### 00:30 · Version 0.7.2: the siege alarm counts every lord coming, enemy castles' militia, doctrine principles 16 and 17 · commit 81e7399 (installed 00:28)
+### 00:30 · Version 0.7.2: the siege alarm counts every lord coming, enemy castles' militia, doctrine principles 16 and 17 · commit 2c85c51 (installed 00:28)
 - **Why:** the siege of Hollin Gate (the session above). The question: why the agent went through with the siege of Hollin Gate even though it had a lot of defenders. The defenders had come after the storm began: about 50 of Arnor's lords, one by one, none in an army, so besiege's alarm (an enemy *army* only) never rang; and the agent was told the castle's garrison, not its militia. My decision: make fixes 1 and 2. The rest is more of a siege doctrine question. The agent should (1) post scouts around the army to figure out if a relieving force is coming during the siege, so it can call it off, and (2) understand that when the enemy is stronger, it is important to strike hard and quick, sometimes forgoing smaller targets in favor of guaranteeing a more important hit. I also felt its siege of Hollin Gate should have been a lot quicker than the amount of time it took, and asked for that to be looked into.
 - **What:**
   - **besiege's relief alarm** counts every enemy lord and army in view within `relief_radius` of the holding or seen heading for it from anywhere, and those seen so in the last 6 hours, all together (`World.ReliefComing`); it calls back at `relief_ratio` times the besieger's strength and again each time they have grown by half its strength, naming them nearest first with strength, both distances and what each is doing. Still a call-back only. New functions `relief_coming`, `relief_count`, `relief_of`.
@@ -608,7 +608,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room and the dashboard were stopped at 00:12 (idle, the game closed) and restarted, detached, at 00:31:19;
   - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (principles 16 and 17) and wrote `tools.txt` with 19 orders.
 
-### 01:55 · Version 0.7.3: the game's clocks (marches by the game's exact speed rule; sieges and battles run ahead) · commit 66226fe (installed 01:48)
+### 01:55 · Version 0.7.3: the game's clocks (marches by the game's exact speed rule; sieges and battles run ahead) · commit b881f4d (installed 01:48)
 - **Why:** our prediction of the marching speed of a force should be based on the game's exact equations, so the AI has a good idea of where its own and enemies' armies will reach their waypoint. The same goes for siege and battle timers, so it can plan ahead.
 - **The research** (three passes on the 1.4.8 code, the decompiled TAOM 2.0.26, and the pack's CheatsForBannerlord, ImprovedGarrisons and TFAOMFixes; [TOOLS.md](TOOLS.md#the-games-clocks-marches-sieges-and-battles-run-ahead-since-073)):
   - the models in force: TAOM's speed, siege event, combat simulation and military power models (the last registered wins);
@@ -631,7 +631,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Tuesday, October 20
 
-### 17:30 · Version 0.7.4: siege control (the agent's storm rule and relief bars) and battles run ahead before they begin · commit fd7b47e (installed 17:28)
+### 17:30 · Version 0.7.4: siege control (the agent's storm rule and relief bars) and battles run ahead before they begin · commit 13b0b29 (installed 17:28)
 - **Why:** the walk-through of the Hollin Gate defeat under 0.7.3 left five gaps: no time for a storm or a field battle before it begins; the agent sees only the relief its own lords see; the storm is the game's choice; an answer comes about 10 game hours after the alarm; the enemy's morale is guessed. My decision: fix all gaps now. Gap 1 is the most important, with time estimates both for siege battles and for field battles. On gap 3: I wondered whether the AI could be given a tool to dictate siege decisions, starting with the storm time, gated on storm immediately, storm after x siege engines constructed and so on, based on its understanding of the enemy garrison's strength and the imminence of relief. On gap 4: the agent should set the bar, what relief force strength level forces a withdrawal and what relief force level forces an immediate storm. It should set the bar as it begins the siege, ahead of time, and the logic should run as part of its siege tool.
 - **What** ([TOOLS.md](TOOLS.md#siege-control-the-storm-rule-the-relief-bars-and-battles-run-ahead-before-they-begin-since-074)):
   - **the storm rule** (gap 3): besiege's `storm` (0 the game decides, 1 storm once ready with `storm_engines` built and the besiegers `storm_ratio` times the defenders, 2 do not storm), handed hourly from the siege stage to `StormGate`, which a Harmony prefix on the game's storm test (`BesiegerCamp.StartingAssaultOnBesiegedSettlementIsLogical`) answers from for that camp; every other camp keeps the game's own test. The game asks it only once the camp's preparations are done, so no rule storms earlier, as the player cannot. The second hook that changes the game's behaviour; a new self-check "storm rule";
@@ -648,7 +648,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `scripts/setup-agent.ps1 -Mode live` installed the new `warroom-system.md` (the two new questions named) and wrote `tools.txt` (19 orders, besiege with its new settings).
 - **Not yet seen in a game:** the hook attaching under the pack (the self-check says); a storm by the agent's rule; the relief bars on real reliefs; a run-ahead storm or field battle against what then happens.
 
-### 22:15 · Version 0.7.5: what the first evening on 0.7.4 taught; orders for lords in your army; the fairer test save · commit 1f53891 (installed 22:12)
+### 22:15 · Version 0.7.5: what the first evening on 0.7.4 taught; orders for lords in your army; the fairer test save · commit 22b6ba9 (installed 22:12)
 - **Why:** the first session on 0.7.4 (the save besieging Western Moria, 21:14 to about 21:40). I picked "C" for my own siege: the report keeps treating my camp like any other (the agent is not told which lord is the player). Then: the other problems were to be fixed as well. Then, on Naglur: the agent chose to lift the siege but was still stuck in the storm, and its logs were to be checked to diagnose why the mismatch happened. And: back to the part where I give orders to my lords. I should be able to give orders to lords who are in my army, and once I have given them an order, they should first leave my army and then execute their order. And: I wanted a fairer, longer term test save where the Misty Mountain Orcs are of more even strength to my kingdom (the line I chose: only the old orc fortresses; their garrisons swapped to orc troops; I reach army lords from the army tab's portraits).
 - **What the session showed** ([TOOLS.md](TOOLS.md#what-the-first-evening-on-074-taught-since-075)):
   - the start-up checks passed (13 of 13), the storm hook attached, no errors; the agent set storm rules and withdrawal bars on its own and asked the new battle-odds question once;
@@ -672,7 +672,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war room and the dashboard were found stopped after the game closed and were started again, detached, at 22:13:05; `scripts/setup-agent.ps1 -Mode live` wrote `tools.txt` (19 orders, besiege's settings saying the bars wait out a battle).
 - **Not yet seen in a game:** `agents.rebalance` on a save; ordering a lord from the army tab; the measured battle rates and the raid clock against what then happens; the cost trims' effect.
 
-### 23:35 · Outside the repository: your armies by order, and raids (TFAOMFixes) · commit 781e9a1
+### 23:35 · Outside the repository: your armies by order, and raids (TFAOMFixes) · commit 5bf07a3
 - **Why:** another feature I wanted for my personal orders, so I can keep up with the AI properly: I should be able to get lords to form armies, pick which lords should join that army, and then give orders to lords that are the leaders of armies to attack a settlement, defend a settlement and so on with their armies. If I am ordering them to create an army as the ruler, all influence costs for that army should be borne by me, including keeping army cohesion. The army should only disband when I tell it to disband. Independently formed armies should be exempt from all of this. On what happens when the influence runs out: armies should disband once cohesion and influence run out. Raids: raiding villages added too.
 - **What** (`C:\BannerlordArchive\src-TFAOMFixes148`: new `VassalArmies.cs`; `VassalOrders.cs`; one line each in `SubModule.cs` (arming, saving) and `Annex.cs` (the hourly look); the project file; backups `*.bak-20261020`). In "I have orders for you":
   - **Raise an army.** Pick the lords (nearest first, each with the game's own calling price), then the fief where they gather; the leader waits there. The ruler needs the influence for the calls. The game charges each call to the leader's clan; it is refunded and charged to the ruler. **Call more lords** does the same for a raised army. **Disband your army** ends it; its leader then acts as he sees fit.
@@ -684,7 +684,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** at 23:33 (sha256 `87DCBDB120678F5C…`) over the 22:08 build (`AA07F7D3…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-vassalarmies-20261020-2335`). The other session working on TFAOMFixes (crowd AI trims) was told; none of its files changed.
 - **Not yet seen in a game:** all of it. The recorder reads Party AI Controls' orders as before; the army raising and the raids are not yet recorded as the player's decisions.
 
-### 23:59 · Version 0.7.6: the test-save command takes Western Moria too, and no longer gets your heroes captured · commit 0d8852b (installed 23:58)
+### 23:59 · Version 0.7.6: the test-save command takes Western Moria too, and no longer gets your heroes captured · commit b8e911a (installed 23:58)
 - **Why:** the first run of `agents.rebalance apply` (23:54, on a new save). The command should give what it was already giving them plus Western Moria. It also ended up giving a lot of my lords to them as prisoners; why was to be found out, and that fixed as well.
 - **Why the heroes were captured:** the game's own rule. When a castle or town changes owner, `PrisonerCaptureCampaignBehavior.HandleSettlementHeroes` (on `OnSettlementOwnerChanged`) takes prisoner every hero staying in it without a party (not the player, a wanderer or a notable) whose realm is at war with the new owner, and sends the lords' parties out. The command moved the parties out but not those heroes (families, lords between parties): 11 were "taken prisoner by" Nanduhirion (9), Caradhras and Sirannon.
 - **What:** Western Moria (`town_MM2`) is on the list. Before each handover, those heroes are moved (`TeleportHeroAction.ApplyImmediateTeleportToSettlement`) to their realm's nearest castle or town that is not under siege and not being handed over; a governor first stops governing. The preview counts them.
@@ -692,7 +692,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, October 22
 
-### 11:26 · Version 0.7.7: the test-save command no longer stalls on the orcs' own battles, and a refusal says so · commit f52ccf5 (installed 11:31)
+### 11:26 · Version 0.7.7: the test-save command no longer stalls on the orcs' own battles, and a refusal says so · commit 7c01f8f (installed 11:31)
 - **Why:** running the rebalance command did nothing. Both runs that morning (11:19, `agents.rebalance apply` on a save at Summer 20, 1087, 07:00) refused and changed nothing. The orcs were storming Hollin Gate (`castle_MM6`, the camp of `lord_MM8_1`, in the hourly frame `h2192359`), and the command would not run while any battle was fought at one of the places or their villages. It said so, but below a first line that read "REBALANCE, CARRIED OUT" whatever happened, and that first line is all the log keeps.
 - **What** (`TestSetup`):
   - a battle at one of the places or their villages that the orcs' side is fighting against the player's realm (a storm, a raid) is broken off before the handover, as peace breaks one off (`MapEvent.DiplomaticallyFinished`: no winner, no loot, no prisoners; the storm closes with the siege, `SiegeEvent.FinalizeSiegeEvent`, and a raid at the game's next look, `MapEvent.Update`). The game does the same in `ChangeOwnerOfSettlementAction` when a place passes to its attackers' side. The preview names each one;
@@ -703,13 +703,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** at 11:31, after the game closed (sha256 `2A46E12C9EC59C29…`); the war room and the dashboard were stopped for the build (their self-tests passed) and started again, detached, at 11:31 (dashboard answering on 7329, the war room waiting after poke #418). Settings unchanged: watch mistymountainorcs, agent live, agent_lords all.
 - **Not yet seen in a game:** the run through a storm.
 
-### 11:46 · Outside the repository: an army a lord formed himself keeps together while he carries out your order (TFAOMFixes) · commit e81cc9e
+### 11:46 · Outside the repository: an army a lord formed himself keeps together while he carries out your order (TFAOMFixes) · commit dafc8bb
 - **Why:** I asked what happens when I order a lord who leads an army. I imagined that the army follows that order or the lord disbands the army to follow that order, and I wanted the former. Read in the code: nothing of ours or of Party AI Controls breaks the army up for an order (Party AI Controls pulls a lord out only from an army he does not lead), and an army raised by the player's order already stays together. But an army the lord formed himself was left to all the game's own rules, as asked on Oct 20, and one of them, idleness, undoes most orders. `Army.CheckInactivity` counts an hour of idleness for holding still, travelling to a friendly place, or patrolling, and two back for besieging, raiding or defending a place under siege. After 48 it breaks the army up. Waiting in a fief, defending a fief nobody attacks, patrolling and recruiting all look idle. Asked whether to keep such armies together only against that, or to take them over as raised armies, I chose the smaller fix.
 - **What** (`C:\BannerlordArchive\src-TFAOMFixes148`: `VassalArmies.cs`, `VassalOrders.cs`; backups `*.bak-20261022`): while the leader of an army he formed himself carries out an order of the player's (one given in "I have orders for you", a raid included; `VassalOrders.UnderOrder`, which asks Party AI Controls only about lords the player commanded), the break-up for idleness is held back, and so is his own whim in the game's hourly decision (an "unknown" break-up there; Party AI Controls' own guard on `DisbandArmyAction.ApplyByUnknownReason` sits on a one-line wrapper its callers may have compiled in). Each time idleness is held back, the game's count goes back to 0, so when the order ends he has a fresh two days. Cohesion, its cost and its running out stay his; every other reason still ends the army; nothing changes for armies under no order of the player's.
 - **Checks:** built clean (sha256 `434511229FDC618B…`), 543 game references, 0 missing; it still holds the other session's CrowdAi, CrushWatch and FastCores (that session agreed to the build). The game was open; it was installed at 14:15, ten seconds after the game closed (sha256 `434511229FDC618B…`; the build before it kept at `C:BannerlordArchiveTFAOMFixes.dll.148-before-ownarmies-20261022-1415`).
 - **Not yet seen in a game.**
 
-### 14:39 · Version 0.8.0: a second agent, for Dol Guldur · commit 74c9c5e (installed 14:37)
+### 14:39 · Version 0.8.0: a second agent, for Dol Guldur · commit 7d1f22f (installed 14:37)
 - **Why:** I wanted to give Dol Guldur an agent as well in the next launch, to see how well I can do against a more evenly matched enemy. Dol Guldur (`dolguldur`, ruled by Khamûl, the Easterling) holds 21 castles and towns, Caras Galadhon and Cerin Amroth among them, and is at war with Gondor, Rohan and the player's realm. Until now the bridge watched one realm only.
 - **What:**
   - `watch` takes a list (`mistymountainorcs, dolguldur`). Each realm after the first has its own channel folder, `agent_dir.<realm id>`. The first keeps `agent_dir`, and nothing of the orcs' channel changes.
@@ -726,7 +726,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Also answered:** why the lords near Eastern Moria "keep wandering off" although under orders. They were not under orders. Ufza and Shagash had ridden in Naglur's army, whose members hold no order of their own. When it broke up from lost cohesion (Autumn 5, about 08:00), the game's own AI sent both at once to defend Skar-ghâsh, a raided village by Sirannon, towards Górli's host. The agent's poke at 10:00 was answered 21 s later, but the game ran 5 in-game hours meanwhile and was then paused. Its defend order and the next poke's garrison order were carried out together at 15:00, and from then on both stayed in Eastern Moria.
 - **Not yet seen in a game:** two agents at once.
 
-### 17:40 · Version 0.9.0: an agent is a folder; no agent is special; one script runs them all · commit 1d28917 (installed 17:38)
+### 17:40 · Version 0.9.0: an agent is a folder; no agent is special; one script runs them all · commit 02166f0 (installed 17:38)
 - **Why:** I asked how 0.8.0's two agents compare to this aim: adding a new agent should only entail strapping on a new modular component with a new system prompt, with tools reused like function calls and no crossover between brains. The comparison found five gaps:
   - the game-side pieces of an agent were kept in five places, each filtered by realm;
   - the first agent was special;
@@ -773,7 +773,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   The war room's (50) and the dashboard's (27) self-tests passed. 512 game references, 0 missing. The installed DLL has sha256 `A691501CF37904FD…`.
 - **Not yet seen in a game.**
 
-### 17:49 · The agents' goal: no region, the whole map · commit 04aeabd
+### 17:49 · The agents' goal: no region, the whole map · commit 49afa72
 - **Why:** reviewing both agents' system prompts: the goal should not be to win the war for a specific region. It should be to systematically eradicate all enemies and assert its dominance over the game map with its allies.
 - **What:** the goal now reads "Systematically eradicate all your enemies, and assert your dominance over the whole map together with your allies." It replaces "Win the war for the mountains:" (Dol Guldur's: "... for Rhovanion:") and its three points:
   - break the enemy's power around your lands;
@@ -788,7 +788,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `scripts\setup-agent.ps1` loses `-Theatre`: the goal names no region now, so only the title and the opening line name the realm.
 - **Checks:** both scripts parse.
 
-### 18:23 · Version 0.9.1: every save gets exactly its own history back · commit 46b8447 (installed 18:22)
+### 18:23 · Version 0.9.1: every save gets exactly its own history back · commit dbece13 (installed 18:22)
 - **Why:** I asked how loading different saves keeps histories apart. The cut-back went by date alone and deleted what it cut. So loading a later save from a run played before another one gave the agents the other run's history, and nothing of its own after the branch point. An important fix, to be built now.
 - **What** (`History`):
   - every chronicle line, in the module, and every copy of the notes and the story, in the war room's `snapshots.jsonl`, is labelled with the game session (load id) that wrote it, and nothing is deleted any more;
@@ -801,7 +801,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the dashboard's (27) passed; 514 game references, 0 missing; the installed DLL has sha256 `3D4F551CEA13A24A…`. The war rooms and the dashboard were stopped for the build and started again at 18:23.
 - **Not yet seen in a game.**
 
-### 19:39 · Outside the repository: recruiting and garrison training (TFAOMFixes, Improved Garrisons' options) · commit 962469e
+### 19:39 · Outside the repository: recruiting and garrison training (TFAOMFixes, Improved Garrisons' options) · commit e356783
 - **Why:** I asked how recruiting and training work for my garrisons and for the computer's lords. The walk-through found three things, and I asked for all of them. 1: this fix surely must be made. 2: NPC world recruitment turned on. Then: notables should offer each AI lord only that lord's own culture's troops, without us having to convert them after recruitment, and my clan's parties only troops from my troop tree; and a weak party on a recruit order should go to every single settlement, one by one, recruiting every single troop there, irrespective of their template, until they reach 80% full party size. Then, if they do not get another order, they slowly replace off-template troops with on-template troops.
 - **What** (`C:\BannerlordArchive\src-TFAOMFixes148`: new `GarrisonTraining.cs`, `RecruitOrders.cs`; `HostRecruits.cs` (the `Offers` class and the doors); a line each in `SubModule.cs`, `HookCensus.cs` and the project file, backup `TFAOMFixes148.csproj.bak-20261022-recruit`):
   - **Garrison training keeps its experience.** Improved Garrisons gives each kind of troop 20 experience a man a night, but only on a night that promotes at least one man, so a stack needed about cost / 20 men (65 for level 26, 202 for level 51). Its own log showed it: Hithaegrist's last 100 entries were 123 promotions, none past level 21. Now a stack it would have trained but left untouched gets its 20 a man kept, by its own rules (template, top tier, room left on the template's lines). Its saved options are only read. In the player's garrisons trained along a template, the game's own daily promoter (random branch) is held back.
@@ -825,7 +825,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** at 19:38 (sha256 `2D3A3986EC987787…`, 434,688 bytes), the game closed, over `434511229FDC618B…`, which is kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-recruit-20261022-1938`. The `.cs` files were edited in place: the source before this change is the one that built that kept DLL.
 - **Not yet seen in a game.**
 
-### 19:48 · Outside the repository: computer garrisons up to 250 / 400, and a one-day sweep memory (TFAOMFixes) · commit e2a440f
+### 19:48 · Outside the repository: computer garrisons up to 250 / 400, and a one-day sweep memory (TFAOMFixes) · commit c69b73c
 - **Why:** the limit should be raised to 250 men for castles and 400 men for cities, and for the recruit order: instead of the last 3 days, the bar is set to the last day. Slots refill every day.
 - **What** (`C:\BannerlordArchive\src-TFAOMFixes148`):
   - new `ComputerGarrisons.cs`. Improved Garrisons has one limit for all computer garrisons (50). Every time it asks for a computer holding's settings, it builds a fresh object that is never saved. A postfix on `GarrisonBehavior.GetTownSettings` sets that object's limit to 250 for a castle and 400 for a town. The player's saved settings and its options file are untouched, so its options screen still shows 50. File `computer_garrisons.txt`, console `tfaomfix.computer_garrisons`;
@@ -839,7 +839,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** at 19:48 (sha256 `A263BA3D602E8BA8…`, 437,760 bytes), the game closed, over `2D3A3986EC987787…`, kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-limits-20261022-1948`. CrowdAi, CrushWatch, FastCores, VassalArmies and RingWars are still in it.
 - **Not yet seen in a game.**
 
-### 20:19 · Version 0.9.2: an agent's recruit order tours, as my own parties do · commit 6adf9ac (installed 20:18)
+### 20:19 · Version 0.9.2: an agent's recruit order tours, as my own parties do · commit e56ba49 (installed 20:18)
 - **Why:** any lord with a recruit order given by an agent controlling a faction should also follow the same logic as my own parties. Until now the recruit order went to one town or village and stayed up to three days or until 98% full. It bought only through the game's hourly round: one volunteer per notable an hour, on a dice roll.
 - **What** (new `RecruitTour.cs`; `Orders.cs`; `Tools/Library/recruit.json`; the move kind `tour` in `ToolDef.cs`; [TOOLS.md](TOOLS.md#the-recruit-order-tours-since-092)):
   - **Where:** from the order's place (now any town, castle or village of the realm or an ally), the lord rides to the nearest town, castle or village of the realm, an ally or a realm at peace with it. The place must be within reach (four times the usual gap between neighbouring towns) and not swept by this order in the last day. One after another;
@@ -884,7 +884,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Friday, October 23
 
-### 13:17 · Version 0.9.3: recruit tours say why they stop, the chase question before a hunt, and fixes for a realm of mine with an agent · commit 25cda5f (installed 13:16)
+### 13:17 · Version 0.9.3: recruit tours say why they stop, the chase question before a hunt, and fixes for a realm of mine with an agent · commit 3296705 (installed 13:16)
 - **Why:**
   - **The first evening on 0.9.2** (Oct 22, 20:22 to 20:39, about three in-game days): 13 of Dol Guldur's 14 recruit tours ended in their first hour at 3 to 43%, saying "nothing left to recruit within reach", while 1,500 volunteers waited in its lands. The cause is the game's daily wage cap (`ClanVariablesCampaignBehavior.MakeClanFinancialEvaluation`). It caps each war party's daily wages from the gold of its clan's leader: under 30,000, 200 + (gold / 30,000)² × 400; 30,000 to 90,000, 600 to 1,200; above 90,000, no cap; half again for the leader's own party. 21 of Dol Guldur's 47 lords were at their cap: Skûlgar, for one, had 81 men, wages 354 of 359, and 10,555 gold. The agent was not told why, sent the same five lords again, and three stopped again at once. The orcs were hardly touched (3 lords at the cap); their limit is the volunteers themselves (about 440 waiting, 220 within their standing).
   - **Oct 23, on hunt:** it is completely unnecessary for a party or army to hunt an enemy that is faster than it if it has other competing objectives. The only reason to do this is having nothing else to do or trying to drive the enemy away from something. For this to happen, the agent should be able to ask for the speed of an enemy party in sight before giving a hunt order, and should have this as part of the guide for its use of the hunt order.
@@ -910,7 +910,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms and the dashboard were stopped for the build and started again at 13:16.
 - **Not yet seen in a game.**
 
-### 13:55 · Version 0.9.4: money for the agents (their own wage caps, a purse, a loot-only sell order, a battle's worth) · commit 3f6dd19 (installed 13:54)
+### 13:55 · Version 0.9.4: money for the agents (their own wage caps, a purse, a loot-only sell order, a battle's worth) · commit 03fdda4 (installed 13:54)
 - **Why:** Oct 23: the caps should be the agent's call. It should be able to estimate the value of loot and prisoner ransom money from a battle and decide accordingly. An understanding of economics should be given to it now. When needed, it should send armies or lords that have battle loot to friendly settlements, to sell it and ransom prisoners. On the plan: agents should be able to set caps freely. The sell order needs care: an order to sell must actually sell loot and just loot, instead of important food and other things.
 - **The game's rules it rests on** (1.4.8, read in its code): each lord pays his men every day from his own purse; his clan's leader tops him back up to 5,000 while the leader has 4,000 or more; a lord above 10,000 hands a tenth of the excess to his clan daily; unpaid wages cost morale and men desert. The wage cap only stops recruiting. Computer lords sell everything but food and good riding horses on entering a friendly town (pack animals too), and hand prisoners over on entering a friendly castle or town; a soldier fetches a quarter of his recruit price.
 - **What** ([TOOLS.md](TOOLS.md#money-since-094); new `Purse.cs`, `PurseView.cs`, `Tools/Library/sell.json`):
@@ -934,7 +934,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms and the dashboard were stopped for the build and started again at 13:55.
 - **Not yet seen in a game.**
 
-### 14:17 · Version 0.10.0: the player's lieutenant, in the campaign map's chat box · commit 57cf33c (installed 14:16)
+### 14:17 · Version 0.10.0: the player's lieutenant, in the campaign map's chat box · commit 20c386a (installed 14:16)
 - **Why:** Oct 22: an agent that acts as the player's lieutenant. The player types orders into that chat to their lieutenant, which then orders lords to do things on the map; I verify and approve the order; I can also ask it what lords are doing across the realm, any threats spotted on fronts I am far away from, and what lords I gave orders to are currently doing. Oct 23: everything stays verbal in the chat box, and my approval is verbal too. Its answers are short and concise whenever possible, and popups pause the game until the popup is closed. On who it commands: it should be able to command them, including my own clan's parties. It stays in the chat window for now; the companion chat is a quality of life upgrade for later.
 - **What** ([LIEUTENANT.md](LIEUTENANT.md); new `Lieutenant.cs`, `LieutenantRoom.cs`, `module\GUI\Prefabs\SPChatLog.xml`, `agent\lieutenant-system.template.md`):
   - **The chat box on the campaign map:** the game's single-player chat log is the multiplayer chat box with its typing line taken out (its `TextInputWidget` names a widget the prefab no longer has) and its channels closed. The module brings the game's own prefab back with the typing line in it, and five Harmony patches on `MPChatVM` (`ChatHook`): on the campaign map with a lieutenant, the closed channels become the open "party" channel, named "(Lieutenant)"; what is sent goes to the lieutenant instead of a server; messages may be 400 letters (100 before); the clock stops while the player types and runs again after (`lieutenant_pause`). Missions and multiplayer are untouched; the patches attach only when a lieutenant is in the agents' settings.
@@ -965,7 +965,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The gap:** the answer waited until the game's clock ran again, since the bridge handed it to the game's tick (which stops while paused). The write-up came as a window although I had not asked for one.
 - I then asked for a window of the lieutenant's own: a button works as a shortcut (say Enter) to go into the lieutenant pop-up automatically and chat with it through that pop-up rather than through the game's own log. This way it is easier to approve, disapprove, or comment on its proposals as well (possibly with buttons for each).
 
-### 14:43 · Version 0.10.1: the lieutenant's own window, with Approve and Decline · commit bf0b406 (built 14:43; installed 14:47, next entry)
+### 14:43 · Version 0.10.1: the lieutenant's own window, with Approve and Decline · commit d7c830e (built 14:43; installed 14:47, next entry)
 - **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); new `LieutenantWindow.cs`, `module\GUI\Prefabs\LieutenantWindow.xml`; `Lieutenant.cs` rewritten around it):
   - **The window:** on the campaign map, the game's chat keys (Enter, T) open it (one Harmony prefix on `MPChatVM.StartTyping`; the game's chat box stays as it is). In the look of the game's own text pop-up: the conversation (the last 14 lines, newest at the bottom), the proposal waiting with **Decline** and **Approve**, the line to type in (focused on opening; Enter sends), **Close** (Esc). The game stands still while it is open, the clock locked (`lieutenant_pause`), and runs again as it ran.
   - **Approve and Decline:** the button carries out the proposal waiting as it stands, or drops it; the next message tells the war room which ("notes" in `chat.json`, WHAT YOUR RULER DID SINCE YOUR LAST ANSWER in its message). Words still work ("yes", "only Dain and Thorin"), and a comment typed instead goes with the proposal, to change it.
@@ -982,7 +982,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - every sprite and brush of the window is one the game's own text pop-up or chat log uses.
 - **Not yet seen in a game:** the window itself (its look, focus, Enter and Esc, the buttons, the clock lock).
 
-### 14:47 · Version 0.10.1 installed · commit 930342d
+### 14:47 · Version 0.10.1 installed · commit 3b70807
 - The game closed, I said to install. The war rooms (three) and the dashboard were stopped for the build and started again at 14:47; the lieutenant's war room waits for the player's words (last answered #1: the Goblin Town proposal of 14:29 was never answered, so nothing was given).
 - **Fixed at the install:** the war room's self-test check of the lieutenant's message looked for a line break as `\n`, but the message's lines end in `\r\n` on Windows; the check now looks for the heading and the note on their own, in order. All of its checks passed, as did the smoke test (225) and the dashboard's (27).
 - **Installed:** the module's DLL sha256 `5FB015DC4F311217…`, the war room's `WarRoom.dll` `4DB80E7E8E136400…`; the module's `GUI` holds only `Prefabs\LieutenantWindow.xml` (the mirror removed 0.10.0's `SPChatLog.xml`).
@@ -992,7 +992,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - I loaded the campaign (14:50) and closed the game (14:51): Enter and T still opened the chat window. Enter should open the lieutenant window, T should open the chat window.
 - The key hook had attached ("the lieutenant's key (Enter, T) attached" in the bridge's log) but was never reached: it sat on the chat box's start of typing (`MPChatVM.StartTyping`), whose body is 15 bytes of code, and the runtime always folds bodies under 16 bytes into the code that calls them, so the chat box's key handling ran its own copy and never our hook. (The same trap as Harmony patches on tiny getters, noted before; the offline dry run only shows that a hook attaches, not that it is reached.)
 
-### 14:57 · Version 0.10.2: Enter opens the lieutenant's window, T the game's chat box · commit 697bd79 (built and installed 14:57)
+### 14:57 · Version 0.10.2: Enter opens the lieutenant's window, T the game's chat box · commit 4e4f350 (built and installed 14:57)
 - **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); `Lieutenant.cs` `ChatHook`, `GameHooks.InstallChat`):
   - the hook moves to the chat box's look at its keys each frame (`GauntletChatLogView.HandleInput`, 813 bytes, in Native's GauntletUI, found by name): on the campaign map, with a lieutenant and the chat box shut, Enter (read from the map's own keys, as the chat box reads it) opens the lieutenant's window and the chat box does nothing that frame;
   - **T** is left to the game: it opens the game's chat box, as I asked; Enter while the chat box is open stays the chat box's;
@@ -1012,7 +1012,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - In that launch I asked for "a contingent of dwarven lords to defend my border with the misty mountain orcs, and a contingent of silvan elven lords to defend my border with dol guldur" (15:02:12); the answer came in 44 s with a proposal of 7 orders (six dwarf lords, 2,209 men, at Goblin Town, and an elven force), not answered before the game closed. Errors: none.
 - **The gaps:** the conversation showed only its last 14 lines, cut at the top with no way back; the proposal's list was cut at 140 points, so a 7-order proposal lost its last lines; and the window had no room for a proposal's box at all (its parts added up to more than its height).
 
-### 15:11 · Version 0.10.3: the lieutenant's window scrolls · commit b5e273d (built and installed 15:11)
+### 15:11 · Version 0.10.3: the lieutenant's window scrolls · commit 74c4eef (built and installed 15:11)
 - **What** ([LIEUTENANT.md](LIEUTENANT.md#using-it-since-0101-its-own-window); `module\GUI\Prefabs\LieutenantWindow.xml`, `LieutenantWindow.cs`, `Lieutenant.cs`):
   - the conversation is the game's own scrolling panel, set up as the game's chat log's is (`SPChatLog.xml`: newest at the bottom), with a bar in the look of the game's selection pop-up (`MultiSelectionQueryPopup.xml`): the mouse wheel over it or the bar scrolls back through everything since the load (up to the last 200 lines, was 60 kept and 14 shown);
   - it opens at the newest line and follows each new one, unless the player has scrolled back to read (then it stays put); the player's own words always bring it to the end (`LieutenantWindow.Add(mine)`; the window finds its bar by `LinesScrollbar` and holds it at the end for 8 frames, as a new line's height is known a frame or two after it is added);
@@ -1030,7 +1030,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms (three) and the dashboard were stopped for the build and started again at 15:11; the lieutenant's war room waits for the player's words (last answered #2).
 - **Not yet seen in a game:** the scrolling itself, following the newest line, and the proposal's box with a long proposal.
 
-### 15:34 · Version 0.10.4: the fog check's two false alarms, and the sight check's drop, explained and fixed · commit f1c3a0d (built and installed 15:34)
+### 15:34 · Version 0.10.4: the fog check's two false alarms, and the sight check's drop, explained and fixed · commit ce1bebb (built and installed 15:34)
 - I asked to look into the problems and figure out why they materialized (the fog check's leaks on Oct 22 and Oct 23, and the sight check's agreement falling from 96–98% to 86–91% on Oct 22).
 - **The fog check, Oct 23 (20 flags in 2 reports, 0.10.0):** all 20 were the orcs' own lords, in YOUR PURSE's "Carrying loot" and "Holding prisoners" lines (0.9.4). They were lords riding in the orcs' two armies (12 and 8 parties). The check took the realm's own lords only from the report's own-lords list, which holds only those leading parties. **Not a leak:** a realm knows its own lords.
 - **The fog check, Oct 22 (1 flag):** poke #429 was about a raid on the orc village Linhamm, named by the game's own notice ("Linhamm is being raided by Cadda Tordaging"). The raid began at 21:53. By the hour's look 20 minutes later the raider was off the village and out of the orcs' sight, so the poke's fact line named a lord the orcs had never seen ("last seen 9999 hours ago"). **Not a leak either:** the game's news named him to the realm.
@@ -1049,7 +1049,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms (three) and the dashboard were stopped for the build and started again at 15:34.
 - **Not yet seen in a game:** the sight check's new numbers (it needs the game; expected near 100%).
 
-### 16:04 · Version 0.11.0: the test runs' record, scoreboard, setups and watcher · commit d416ad5 (built and installed 16:04)
+### 16:04 · Version 0.11.0: the test runs' record, scoreboard, setups and watcher · commit 8b661eb (built and installed 16:04)
 - My test plan (Oct 23, [RUNS.md](RUNS.md)): all tests run for 60 in-game days, starting from the TEST START save. **A:** me against the orcs' and Dol Guldur's agents (first). **B:** me against the game's own AI (if I can). **C1, C2:** control of my kingdom goes first to an agent, to play against other agents and against the game's raw AI, to see how its performance compares to mine.
 - My choices for the agent-ruler runs: switch the player character to a wanderer in a random town, give that character a lot of money and food so it does not die, and simply let the game run. The lieutenant stays on when I play. The rivals' agents stay on, watching, against the game's AI so long as usage is fine. Token usage stats are to be tracked as well.
 - **The run record in the bridge** (new `Runs.cs`: `Run`, `RunRules`, `RunDay`, `RunFiles`):
@@ -1090,7 +1090,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Found on the way: the start-up check showed the kingdom's own agent, switched off for run A, as a red problem; cheat mode is on in my game (noted against the run); a save made before the clock first ran would not have counted as the run's; the run's first folder (`20261023-1613`, before it was named) stayed behind; the lieutenant's usage read $0.00 (its calls' log had no price); Dol Guldur is at peace with my kingdom at the start of TEST START (only the Misty Mountain Orcs are at war with me).
 - I asked to fix the lieutenant and Party AI Controls before going deeper into test A.
 
-### 16:55 · Version 0.11.1: the lieutenant works with Party AI Controls, and its conversation is the save's · commit e6f41d7 (built and installed 16:54)
+### 16:55 · Version 0.11.1: the lieutenant works with Party AI Controls, and its conversation is the save's · commit 24b7c29 (built and installed 16:54)
 - **Oct 23:** the lieutenant should be able to work in tandem with Party AI Controls. Any order given by the lieutenant should override any order given by Party AI Controls, and it should be able to change backup orders, troop templates, and all options as well. All changes made by the lieutenant and all of its orders should also be reflected in the dashboards of Party AI Controls. And: the chat I have with my lieutenant should be persistent within a save, even if each prompt is technically a different session. This is something interacting with a human, and I want to be able to reference previous things that were said in the chat throughout a save. The lieutenant should also have access to the chat I have with it, so I can refer back to it. This is something specific to the lieutenant, so it should not touch the other agents.
 - **The lieutenant and Party AI Controls** (new `PacLink.cs`, docs/LIEUTENANT.md "Party AI Controls"):
   - its orders are still carried out by our order layer, as every agent's (the comparison runs need that), and each shows in Party AI Controls' panel as that lord's order: the nearest of its kinds (`PacRules.MirrorOf`), or none for a raid, a shadow, a watch post on open ground, armies. It replaces his Party AI Controls order (0.10 refused such a lord); his queue and backup order stay, and when it ends the next queued order starts there;
@@ -1113,7 +1113,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repository** (`scripts\arm.ps1 -Arm C1`, logged in `runs\arms.log`): the kingdom's agent `C:\Users\karab\Projects\kingdom-war-council` off -> live, the lieutenant live -> off; the orcs and Dol Guldur stay live. Read at the next load.
 - The old run A (`20261023-1613-A`, 4 in-game hours) ends unfinished when TEST START is loaded; A is to be played again later.
 
-### 17:59 · Version 0.11.2: the playerless switch as a command · commit 0b6d40a (built and installed 17:59)
+### 17:59 · Version 0.11.2: the playerless switch as a command · commit 53d9f20 (built and installed 17:59)
 - **Oct 23:** the switch should be done by a written command, including giving them gold and food, with a good wanderer found to switch into and the command prepared. Then: no need to guard against those pop-ups for now. Just the switch command and a report back; if something does end up blocking us, we respond after.
 - **`agents.run playerless [go] [name]`** (new `Playerless.cs`): without `go` it shows the wanderer it would take (a free wanderer, no clan, nobody's companion, no party, in a town at peace with the kingdom, not besieged and not the kingdom's nor a rival's; the town farthest from every castle, town and lord at war with the kingdom or with the town's owner) and the next four; `go` pauses the game, releases every kingdom lord holding a Party AI Controls order (`PacLink.Release`: order, queue and backup order cleared, off TFAOMFixes' commanded list), takes the wanderer into the player's clan as a companion (`AddCompanionAction`), switches to him with the character-switch mod's own `SwitchActions.SwitchPlayer` (by name), lets the old character's party go to the game's AI (that switch holds it with the AI off and a Party AI Controls stay order), gives him 100,000 denars and 100 grain, and takes him into the town. Kept in run.json's `set_up`.
 - **Why the wanderer joins the clan first:** the switch mod only switches within the player's clan (its button is on the clan screen), and the game cannot make a party for a hero of no clan (`LordPartyComponent.InitializeLordPartyProperties` reads his clan's party template; read in the 1.4.8 source).
@@ -1126,7 +1126,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Run `20261023-1802-C1` began 18:05:12, finished 19:25:43 (60 days, 1 h 20 min at about 80 s an in-game day, no stall or crash). The kingdom's agent ended +1 town, +3 castles, +12 villages, 154 enemy lords taken; the orcs −2 castles, −7 villages; Dol Guldur −1 town, −1 castle, −5 villages. About $276 at list price (orcs $106.69, Dol Guldur $84.79, the kingdom $84.97), no usage limit met. Report: `runs\20261023-1802-C1\report.md`.
 - I asked for a dive into the report and everything flagged, and all necessary fixes. Four investigations (the frozen lords; stuck and fought orders with the slowness alarms; the battle counts and the fog check; gold, the failed story, the first timeout and the votes) found what 0.11.3 fixes.
 
-### 20:25 · Version 0.11.3: what run C1 showed, fixed · commit daf0ec7 (built and installed 20:25)
+### 20:25 · Version 0.11.3: what run C1 showed, fixed · commit 5c31b20 (built and installed 20:25)
 - **Kingdom votes never settled in C1** (`Votes.cs`, new). The game's player clan is fixed (`Clan.PlayerClan` is `player_faction`), so after the playerless switch the kingdom was still the player's to the game. A due vote waits for the player (`KingdomDecision.NeedsPlayerResolution`), and the map opens the kingdom screen only when no menu is up.
   - In 60 days: 2 votes proposed (Bailiffs, the owner of Sirannon), 0 settled.
   - The game puts one holding's vote at a time, so none of the 6 castles and the town taken were given out. They stayed with the ruler's clan.
@@ -1193,7 +1193,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Not changed.
 - This test has to be run again some other time, from the start. What killed it was one bug that forced our troops out of a castle they should have defended. The focus goes to fixing that bug, and then trying again. In the ideal world, our agents should easily beat the raw game's strategy.
 
-### 21:56 · Version 0.11.4: the game's sally kept from our sheltering lords · commit 9066778 (built and installed 21:56)
+### 21:56 · Version 0.11.4: the game's sally kept from our sheltering lords · commit 268c6c8 (built and installed 21:56)
 - **The sally rule** (`SallyGate.cs`, new; a prefix on `SallyOutsCampaignBehavior.CheckSallyOut`, by name):
   - While a lord one of our orders holds is inside a besieged castle or town, the game's own test does not send the defenders out, as it spares a defence the player leads from inside.
   - They still join a relief's battle at the camp by the game's bar (1.5 times), which the relieve and defend orders count on.
@@ -1263,7 +1263,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - 60 days in 1 h 20 min; about $236 at list price; no errors, freezes, fog leaks or failed calls; one mark (cheat mode during setting up, expected).
 - The kingdom ended +1 town, ±0 castles, +4 villages, with 180 enemy lords taken; Dol Guldur's great army was destroyed at Lasgalor on day 40, at 17,565 of our men lost. Findings in docs/RUNS.md, "Run C2 replayed (Oct 24)".
 
-### 17:26 · Version 0.11.5: the council of war sits on time in a busy realm · commit e2f0ef6 (built and installed 17:26)
+### 17:26 · Version 0.11.5: the council of war sits on time in a busy realm · commit 5825ca2 (built and installed 17:26)
 - **Oct 24:** I asked for a diagnosis of why the agent was not as aggressive in pressing its advantage after its large victory at Lasgalor against Dol Guldur. Then: build and install the fix.
 - **What was found** (the kingdom war room's log and calls in run C2):
   - The war room looked for a due council only when no poke was waiting (`Room.Run`). The kingdom's pokes came every few seconds against answers of 10 to 30 s, so its war room was idle 44 times in the run's 80 minutes; the two watching agents' war rooms, with fewer pokes, idled often.
@@ -1301,7 +1301,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The instructions' lines in play:** principles 2 and 3 ("tied to a siege"); "the edge" with no measure; the persona's du Guesclin line ("let an invader burn itself out, destroy its detachments ... without the battle") with principles 4, 6, 7, 11, 12 and 15 all aimed at the enemy's parties; principle 17's "when time is on your side, wait"; council step 3, every front's share before the blow. One line pointed at the main army ("break the enemy's field armies before you take its castles"). The replay (same instructions) had "tied to a siege" in 2 of 21 plans: the instructions allow it, and an enemy army that stays whole brings it out.
 - Nothing changed by the read itself. I took the fixes offered and added two of my own (the next two entries).
 
-### 13:38 · The agents' instructions: the enemy's main army first, raiders to small forces · commit 9e6d5cf (the template)
+### 13:38 · The agents' instructions: the enemy's main army first, raiders to small forces · commit 8701c34 (the template)
 - **Oct 25:** I accepted the fix propositions, with more on the main army, something like this: prioritize efforts properly: on seeing an enemy's main force it can beat, the agent should plan on assembling an overwhelming force and meeting it on the field, or as quickly as possible so long as it has the advantage, and crushing it. Then it can be aggressive and quickly take over the enemy's territory as the enemy aims to regroup. Also some notes on the raiding parties: armies should not be spending time chasing raiding parties and should be focused on their primary objectives. Raiding parties should only be answered by smaller groups of lords that can crush them; the focus of large armies should not be diverted.
 - A general principle in the doctrine's own words, the same for every realm agent, with nothing of this war in it. The design, its grounding and caveats: docs/DOCTRINE.md, "Principle 18 and the raiders (Oct 25)".
 - **What changed** (`agent/warroom-system.template.md`):
@@ -1318,7 +1318,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - In force from their next answer, no restart. The lieutenant's instructions have no doctrine and are unchanged.
 - **For comparisons:** C1 and all three C2 runs were played without principle 18; the runs still to be played are on it. A run's setup records each agent's instructions' fingerprint, so it shows.
 
-### 13:39 · Version 0.11.6: defend goes inside in time; every battle forecast names what the loser has left · commit 9e6d5cf (installed 13:39)
+### 13:39 · Version 0.11.6: defend goes inside in time; every battle forecast names what the loser has left · commit 8701c34 (installed 13:39)
 - **Oct 25:** I accepted the two tool fixes offered after the read above: the guard order's trap at Bagbûrz, and battle forecasts that say how much of the enemy's army falls.
 - **defend, the early shelter** (`Tools/Library/defend.json`): with `stay_inside` 1 at a castle or town, it goes inside as soon as enemy lords and armies at least `shelter_at` times its strength are due at the holding, by the game's marching rules, within the hours it would take to ride back from the edge of its patrol plus six (`relief_within(at, radius / max(pace, 0.3) + 6, radius)`, the siege order's relief count), whatever its caution; the same rule breaks off a strike, and it patrols again only when that force is no longer due. Without `stay_inside` nothing changed (choosing another refuge would need the coming force weighed, and the danger rule covers it while caution is on). The library's text and the `shelter_at` setting say so. New built-in `pace` (the lord's map units an hour over a day, by the game's marching rules; `Runner`, `ToolDef.BuiltIns`).
 - **Battles run ahead name the loser's remnant:**
@@ -1351,7 +1351,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The queue reached 2,051 of its 4,096 jobs; past that, work is dropped. The `helper_backlog` alarm (174 times) was not serious, so the 10-minute watch never showed it.
 - On the plan: agreed, implement all fixes (kept on the efficiency cores, urgent work out of efficiency mode; no virus-scanner exclusion).
 
-### 15:16 · Version 0.12.0: the helper on time · commit 44f2b66 (installed 15:16)
+### 15:16 · Version 0.12.0: the helper on time · commit 9cb88d0 (installed 15:16)
 - **Three lanes on the helper's one thread** (`Background`; one thread, so nothing it keeps is shared):
   - **urgent** (`PostFirst`): the agents' answers, every order's start, change and end (`Orders`), and each hour's order rules and look (`Background.PostHour` → `Brain.Decide`: the tools, what each realm sees, the trails, the recruitment log). It runs at normal priority, out of Windows' efficiency mode, on the same efficiency cores (`Cpu.SetCurrentThreadUrgent`);
   - **regular** (`Post`): logs and records, as before;
@@ -1387,7 +1387,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - Also found: Party AI Controls' own refill sent Aragorn to fill his ranks after the battle with Naglur (day 14) and held him there to the end; the bridge refused the agent's 3 orders to him meanwhile, and the recorder logged the 7 refill steps as "You ordered Aragorn ...".
 - Where it stood (docs/RUNS.md): the kingdom −1 castle (Imnagath, to Thrurg, day 20), 46 enemy lords taken, Naglur's army destroyed (day 14), $98.68 list price for the three agents.
 
-### 16:03 · Version 0.12.1: arriving at a castle, and no refill behind the agent's back · commit 8114d16 (installed 16:03)
+### 16:03 · Version 0.12.1: arriving at a castle, and no refill behind the agent's back · commit c3956f3 (installed 16:03)
 - **Arrivals measured to the gate** (`World.Near`, the `within` function): to a holding, the nearer of its centre and its gate. The gate lies a median 2.9 from a castle's centre and 3.3 from a town's (up to 7.1; villages have none), read from a saved hour of the run. Before, a siege began only when the game's waiting point fell on the castle's side of its gate (likely also Nanduhirion's siege that "never began" in run 20261024-2110-C2), a watch at a gate over 3 from the centre (105 of 221 castles and towns) never began, and goto's close stop ("within 4") often fell short.
 - **`near`** goes to a reachable point 2 to 5 from the gate (was 3 to 6); goto stops close at "within 6" (was 4).
 - **A march that stops short is called back** (`Runner.Stalled`): a lord moving to a place (`near`, `goto`, `enter`, `post`, `toward`) who has stood still for 6 in-game hours, more than 6 from it (3 from a spot), out of battle, outside and not besieging, is reported once per stand: "... has not moved for 6 hours while marching on Caradhras, still 9.0 from Caradhras: he may be stuck on the map. The order is kept and he holds where he is; give him another order if he should go elsewhere." It does not end the order (that would hand the lord to the game's AI).
@@ -1406,7 +1406,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Found** (the order's steps and hourly states in the trace, the kingdom's pokes): the guard order (radius 30, `strike_below` 1) struck Narsha (1,751 against Alenon's 8,505), one of a dozen lords marching to join Thrurg (about 17,000 together); the chase ran 33 hours, out of his area into them; the shelter came only when the forces within 30 of the castle reached 1.5 times his strength, 26 from the walls; Bolga and 17 more parties (10,306 men) caught him 5 hours later. The safety rule weighs each enemy party alone and never fired. The old 4-hour give-up never worked (patrol struck the same target again the same hour). The agent's change to radius 20 and `stay_inside` 1 came while he was already in the battle.
 - Where it stood: the kingdom +1 castle, +3 villages, 14 of its lords taken against 8; $41.23 list price for the three agents.
 
-### 16:38 · Version 0.12.2: a host split into many parties counts as one · commit 57944ee (installed 16:38)
+### 16:38 · Version 0.12.2: a host split into many parties counts as one · commit 1db15b9 (installed 16:38)
 - **The host** (`World.HeadOf`, `HostOf`): a lord marching to join an army or a lord of his realm (`EscortParty`) belongs to its head; his host is the head and every party in view marching to join it within 20 of him (`World.HostReach`).
 - **The safety rule counts the danger as a group** (`World.DangerAround`, `Runner.Safety`): every hostile lord, army and bandit band in view within `danger_radius`, and the host of each of those lords (also of the lord's own target, which itself stays spared), together against `caution` times his strength. Shelter, run and "would it hold" take the group's whole strength (`ChooseRefuge` with the group, no part counted twice); the call-back names it ("from Grisha and 1 more with it (strength 980 together against 600)"). A shadow spares the army it shadows and its host unless they chase it.
 - **`threat_near`** also counts the host of every enemy lord within its radius.
@@ -1422,7 +1422,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Not yet seen in a game:** all of it. To watch in the next run: shelters and falls back "from X and N more with it", strikes broken off or given up, a guard staying inside while a host stands just outside its area, and whether the group rule makes lords shelter too often (bandit bands near each other now count together too).
 - **For comparisons:** in every run before this, a lord's safety rule weighed each enemy party alone, strikes could pick one lord out of a gathering host and chase it out of their area, and a broken-off strike began again the same hour.
 
-### 17:11 · Version 0.12.3: the agent decides who joins a fight, and asks before it engages · commit a4076b7 (installed 17:11)
+### 17:11 · Version 0.12.3: the agent decides who joins a fight, and asks before it engages · commit 7cc733b (installed 17:11)
 - **Oct 25:** every lord marching to an army within view should be listed under that army with how far away they are from it. The agent should decide which ones to count as a threat and which ones not to (so if it takes 20 hours for an army to engage an enemy and win, the agent should have all information needed to deduce which lords will make it there within the timeframe of the engagement and decide accordingly). Beyond this, before an engagement, the agent should be able to forecast how long it will take its selected lord or lords to begin and end the engagement, and which enemy lords in view are close enough in terms of marching distance to that engagement to participate in it as it progresses, so it can decide accordingly and set rules accordingly. On how the agent's choice reaches the hourly rules I chose "Hours window only" (over a window with exclusions, named lords only, or a window defaulting to 0).
 - **The report** lists under each army in view the lords marching to join it (in its army but not yet with it, or following it or a lord of their own realm: `Views.JoiningHead`), each with men, strength, distance from it and the hours at his pace while it holds where it is; the lord's own line says how far he is from it. Given only toward an army the realm can see.
 - **`join_hours`** (default 8, 0 to 96) on every move and tool: its rules count with a fight every enemy lord and army in view that could march to it within that many hours at its own pace (`World.Joiners`, `HoursTo`). Caution, once anything hostile is within `danger_radius`, counts those who could reach the lord (`DangerAround`); `company`, `easiest_enemy_near` (defend's strike, hunt) those who could reach the target; `threat_near` in tools' rules those who could reach the place. 0.12.2's fixed "host within 20" (`HostOf`, `HostReach`) is gone; the shadow's spared host stays (`HeadOf` now uses the same joining rule).
@@ -1441,7 +1441,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - `20261025-1831-C2`, from TEST START, one load. The kingdom +2 towns (Nanduhirion, Eastern Moria), +2 castles net (Caradhras, Hollin Gate, Sirannon taken; Torech Emel lost, retaken, lost), +12 villages; 182 enemy lords taken against 29 of its own; lord battles 106-32; Dol Guldur's main host destroyed at Imnagath (day 23, 19 lords, Thrurg and Lorgath among them), Naglur's army on day 11. Agents' list price $294.42. The helper on time throughout (0 hours folded over 1,440 report rounds). Details in docs/RUNS.md.
 - **Found during it** (my questions and the watch): the first council overturned the first answer's order for Aragorn (sell at Mount Gundabad → Hithaegrist, 75 back); the sell order did not say a castle buys no loot; guards still marching to their area started and broke off 31 strikes; lords on the way to a refuge were caught by parts of the danger that came up later (Haldir, Zlatka, Alvar, Elrohir); one false fog alarm. And, from me at the end: Imak was going back and forth because he was scared of Khamûl's force, even though our lords' combined force was enough to take him. The question: why the strength calculator was not taking into account the strength of the other lords around him. Then: make the fix. The test is done. The final report next, and once all is done, be ready for the control test: all realms playing with the game's AI.
 
-### 20:09 · Version 0.12.4: our side counts too, and the control arm · commit d4ad9dd (installed 20:09)
+### 20:09 · Version 0.12.4: our side counts too, and the control arm · commit 7519847 (installed 20:09)
 - **Our side of a fight** (`World.Friends`, `SideStrength`, new function `side_strength(x)`): the lord, every lord of the realm or an ally camped in the siege he is in or making for, and, within the order's `join_hours`, those marching to join him or bound for the same place or target (besieging or defending it, or holding an agent's order aimed at it). Lords merely near him do not count: a lord on one of the agent's orders joins no fight by himself. Used by caution, besiege's relief alarm and its withdrawal and storm bars, defend's strike, break-off and shelter rules, and hunt; the call-backs say it ("against your side's 6,000 (Imák's 1,500 with your lords camped there or due within 8 hours)").
 - **Guards strike only from inside their area**; **a lord on his way to shelter plans again every hour**, and **"can he get there first" is judged against every party of the danger** (`ChooseRefuge`).
 - **The sell order** says a castle buys no loot (only a town) and a batch of prisoners holding a captured enemy lord pays nothing (the game's `SellPrisonersAction`).
@@ -1464,7 +1464,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - `20261025-2015-C0`, from TEST START, one load, every realm the game's AI, every agent off (0 calls, $0.00), 0.34 real hours. The kingdom ±0 towns (Nanduhirion taken, Goblin Town lost), +2 castles net (Sirannon, Caradhras; Imnagath and Torech Emel lost and retaken), +4 villages; 137 enemy lords taken against 142 of its own; lord battles 120-115; on day 29 Val's army (5,454 men) destroyed outside Glad Thaw with 13 lords taken. Against the counted C2 run: holdings +2 against +4, villages +4 against +12, own lords lost 142 against 29. Details in docs/RUNS.md; report in `runs\20261025-2015-C0\report.md`, the table in `runs\compare.md`.
 - **Health:** 0 errors, 0 freezes, 1,440 report rounds with none folded. Two false alarms from a run with every agent off (`Runs.exe watch`'s war-room count; the self-check's "two agents" for the kingdom's own and the lieutenant, both off): to fix when the game is closed.
 
-### 20:51 · Version 0.12.5: the control run's two false alarms, and C1 set again · commit 4f36147 (installed 20:50)
+### 20:51 · Version 0.12.5: the control run's two false alarms, and C1 set again · commit f839570 (installed 20:50)
 - **The self-check** (`BridgeBehavior`): two agents of one realm both switched off (C0: the kingdom's own and the lieutenant) are a note ("both are switched off, so neither plays it"), not a failed "realm under watch"; only two switched on is still a problem.
 - **`Runs.exe watch`** counts a war room for each agent switched on (live or watching) only, so the control (every agent off) no longer reads "only 0 of 3 war rooms are running".
 - Versions set to 0.12.5.
@@ -1492,7 +1492,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **My eleven answers** are at the head of `docs/PLAN-0.13.md`, each with what it means: our tools stay fully the agents' and their definitions become readable; a couple of example tools in the instructions, my own among them; the lieutenant writes tools with my approval; libraries carry over between runs; the War of the Ring's rules stay; the allied channel (letters and joint plans between allied agents, and me speaking to agent allies through my lieutenant); every diplomatic act, mercenaries and expulsion included; the instructions as a skeleton during the build and their final wording after it, which I review; the backup's place proposed after the build; comparisons free.
 - **Added:** B5 (the allied channel and the lieutenant), the order of work's new steps (the allied channel; the skeleton; my decisions after the build), and the open points: an agent of its own for a realm allied to mine, so I have an agent ally to speak to; letters to realms that are not allies.
 
-### 02:12 · 0.13 step 1 of 7, the training record (0.13.0-pre1) · commit f2a1d4f (not installed)
+### 02:12 · 0.13 step 1 of 7, the training record (0.13.0-pre1) · commit 29e12b9 (not installed)
 - I asked to log both my moves and the agents', capturing everything from them as well, and to implement the full plan now, not stopping until it is done. This is step 1 of `docs/PLAN-0.13.md` Part F (Part C, the record), first so that everything after is captured.
 - **Your moves** (`Recorder`, `RecordHooks`):
   - only while you rule your realm yourself (`RecordRules.Yours`): your own character leads it, or is a lord of a realm no live agent commands. In the C runs a wanderer stands in for you and the kingdom's agent is live, so nothing is recorded as yours there (before, 37 proposals and 7 Party AI Controls refills of the agent runs were credited to you);
@@ -1509,7 +1509,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** build with no warnings; speed test within budget (the 95th slowest of a hundred hours 181 ms, budget 1,000; median 137 ms); smoke test passed (305 checks; 18 new: the run's tags, the episode index's poke, answer, receipt, outcome and day lines, the toolbook, a move with its report kept and read back, the hourly copy, the recorder's two rules, and the bundle on a made-up run with a call folder missing); war room self-test passed (75; 4 new: the thinking read from the stream, its setting, `thinking.txt`); 722 game references, 0 missing.
 - **Outside the repository:** none yet. When the war rooms start next, each agent folder's `warroom.txt` gains `thinking_display = summarized` (the war room adds missing keys). Not installed: the build goes on to step 2; 0.13.0 is installed at step 7.
 
-### 02:34 · 0.13 step 2 of 7, the language grows (0.13.0-pre1) · commit c49a8ef (not installed)
+### 02:34 · 0.13 step 2 of 7, the language grows (0.13.0-pre1) · commit 8e9ef99 (not installed)
 - Tool writing should be for custom strategies the agents want to pursue, with my circuit order as one of the examples. This is step 2 of `docs/PLAN-0.13.md` Part F (A2): the language the agents will write their own tools in.
 - **New in the language** (`Expr`, `ToolDef`, `Runner`):
   - lists (`[a, b]`, an order's `places` and `lords`) and tables (`{}`, read as `visited[stop]`, set as `"visited[stop]": "now"`); each `{}` is a new table;
@@ -1525,7 +1525,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** build with no warnings; smoke test passed (341 checks; 36 new: lists and tables, what the checker refuses and how it says so, the limits, the list functions in a running tool, recruit_here, wait and arrived, and my circuit end to end on a made-up world: each place once a day, a band too strong left alone and a small one struck, sheltering from an army, selling first once the loot is over its bar, a place lost skipped with one call-back); 722 game references, 0 missing. The war room is unchanged in this step.
 - **Outside the repository:** none. Not installed.
 
-### 02:55 · 0.13 step 3 of 7, the agents' own tools (0.13.0-pre1) · commit 9cdcf03 (not installed)
+### 02:55 · 0.13 step 3 of 7, the agents' own tools (0.13.0-pre1) · commit 5902f6e (not installed)
 - If the agent wants, it can keep the tool it has written as a one-off order, or if it thinks the tool has reuse value, it can add it to its tool and order library so it is able to reuse it, and our tools should still have full access. This is step 3 of `docs/PLAN-0.13.md` Part F (A1, A4 to A8).
 - **An answer's `tools`** (read before its orders): each tool is checked; then kept (`"keep": true`), used once for that answer's orders, changed (writing a kept tool's name again makes a new version: orders already running keep the version they started with), or retired (`"retire": true`). A tool that fails the checker is refused with its problems, and so are the orders naming it. Each tool gets its own line in receipts.log ("KEPT. circuit v1 is kept in your library"), in the orders' record and in the episode index, and a kept or retired tool a chronicle line. In shadow mode a tool is checked only.
 - **The realm's library** (`Tools/OwnLibrary.cs`): in the channel folder's `library\` (an index and one file per version), so it carries over between loads, campaigns and runs; the player's realm has one, shared by its own agent and the lieutenant. At most 30 kept tools; no tool may take the name of one of ours. Each kept tool's record (runs, how they ended, call-backs a day, men, gold and strength over its runs, battles fought and won, lords taken and lost, holdings gained and lost, the runs it was used in) is summed from its runs' outcomes. A run's setup records each realm's kept tools as it begins.
@@ -1536,7 +1536,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** build with no warnings; smoke test passed (365 checks; 24 new: tools kept, used once and refused with their orders, the library's files and listing, two versions running side by side, the same definition unchanged, a kept tool's record, retiring, our names refused, the 30-tool limit, the library carried over a new load, shadow mode, the call-back and time guards, the try asked directly and through the channel); war room self-test passed (83; 8 new: check_tool with the checker alone, an answer's tool form, the try through a stand-in bridge and without one, the logging, the runaway limit); 726 game references, 0 missing.
 - **Outside the repository:** none. Not installed.
 
-### 03:18 · 0.13 step 4 of 7, diplomacy (0.13.0-pre1) · commit 4ae1c50 (not installed)
+### 03:18 · 0.13 step 4 of 7, diplomacy (0.13.0-pre1) · commit abe6360 (not installed)
 - Build everything out now, for a long run (every diplomatic act, mercenaries and expulsion included); the game's hardcoded rules stay, and a ruler may overrule its clans at the game's price. This is step 4 of `docs/PLAN-0.13.md` Part F (Part B).
 - **Read in the game's code first:** a realm the game runs settles each vote the moment it is proposed, and peace, an alliance, a call to war or a trade agreement between two such realms is made by the proposer's vote alone; only the player's own realm is ever asked. The pack (TAOM 2.0.26) blocks peace between hostile realms while the War of the Ring rages, and some wars, inside the game's own actions.
 - **The acts** (`Diplomacy.cs`, an answer's `diplomacy`): propose war, peace (with a daily tribute either way and its days), an alliance, a call to war, a trade agreement, a policy (adopt or abolish), expelling a clan; hire and let go mercenary clans; vote; decide as ruler; accept or decline an offer. Each proposal is the game's own vote in the realm at the game's influence price, settled at once with the ruler's clan supporting it fully (`"overrule": true` decides it even against the clans, at the game's price). A mercenary clan is hired only if it would take the game's own terms.
@@ -1548,7 +1548,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** build with no warnings; smoke test passed (383 checks; 18 new: acts read as written, the checks of every act against a made-up realm's screens, the two report sections, an answer's acts refused, checked in shadow mode and handed to the game's thread when live, the book and the index); war room self-test passed (83); 803 game references, 0 missing; the self-check also looks for the vote's private parts by name. The game-side holding and settling is only testable in the game: it is for the shake-down (step 9).
 - **Outside the repository:** none. Not installed.
 
-### 03:26 · 0.13 step 5 of 7, the allied channel and the lieutenant (0.13.0-pre1) · commit 4afd4e9 (not installed)
+### 03:26 · 0.13 step 5 of 7, the allied channel and the lieutenant (0.13.0-pre1) · commit 744ec81 (not installed)
 - Agents communicate with their allies to coordinate attacks, the player can communicate with their allies (who are agents) through their lieutenant, and the lieutenant writes tools based on my permission. This is step 5 of `docs/PLAN-0.13.md` Part F (B5).
 - **Letters** (`Allies.cs`, an answer's `letters`): an agent writes to an allied realm's agent; the letter reaches it in its next poke, saying who wrote and when; your realm is written to through your lieutenant, into its window. A letter binds no one and carries no orders, and tells only what its writer chose to (each realm's fog holds). A letter to a realm not allied, or one no agent reads, is refused with that reason.
 - **Joint plans:** a letter may carry one in a fixed form (what, where, when, each side's part), with an id; later letters agree to it or decline it (only the realm it was proposed to), or mark it under way, done or dropped. Plans still open show in both realms' reports under **ALLIES AND JOINT PLANS**, beside each ally, whether its ruler reads letters, and its last letters.
@@ -1557,7 +1557,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** build with no warnings; smoke test passed (393 checks; 10 new: letters refused to a realm not allied and to one no agent reads, a letter with a joint plan delivered in the ally's next poke, the writer agreeing to its own plan refused, the ally agreeing, the section in both reports, the store and the book, an answer's letters receipted, letters and plans read back at a new load); war room self-test passed (85; 2 new: the lieutenant's message with letters and a proposal's letters, the answer file carrying tools, diplomacy and letters); 803 game references, 0 missing.
 - **Outside the repository:** none. Not installed.
 
-### 03:33 · 0.13 step 6 of 7, the instructions' skeleton (0.13.0-pre1) · commit 59327cf (not installed)
+### 03:33 · 0.13 step 6 of 7, the instructions' skeleton (0.13.0-pre1) · commit 517c1df (not installed)
 - Build all of the skeleton first; once all the building is done, I review the wording and we write the final prompt. The circuit goes in their prompt for inspiration, with a couple of other examples. This is step 6 of `docs/PLAN-0.13.md` Part F (Part D). The final wording, and the doctrine's diplomacy principles, are for step 8.
 - **The war councils' instructions** (`agent/warroom-system.template.md`) gain working sections: **Writing your own tools** (the tool's form, what it takes and of which kind, settings, remembering, states and rules, every move, value, name and function of the language, the limits, keeping, using once, changing and retiring a tool, the record, and three example tools: my circuit, a watch that waits on an event, an army leader's sortie), **Checking a tool** (left out of a call without the tool), **Diplomacy** (every act and its form, how proposals, the realm's votes and offers go, mercenaries, the War of the Ring), **Allies** (letters and joint plans); and "How you answer" names the answer's `tools`, `diplomacy` and `letters`.
 - **The lieutenant's instructions** (`agent/lieutenant-system.template.md`): tools, diplomacy and letters to allies, all on the ruler's yes, its allies' letters, and checking a tool (left out without the tool).
@@ -1569,7 +1569,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the three realm councils' `warroom.txt`: `council_after` gains "offers peace | offers an alliance | offers a call to war", so an offer calls a council.
 - Not installed.
 
-### 03:41 · 0.13 step 7 of 7, everything together: version 0.13.0 installed · commit 9d0e902
+### 03:41 · 0.13 step 7 of 7, everything together: version 0.13.0 installed · commit fd3db2d
 - I asked to implement the full plan now, not stopping until it is done. Step 7 of `docs/PLAN-0.13.md` Part F: all tests together, the documents, version 0.13.0, the install.
 - **The speed test** now runs 30 of the agents' own tools (the circuit, on the orcs' first lords of the big made-up world) beside ours: within budget, the 95th slowest of a hundred hours 166 ms (budget 1,000; median 134 ms; 181 ms at step 1), and the time guard stopped none.
 - **All tests:** smoke test 395 checks passed; war room self-test 85 passed; dashboard self-test 27 passed; `WarRoom toolcheck --write` passed (step 6); 803 game references, 0 missing, in the installed DLL too.
@@ -1585,10 +1585,10 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** after the morning's report, the repository's two instruction drafts were found changed on disk: in `agent/warroom-system.template.md` the four new sections (Writing your own tools, Checking a tool, Diplomacy, Allies: 136 lines) had been replaced by the word "now", and a stray character had been added to the first line of it and of `agent/lieutenant-system.template.md`. It looks like typing that went into the editor after a link in the report had selected those lines. Both were put back from the last commit (`git checkout`); the changed copies are kept in the session's scratch folder. The copies the agents read were never touched: all four matched their fingerprints (be4df7e7, b0d45ad1, ce056fba, f28838b5). Links in reports now point at one line, not a range.
 - **The wording:** I asked for the new sections, to read them for step 8, and got them whole, word for word.
 
-### 12:58 · Version 0.13.1: the backup on the D: drive, installed · commit 9d73c9c
+### 12:58 · Version 0.13.1: the backup on the D: drive, installed · commit 40973a9
 - **Decision 9** (on the proposal of a copy on the laptop's second drive and one in a private Hugging Face dataset): the data stays local for now, at the D: drive.
 - **What:** `Runs.exe backup [--to <folder>]`, and at every run's end the bridge asks for it after the bundle (`Runs.exe bundle <run> --backup`). The records folder (`%LOCALAPPDATA%\BannerlordAgents`) and every agent's folder in `agents` are copied into the place `backup` in `settings.txt` names: `D:\BannerlordAgents-backup`, on the laptop's second disk (789 GB free). It never deletes; a file that only grew gets its new bytes added; one that shrank or was rewritten is copied whole, and the copy it replaces is kept under `earlier\<time>\`; a file another program holds shut is named and left for the next backup. It works at background priority, refuses a place inside what it copies or a drive without room, and writes `backup.log` and `README.txt` beside the copy. The bridge knows the new setting (it writes `settings.txt` back with only the keys it knows, so an unknown key would be lost). [LOGGING.md](LOGGING.md#the-backup-since-0131), [RUNS.md](RUNS.md).
-- **Also:** two fields of the tool checker that only the game's side sets now start at their defaults, so the war room's build has no warnings. Its build had shown these two warnings since step 3 (commit 9cdcf03): the entries for steps 3 to 5 said "build with no warnings", which held for the module but missed the war room.
+- **Also:** two fields of the tool checker that only the game's side sets now start at their defaults, so the war room's build has no warnings. Its build had shown these two warnings since step 3 (commit 5902f6e): the entries for steps 3 to 5 said "build with no warnings", which held for the module but missed the war room.
 - **Checks:** a full rebuild with no warnings; smoke test passed (405 checks; 10 new: the first backup whole, nothing written when nothing changed, a grown file's new bytes added to the same copy, a shrunk file copied whole with its old copy kept, nothing deleted, a file held shut left for the next backup and copied by it, a place inside what it copies refused, `bundle --backup`, the bridge keeping the setting and asking for the backup only when a place is set); war room self-test passed; dashboard self-test passed (27); 803 game references, 0 missing.
 - **Version 0.13.1** (`SubModule.xml`, the module, Runs.exe; the war room stays 0.13.0).
 - **Installed** with `scripts\deploy.ps1`, the game closed and the war rooms stopped: the DLL's sha256 `d4a75205b821ae56…`, `runs\Runs.exe` 0.13.1.
@@ -1598,7 +1598,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `D:\BannerlordAgents-backup`: the first backup, made by hand with the installed Runs.exe: 35,062 files from the records folder and the four agent folders, 7,480.6 MB, in 6 min 34 s at background priority, none in use or failed. Checked against the originals: the same files and bytes in each of the five folders, and the same fingerprints for the files tried (the orcs' pokes, `settings.txt`, `bridge.log`, the orcs' instructions). A second backup at once found all 35,062 unchanged and wrote nothing. 777.7 GB left on D:.
 - **On the docket** (step 8): the instructions' final wording and the doctrine's diplomacy principles; whether a realm allied to mine gets an agent; letters to realms that are not allies. A copy off the laptop can follow when I want one.
 
-### 19:35 · Version 0.13.2: the records moved to the D: drive, installed · commit cd13859
+### 19:35 · Version 0.13.2: the records moved to the D: drive, installed · commit 5e9516b
 - **Decision** (asked after 0.13.1 whether the records themselves should move too): yes, the records themselves move to D: as well.
 - **What:** the records folder now lives at `D:\BannerlordAgents`, on the laptop's second disk. `%LOCALAPPDATA%\BannerlordAgents` is a link (a junction) to it, so the bridge, the war rooms, the dashboard, Runs.exe and the scripts all find it where they always did, and none of them changed. The four agent folders stay where they are (`C:\Users\karab\Projects\...`, 80 MB). [LOGGING.md](LOGGING.md#where-the-files-are); CLAUDE.md's rule on logs says to keep to the usual path.
 - **The backup's check** that its place is not inside what it copies now follows links (Runs.exe). Through the link, a place inside `D:\BannerlordAgents` looked as if it were outside the records folder, so each backup would have copied the one before it into the records until D: was full. The installed 0.13.1 Runs.exe did just that on a made-up folder; 0.13.2 refuses it, there and on the real folders (`backup --to D:\BannerlordAgents\copy-test`: refused, nothing made).
@@ -1615,7 +1615,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, October 29
 
-### 15:08 · The agents' instructions: raiders struck while they are alone · commit 4fc6b84 (the template)
+### 15:08 · The agents' instructions: raiders struck while they are alone · commit 26259c9 (the template)
 - **Oct 29**, reading the instructions (step 8), on the general system prompt: telling the AI to attack raiders "on their way home" is wrong in terms of the game mechanics. The smarter move is to attack them when they are isolated from their allies and we can either catch them before they get to safety, or when they are already bogged down in a raid, which means they are stuck, isolated, and therefore in a vulnerable position.
 - A correction in the doctrine's own words, the same for every realm agent, with nothing of this war in it. The reasons, the game's rules behind it, the grounding and the caveats: docs/DOCTRINE.md, "Principle 7 corrected (Oct 29)".
 - **What changed** (`agent/warroom-system.template.md`, principle 7 only):
@@ -1630,7 +1630,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the game was closed and the war rooms kept running; each call reads the instructions afresh, so the new text is in force from their next answer, with no restart. The lieutenant's instructions have no doctrine and are unchanged.
 - **For comparisons:** every run so far was played with the old principle 7; the shake-down and the runs after it are on the new one. A run's setup records each agent's instructions' fingerprint, so it shows.
 
-### 15:44 · Version 0.13.3: recruiting at towns and castles, in the instructions and the circuit example; installed · commit 7727645
+### 15:44 · Version 0.13.3: recruiting at towns and castles, in the instructions and the circuit example; installed · commit e18e955
 - **Oct 29**, on the instructions given whole: the instruction set is good, but the recruitment loop example needs a revision. The game allows recruitment at towns and castles, and towns actually have the most notables to recruit from, so are recruitment centers. This must be known, and the recruitment circuit state machine must also include recruitment at a town and at a castle, so the example does not confuse the agent.
 - **The game's rules, read for it:**
   - the base game gives notables to towns (2 merchants, 2 gang leaders, 1 artisan) and villages (1 headman, 2 rural notables) only (`DefaultNotableSpawnModel`, `NotablesCampaignBehavior`);
@@ -1652,7 +1652,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the war rooms and the dashboard stopped at about 15:42 for the build and started again at 15:44 (`scripts\agents.ps1`, detached; each waits for the game). Each channel's `tools.txt` takes the guard order's new words when the next game session writes it.
 - **On the docket:** the recruitment day log (`Recruitment.Day`, `Recruitment.OnHour`) still counts the volunteers waiting and the hours where lords could recruit in towns and villages only; castles should count too (our measurement only; the agents never read it). And, for me to decide: the guard order could refill at the castle it guards when that castle has volunteers, instead of riding to the nearest town or village.
 
-### 18:53 · Version 0.13.4: the guard order takes its own castle's volunteers first; the recruitment log counts castles; installed · commit 3c78666
+### 18:53 · Version 0.13.4: the guard order takes its own castle's volunteers first; the recruitment log counts castles; installed · commit 955df7b
 - **Oct 29**, to the offer that the guard order refill at the castle it guards now that castles recruit: yes. The recruitment log is to be fixed as well, and once that is done, everything made ready for the test with me playing as Aragorn (Arnor & Gondor).
 - **The guard order** (`Tools/Library/defend.json`): when its ranks fall below the floor and it is not needed (the same three tests as before), a guard of a castle or town now first goes to the holding itself and takes its volunteers (a new state, `restock`, with the move `recruit at`), staying in its area and calling nobody back. Back to its patrol once its ranks are over the floor (after at least 3 hours in the state). Still short 2 hours after arriving, it rides on to the nearest town or village of the realm or an ally (`nearest_supply()`) with a call-back, and from there the old refill rules hold (12 hours without 5 points gained, two days in all). When the nearest town or village is the holding itself or there is none, it stays there under those rules, quietly. It breaks off when an enemy lord or army comes within its radius or the holding is besieged (the patrol's rules decide what next), and gives up after a day without reaching the holding (back to its patrol, trying again in two days, with a call-back). A guard of a village goes straight to the old refill. Its description (`about`), `calls_back` and the `floor` setting say so; the agents read them in `tools.txt` and `tools\defend.json`, both written by the bridge at the next session.
 - **The recruitment log** (`Recruitment.OnHour`, `Recruitment.Day`): castles now count among the places where a lord could recruit (not besieged), for the hours each lord spent there, and among the realm's places with volunteers waiting (kind `castle` in `places`); the day's sentence says "towns, castles and villages". The log is our measurement only; the agents never read it. Days logged before today counted towns and villages only, so the waiting volunteers and the hours in recruiting places jump from today's days on: compare across with care.
@@ -1671,7 +1671,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Changed:** `C:\Users\karab\Projects\lieutenant\warroom.txt`, `timeout_seconds` 120 → 300 (sha256 `a2b2c8a4…` → `7a75a73c…`; backup `warroom.txt.bak-20261029-before-timeout`). The game's clock is stopped while the lieutenant's window is open, so the longer limit costs waiting, not game time. The war room reads its settings at its start, so only the lieutenant's was restarted (19:16:07, pid 57136, through `scripts\agents.ps1 start`, which leaves running ones alone); the orcs' and Dol Guldur's carried on undisturbed. Nothing in the game or the module changed; the game was running.
 - **For me:** ask again; the same ask should now get its answer.
 
-### 19:36 · Version 0.13.5: the test carries on across closing the game and loading its save; the lieutenant with no time limit; installed · commit 008c946
+### 19:36 · Version 0.13.5: the test carries on across closing the game and loading its save; the lieutenant with no time limit; installed · commit cc95982
 - **Oct 29**, after the first hours of run A (`20261029-1903-A`, about 8 in-game hours, saved as `TEST CONTINUOUS SAVE` at 19:15, game closed): two things. 1: remove the time limit on the lieutenant's thinking. 2: make sure that the test logs and the agents' records survive the game being closed and reloaded into the same save, so the test continues when I have to step off the game and back on it with time.
 - **What already survived** (read in the code before changing anything): the run (a load of one of its own saves carries it on, `Run.OnLoad`, since 0.11; `TEST CONTINUOUS SAVE` is among its saves), the agents' memory and chronicle and the lieutenant's conversation (labelled per session, found again by the save's note, since 0.9.1 and 0.11.1; the 19:15 save's note is in `saves.jsonl`), the training record (append-only, tagged by run), the agents' own tools (their libraries). **What did not:** every order in force (cleared at every load, `Orders.Reset`, `Runner.Reset`): the agents' lords went to the game's own AI until the agent ordered them again, and each tool's progress was lost; the agents' wage caps; `run.json`'s last hour (written only at day lines and marks, so hours played after a save and lost within a day went unmarked when replayed); a war room not running after a restart of the laptop (nothing started it). Also found: the run's readied folder `runs\20261029-1903` stayed behind with `status: armed`, because a `Runs.exe watch` at 19:08 put its cursor (`watch.json`) in it and the tidy-up removes a folder holding only `run.json`; left as it is (nothing is deleted without my word).
 - **The orders carried on** (new `CarryOn.cs`): at every save (`OnSaveOver`, after the take-back) the game's thread lists the tool orders held (`Orders.KeepForSave`) and the wage caps (`Wages.KeepForSave`), and the helper (urgent lane, as each hour's steps) writes `data\<campaign>\orders\<save>.json`: each tool run with the very definition it runs (`Runner.Export`: its order, settings, state and the hour it entered it, remembered values with tables and lists, the move in force, the safety and food rules' places, its call-back count) and its record so far (`Outcomes.Export`). Never in the save; overwritten with the save of the same name. At a load (`Bridge.Start`, after the reset is posted) the file is read when it is that save's at that hour (History's rule, 0.05 h); each order is checked on the game's thread as at its start (`Orders.Resume`: alive, free, leading his party in the realm, on no Party AI Controls order unless the lieutenant's, among the lords who obey the agent, the realm's agent the same folder and live) and the lord held again under the same tool run's id (new runs are numbered past it), shown in Party AI Controls' panel for the lieutenant's; on the helper the tool is taken up where it was and its move given again (`Runner.Resume`, `Outcomes.Resume` with a `run_resumed` line in the toolbook); a wage cap is put back (`Wages.Resume`). What could not carry on is let go and said: the realm's first look reads "The game was loaded from a save: the N orders you had in force then carry on as they stood (YOUR ORDERS IN FORCE lists them). Not carried on: ..." (still matching the council's "First look" words).
@@ -1683,20 +1683,20 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repository:** `%LOCALAPPDATA%\BannerlordAgents\settings.txt` gained `war_room = C:\Users\karab\Projects\bannerlord-agents\src\BannerlordAgents.WarRoom\bin\Release\net8.0-windows\WarRoom.exe` (backup `settings.txt.bak-20261029-before-war-room`); the lieutenant's `warroom.txt` as above; the war rooms and dashboard stopped at about 19:24 and started at 19:36 (`scripts\agents.ps1`).
 - **Not yet seen in the game:** a carry-on at a load, a war room started by the game. The 19:15 save was made before 0.13.5, so it has no orders file: its first load carries the run, the memory and the conversation on, but not the orders; every save from now on carries them.
 
-### 19:42 · Version 0.13.6: the fog check knows the ruler's own diplomacy screens; installed · commit 3da0780
+### 19:42 · Version 0.13.6: the fog check knows the ruler's own diplomacy screens; installed · commit d53cca4
 - **Found by the run's watch** (19:4x, the game closed): run `20261029-1903-A`'s first hours raised `fog_leak` on 20 reports, every one the realms' ids in the agents' new DIPLOMACY section ("Kingdom of Arnor and Gondor [new_kingdom]: at war since ...", "Gondor [empire_w]", "Rohan [vlandia]"). A false alarm: the section is what the realm's ruler sees on the game's own kingdom and diplomacy screens (PLAN-0.13 B3 meant its ids to be allowed), but the fog check's list of what a realm may know (`Brain.Known`) never took them. Left alone, every report would raise it, and a real leak could hide among them.
 - **Fixed:** `DiploRules.Ids` lists every id the DIPLOMACY and OPEN VOTES AND OFFERS sections may name (the realm, its ruling clan, every realm on the stances' list, the votes and offers with their realms, the realm's clans and those for hire, the policies), and `Brain.Known` gives them to the check; the check also passes over our own numbering of held votes and offers (`[v3]`, `[o2]`), which the news names after they close. Nothing else is allowed: lords, parties and holdings are checked as before.
 - **Checks:** smoke test 421 (new: the diplomacy test's whole report passes the fog check with what the realm knows, and without it still fails on the realms' and policies' ids, so the check still bites); war room and dashboard self-tests passed; 814 game references, 0 missing.
 - **Installed** with `scripts\deploy.ps1` at 19:41, the game closed and the war rooms stopped: DLL sha256 `c62a9443cf21bc94…`, `SubModule.xml` v0.13.6. War rooms and dashboard stopped at about 19:39 and started again at 19:42.
 
-### 20:05 · Version 0.13.7 built: on screen only the lieutenant's and my own orders; to be installed when the game is next closed · commit d838c98
+### 20:05 · Version 0.13.7 built: on screen only the lieutenant's and my own orders; to be installed when the game is next closed · commit a3f240b
 - **Oct 29**, during run A (`20261029-1903-A`, the game running): in the next run, the other agents' orders come out of the logs that show up in-game. I only want to see what comes from my lieutenant and the normal game logs and updates in-game; the dashboard stays the same.
 - **What reached the game's message log from us:** the agents' pokes ("Dol Guldur: First look since ...", yellow, `Brain`), every order's start, arrival and end ("Order: ...", "... reached ...", "Order for ... ended: ...", cyan, `Orders.Say`), the red alarms (`Diag.Screen`), the lieutenant's answers when its window is closed (`LieutenantWindow.Add`), and the test run's lines (`Run.Say`).
 - **Changed:** an agent's poke no longer goes on screen; an order's lines go on screen only when it is the lieutenant's (its realm is the lieutenant's) or my own (`hand`: the console's `agents.order`; `you`: my vassal orders), by `Orders.Shown`. The lieutenant's own lines, the red alarms, the run's lines and the game's own messages stay. Nothing changes in the logs, the run's record, the war rooms or the dashboard.
 - **Checks:** smoke test 422 (new: the on-screen rule: the lieutenant's and your own shown, another agent's and its next orders not); the module builds with no warnings. Not yet the war room and dashboard self-tests and the install: the game was running (they run in `deploy.ps1` at the install).
 - **Install:** waits until the game is next closed (never while it runs); then `scripts\deploy.ps1`, the war rooms stopped and started around it.
 
-### 20:23 · Version 0.13.8: the lieutenant sees and orders lords in armies; approval in words only, no buttons; installed with 0.13.7 · commit f6d331b
+### 20:23 · Version 0.13.8: the lieutenant sees and orders lords in armies; approval in words only, no buttons; installed with 0.13.7 · commit 5a6f911
 - **Oct 29**, during run A: it felt as if some lords that should be controlled by my lieutenant kept escaping to the game's AI (like Stein), and my lieutenant could not see lords in armies. Both were to be investigated and fixed. I also did not want to have to click "approve" or "decline" to approve the lieutenant's orders: I should only have to approve them in the chat, since many times I approve some but have comments on others. I was saving and closing the game, so the logger updates and these fixes were to be installed when done.
 - **What the record showed:**
   - **Stein:** he never held an order of the lieutenant's. The game's own AI formed his army and called the ruler's clan lords Balakhôr and Oryon into it (Party AI Controls lords with joining armies allowed: nothing held them). Asked to station Stein and Górli, the lieutenant gave each a `disband` (chat 10, 20:08), which hands the leader and every lord of the army back to the game's own AI, and no order after it, though its words said "each now holds a castle".
@@ -1714,7 +1714,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with `scripts\deploy.ps1` at 20:23, the game closed and the war rooms stopped (the first try at about 20:20 stopped at the war room self-test's old wording check: nothing was installed then): DLL sha256 `2794f41727606bfd…`, `SubModule.xml` v0.13.8; the installed window has no Approve or Decline. War rooms and dashboard stopped at about 20:17 and started at 20:25.
 - **Seen on disk:** my save at 20:12 (`TEST CONTINUOUS SAVE`, Autumn 2, 1087, 17:00) wrote its orders file: 98 orders in force and 5 wage caps (0.13.5); `run.json` has its hour. Its load will be the first carry-on in the game.
 
-### 20:42 · Version 0.13.9: the lieutenant forms the ruler's own army; a fresh report straight after loading; installed · commit f128b03
+### 20:42 · Version 0.13.9: the lieutenant forms the ruler's own army; a fresh report straight after loading; installed · commit 21255b9
 - **Oct 29**, after loading on 0.13.8: new feature: the lieutenant should be able to form an army for me, under my name (so for example if I ask it to get every lord stationed at Imnagath to join my army, it should be able to form an army for me and automatically have them join it). It also said that it still could not see the lords in Stein's army, which was to be checked and fixed. I was closing the game, so the install could follow when done.
 - **Why it still could not see Stein's army's lords:** its message at 20:31 (chat 11) carried the report written at Autumn 2, 16:00, by the session before (0.13.7, before the army lists), just before the save. The game loads paused, and the lieutenant's report is written each in-game hour, so words said before the clock first ran read the last session's report. The report written at 20:34 (Autumn 3, 07:00) lists Stein's army with its 7 lords: the 0.13.8 lists work.
 - **Fixed:** until the first hour since a load, each message of the ruler's copies the realm as it stands (`Capture.Take`, the game's thread, the clock held by the window) and the helper writes the lieutenant's report and look-ups from it before the message (`Brain.LieutenantReportNow`, `Lieutenant.OnPlayerSays`): nothing else of an hour (no orders stepped, no pokes, no day lines, the run untouched).
@@ -1724,14 +1724,14 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with `scripts\deploy.ps1` at 20:42, the game closed and the war rooms stopped: DLL sha256 `24993e6968d1ee66…`, `SubModule.xml` v0.13.9. War rooms and dashboard stopped at about 20:38 and started at 20:43.
 - **Not yet seen in the game:** the ruler's army formed or added to by the lieutenant, its influence charge, a far lord joining it; the report written on the spot.
 
-### 20:45 · Version 0.13.10: no false "caught by the save" alarm for orders carried on; installed · commit c0f1c4e
+### 20:45 · Version 0.13.10: no false "caught by the save" alarm for orders carried on; installed · commit ee44624
 - **Found by the run's watch** (the game closed after the 20:29 session): the 20:29 load raised `load_frozen` (serious, on screen): "After loading, 99 lords we once held have the game's AI switched off ... A save may have caught them." They were the lords whose orders 0.13.5 had just carried on. The saves were clean: at 20:12 98 lords were handed back before the game wrote and taken back after, at 20:34 108, each "all free while saving".
 - **Why:** the load's sweep of lords with the game's AI off (`Orders.FrozenAtLoad`) ran after `CarryOn.AtLoad` had held them again, and the past hand-backs' check (`CheckPastHandbacks`, later on the game's tick) counted every lord we ever handed back that is held now, our own carried-on orders included.
 - **Fixed:** the sweep runs on the save as loaded, before any order is carried on (`Bridge.Start`); the check passes over a lord an order of ours holds now (`Orders.Holds`). Its words say the orders written at the save are carried on next.
 - **Checks:** smoke test 424, war room and dashboard self-tests passed (in `deploy.ps1`); 816 game references, 0 missing.
 - **Installed** with `scripts\deploy.ps1` at 20:44, the game closed and the war rooms stopped (about 20:44, started again 20:45): DLL sha256 `f82e4b9de6ca972d…`, `SubModule.xml` v0.13.10.
 
-### 21:04 · Version 0.13.11 built: guards join the ruler's own attack; to be installed when the game is next closed · commit a47f195
+### 21:04 · Version 0.13.11 built: guards join the ruler's own attack; to be installed when the game is next closed · commit 0a45498
 - **Oct 29**, in the game: I was chasing Mauhur, who had 700 men, with my army of more than 4000, but allied lords around me were still not engaging him and were instead running from him. They should be engaging him normally, since they know I am around and that their strength is greater than Mauhur's. I asked why they were not giving chase with me.
 - **What the record showed** (session 20261029-204801): at Autumn 5, 09:00, the hour I went after Mauhur (Gundabad, 685 men against my 3,865), 13 guards of Lasgalor (Alenon, Oropherion, Lothuial, Amarië, Orophin, Anairë, Elladan, Celebrían, Elrohir, Chägermeister, Iminyar, Nimrien, Elbereth) struck him; at 12:00 all broke off together by the guard's leash (`distance(target, at) > radius`: Mauhur had run more than 20 from Lasgalor), and patrolled back toward it. None fled: no safety or shelter step named Mauhur. My own party broke off two hours later. A guard weighed only itself and lords bound for its holding or target: a lord attacking the same enemy, the ruler included, did not count.
 - **Changed** (the same for every realm):
@@ -1743,7 +1743,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Install:** when the game is next closed (`scripts\deploy.ps1`, the war rooms stopped and started around it).
 - **Installed** at 21:07 on my word, the game closed, with `scripts\deploy.ps1`, the war rooms stopped first (started again 21:08): DLL sha256 `6361510b59cf2bfd…`, `SubModule.xml` v0.13.11, the new rule's words in the DLL. Checks then: smoke test, war room self-test (its copy of the library rebuilt) and dashboard self-test passed; 816 game references, 0 missing; the speed test WITHIN BUDGET (95th slowest hour of a hundred 369.9 ms of 1,000; 327.0 at 0.13.8: orders 191 ms over the test against 140, the rest again in the dashboard 4,903 ms and view 595 ms, which this did not change; still creeping, to look into).
 
-### 21:17 · Version 0.13.12 built: the lieutenant's carried-on orders known as its own at a load; to be installed when the game is next closed · commit 3d81a12
+### 21:17 · Version 0.13.12 built: the lieutenant's carried-on orders known as its own at a load; to be installed when the game is next closed · commit 2a14214
 - **Found by the run's watch** (the 21:12 load, 0.13.11): "orders: 122 carried on from TEST CONTINUOUS SAVE (Autumn 5, 1087, 15:00), 2 not, 6 wage caps". The two were the lieutenant's recruiting rounds (`recruit_round`, its own tool) for Theorin and Himrion, refused as "follows an order from his ruler's own dialogue (patrol around Goblin Town)": the lieutenant's orders replace a Party AI Controls order, but at the load `Lieutenant.IsRealm` read the helper's agents (`Agents.All`), which its reset fills only after the load's carry-on, so the order counted as another agent's. The same test showed the lieutenant's carried-on orders could not be mirrored in Party AI Controls' panel at a load (`PacLink.OnOrderStarted` asks the same).
 - **Fixed:** `Lieutenant.IsRealm` also reads the load's own agents (`Bridge.Configs`, set on the game's thread as the load begins).
 - **Also seen, left as it is:** the run's watch flagged the sight check at 122 of 134, once, at 21:13, a minute after the load: the 12 were Khamûl's army besieging Torech Emel, 60 to 65 from the player's party, which the realm's besieged castle sees and the game had not yet marked visible to the player's party just after the load; every check after agreed fully (134 of 134, 135 of 135, 132 of 132, ...).
@@ -1751,7 +1751,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test 426 (new: the lieutenant's realm known from the load's settings before the helper's agents are filled). The rest at the install.
 - **Install:** when the game is next closed.
 
-### 21:32 · Version 0.13.12 installed, with two small fixes added before it went in · commit 726d838
+### 21:32 · Version 0.13.12 installed, with two small fixes added before it went in · commit 2302318
 - **The session it follows** (20261029-211041, 21:10 to 21:28, run 20261029-1903-A, day 9 of 60):
   - **The lieutenant built my army on my words**, the first time in the game. At Autumn 6, 19:00, its answer had the 14 Lasgalor lords follow Aragorn, the 10 at Torech Emel garrison it and Stein called. I replied: "Have all of the lasgalor lords join my army for now then. Have the torech emel lords join my army as well: the siege has already begun so they would only be walking into a trap." The next answer called all 25 lords into my army, and when the clock ran (21:17:33) all 25 joined, Stein included. The first answer's 24 orders had waited for the clock. They were issued in the same moment and ended at once, "called to your army". The end was right, but it was noise in the story.
   - **The battle that followed**: Aragorn's army (8,999 men) went after Khamûl, who was storming Torech Emel with three armies. The field held 11,198 at once (9,990 soldiers and 1,208 horses; the battle helper's battle size is 10,000). It loaded in 280 s, about 1,040 shaders compiled in that time (21:22 to 21:26). Our watchdog called the load a freeze ("game_frozen", 120 s, main thread waiting while 10+ engine workers ran at a full core each). It then ran at 11 fps (median frame 84 ms, the engine's own battle step 43 ms of it). There were no faults and no armour dropped: the armour list peaked at 409,584 of 1,048,576. I closed the game in the battle as too slow (21:27:56). The last save is TEST CONTINUOUS SAVE at 21:22:04, just before it.
@@ -1763,7 +1763,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed:** 21:31:54. `BannerlordAgents.dll` sha256 `CA6D4E504E3E8BC2CA10F3B4A338EC0AA25E5C0A43B5447064DB5DE394CEACA1`, SubModule v0.13.12.
 
 
-### 12:52 (Oct 30) · Version 0.13.13 built: the lieutenant's orders wait for its answer's own tools; to be installed when the game is next closed · commit af8a643
+### 12:52 (Oct 30) · Version 0.13.13 built: the lieutenant's orders wait for its answer's own tools; to be installed when the game is next closed · commit 078f000
 - **Seen in the run** (session 20261029-232345, Autumn 9, 15:00): I asked for Himrion and Theorin to recruit together, each taking half at every stop. The lieutenant wrote a new tool, `recruit_pair` (the first tool it has written itself in a run). In the same answer (chat-18.json) it ordered both lords onto it and told me "Done, sire". The orders were refused as unknown ("'recruit_pair' is not an order ... and your own: recruit_round"), and the tool was kept in the realm's library a moment after (receipts.log 12:41:04). On my next words ("Place the orders") the lieutenant gave a different plan with tools already kept (recruit_round for Theorin; Himrion, already full, to follow), so nothing was lost in the game.
 - **Cause:** `Lieutenant.Carry` gave the answer's orders on the game's thread first, and only then posted its tools to the helper. An agent's answer takes its tools first (`Channel`, docs/PLAN-0.13.md A8).
 - **Changed:**
@@ -1782,7 +1782,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The run's watch now names the newest save: "load TEST CONTINUOUS SAVE to carry it on".
 
 
-### 19:07 (Oct 30) · Version 0.13.14 installed: a lord's side counts the lords following him inside the holding he is in · commit 4334b79
+### 19:07 (Oct 30) · Version 0.13.14 installed: a lord's side counts the lords following him inside the holding he is in · commit 5d1c4db
 - **Oct 30:** the logic for our orders might still be discounting the strength of nearby lords and lords following other lords when deciding whether to attack or retreat. To be checked and verified from my lieutenant's readings on the Torech Emel to Gwígar corridor's defence. (The lieutenant had just reported the corridor's defence going "badly": Alenon, Oropherion and Arien sheltering in Gwígar, Glin-edhel and Tinnulas raided.)
 - **What the record showed** (session 20261030-155534, the lieutenant's report of Winter 1, 1087, 17:00):
   - At 12:00 the lieutenant ordered "Group A": Alenon to defend Tinnulas (radius 30, strike_below 1, shelter_at 1.5, join_hours 12), with Oropherion and Arien to follow him (caution 0).
@@ -1800,7 +1800,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed:** 19:07, with the game closed (it closed at 19:06). `BannerlordAgents.dll` sha256 `1EDACBFD829F136BE8BF5E540E7A357E532DF9DAC3509E43F6E193AC107F01D7`, SubModule v0.13.14. `docs/TOOLS.md` updated (our side of a fight).
 
 
-### 19:19 (Oct 30) · Version 0.13.15 installed: every held lord rides to relieve a lord of ours in a fight he can reach and win · commit f4d53af
+### 19:19 (Oct 30) · Version 0.13.15 installed: every held lord rides to relieve a lord of ours in a fight he can reach and win · commit d673cac
 - **Oct 30:** lords under any order and not in an army should always ride with all haste to relieve lords in a fight if their combined strength beats the combined strength of the enemies in the area for the expected duration of the fight. To be verified: whether this happens now, and if not, to make sure it does, with a report of exactly which orders changed, how, and how lords in armies behave. Armies should still try to relieve lords if they are close enough to reach them before the fight is done and their combined strength is stronger than the combined strength of the enemies in the area, but should never break up because of this.
 - **Before:** it did not happen. No order sent a lord to a friendly lord's fight. The one partial case was defend's strike, which attacks enemies near its own holding (within its radius, weighed with the lords bound for that holding or target), and so sometimes an enemy already fighting a lord of ours there. Every other order (patrol, garrison, recruit, sell, follow, hold, wait, raid, besiege's camp and the rest) left a lord in a fight alone.
 - **Changed** (a third rule every order carries, in `Runner`, checked each hour before safety and food; the same for every realm's held lords):
@@ -1824,7 +1824,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Sunday, November 1
 
-### 16:53 · Version 0.13.16 built: the lieutenant reads the whole chronicle, the report's recent history keeps the news, battle lines say who fought, the relief counts bands and wants time to spare; to be installed when the game is next closed · commit 43642e2
+### 16:53 · Version 0.13.16 built: the lieutenant reads the whole chronicle, the report's recent history keeps the news, battle lines say who fought, the relief counts bands and wants time to spare; to be installed when the game is next closed · commit 21da25d
 - **Nov 1:** the lieutenant said that it was not able to see what happened at Nanduhirion, and I asked for a diagnosis of why. Then: the fixes for the lieutenant, and the other proposed fixes as well, made and installed once the game is closed.
 - **Why the lieutenant could not tell** (its call of Oct 30, 18:58, chat 33, "What happened at the siege of nanduhirion? Was it relieved by the dol guldur?"):
   - It answered "I can't confirm Dol Guldur helped". The notices had all reached the realm and its chronicle: Dáin, Náth, Lek, Isvan and Malthorn taken by Dramthak (Dol Guldur), Asta, Durin and Tyaska by three other Dol Guldur lords, Svedorn, Ask, Daeron and Iridi by orc lords, all at Autumn 21, 22:00.
@@ -1848,15 +1848,15 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The war room's self-test passed (built into the scratchpad, since the running war rooms lock their own folder). New: the lieutenant's chronicle line, its place in the message, and the instructions' text.
 - **Not installed:** the game is running (my test since 16:19). To go in with the game closed, the war rooms stopped first.
 
-### 17:14 · Version 0.13.16 installed · commit f1f2126
-- **What:** the 0.13.16 build of 16:53 (commit 43642e2), unchanged.
+### 17:14 · Version 0.13.16 installed · commit ba0a5f9
+- **What:** the 0.13.16 build of 16:53 (commit 21da25d), unchanged.
 - **When:** I closed the game at 17:12 (its last save, TEST CONTINUOUS SAVE at Winter 5, 1087, 22:00, wrote the orders in force down). The war rooms and the dashboard were stopped first (`scripts\agents.ps1 stop`, 5 processes), and started again after (17:13, detached; each waiting for its next poke or words).
 - **Installed:** `scripts\deploy.ps1`: build, smoke test (433), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `87BA751D020B502972EE0906E8F6290A1D9667AD6E96EB663D70C30DDA328401`, SubModule v0.13.16. RefCheck on the installed DLL against the game's, TAOM.Dependencies', SandBox's and SandBoxCore's bins: 269 game types and 817 member references, 0 missing.
 - **Outside the repo:** `C:\Users\karab\Projects\lieutenant\warroom-system.md` replaced by `agent\lieutenant-system.template.md` (the Look-ups paragraph on `chronicle.txt`, and How you are asked); the old copy is `warroom-system.md.bak-20261101-before-chronicle`.
 - **Seen in the session before it (0.13.15, 16:19 to 17:12):** the relief rule fired for Osven (16 riders, turned back; the bands that took him uncounted, the reason for this version) and for Kisha raiding Hrak-dum (up to 20 riders, 9,253 against 7,119 with Dramthak's army counted, on a measured clock of 62 hours capped at 24; more orc lords out of sight came to Vugra and the fight ended before any rider arrived; all turned back within 7 hours). On the orcs' side Ufthak joined Vrakdush's fight at Brak-gash (two orc lords on the winning side). Dol Guldur's Dramthak, about 7,000 strong, rode 17 hours to relieve Vugra (2,731) against Kisha (about 450): the rule does not ask whether the friend needs the help; told to me as a proposal (ride only while the friend's side would not win alone).
 - **To watch in the game:** battle lines with "Who fought:", captures naming the captor's realm, the relief's "with time to spare" and bands counted, the lieutenant's "YOUR WHOLE CHRONICLE" line and whether it reads `chronicle.txt` when asked about the past; Dol Guldur's `[castle_MM7]` fog alarm gone.
 
-### 17:19 · Version 0.13.17 built: a relief sends lords from other orders only when needed, and enough of them; lords on defend, patrol and recruiting always go · commit 72fd200
+### 17:19 · Version 0.13.17 built: a relief sends lords from other orders only when needed, and enough of them; lords on defend, patrol and recruiting always go · commit 411e85c
 - **Nov 1** (on the proposal that a relief rides only while the friend's side would not win alone): I accepted the proposed fix on the relief rule. Beyond it, the logic should assign enough lords to tip the balance for relief, and lords that have a defend, patrol or recruit order (so lords that are basically not doing anything important) should still go to relieve another lord regardless of how the battle is going, since a crushing victory reduces losses compared to a close victory.
 - **Changed** (`Runner.ReliefPlans`, `FreeToRide` new, `Library.ReliefWinBar` new = 1.5, `ReliefPlan.Free/Busy/Needed`, the call-back, `Library.Text`):
   - Nobody rides while our side, with every lord who can get there with time to spare, would not outweigh the enemy (as before).
@@ -1867,12 +1867,12 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Version 0.13.17.
 - **Checks:** smoke test 434, all passed (new: a defend lord rides to a fight his side would not win alone and the one goto lord nearest goes with him, enough for 1.5 times, the two farther ones do not; with the fight won alone, the defend lord still goes and no goto lord does; which orders are free). The war room's self-test passed (scratch build).
 
-### 17:20 · Version 0.13.17 installed · commit 73ebc27
-- **What:** the 0.13.17 build (commit 72fd200), unchanged, with the game closed (since 17:12).
+### 17:20 · Version 0.13.17 installed · commit b41301a
+- **What:** the 0.13.17 build (commit 411e85c), unchanged, with the game closed (since 17:12).
 - **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (434), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `CA942B6D883271000CE3B729053DDBD834D3A559A0B674A5F1478AE16D4FB477`, SubModule v0.13.17. RefCheck: 269 game types, 817 member references, 0 missing. War rooms and dashboard started again (17:20, detached).
 - **To watch in the game:** relief call-backs saying "so they win it bigger" (a lord free to ride, the fight won alone) or "to tip the balance" (another order); no gather, garrison or other busy lord riding to a fight won alone; enough riders for 1.5 times the enemy.
 
-### 17:44 · Version 0.13.18 built: a holding taken by storm no longer has its siege "lifted" · commit 3b36086
+### 17:44 · Version 0.13.18 built: a holding taken by storm no longer has its siege "lifted" · commit 37b13ca
 - **Nov 1:** make the siege fix. (The record said "The siege of Felegoth was lifted; Aragorn had laid it" right before "Felegoth passed from Gundabad to Kingdom of Arnor and Gondor, taken by Aragorn", at Winter 5, when he stormed it.)
 - **Why:** in 1.4.8 a storm won ends the siege before the holding changes hands. `KingdomManager.SiegeCompleted` removes the besiegers (`BesiegerCamp.RemoveAllSiegeParties`, which ends the siege and fires `OnSiegeEventEnded`), and only then calls `ChangeOwnerOfSettlementAction.ApplyBySiege`. So in `Notices.OnSiegeEnded` the holding was still its old owner's, and its test "taken: the change of hands says it" never held for a storm.
 - **Changed** (`Notices.OnSiegeEnded`, `Flush` new, `OnOwnerChanged`, `Send`'s `hours`, `BridgeBehavior.OnTick`):
@@ -1882,16 +1882,16 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test 434, all passed (no game objects in the smoke test, so the case itself is to be seen in the game: the next holding stormed).
 - Version 0.13.18.
 
-### 17:45 · Version 0.13.18 installed · commit 5cd6f32
-- **What:** the 0.13.18 build (commit 3b36086), unchanged, with the game closed.
+### 17:45 · Version 0.13.18 installed · commit d7ff3e7
+- **What:** the 0.13.18 build (commit 37b13ca), unchanged, with the game closed.
 - **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (434), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `B176FD48CAE5C9AB1117817F84A228EAD0FE00F7F15188EFFD4EC325C5060A6B`, SubModule v0.13.18. RefCheck: 269 game types, 817 member references, 0 missing. War rooms and dashboard started again (17:45, detached).
 - **The watch** (outside the repo, Claude Code's session; Nov 1: the watchers should only wake Claude Code when the game is running, not all the time): the 10-minute watch now runs only while the game is up. While it is closed, one silent background check (every 30 s, no output) waits for `Bannerlord.BLSE.Launcher` and wakes the session once when it starts; the watch and the battle alarms then run until the alarms see the game close, and the silent check takes over again.
 
 ### 17:47 · Pushed to GitHub: versions 0.13.16 to 0.13.18
 - **Nov 1:** push them now; I restart playing once that is done.
-- **What:** the 12 commits from 43642e2 (0.13.16) to 990c46c (0.13.18's install entry), and this entry, to `origin/main` (github.com/Mertoghlip/bannerlord-agents, private).
+- **What:** the 12 commits from 21da25d (0.13.16) to 74872e4 (0.13.18's install entry), and this entry, to `origin/main` (github.com/Mertoghlip/bannerlord-agents, private).
 
-### 18:31 · Version 0.13.19 built: the supply order, the garrison floor, food and garrison strength in the report, the lieutenant keeps unsent words · commit 4e98819
+### 18:31 · Version 0.13.19 built: the supply order, the garrison floor, food and garrison strength in the report, the lieutenant keeps unsent words · commit fce7910
 - **Nov 1:**
   - I asked whether NPC lords can also be allowed to donate food to garrisons. I was seeing a lot of castles at my fronts with zero food due to raids on their villages, and agents and the lieutenant should be able to order lords to donate extra food to settlements to make sure they can outlast sieges. Then, on the two choices put to me (buy first; every realm's agents): agreed.
   - Orders should also get lords to go to their clan's settlements and take troops from those garrisons as they recruit, up until the strength of the garrison falls to a floor set by the agent.
@@ -1906,13 +1906,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Version 0.13.19.
 - **Checks:** smoke test 436, all passed (new: the report's food and garrison strength for the realm's own and none for an enemy's; garrison_floor on every order and described once; the supply order in the library). The two checks the new parts changed were updated (21 orders, the holding line's strength). The game-thread parts (buying, handing over, taking from a garrison, the window) are to be seen in the game.
 
-### 18:32 · Version 0.13.19 installed, and pushed with 0.13.19's commits · commit e3c90fb
-- **What:** the 0.13.19 build (commit 4e98819), unchanged, with the game closed (since 18:25; its last save, TEST CONTINUOUS SAVE at Winter 14, 1087, 08:00, wrote the orders in force down).
+### 18:32 · Version 0.13.19 installed, and pushed with 0.13.19's commits · commit e7d2fa5
+- **What:** the 0.13.19 build (commit fce7910), unchanged, with the game closed (since 18:25; its last save, TEST CONTINUOUS SAVE at Winter 14, 1087, 08:00, wrote the orders in force down).
 - **Installed:** war rooms and dashboard stopped first (5 processes), `scripts\deploy.ps1`: smoke test (436), war room and dashboard self-tests all passed. `BannerlordAgents.dll` sha256 `B07746A4F0034B9D6823F862BF9826826785B6D990C3992D607E98FCE12E03B1`, SubModule v0.13.19. RefCheck: 271 game types, 834 member references, 0 missing (the food store, the stores' limit, the food-buying model, `SellItemsAction`, the item roster's counts, `InventoryCapacity`, `TotalWeightCarried`, the estimated strength). War rooms and dashboard started again (18:31, detached).
-- **Pushed:** this entry and commits 4e98819, 8245c14 to `origin/main` (I had asked for the last batch to be pushed once done).
+- **Pushed:** this entry and commits fce7910, 3d5a4ad to `origin/main` (I had asked for the last batch to be pushed once done).
 - **To watch in the game:** supply orders (the market stop, "handed over N food at X"), garrison men taken ("from garrison" in the trace), the food line in YOUR HOLDINGS, the lieutenant's window keeping unsent words.
 
-### 18:47 · Version 0.13.20 built: the hunger warning, food in the order language, doctrine principle 19, and the realm agents' instructions brought up to date · commit 9875256
+### 18:47 · Version 0.13.20 built: the hunger warning, food in the order language, doctrine principle 19, and the realm agents' instructions brought up to date · commit f72c774
 - **Nov 1** (my question: do the agents' system prompts and the lieutenant's prompt contain instructions for these orders, and do they have the needed context; on the three fixes and three extras proposed): I accepted the fix proposals and all the optional extras, to be implemented as well.
 - **What was found:**
   - The order library (`tools.txt`, written by the bridge at every load, `AgentChannel.WriteLibrary`, and put into every call's system prompt by the war room) carries the supply order and `garrison_floor` from the next load.
@@ -1931,8 +1931,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The warning fires for a castle with 1 day of food and Kralza 20 away. It is not told again the next hour, is told again once the food falls a day more, and stays silent with the enemy far off.
   - An agent-style tool reading `food_days_at(at)` and `food_at(at)` moves on a castle short of food.
 
-### 18:47 · Version 0.13.20 installed, the realm agents' instructions replaced, pushed · commit 04a44c6
-- **What:** the 0.13.20 build (commit 9875256), unchanged, with the game closed.
+### 18:47 · Version 0.13.20 installed, the realm agents' instructions replaced, pushed · commit 7f32596
+- **What:** the 0.13.20 build (commit f72c774), unchanged, with the game closed.
 - **Installed:**
   - War rooms and dashboard stopped first (5 processes).
   - `scripts\deploy.ps1`: smoke test (438), war room and dashboard self-tests all passed.
@@ -1944,9 +1944,9 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Eight lines changed in each, CRLF kept. The old copies are `warroom-system.md.bak-20261101-before-supply`.
   - The lieutenant's `warroom-system.md` is unchanged.
 - **The order libraries** (`tools.txt`) in the agents' channels are rewritten by the bridge at the next load, with the supply order, `garrison_floor` and the food functions.
-- **Pushed:** this entry, 9875256 and 799c15c to `origin/main`.
+- **Pushed:** this entry, f72c774 and b7e9ecd to `origin/main`.
 
-### 19:23 · Version 0.13.21 built: food coming and each holding's clan in the report, the lords-eat-their-own rule, no hunger warning for full stores · commit 2027e50
+### 19:23 · Version 0.13.21 built: food coming and each holding's clan in the report, the lords-eat-their-own rule, no hunger warning for full stores · commit dc1a8b2
 - **Nov 1:**
   - Asking why Zulgora's army left Gwígar: the castle actually had food, since it had already been restocked, and I asked why it did not see that.
   - The lieutenant before that, on Oropher's loop with `garrison_floor` 600: "The game only lets him do this in your clan's own holdings; the report does not show me which ones those are."
@@ -1967,7 +1967,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the late-answer warning (what changed at the places an answer's orders name while it was being written);
   - the "can they cut me off" check in the race question.
 
-### 19:24 · Version 0.13.21 installed after the Zulgora battle crash, realm instructions updated, pushed · commit 48316e4
+### 19:24 · Version 0.13.21 installed after the Zulgora battle crash, realm instructions updated, pushed · commit 9ebc2e5
 - **The crash first** (TFAOMFixes' to fix, not ours; told to its session with the bundle):
   - My battle against Dol Guldur's Zulgora (about 6,000 soldiers and horses) hung at Winter 17, 19:18 real time. TAOM caught an AccessViolationException in `Agent.ParallelUpdateCachedAndFormationValuesForAIAgent` (bundle `taom_crash_20261102_031828_653c8d22.zip`).
   - The game's log had three "as_spider does not contain act_warg_attack_running" lines less than a second before the first engine fault (+0x6f909d reading 0x25c0, then +0x5f132d reading 0x88, the same pair as Oct 29 23:18). The main thread then spun at TaleWorlds.Native+0x1f3344 (our freeze probe at 19:18:50).
@@ -1979,9 +1979,9 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - RefCheck: 271 game types, 834 member references, 0 missing.
   - War rooms and dashboard started again (19:24, detached).
 - **Outside the repo:** the three realm agents' `warroom-system.md` rebuilt from the template as before (each keeps its title and opening line). Two lines changed in each: the Recruiting line on clans. The old copies are `.bak-20261101-before-clans`.
-- **Pushed:** this entry with 2027e50 and 3a7824e.
+- **Pushed:** this entry with dc1a8b2 and 3830934.
 
-### 20:30 · Version 0.13.22 built: the late-answer warning, the cut-off check in the race question, the tool language for the lieutenant · commit 4e31f60
+### 20:30 · Version 0.13.22 built: the late-answer warning, the cut-off check in the race question, the tool language for the lieutenant · commit f591aae
 - **Nov 1**, on the two proposals left from the Zulgora analysis and the lieutenant's gap: implement both ideas, and fix the gap for the lieutenant as well.
 - **The late answer** (`LateAnswer.cs`, new; `Channel`'s `LateAnswer.Book`; `Brain.Poke` passes each poke's view):
   - Measured first in the channels' receipts (last 400 orders each): answers took effect a median 6 in-game hours after their poke for the orcs (one in ten 18 or more, the most 33) and 8 for Dol Guldur (one in ten 24 or more, the most 52).
@@ -2010,8 +2010,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
     - both templates list every move, name and function of the language (`ToolDef.Verbs`, `Functions`, `BuiltIns`).
   - **War room self-test, all passed.** New: on the made-up map, Hirgon standing on Bolg's road east can be on it about 7 along an hour before him, and Aragorn's slow army near its end about 48 along; nobody can reach the pass road south first.
 
-### 20:32 · Version 0.13.22 installed, the realm agents' and the lieutenant's instructions replaced, pushed · commit 88c59b2
-- **What:** the 0.13.22 build (commit 4e31f60), unchanged, with the game closed.
+### 20:32 · Version 0.13.22 installed, the realm agents' and the lieutenant's instructions replaced, pushed · commit 8b86b36
+- **What:** the 0.13.22 build (commit f591aae), unchanged, with the game closed.
 - **Installed:**
   - War rooms and dashboard stopped first (5 processes).
   - `scripts\deploy.ps1`: smoke test (442), war room and dashboard self-tests all passed.
@@ -2021,11 +2021,11 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repo:**
   - Each realm agent's `warroom-system.md` (`orc-war-council`, `dolguldur-war-council`, `kingdom-war-council`) rebuilt from the template, keeping its title and opening line. Four lines changed in each (the poke section, the names, the functions, Asking the way), CRLF kept; the old copies are `warroom-system.md.bak-20261101-before-late-answer`.
   - The lieutenant's `warroom-system.md` (`C:\Users\karab\Projects\lieutenant`) replaced by its template (The tool language, Asking the way); the old copy is `warroom-system.md.bak-20261101-before-language`.
-- **Pushed:** this entry with 4e31f60 and the follow-up naming it.
+- **Pushed:** this entry with f591aae and the follow-up naming it.
 
 ## 2026-11-02
 
-### 00:08 · Version 0.13.23 built and installed: the late note names no id its report no longer shows; the game killed for the battle helper's freeze fix, pushed · commit d77ccc9
+### 00:08 · Version 0.13.23 built and installed: the late note names no id its report no longer shows; the game killed for the battle helper's freeze fix, pushed · commit 6e7cfcc
 - **The fog check flagged two late notes** (Nov 1, the orcs' pokes #6258 and #6295): "Osven [lord_2_121_party_1]: no longer in your report." and the same for Silivren. Both were lords of mine that an order had named, captured meanwhile. The agent had seen those ids in the report it answered, so nothing it could not know reached it, but a report names only the ids it shows.
 - **Changed** (`LateAnswer.For`): each line names the place or lord by the id the newest report shows (a captured lord's own, not his party's), and with no id at all when it has gone from the report. Version 0.13.23.
 - **Checks:** smoke test 443, all passed (new: Baranthir gone from the newest report reads "- Baranthir: no longer in your report." with neither of his ids). War room and dashboard self-tests passed. RefCheck: 271 game types, 834 member references, 0 missing.
@@ -2052,7 +2052,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Tuesday, November 3
 
-### 20:35 · Install, version 0.14.0: a news wake's context, pinpoint by the clock of the news · commit 0011edf
+### 20:35 · Install, version 0.14.0: a news wake's context, pinpoint by the clock of the news · commit d7c89a8
 - **Why:** Nov 2: what is relevant to this specific piece of news should be given, and the rest should be queryable; the reach is set by the "clock" for the specific new development. My other answers: a first look keeps the whole report; tool writing moves to councils only; a letter's theatre is the places it names. Plan and decisions: `docs/PLAN-news.md`.
 - **What, game side:**
   - `Theatre`: a poke's focuses, their clocks and horizons (6 hours to 3 days, a day with no clock), the lords marked against the clock with the agent's measured answer time, and who else can be there in time.
@@ -2071,7 +2071,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repository:** `warroom-news.md` installed in `orc-war-council`, `dolguldur-war-council` and `kingdom-war-council`, each `agent.txt` given `news = shadow`. War rooms and dashboard stopped for the builds and started again.
 - **Still to do:** shadow in play, then a both-sides test run in theatre mode.
 
-### 21:03 · War room 0.14.1: a report's sections read to their end, not the report's; the news context measured · commit bfa1c1c
+### 21:03 · War room 0.14.1: a report's sections read to their end, not the report's; the news context measured · commit b838f99
 - **Why:** fix the bug, and report by how much we were able to reduce the context.
 - **The fix:** `Room.Section` looked for \n\n in text whose lines end in \r\n, so it read each section to the end of the report. It now stops at the section's blank line, whichever way the lines end. Two new self-test checks; war room self-test (100 checks) and smoke test passed.
 - **What it changes, in every news mode:** urgency and a council's words are read from the news only. On the run's 768 written answers, urgent falls from 654 to 61, so most pokes take the 3,000 thinking cap, not 5,000. Of the 142 councils, 31 had a dated chronicle line as their reason and need not have sat. Runs from now on differ from run A in this, beside the news report.
@@ -2080,9 +2080,17 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Corrects the 20:35 entry:** its 35,806 and "about 24,500 fixed" came from replays without the way-finding section and tools; with them, about 38,500 on those twelve, and 24,000 to 26,000 fixed.
 - **Also:** `replay --campaign` and `--lookups` (a replay with the whole tool set or the Read tool, to measure a call's size), `SmokeTest --coverage --sizes`.
 
-### 21:35 · The repository's wording in my own voice; the Claude notes kept local · commits 029b2ee and 934eb2a
+### 21:35 · The repository's wording in my own voice; the Claude notes kept local · commits 40d7f46 and bfdac71
 - **Why:** lines such as "for review by the author" in the third person read like an assistant's notes, not a project's.
-- **The wording (029b2ee):** the change log, the docs and the code comments now read first person where a person matters, with no attribution elsewhere: about 640 lines in 70 files. Dates, numbers, hashes, ids and links are kept. Quoted requests became plain statements of what was wanted.
+- **The wording (40d7f46):** the change log, the docs and the code comments now read first person where a person matters, with no attribution elsewhere: about 640 lines in 70 files. Dates, numbers, hashes, ids and links are kept. Quoted requests became plain statements of what was wanted.
 - **Checks:** no code changed. Compared with the last commit, all 177 changed C# lines differ only in a comment; the other four are a help block, an XML comment and one test description. Nothing under `agent/` changed. Smoke test 457 checks, war room self-test 100, dashboard self-test, all passed. No install: the module's behaviour is unchanged.
-- **The Claude notes (934eb2a):** `CLAUDE.md` and `agent/CLAUDE.template.md` are out of the repository and ignored by git; they stay on this laptop, and Claude Code still reads `CLAUDE.md` here. `src/BannerlordAgents.WarRoom/Claude.cs` stays: it is source code the war room needs. Four pointers to the removed files were dropped from the docs and one comment.
+- **The Claude notes (bfdac71):** `CLAUDE.md` and `agent/CLAUDE.template.md` are out of the repository and ignored by git; they stay on this laptop, and Claude Code still reads `CLAUDE.md` here. `src/BannerlordAgents.WarRoom/Claude.cs` stays: it is source code the war room needs. Four pointers to the removed files were dropped from the docs and one comment.
 - **Left as they were:** `docs/proposal/` (dated snapshots, which also state that Claude Code helps with implementation, as the course allows), the commit history and its `Co-Authored-By` lines, and every other mention of Claude Code.
+
+### 21:44 · The history rewritten; the engine notes in the docs · commit COMMIT_NOTES (force-pushed)
+- **The history:** `CLAUDE.md` and `agent/CLAUDE.template.md` are out of all 212 commits, and 40 commit messages are reworded in the first person. Authors, dates and `Co-Authored-By` lines are unchanged. Every commit has a new id; this log's 119 citations now give the new ones.
+- **Checks:** commit by commit against the old history, the only files that differ are those two; authors, emails and dates are identical; the latest tree is byte for byte the same.
+- **Not cleaned:** old versions of the docs and comments, in earlier commits, still have their old wording. Only the latest version is rewritten.
+- **The way back:** `D:\BannerlordAgents-backup\repo-history-rewrite-20261103\` holds a bundle of the old history, the old-to-new id map (`map.txt`) and copies of the two files as they stood. Run records and notes written before today may cite old ids; `map.txt` translates them.
+- **Other copies:** any other clone of this repository needs cloning afresh.
+- **The engine notes:** moved word for word from the local `CLAUDE.md` to `docs/ENGINE-NOTES.md`. `CLAUDE.md` keeps my rules, the build notes and the code map, and points to them.

@@ -21,7 +21,7 @@ The study asks how much to leave to the model and how much to code. It also asks
 | `agent/` | Templates for the agent's own folder, which lives outside this repository so the agent cannot read the code. `scripts/setup-agent.ps1` installs them. |
 | `tools/FreezeProbe/` | A small program outside the game that says where the game is stuck when it freezes. The module starts it by itself; it is installed in the module's `probe` folder. |
 | `scripts/` | `deploy.ps1` builds everything, runs the smoke test, and installs the module into the game; it refuses while the game is open or if a check fails. `probe.ps1` runs the freeze probe by hand. `setup-agent.ps1` prepares the agent's folder, `warroom.ps1` starts the war room, and `dashboard.ps1` the dashboard. |
-| `docs/` | The build plan, the first tests phase by phase, the tools, the war room, the memory, the logs ([LOGGING.md](docs/LOGGING.md)), the study of medieval military doctrine behind the agent's instructions ([DOCTRINE.md](docs/DOCTRINE.md)), every change with its notes ([CHANGELOG.md](docs/CHANGELOG.md)), the hours log, the session reports, and the proposal. |
+| `docs/` | The build plan, the first tests phase by phase, the tools, the war room, the memory, the logs ([LOGGING.md](docs/LOGGING.md)), the study of medieval military doctrine behind the agent's instructions ([DOCTRINE.md](docs/DOCTRINE.md)), what the game and the pack do under the hood ([ENGINE-NOTES.md](docs/ENGINE-NOTES.md)), every change with its notes ([CHANGELOG.md](docs/CHANGELOG.md)), the hours log, the session reports, and the proposal. |
 
 More arrives as the plan reaches it:
 - `src/BannerlordAgents.Core/`: the shared core, when the tool engine is needed outside the game too.
