@@ -2052,7 +2052,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Tuesday, November 3
 
-### 20:35 · Install, version 0.14.0: a news wake's context, pinpoint by the clock of the news · commit COMMIT_HASH
+### 20:35 · Install, version 0.14.0: a news wake's context, pinpoint by the clock of the news · commit 0011edf
 - **Why:** Mert, Nov 2: "stuff RELEVANT to this specific piece of news should be given and the rest should be queryable"; the reach set by "the 'clock' for the specific new development". His other answers: a first look keeps the whole report; tool writing moves to councils only; a letter's theatre is the places it names. Plan and decisions: `docs/PLAN-news.md`.
 - **What, game side:**
   - `Theatre`: a poke's focuses, their clocks and horizons (6 hours to 3 days, a day with no clock), the lords marked against the clock with the agent's measured answer time, and who else can be there in time.
