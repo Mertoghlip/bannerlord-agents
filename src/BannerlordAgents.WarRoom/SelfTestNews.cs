@@ -78,6 +78,24 @@ namespace BannerlordAgents.WarRoom
             Check(chron.Contains("defend Orc Castle") && !chron.Contains("goes home") && aragorn.Contains("Enemy army in view: Aragorn") && tool.AskedBook == 12,
                   "chronicle: the lines about a lord (by id, and so by name) or a name, up to the report's hour only: " + chron.Replace("\n", " | "));
 
+            // 0.14.1: a section ends at its blank line, whichever way the report's lines end; a word only in the report's history calls no council
+            const string Crlf = "POKE #12, Summer 3\r\n\r\nREPORT\r\n\r\nWHY YOU ARE ASKED NOW\r\n- Enemy lord in view: Bolg.\r\n\r\nWHAT CHANGED SINCE YOUR LAST ANSWER\r\n- Nothing new.\r\n\r\n"
+                                + "RECENT HISTORY\r\n- Summer 2 · Narsha's army has formed at Laer Loth.\r\n- Summer 2 · Gwigar is besieged by Alenon.\r\n- A wall fell.\r\n";
+            Check(Room.Section(Crlf, "WHY YOU ARE ASKED NOW") == "WHY YOU ARE ASKED NOW\n- Enemy lord in view: Bolg."
+                  && Room.Section(Crlf.Replace("\r", ""), "WHY YOU ARE ASKED NOW") == "WHY YOU ARE ASKED NOW\n- Enemy lord in view: Bolg."
+                  && Room.Section(Crlf, "WHAT CHANGED SINCE YOUR LAST ANSWER") == "WHAT CHANGED SINCE YOUR LAST ANSWER\n- Nothing new."
+                  && Room.Section(Crlf, "NO SUCH HEADING") == "",
+                  "a report's section ends at its blank line, with its lines ending in \\r\\n or in \\n (urgency and a council's reasons read no further)");
+            var council = new Room(new Config { AgentDir = dir, Channel = "warroom", CouncilGapHours = 6 }, Path.Combine(dir, "logs"));
+            council.CouncilSat(1000, null);
+            var noOrders = new JsonObject { ["orders"] = new JsonArray() };
+            council.AfterAnswer(Crlf, noOrders);
+            string quiet = council.CouncilDue(1010);
+            council.AfterAnswer(Crlf.Replace("Enemy lord in view: Bolg.", "Orc Keep is besieged by Aragorn."), noOrders);
+            string due = council.CouncilDue(1010);
+            Check(quiet == null && due != null && due.Contains("Orc Keep is besieged by Aragorn"),
+                  "a word only in the report's history calls no council; the same word in the news does (" + due + ")");
+
             // poke.json's news, as the bridge writes it
             File.WriteAllText(Path.Combine(channel, "poke.json"), "{\"number\":12,\"hours\":1000,\"campaign\":\"camp-n\",\"realm\":\"orcs\",\"news\":{\"mode\":\"theatre\",\"recipe\":\"theatre\",\"book\":\"book\\\\poke-12.json\",\"names\":[\"Aragorn\",\"Orc Castle\"]}}");
             PokeMeta meta = room.ReadMetaForTest(12);

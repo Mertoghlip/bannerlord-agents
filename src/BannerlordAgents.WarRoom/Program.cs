@@ -249,7 +249,10 @@ namespace BannerlordAgents.WarRoom
                     // the poke as the bridge would have sent it in theatre mode: its poke.json with its news, its question book in the channel
                     File.WriteAllText(Path.Combine(c.ChannelDir, "poke.json"), new JsonObject
                     {
-                        ["number"] = p.Number, ["hours"] = p.Hours, ["date"] = When(p.Hours), ["campaign"] = "replay", ["realm"] = p.Realm, ["realm_name"] = p.RealmName, ["load_id"] = "replay",
+                        ["number"] = p.Number, ["hours"] = p.Hours, ["date"] = When(p.Hours),
+                        // --campaign: a campaign with a view file and a map, so the way-finding questions and their instructions are there, as in a live call
+                        // (they answer from that file's newest hour, so use it to measure a call's size, not to judge its answers)
+                        ["campaign"] = Arg(args, "--campaign") ?? "replay", ["realm"] = p.Realm, ["realm_name"] = p.RealmName, ["load_id"] = "replay",
                         ["news"] = JsonNode.Parse(p.News)
                     }.ToJsonString(), new UTF8Encoding(false));
                     string book = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(file)), "book", "poke-" + p.Number + ".json");
@@ -407,7 +410,7 @@ namespace BannerlordAgents.WarRoom
             var c = new Config
             {
                 AgentDir = scratch, Channel = live.Channel, Model = Arg(args, "--model") ?? live.Model, Effort = Arg(args, "--effort") ?? live.Effort,
-                UrgentEffort = Arg(args, "--effort") ?? live.UrgentEffort, Urgent = live.Urgent, TimeoutSeconds = live.TimeoutSeconds, ClaudePath = live.ClaudePath, Lookups = false,
+                UrgentEffort = Arg(args, "--effort") ?? live.UrgentEffort, Urgent = live.Urgent, TimeoutSeconds = live.TimeoutSeconds, ClaudePath = live.ClaudePath, Lookups = args.Contains("--lookups"),
                 ThinkingCap = live.ThinkingCap, UrgentThinkingCap = live.UrgentThinkingCap, MaxLessons = live.MaxLessons, MemoryMode = memory,
                 StoryEvery = live.StoryEvery, StoryWords = live.StoryWords, StoryModel = Arg(args, "--model") ?? live.StoryModel, StoryEffort = live.StoryEffort,
                 StoryThinkingCap = live.StoryThinkingCap, ConversationLimit = live.ConversationLimit

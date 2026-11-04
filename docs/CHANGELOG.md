@@ -2071,3 +2071,15 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 . So 375 of Dol Guldur's 375 answers and 280 of the orcs' 394 counted as urgent, and 47 of 142 councils were called by words in the news or the report, some of them old chronicle lines. Left as it is so the theatre's test changes one thing at a time.
 - **Outside the repository:** `warroom-news.md` installed in `orc-war-council`, `dolguldur-war-council` and `kingdom-war-council`, each `agent.txt` given `news = shadow`. War rooms and dashboard stopped for the builds and started again.
 - **Still to do:** shadow in play, then a both-sides test run in theatre mode.
+
+### 21:03 · War room 0.14.1: a report's sections read to their end, not the report's; the news context measured · commit COMMIT_HASH
+- **Why:** Mert: "Fix the bug, and tell me by how much we were able to reduce the context".
+- **The fix:** `Room.Section` looked for 
+
+ in text whose lines end in 
+, so it read each section to the end of the report. It now stops at the section's blank line, whichever way the lines end. Two new self-test checks; war room self-test (100 checks) and smoke test passed.
+- **What it changes, in every news mode:** urgency and a council's words are read from the news only. On the run's 768 written answers, urgent falls from 654 to 61, so most pokes take the 3,000 thinking cap, not 5,000. Of the 142 councils, 31 had a dated chronicle line as their reason and need not have sat. Runs from now on differ from run A in this, beside the news report.
+- **No game files changed:** the module stays 0.14.0. War rooms and dashboard stopped for the build and started again.
+- **The measure (`docs/reports/2026-11-03-news-context.md`):** a news wake's first read falls 37%, from a median 64,504 to about 40,500 tokens, over all 768 answers: report 59% to 65% less, memory 16% to 60% less, instructions and tools 16% to 18% less. With the councils, unchanged, all first reads fall 31% (60.7M to 42.1M). Only in theatre mode; the agents are on shadow, so none of it is live yet. Reckoned from recordings, and checked within 240 tokens on five real calls.
+- **Corrects the 20:35 entry:** its 35,806 and "about 24,500 fixed" came from replays without the way-finding section and tools; with them, about 38,500 on those twelve, and 24,000 to 26,000 fixed.
+- **Also:** `replay --campaign` and `--lookups` (a replay with the whole tool set or the Read tool, to measure a call's size), `SmokeTest --coverage --sizes`.

@@ -993,12 +993,18 @@ namespace BannerlordAgents.WarRoom
             catch (IOException) { return null; }
         }
 
-        private static string Section(string text, string head)
+        /// <summary>
+        /// A section of a report, from its heading to the blank line that ends it. The bridge's reports end their lines in \r\n (0.14.1: this
+        /// looked for \n\n, never found one, and read every section to the end of the report; so in run 20261029-1903-A all of Dol Guldur's
+        /// 375 answers and 280 of the orcs' 394 counted as urgent, on any word anywhere in the report, and old chronicle lines called councils).
+        /// </summary>
+        internal static string Section(string text, string head)
         {
             int i = text.IndexOf(head, StringComparison.Ordinal);
             if (i < 0) return "";
-            int end = text.IndexOf("\n\n", i, StringComparison.Ordinal);
-            return end < 0 ? text.Substring(i) : text.Substring(i, end - i);
+            string rest = text.Substring(i).Replace("\r", "");
+            int end = rest.IndexOf("\n\n", StringComparison.Ordinal);
+            return end < 0 ? rest : rest.Substring(0, end);
         }
 
         // ---------- the system prompts ----------

@@ -27,6 +27,8 @@ namespace SmokeTest
             if (args.Length < 3) { Console.WriteLine("SmokeTest --coverage <pokes_realm.jsonl> <orders\\done> --run <id> [--out file.md]"); return 1; }
             string pokesFile = args[1], done = args[2];
             string run = Arg(args, "--run"), outFile = Arg(args, "--out");
+            string sizesFile = Arg(args, "--sizes");
+            StreamWriter sizes = sizesFile != null ? new StreamWriter(sizesFile, false, new UTF8Encoding(false)) : null;
             var rows = new List<Row>();
             int lines = 0, skipped = 0;
             foreach (string line in File.ReadLines(pokesFile))
@@ -37,8 +39,12 @@ namespace SmokeTest
                 if (p == null) { skipped++; continue; }
                 string answer = Path.Combine(done, "poke-" + p.Number + ".json");
                 JObject a = File.Exists(answer) ? JObject.Parse(File.ReadAllText(answer)) : null;
-                rows.Add(Measure(p, a));
+                Row row = Measure(p, a);
+                rows.Add(row);
+                // each poke's sizes and its theatre's names, to reckon a whole call's size against its recorded prompt
+                sizes?.WriteLine(Json.Line(new { row.Number, row.Kind, row.Recipe, row.FullChars, row.NewsChars, row.Names, Realms = p.View.AtWar.Concat(p.View.Allies).ToList() }));
             }
+            sizes?.Dispose();
             string text = CoverageText(rows, pokesFile, run, lines, skipped);
             Console.WriteLine(text);
             if (outFile != null) File.WriteAllText(outFile, text, new UTF8Encoding(false));
@@ -113,6 +119,7 @@ namespace SmokeTest
             public int LordOrdered, PlaceInForce, Shown;
             /// <summary>Ids the news report names that the poke's whole report does not: the fog check on recorded pokes.</summary>
             public List<string> NewIds = new List<string>();
+            public List<string> Names = new List<string>();
         }
 
         /// <summary>The kind a poke is filed under: its first item of news that is not a quiet day.</summary>
@@ -144,6 +151,7 @@ namespace SmokeTest
                 Lords = t.Lords.Count, LordsAll = v.Forces.Count, Others = t.Others.Count, Places = t.Places.Count,
                 Clock = t.Focuses.Any(f => !double.IsNaN(f.DecidedAt)), Horizon = t.Focuses.Count > 0 ? t.Focuses.Max(f => f.Horizon) : double.NaN
             };
+            if (t.IsTheatre) row.Names = t.Names(v, local: true);
             var inWhole = new HashSet<string>(Views.IdsIn(p.Report));
             foreach (string id in Views.IdsIn(news)) if (!inWhole.Contains(id) && id != "brackets") row.NewIds.Add(id);
             if (answer == null || !t.IsTheatre) return row;

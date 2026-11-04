@@ -47,13 +47,13 @@ In order: the story so far; the plan and the lessons whole, and the notes on the
 
 **The questions:** `look_up` (one id in full, enemy castles and towns near the realm's lands included: there were no such pages before), `list` (one kind of thing, all of it, or in one region, or with some words) and `chronicle` (the lines about one lord, holding or realm). They answer from the poke's question book, from the same hour and view as the report, fog-checked like it, or from the realm's chronicle and the agent's notes.
 
-**The instructions:** `warroom-news.md`'s sections take the place of the same sections of `warroom-system.md`: the tool-writing manual and the tool check go, and the look-up files give way to the questions. The system prompt falls from about 72,000 to about 57,000 characters.
+**The instructions:** `warroom-news.md`'s sections take the place of the same sections of `warroom-system.md`: the tool-writing manual and the tool check go, and the look-up files give way to the questions. The system prompt falls from 72,344 to 60,576 characters for Dol Guldur, and from 79,063 to 67,295 for the orcs.
 
 ## Results so far
 
 The measures are in [reports/2026-11-03-news-context.md](reports/2026-11-03-news-context.md). In short, on run 20261029-1903-A, from recordings, so with no real roads or siege and battle clocks:
 
-- **Size:** the report is 35% to 41% of the whole one. A call's first read falls from about 62,000 to about 36,000 tokens, not the 15,000 to 20,000 this plan first said: the instructions and tool definitions alone are about 24,500.
+- **Size:** a news wake's first read falls 37%, from a median 64,504 to about 40,500 tokens, over all 768 answers of the run: the report 59% to 65% less, the memory 16% to 60% less, the instructions and tools 16% to 18% less. This plan first said 15,000 to 20,000; the instructions and tools alone are 24,000 to 26,000. With the councils, unchanged, all first reads fall 31%.
 - **Coverage:** 57% to 60% of what the agent's orders named was in the theatre in full; 95% was named in the report at all. The plan's bar of about 95% in the theatre is not met, and a wider horizon would not meet it: 70% of the lords missed lay over a day beyond it. The agent uses a news wake to run the whole war. That is why THE REST OF THE WAR names every lord, and the other orders are given in a few words.
 - **Fog:** across 1,604 rebuilt wakes, a news report named no id its whole report did not.
 - **Replays (12 wakes):** five decisions the same, three the same at the core with more added, two the same main move, two different. The median answer time did not change (23.7 s, 23.3 s), but the total rose 16% and questions rose from 25 to 43, over the plan's limit; the sample had no way-finding questions and no look-up pages, so that is likely too high.

@@ -37,7 +37,7 @@ Twelve recorded wakes (7 of Dol Guldur, 5 of the orcs, of six kinds) answered ag
 
 | | Original | News wake |
 |---|---:|---:|
-| Tokens read on the first step, median | 62,040 | 35,806 (42% less) |
+| Tokens read on the first step, median | 62,040 | 38,468 (38% less), with the way-finding section and tools these replays lacked added back |
 | Answer time, median | 23.7 s | 23.3 s |
 | Answer time, all twelve together | 415 s | 483 s (16% more) |
 | Longest answer | 78.9 s | 120.6 s |
@@ -68,9 +68,37 @@ What this sample cannot say:
 - It had no real road distances or siege and battle clocks.
 - Nothing can say here whether the extra orders, or the missing ones, were better or worse.
 
-## Size: the estimate was wrong
+## How much the context falls
 
-The plan said about 15,000 to 20,000 tokens a call. A straight-line fit over the twelve (first read against the message's length) gives **about 24,500 tokens fixed** (the instructions and the tool definitions, even without the tool-writing manual) plus 10,000 to 17,000 for the message (2.6 characters a token). The instructions are now the biggest part. The local model's target of 8,000 to 16,000 needs a much shorter set of instructions as well.
+**A news wake's first read falls by 37%, from a median 64,504 to about 40,500 tokens,** over all 768 fast answers of the run. This holds only in theatre mode, which no agent is on yet. The plan's 15,000 to 20,000 was wrong, and so was the 36,000 first written here: those replays had no map, so they lacked the way-finding section of the instructions and five tool definitions, about 2,500 tokens.
+
+How it was worked out:
+
+- **Before:** each call's own token count, from its record.
+- **The fixed part:** real calls with a one-line message under each set of instructions and tools, each realm's library as it stands now.
+- **The message:** 0.456 tokens a character (2.19 characters a token), from five real news calls with the whole tool set.
+- **After:** the fixed part, plus the call's recorded message with its report swapped for the news report and its notes and chronicle lines cut to the news.
+- **Check:** on those five real calls this lands within 240 tokens of the true count.
+
+| Tokens, the median wake | Dol Guldur | Misty Orcs |
+|---|---:|---:|
+| Report | 27,340 to 9,670 (65% less) | 29,728 to 12,048 (59% less) |
+| Memory (story, notes, chronicle lines) | 4,161 to 3,490 (16% less) | 9,891 to 3,983 (60% less) |
+| Instructions and tool definitions | 28,994 to 23,903 (18% less) | 31,477 to 26,381 (16% less) |
+| Whole first read | 60,654 to 37,305 (38% less) | 69,505 to 42,778 (38% less) |
+
+System prompt in characters: Dol Guldur 72,344 to 60,576, the orcs 79,063 to 67,295.
+
+By kind of news: tool call-backs and ended orders 40% less, enemies in view 39%, raids, battles and captures 38%, letters 35%, a first look 8% (it keeps the whole report).
+
+- **The whole run:** councils keep the whole picture, at a median first read of 71,697. All first reads together, 142 councils and 768 answers: 60.7 million to 42.1 million tokens, 31% less.
+- **Within a call (the twelve replays):** questions add to the context. The largest context in a call falls from a median 63,932 to 42,086, 34% less, but two wakes that asked much came back near the original: 60,917 to 57,567, and 63,671 to 55,260. All steps of all twelve together: 2.29 million to 1.24 million tokens.
+
+What this cannot say:
+
+- It comes from recordings, so it has no real road distances and no siege or battle clocks. A long clock widens a theatre up to three days, so a live news report may be larger.
+- The fixed part uses the realms' libraries as they stand at the end of the run, so early wakes are slightly overstated.
+- The local model's target of 8,000 to 16,000 is still far off: the instructions and tool definitions alone are 24,000 to 26,000.
 
 ## The helper
 
@@ -83,11 +111,11 @@ The plan said about 15,000 to 20,000 tokens a call. A straight-line fit over the
 
 Budget 1,000 ms. Theatre mode is lighter since it writes no look-up files per wake (1,640 ms over the test, against 80 ms for the question book and 42 ms for the news reports).
 
-## Found on the way: a bug older than this work, left as it is
+## Found on the way: a bug older than this work, fixed in 0.14.1
 
-`Room.Section` looks for a section's end with a blank line in "\n" form, but the report's lines end in "\r\n", so it reads every section to the end of the report. Two things read through it:
+`Room.Section` looked for a section's end with a blank line in "\n" form, but the report's lines end in "\r\n", so it read every section to the end of the report. Two things read through it:
 
-- **Urgency:** its words are searched in the whole report, so 375 of Dol Guldur's 375 answers in the run, and 280 of the orcs' 394, counted as urgent (the larger thinking cap).
-- **Calling a council:** its words are searched there too, so old chronicle lines still in the two-day history can call one. 28 of Dol Guldur's 73 councils and 19 of the orcs' 69 were called by words in the news or the report; several of those reasons were dated history lines ("Summer 20, 1087, 23:00 · Narsha's army has formed").
+- **Urgency:** its words were searched in the whole report. Of the run's 768 written answers, 654 counted as urgent (the larger thinking cap, 5,000 against 3,000); by the news alone, 61 would have (Dol Guldur 375 to 41, the orcs 279 to 20).
+- **Calling a council:** its words were searched there too, so old chronicle lines still in the two-day history could call one. Of the 142 councils, 47 were called by a word in the report: 31 with a dated chronicle line as the reason ("Summer 20, 1087, 23:00 · Narsha's army has formed"), 16 with the current news. The other 95 sat on the hour or after a first look.
 
-It is not fixed in 0.14, so that the theatre's test compares one change at a time. The fix is one line.
+Mert asked for the fix on Nov 3. It holds in every news mode, so runs from now on think less on most pokes and may sit fewer councils than run A: a difference from its baseline, beside the news report.
