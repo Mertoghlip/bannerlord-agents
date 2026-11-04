@@ -186,6 +186,8 @@ The weeks and hours are the proposal's. Each week says what gets built, and how 
 - [x] The backup: on the laptop's D: drive, at every run's end and by hand (0.13.1, Oct 28: [LOGGING.md](LOGGING.md#the-backup-since-0131))
 - [x] The records folder moved to the D: drive, still found at the usual place through a link (0.13.2, Oct 28: [LOGGING.md](LOGGING.md#where-the-files-are))
 - [ ] 0.13 with Mert: the instructions' final wording and the doctrine's diplomacy principles; an agent for an ally of your realm (PLAN-0.13 step 8); then the shake-down (step 9)
+- [x] A news wake's context, pinpoint by the clock of the news (0.14, Nov 3: [PLAN-news.md](PLAN-news.md)), installed in shadow mode
+- [ ] News wakes: shadow in play, then a both-sides test run in theatre mode
 - [ ] Every-move runs, and overnight data collection
 - [ ] Your playbook: Opus 5.5 reads your recordings and writes down how you play
 

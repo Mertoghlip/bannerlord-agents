@@ -48,6 +48,8 @@ The campaign id is the game's own id for the campaign, so separate campaigns nev
 
 A realm is poked at most once per in-game hour. Everything that happened in that hour is merged into one poke.
 
+Since 0.14 (docs/PLAN-news.md) the poke of an agent whose news mode is shadow or theatre also has `news` (the news report), `news_mode` and `theatre` (as `poke.json`'s `news`), and in theatre mode `sent: "news"`, when the news report is what the agent read; `report` stays the whole report either way, and the view has `clock_items` (each siege's and battle's place and the hour it is decided).
+
 Poke numbers carry on across loads: the first poke of a session takes the number after the highest one in the channel's `pokes.log` and in the campaign's poke file, so a number never means two different pokes. A trigger that came from a notice carries `notice`, the notice's own `id`.
 
 Trigger kinds:
@@ -144,7 +146,7 @@ The channel lives in the folder set by `agent_dir` in `settings.txt`, now `C:\Us
 | `tools.txt` | bridge | the order library the agent reads: every move, tool and army order with what it takes, its settings and ranges, and when it calls back. Written at every campaign load (and by `scripts\setup-agent.ps1`). |
 | `lookups\<id>.txt` | bridge | one file per holding of the realm (with the full muster for a castle or town, since 0.6), lord of the realm, captured lord of the realm (0.6) and enemy it knows of, and `captured.txt` (0.6); README.txt says what is in each. Rewritten before each poke. |
 | `chronicle.txt`, `chronicle.jsonl` | bridge | the realm's chronicle (0.5): to read, one dated line each, oldest first; and for the war room, `hours`, `date`, `kind`, `text` per line. Rewritten whole at each load, then a line added as each comes ([docs/MEMORY.md](../docs/MEMORY.md)). |
-| `poke.json` | bridge | the latest poke for the war room (0.5), written before `poke.txt`: `number`, `hours`, `date`, `campaign`, `realm`, `realm_name`, `load_id` (new at every load), `loaded_at` and `loaded_at_date` (the save's in-game hour), `chronicle_lines` |
+| `poke.json` | bridge | the latest poke for the war room (0.5), written before `poke.txt`: `number`, `hours`, `date`, `campaign`, `realm`, `realm_name`, `load_id` (new at every load), `loaded_at` and `loaded_at_date` (the save's in-game hour), `chronicle_lines`; since 0.14 `news`: `mode` (full, shadow, theatre) and, unless full, `recipe` (theatre, whole, realm), `why`, `kinds`, `book`, `report_chars`, `news_chars`, `full_chars`, `usual_lag`, `late_lag`, `focuses` (`id`, `name`, `trigger`, `decided_at`, `how`, `horizon`), `lords` and `others` (each with its hours), `places`, `names` and `realms` |
 | `orders\*.json` | agent (war room) | one answer per file, in the form shown below; a council's answer is `poke-N-council-<time>.json` with `"kind": "council"` (0.6). Each file is read once and moved to `orders\done\`. |
 | `receipts.log` | bridge | one line per order (APPLIED, CHECKED in shadow mode, or REFUSED, with the reason and the answer time), and later lines for what became of agent orders (ended, and `tool:` lines for every call-back). Also: RECEIVED, at once, for a file read while the game's clock is stopped (its orders are answered when the clock runs again); SET ASIDE for a file written before the game session began (moved unread to `orders\stale\`); REFUSED for every order in a file answering a poke from before the last load; UNREADABLE for a file that is not valid JSON after five tries. |
 

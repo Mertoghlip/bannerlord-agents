@@ -18,6 +18,17 @@ namespace BannerlordAgents.WarRoom
         public string HistoryFound = "";
         /// <summary>The test run the poke belongs to, and its arm (0.13, the training record's tags); null outside a run or from an older bridge.</summary>
         public string Run, Arm;
+        /// <summary>
+        /// A news wake (0.14, docs/PLAN-news.md): the bridge's news mode for the agent (full, shadow, theatre), the theatre's recipe (theatre,
+        /// whole, realm), the names and ids in it (the notes on enemies and the chronicle lines are cut to them), and its question book.
+        /// </summary>
+        public string NewsMode = "full", Recipe, Book;
+        public List<string> Names = new List<string>();
+        /// <summary>The realms at war with it and its allies: a note on a whole realm is kept in every news wake.</summary>
+        public List<string> Realms = new List<string>();
+        public bool Theatre => NewsMode == "theatre";
+        /// <summary>Only what bears on the news is shown: the notes and the chronicle lines are cut to it too.</summary>
+        public bool Focused => Theatre && Recipe == "theatre";
     }
 
     /// <summary>
@@ -66,6 +77,8 @@ namespace BannerlordAgents.WarRoom
         private readonly List<KeyValuePair<DateTime, List<string>>> _recentOrders = new List<KeyValuePair<DateTime, List<string>>>();
         private const double RecentOrderSeconds = 60;
         private string _councilNote;
+        // a news wake's tools, not kept (0.14): told to the next fast answer, and to the next council, where tools are written
+        private string _newsNote, _toolsWanted;
 
         /// <summary>The most chronicle lines put before the poke; older ones wait for the story, or are read in chronicle.txt.</summary>
         private const int MaxGapLines = 80;
@@ -130,8 +143,12 @@ namespace BannerlordAgents.WarRoom
             string why = Section(pokeText, "WHY YOU ARE ASKED NOW");
             bool urgent = _c.Urgent.Any(u => why.IndexOf(u, StringComparison.OrdinalIgnoreCase) >= 0);
             effort ??= urgent ? _c.UrgentEffort : _c.Effort;
-            RouteTool routes = Routes(meta, number, "answer", write);
-            string system = SystemFile(routes != null);
+            // a news wake in theatre mode (0.14): the news instructions, the question book instead of the look-up files, no tool writing
+            bool news = meta != null && meta.Theatre;
+            RouteTool routes = Routes(meta, number, "answer", write, news ? BookFor(meta, number) : null);
+            if (routes != null && news) routes.NoCheck = true;
+            bool read = !news && _c.Lookups;
+            string system = SystemFile(routes != null && !routes.BookOnly, news, routes?.BookPath != null, read);
             bool conversation = _c.Conversation;
             string sessionId = null;
             bool resume = false;
@@ -141,7 +158,7 @@ namespace BannerlordAgents.WarRoom
                 sessionId = _mem.SessionId;
                 resume = _mem.SessionStarted;
             }
-            string prompt = Message(pokeText, meta, conversation, !resume, out int gapLines, out int storyWords, write ? TakeCouncilNote() : null);
+            string prompt = Message(pokeText, meta, conversation, !resume, out int gapLines, out int storyWords, write ? Join(TakeCouncilNote(), TakeNewsNote()) : null);
             string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-poke-" + number + (tag != null ? "-" + tag : ""));
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
@@ -151,7 +168,7 @@ namespace BannerlordAgents.WarRoom
                 + (conversation ? (resume ? ", in its conversation (" + _mem.SessionTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens so far)" : ", in a new conversation") : "") + "...");
             // the first look since a load reads the realm whole, often with no story yet: it gets the council's time (0.11.3: the kingdom's first answer was stopped at 122 s of 120)
             int timeout = why.IndexOf("First look", StringComparison.OrdinalIgnoreCase) >= 0 ? Math.Max(_c.TimeoutSeconds, _c.CouncilTimeoutSeconds) : _c.TimeoutSeconds;
-            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, timeout, cap, sessionId, resume, tools: routes);
+            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, read, timeout, cap, sessionId, resume, tools: routes);
             if (r.HandshakeLate) Say("Poke #" + number + ": Claude Code took over 30 s to answer the tools' handshake; the message went anyway.");
             bool stallRetry = false;
             if (!r.Ok && (r.Stalled || r.Runaway))
@@ -162,7 +179,7 @@ namespace BannerlordAgents.WarRoom
                 double lost = r.Seconds;
                 stallRetry = true;
                 if (conversation && !resume) sessionId = _mem.SessionId = Guid.NewGuid().ToString();   // the first call of a conversation is begun again under a new id
-                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, _c.Lookups, timeout, cap, sessionId, resume, tools: routes);
+                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, read, timeout, cap, sessionId, resume, tools: routes);
                 r.Seconds += lost;
             }
             if (conversation && r.Ok)
@@ -188,6 +205,18 @@ namespace BannerlordAgents.WarRoom
                 r.Thinking += r2.Thinking;
             }
             int orders = answer?["orders"] is JsonArray arr ? arr.Count : 0;
+            // tools are written at a council of war only (0.14, Mert's answer 3): a news wake's are not kept, and it and the next council are told
+            List<string> toolsDropped = news && answer?["tools"] is JsonArray wrote && wrote.Count > 0 ? ToolNamesOf(wrote) : null;
+            if (toolsDropped != null)
+            {
+                answer.Remove("tools");
+                if (write) lock (_councilGate)
+                {
+                    _newsNote = "Your answer to poke #" + number + " wrote " + (toolsDropped.Count == 1 ? "a tool" : toolsDropped.Count + " tools") + " (" + string.Join(", ", toolsDropped)
+                                + "): tools are written at a council of war only, so " + (toolsDropped.Count == 1 ? "it was" : "they were") + " not kept. Write it at your next council.";
+                    _toolsWanted = "YOUR NEWS ANSWERS WANTED NEW TOOLS: poke #" + number + " wrote " + string.Join(", ", toolsDropped) + ", which were not kept, since tools are written at a council. Write them now if they are still needed.";
+                }
+            }
             string changed = "";
             if (answer != null && write)
             {
@@ -219,13 +248,17 @@ namespace BannerlordAgents.WarRoom
                 notes_chars = _mem.Notes.Length, notes_changed = changed, session = sessionId, campaign = _mem.Campaign,
                 orders, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null,
                 run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, system_hash = _systemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
-                tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters")
+                tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters"),
+                news_mode = meta?.NewsMode, recipe = meta?.Recipe, message_chars = prompt.Length, read_tool = read, book_asked = routes?.AskedBook ?? 0,
+                tools_offered = routes?.Tools.Count() ?? 0, tools_dropped = toolsDropped
             });
             if (answer != null)
                 Say("Poke #" + number + ": " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s ("
                     + r.OutTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens written, " + r.Thinking.ToString("N0", CultureInfo.InvariantCulture) + " of them thinking; "
                     + r.Turns + " step" + (r.Turns == 1 ? "" : "s") + ")" + (retried ? " after one retry" : "") + "."
                     + (routes != null && routes.Asked > 0 ? " Asked the way " + routes.Asked + (routes.Asked == 1 ? " time." : " times.") : "")
+                    + (routes != null && routes.AskedBook > 0 ? " Asked its book " + routes.AskedBook + (routes.AskedBook == 1 ? " time." : " times.") : "")
+                    + (toolsDropped != null ? " Its tools were not kept (councils write tools)." : "")
                     + (changed.Length > 0 ? " Notes: " + changed + "." : ""));
             else Say("Poke #" + number + ": NO ANSWER (" + problem + ") after " + seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s.");
             _lastCallEnded = DateTime.Now;
@@ -250,6 +283,11 @@ namespace BannerlordAgents.WarRoom
                     sb.AppendLine();
                 }
             }
+            else if (ReplayMemory != null)
+            {
+                // a replay of a recorded call (0.14): the memory that call read, cut to the news when it is replayed as a news wake
+                sb.Append(meta != null && meta.Focused ? FocusMemory(ReplayMemory, meta.Names, meta.Realms) : ReplayMemory.Replace("\r", ""));
+            }
             else
             {
                 storyWords = Words(story);
@@ -257,17 +295,30 @@ namespace BannerlordAgents.WarRoom
                 sb.AppendLine(story.Length > 0 ? story.Trim()
                     : "(Not written yet: your chronicler writes it in a quiet moment. Until then, your notes, the chronicle lines below and the report's recent history are your memory.)");
                 sb.AppendLine();
+                // a news wake in theatre mode (0.14): the plan and the lessons whole, the notes on the enemies in this news only, and the chronicle's
+                // lines about it; the rest is a question away (list notes, chronicle)
+                bool focused = meta != null && meta.Focused;
+                int hidden = 0;
                 sb.AppendLine("YOUR NOTES (only you change them, with \"plan\", \"enemies\" and \"lessons\" in your answer)");
-                sb.AppendLine(notes);
+                sb.AppendLine(focused ? FocusNotes(notes, meta.Names.Concat(meta.Realms).ToList(), out hidden) : notes);
+                if (hidden > 0) sb.AppendLine("(Your notes on " + hidden + " other " + (hidden == 1 ? "enemy" : "enemies") + ", not in this news, are kept as they are: list notes shows them all.)");
                 sb.AppendLine();
                 List<ChronicleLine> gap = Gap(storyHours, meta);
                 gapLines = gap.Count;
-                if (gap.Count > 0)
+                int elsewhere = 0;
+                if (focused)
                 {
-                    sb.AppendLine("YOUR CHRONICLE SINCE THE STORY, BEFORE THE REPORT'S RECENT HISTORY (" + gap.Count + " lines, oldest first)");
+                    List<ChronicleLine> here = gap.Where(l => meta.Names.Any(n => n.Length >= 4 && (l.Text.IndexOf("[" + n + "]", StringComparison.OrdinalIgnoreCase) >= 0 || Mentions(l.Text, n)))).ToList();
+                    elsewhere = gap.Count - here.Count;
+                    gap = here;
+                }
+                if (gap.Count > 0 || elsewhere > 0)
+                {
+                    sb.AppendLine("YOUR CHRONICLE SINCE THE STORY, BEFORE THE REPORT'S RECENT HISTORY (" + gap.Count + " lines" + (focused ? " about this news" : "") + ", oldest first)");
                     int skip = Math.Max(0, gap.Count - MaxGapLines);
-                    if (skip > 0) sb.AppendLine("- (" + skip + " earlier lines are in chronicle.txt)");
+                    if (skip > 0) sb.AppendLine("- (" + skip + " earlier lines are in " + (focused ? "your chronicle: ask chronicle" : "chronicle.txt") + ")");
                     foreach (ChronicleLine l in gap.Skip(skip)) sb.AppendLine("- " + l.Date + " · " + l.Text);
+                    if (elsewhere > 0) sb.AppendLine("- (" + elsewhere + " more lines from elsewhere in your realm: ask chronicle about a lord, holding or realm)");
                     sb.AppendLine();
                 }
             }
@@ -336,6 +387,9 @@ namespace BannerlordAgents.WarRoom
             catch (Exception e) when (e is JsonException || e is InvalidOperationException || e is FormatException) { return null; }
         }
 
+        /// <summary>For the self-test: what poke.json says about a poke.</summary>
+        internal PokeMeta ReadMetaForTest(int number) => ReadMeta(number);
+
         private PokeMeta ReadMeta(int number)
         {
             string text = ReadShared(Path.Combine(_c.ChannelDir, "poke.json"));
@@ -349,6 +403,14 @@ namespace BannerlordAgents.WarRoom
                     RealmName = (string)o["realm_name"], LoadId = (string)o["load_id"], LoadedAt = Num(o["loaded_at"]), LoadedAtDate = (string)o["loaded_at_date"] ?? "",
                     Run = (string)o["run"], Arm = (string)o["arm"]
                 };
+                if (o["news"] is JsonObject nw)
+                {
+                    m.NewsMode = (string)nw["mode"] ?? "full";
+                    m.Recipe = (string)nw["recipe"];
+                    m.Book = (string)nw["book"];
+                    if (nw["names"] is JsonArray na) m.Names = na.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                    if (nw["realms"] is JsonArray ra) m.Realms = ra.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                }
                 if (o["history"] is JsonObject h && h["before"] is JsonArray steps)
                 {
                     m.HistoryFound = (string)h["found"] ?? "";
@@ -629,7 +691,7 @@ namespace BannerlordAgents.WarRoom
             string briefing = ReadShared(Path.Combine(_c.ChannelDir, "council.txt")) ?? "";
             string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
             string council = CouncilText(why, meta, number, briefing, situation);
-            string prompt = Message(council, meta, false, true, out int gapLines, out int storyWords);
+            string prompt = Message(council, meta, false, true, out int gapLines, out int storyWords, write ? TakeToolsWanted() : null);
             string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-council-" + number + (tag != null ? "-" + tag : ""));
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
@@ -769,6 +831,101 @@ namespace BannerlordAgents.WarRoom
             }
         }
 
+        /// <summary>The agent's notes as they stand, for the book questions (list notes; a look-up of an enemy it has a note on).</summary>
+        private string NotesNow()
+        {
+            if (_mem == null) return "";
+            _mem.View(out _, out _, out _, out string notes, out _);
+            return notes;
+        }
+
+        private string TakeNewsNote() { lock (_councilGate) { string n = _newsNote; _newsNote = null; return n; } }
+        private string TakeToolsWanted() { lock (_councilGate) { string n = _toolsWanted; _toolsWanted = null; return n; } }
+
+        private static string Join(string a, string b) => string.IsNullOrEmpty(a) ? b : string.IsNullOrEmpty(b) ? a : a.TrimEnd() + "\n\n" + b;
+
+        /// <summary>The names of the tools an answer wrote.</summary>
+        private static List<string> ToolNamesOf(JsonArray tools)
+            => tools.Select(t => t is JsonObject o ? (string)(o["name"] as JsonValue) : null).Select(n => string.IsNullOrWhiteSpace(n) ? "(unnamed)" : n.Trim()).ToList();
+
+        /// <summary>A name in a text, as a whole word, whatever its case.</summary>
+        internal static bool Mentions(string text, string name)
+        {
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(name)) return false;
+            int i = text.IndexOf(name, StringComparison.OrdinalIgnoreCase);
+            while (i >= 0)
+            {
+                bool before = i == 0 || !char.IsLetterOrDigit(text[i - 1]);
+                int end = i + name.Length;
+                bool after = end >= text.Length || !char.IsLetterOrDigit(text[end]);
+                if (before && after) return true;
+                i = text.IndexOf(name, i + 1, StringComparison.OrdinalIgnoreCase);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The notes for a news wake (0.14): the plan and the lessons whole, and the notes on the enemies (lords or realms) the news names or
+        /// its theatre holds; hidden: how many were left out.
+        /// </summary>
+        internal static string FocusNotes(string notes, List<string> names, out int hidden)
+        {
+            hidden = 0;
+            Dictionary<string, string> s = Memory.Sections(notes ?? "");
+            List<KeyValuePair<string, string>> enemies = RouteTool.EnemyNotes(notes);
+            var keep = enemies.Where(e => names.Any(n => n.Length >= 3 && (string.Equals(e.Key, n, StringComparison.OrdinalIgnoreCase) || Mentions(e.Key, n) || Mentions(n, e.Key)))).ToList();
+            hidden = enemies.Count - keep.Count;
+            var sb = new StringBuilder();
+            sb.Append("## Plan\n").Append(s.TryGetValue("Plan", out string plan) && plan.Length > 0 ? plan : "(not set yet)").Append("\n\n## Enemies (in this news)\n");
+            if (keep.Count == 0) sb.Append(enemies.Count == 0 ? "(none noted yet)\n" : "(none of your notes is on an enemy in this news)\n");
+            foreach (KeyValuePair<string, string> e in keep) sb.Append("- ").Append(e.Key).Append(": ").Append(e.Value).Append('\n');
+            sb.Append("\n## Lessons\n").Append(s.TryGetValue("Lessons", out string lessons) && lessons.Length > 0 ? lessons : "(none yet)");
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>A replay's memory: the original call's message up to its poke, read in place of this room's own (0.14, replay --calls).</summary>
+        internal string ReplayMemory;
+
+        /// <summary>
+        /// A recorded call's memory cut to a news wake's (0.14): its notes cut to the enemies of the news, and its chronicle lines since the story
+        /// to those about it, as a news wake in theatre mode has them.
+        /// </summary>
+        internal static string FocusMemory(string memory, List<string> names, List<string> realms)
+        {
+            string text = memory.Replace("\r", "");
+            const string NotesHead = "YOUR NOTES (", GapHead = "YOUR CHRONICLE SINCE THE STORY";
+            int n = text.IndexOf(NotesHead, StringComparison.Ordinal);
+            if (n >= 0)
+            {
+                int body = text.IndexOf('\n', n) + 1;
+                int end = text.IndexOf("\n\n" + GapHead, body, StringComparison.Ordinal);
+                if (end < 0) end = text.TrimEnd().Length;
+                string cut = FocusNotes(text.Substring(body, end - body), names.Concat(realms ?? new List<string>()).ToList(), out int hidden);
+                text = text.Substring(0, body) + cut + (hidden > 0 ? "\n(Your notes on " + hidden + " other " + (hidden == 1 ? "enemy" : "enemies") + ", not in this news, are kept as they are: list notes shows them all.)" : "")
+                       + text.Substring(end);
+            }
+            int g = text.IndexOf(GapHead, StringComparison.Ordinal);
+            if (g >= 0)
+            {
+                int body = text.IndexOf('\n', g) + 1;
+                int end = text.IndexOf("\n\n", body, StringComparison.Ordinal);
+                if (end < 0) end = text.Length;
+                List<string> lines = text.Substring(body, end - body).Split('\n').ToList();
+                List<string> here = lines.Where(l => !l.StartsWith("- ", StringComparison.Ordinal) || names.Any(nm => nm.Length >= 4 && (l.IndexOf("[" + nm + "]", StringComparison.OrdinalIgnoreCase) >= 0 || Mentions(l, nm)))).ToList();
+                int elsewhere = lines.Count - here.Count;
+                if (elsewhere > 0) here.Add("- (" + elsewhere + " more lines from elsewhere in your realm: ask chronicle about a lord, holding or realm)");
+                text = text.Substring(0, body) + string.Join("\n", here) + text.Substring(end);
+            }
+            return text;
+        }
+
+        /// <summary>A poke's question book in the channel (0.14), or null when there is none.</summary>
+        private string BookFor(PokeMeta meta, int number)
+        {
+            string path = Path.Combine(_c.ChannelDir, meta?.Book ?? Path.Combine("book", "poke-" + number + ".json"));
+            return File.Exists(path) ? path : null;
+        }
+
         // ---------- reading the channel ----------
 
         /// <summary>The newest poke: its number from pokes.log, its text from poke.txt (when poke.txt already holds it).</summary>
@@ -851,26 +1008,35 @@ namespace BannerlordAgents.WarRoom
         /// stays cached). The memory section says how this memory works (written or conversation); without reading, the
         /// look-ups section goes.
         /// </summary>
-        internal string SystemFile(bool routes = false)
+        internal string SystemFile(bool routes = false, bool news = false, bool book = false, bool? read = null)
         {
-            lock (_systemGate) return SystemFileLocked(routes);   // the council's thread asks for it too
+            lock (_systemGate) return SystemFileLocked(routes, news, book, read ?? _c.Lookups);   // the council's thread asks for it too
         }
 
         /// <summary>
         /// The "ask the way" tool for one call (RouteTool), or null when it cannot be offered: switched off, no map copied yet, or
         /// no view file for the realm. Without it, its section of the instructions goes too.
         /// </summary>
-        internal RouteTool Routes(PokeMeta meta, int number, string call, bool live)
+        internal RouteTool Routes(PokeMeta meta, int number, string call, bool live, string book = null)
         {
-            if (!_c.RouteTool || meta == null) return null;
+            if (meta == null) return null;
+            // a news wake's questions on its book need no map (0.14): offered alone when the way-finding cannot be
+            RouteTool BookOnly() => book == null ? null : new RouteTool(RouteTool.DefaultRoot(), live ? _logDir : Path.Combine(_logDir, "replays"), meta.Campaign, meta.Realm, number, call)
+            {
+                BookOnly = true, BookPath = book, ChronicleDir = _c.ChannelDir, Notes = NotesNow
+            };
+            if (!_c.RouteTool) return BookOnly();
             string root = RouteTool.DefaultRoot();
             // a live call's tool can ask the bridge for a try of a tool being written (0.13, check_tool); a replay's cannot
             var tool = new RouteTool(root, live ? _logDir : Path.Combine(_logDir, "replays"), meta.Campaign, meta.Realm, number, call) { ChannelDir = live ? _c.ChannelDir : null };
             if (!tool.Ready(out string why))
             {
                 if (_routesWhy != why) { Say("The \"ask the way\" tool is not offered: " + why + "."); _routesWhy = why; }
-                return null;
+                return BookOnly();
             }
+            tool.BookPath = book;
+            tool.ChronicleDir = _c.ChannelDir;
+            tool.Notes = NotesNow;
             if (_routesWhy != "ready") { Say("The \"ask the way\" tool is offered in every answer and council."); _routesWhy = "ready"; }
             if ((DateTime.Now - _rulesWritten).TotalMinutes >= 10)
             {
@@ -905,9 +1071,18 @@ namespace BannerlordAgents.WarRoom
             _atlas.Start();
         }
 
-        private string SystemFileLocked(bool routes)
+        private readonly Dictionary<string, string> _systemFiles = new Dictionary<string, string>();
+
+        /// <summary>
+        /// One of the system prompts, each kept in its own file by its fingerprint (so each stays cached: a news wake's and a council's
+        /// differ since 0.14). routes: the way-finding questions are offered; news: a news wake in theatre mode, whose instructions take the
+        /// sections of warroom-news.md in place of the same ones (tool writing at a council only, the questions in place of the look-up files);
+        /// book: its questions on the book are offered; read: the Read tool (the look-up files).
+        /// </summary>
+        private string SystemFileLocked(bool routes, bool news, bool book, bool read)
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate) : "You command a realm in Mount & Blade II: Bannerlord. Answer each poke with one JSON object of orders.";
+            if (news) template = NewsInstructions(template);
             // never promise a tool the call does not have ("check a tool" is served beside "ask the way", 0.13)
             if (!routes)
             {
@@ -915,20 +1090,59 @@ namespace BannerlordAgents.WarRoom
                 template = ReplaceSection(template, "## Checking a tool", null);
             }
             if (_c.Conversation) template = ReplaceSection(template, "## Your memory", ConversationMemory);
-            if (!_c.Lookups)
-            {
-                // never promise a tool the call does not have: the model would type tool calls as text instead
-                template = ReplaceSection(template, "## Look-ups", null).TrimEnd() + "\n\nYou have no tools in this call: answer from the message alone.\n";
-            }
+            // a news wake's "## Look-ups" are its questions on the book; anyone else's, the Read tool's files
+            if (news ? !book : !read) template = ReplaceSection(template, "## Look-ups", null);
+            // never promise a tool the call does not have: the model would type tool calls as text instead
+            if (!read && !routes && !book) template = template.TrimEnd() + "\n\nYou have no tools in this call: answer from the message alone.\n";
             string tools = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "(the order library appears once the game has loaded a campaign)";
             string text = template.TrimEnd() + "\n\n" + tools.Trim() + "\n";
             string hash = Hash(text);
-            if (hash == _systemHash && _systemFile != null && File.Exists(_systemFile)) return _systemFile;
             _systemHash = hash;
+            if (_systemFiles.TryGetValue(hash, out string known) && File.Exists(known)) return _systemFile = known;
             _systemFile = Path.Combine(_logDir, "system-" + hash + ".md");
             File.WriteAllText(_systemFile, text);
-            Say("System prompt " + hash + ": " + text.Length.ToString("N0", CultureInfo.InvariantCulture) + " characters.");
+            _systemFiles[hash] = _systemFile;
+            Say("System prompt " + hash + (news ? " (news wakes)" : "") + ": " + text.Length.ToString("N0", CultureInfo.InvariantCulture) + " characters.");
             return _systemFile;
+        }
+
+        /// <summary>
+        /// The instructions for a news wake (0.14): each "## " section of warroom-news.md in the agent's folder takes the place of the same section
+        /// of the instructions ("(removed)": the section goes; a section they lack is added at the end). Without that file, the tool-writing
+        /// manual and the tool check go, since a news wake writes no tools.
+        /// </summary>
+        internal string NewsInstructions(string template)
+        {
+            string file = File.Exists(_c.NewsTemplate) ? File.ReadAllText(_c.NewsTemplate) : null;
+            if (file == null)
+            {
+                template = ReplaceSection(template, "## Writing your own tools", "## Writing your own tools\n\nYou write and change tools of your own only at a council of war; in a poke, order the tools you have.");
+                return ReplaceSection(template, "## Checking a tool", null);
+            }
+            foreach (KeyValuePair<string, string> s in NewsSections(file))
+                template = ReplaceSection(template, s.Key, s.Value.Trim() == "(removed)" ? null : s.Key + "\n\n" + s.Value.Trim());
+            return template;
+        }
+
+        /// <summary>The "## " sections of the news instructions, in order, heading to body (anything before the first heading is the file's own note).</summary>
+        internal static List<KeyValuePair<string, string>> NewsSections(string text)
+        {
+            var list = new List<KeyValuePair<string, string>>();
+            string head = null;
+            var body = new StringBuilder();
+            foreach (string raw in text.Replace("\r", "").Split('\n'))
+            {
+                if (raw.StartsWith("## ", StringComparison.Ordinal))
+                {
+                    if (head != null) list.Add(new KeyValuePair<string, string>(head, body.ToString()));
+                    head = raw.TrimEnd();
+                    body.Clear();
+                    continue;
+                }
+                if (head != null) body.Append(raw).Append('\n');
+            }
+            if (head != null) list.Add(new KeyValuePair<string, string>(head, body.ToString()));
+            return list;
         }
 
         private string ChroniclerFile()

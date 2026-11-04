@@ -239,7 +239,7 @@ namespace BannerlordAgents
         public static void OnArmyDispersed(Army army, Army.ArmyDispersionReason reason, bool isPlayersArmy)
         {
             if (army == null) return;
-            Send("army_dispersed", "The army of " + Names.Party(army.LeaderParty) + " broke up (" + reason + ").", Involved(army.Kingdom));
+            Send("army_dispersed", "The army of " + Names.Party(army.LeaderParty) + " broke up (" + reason + ").", Involved(army.Kingdom), army.LeaderParty?.StringId);
         }
 
         /// <summary>
@@ -382,7 +382,7 @@ namespace BannerlordAgents
             if (h == null || !h.IsLord) return;
             // the captor's realm too (0.13.16): "taken prisoner by Dramthak" alone did not tell the lieutenant that Dol Guldur had fought at Nanduhirion
             Send("captured", Names.Hero(h) + " (" + F(h.MapFaction) + ") was taken prisoner by " + P(capturer) + (capturer?.MapFaction != null ? " (" + F(capturer.MapFaction) + ")" : "") + ".",
-                 Involved(h.MapFaction, capturer?.MapFaction));
+                 Involved(h.MapFaction, capturer?.MapFaction), capturer?.MobileParty?.StringId);
         }
 
         public static void OnDecisionAdded(KingdomDecision d, bool isPlayerInvolved)

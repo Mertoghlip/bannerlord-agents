@@ -32,6 +32,8 @@ namespace BannerlordAgents
         public List<string> Purse = new List<string>();
         /// <summary>The game's clocks the realm can see (0.7.3, Forecast): each siege and each battle, run ahead by the game's own rules.</summary>
         public List<string> Clocks = new List<string>();
+        /// <summary>Each clock's place and the hour it decides things (0.14, a news wake's theatre): one per line of Clocks, in the same order.</summary>
+        public List<ClockItem> ClockItems = new List<ClockItem>();
         /// <summary>The realms at war with it, as the encyclopedia shows any player (0.7.4): living lords, and their parties' strength in all, beside what of it is in sight.</summary>
         public List<string> EnemyRealms = new List<string>();
         /// <summary>Its diplomacy, and its open votes and the offers made to it (0.13, DiploRules): for a realm an agent serves.</summary>
@@ -39,6 +41,21 @@ namespace BannerlordAgents
         public List<string> Open = new List<string>();
         /// <summary>Its allies, whether their rulers read letters, their last letters, and the joint plans between them (0.13, Allies).</summary>
         public List<string> Allied = new List<string>();
+    }
+
+    /// <summary>
+    /// Where one siege or battle of the report is, and when the game's own rules say it is decided (0.14, Theatre): a siege when a
+    /// storm is likeliest or the food runs out, whichever comes first; a battle when it ends; a raid when the village is looted.
+    /// NaN when not within the five days the clock runs ahead.
+    /// </summary>
+    internal sealed class ClockItem
+    {
+        public string Kind, Place, Why;
+        public float X, Y;
+        public double DecidedAt = double.NaN;
+        /// <summary>The realm's own holding (a siege of it, a battle at it) or its own lords in it.</summary>
+        public bool Ours;
+        public List<string> Parties = new List<string>();
     }
 
     internal sealed class ViewCaptive
@@ -143,7 +160,7 @@ namespace BannerlordAgents
     }
 
     /// <summary>Builds views and reports on the worker, from a snapshot. No game objects here.</summary>
-    internal static class Views
+    internal static partial class Views
     {
         public static View Build(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> hostile, Brain.Memory mem)
         {
@@ -280,7 +297,7 @@ namespace BannerlordAgents
                 v.Sum = Sum(s, fid, own);
                 v.Purse = PurseView.Lines(s, fid);
             }
-            v.Clocks = Clocks(s, fid, sees, allies);
+            v.Clocks = Clocks(s, fid, sees, allies, v.ClockItems);
             v.EnemyRealms = EnemyRealms(s, fid, sees);
             // its diplomacy and its open votes and offers, as its ruler's screens show them (0.13, B3)
             if (s.Diplomacy != null && s.Diplomacy.TryGetValue(fid, out DiploView dv))
@@ -323,9 +340,19 @@ namespace BannerlordAgents
         /// lords in it, at its holding, or with any party in it in sight. Its own side's morale is known; another's is not, and
         /// is taken as middling (50).
         /// </summary>
-        public static List<string> Clocks(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> allies)
+        public static List<string> Clocks(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> allies, List<ClockItem> items = null)
         {
             var lines = new List<string>();
+            items?.Clear();
+            // each line's place and the hour it decides things, for a news wake's theatre (0.14): the lists stay in step
+            void Item(string kind, string place, float x, float y, bool ours, double at, string why, IEnumerable<string> parties)
+            {
+                if (items == null) return;
+                var it = new ClockItem { Kind = kind, Place = place, X = x, Y = y, Ours = ours, DecidedAt = at, Why = why };
+                foreach (string p in parties) if (p != null) it.Parties.Add(p);
+                items.Add(it);
+            }
+            double Soonest(params double[] hours) { double best = double.NaN; foreach (double h in hours) if (!double.IsNaN(h) && h > s.Hours - 1e-6 && (double.IsNaN(best) || h < best)) best = h; return best; }
             // the realm's own (0.7.4: its allies' sieges and battles far off are not in its sight, and leaked; the fog check caught them)
             bool Friend(string f) => f != null && f == fid;
             bool Sees(string party) => party != null && sees != null && sees.ContainsKey(party);
@@ -348,6 +375,12 @@ namespace BannerlordAgents
                 lines.Add(h.Name + " [" + h.Id + "] (" + h.Kind + ", " + FactionName(s, h.Faction) + "), besieged by " + PartyName(g.Besieger) + LordTag(g.Besieger)
                           + " (" + FactionName(s, g.BesiegerFaction) + ") since " + Text.When(g.StartHours) + " (" + Math.Round(s.Hours - g.StartHours) + " hours)"
                           + (g.Storming ? "; a storm is being fought now (below)" : "") + ": " + Forecast.SiegeText(s, g, c, ours, stormNow, known));
+                // decided: by the storm (the agent's own rule, when it leads the siege, else the likeliest hour) or by hunger, whichever comes first;
+                // a siege seen only from outside its walls has no clock the realm can read
+                double storm = c.Rule != null ? c.RuleStormAt : c.MedianAt;
+                double decided = g.Storming || !known ? double.NaN : Soonest(storm, c.FoodOutAt);
+                string why = double.IsNaN(decided) ? null : !double.IsNaN(c.FoodOutAt) && Math.Abs(decided - c.FoodOutAt) < 1e-6 ? "its food runs out" : "a storm is likeliest by then";
+                Item("siege", h.Id, h.X, h.Y, ours || theirs, decided, why, new[] { g.Besieger });
             }
             foreach (BattleRow b in s.Battles)
             {
@@ -369,6 +402,7 @@ namespace BannerlordAgents
                       .Append("It has ").Append(Math.Round(at.HitPoints * 100)).Append("% left, falling about ").Append((perHour * 100).ToString("0.#", Text.Inv)).Append("% an hour")
                       .Append(measured ? " (measured over the last hour)" : " (by the rule)").Append(", so it is looted in about ").Append(Forecast.HoursText(left)).Append(" (").Append(Text.When(s.Hours + left)).Append(") unless the raiders are driven off.");
                     lines.Add(sb.ToString());
+                    Item("raid", at.Id, at.X, at.Y, at.Faction == fid || mineIn, double.IsNaN(left) ? double.NaN : s.Hours + left, "the village is looted", b.Attackers.Parties.Concat(b.Defenders.Parties));
                     continue;
                 }
                 // a battle under way two rounds or more: at the rates measured in it (0.7.4); else by the rules, the morale the realm
@@ -407,6 +441,8 @@ namespace BannerlordAgents
                       .Append(!mine.SettlementLed ? "" : at != null && at.Kind == "village" ? " (led by the village: it never breaks)" : " (behind walls: it never breaks)").Append("; the other side's you cannot see.");
                 }
                 lines.Add(sb.ToString());
+                Item("battle", at?.Id, at != null ? at.X : b.X, at != null ? at.Y : b.Y, att || def || mineIn || (at != null && at.Faction == fid), c.EndsAt, "the battle ends",
+                     b.Attackers.Parties.Concat(b.Defenders.Parties));
             }
             return lines;
         }
@@ -552,49 +588,18 @@ namespace BannerlordAgents
             }
 
             sb.AppendLine().AppendLine("YOUR LORDS AND ARMIES (" + v.Forces.Count + ", " + Text.N(v.Forces.Sum(f => f.ArmyMen > 0 ? f.ArmyMen : f.Men)) + " men)");
-            if (v.Forces.Concat(v.Seen).Any(p => p.Arrives != null))
-                sb.AppendLine("\"There in about N hours\", here and below, is the game's own reckoning of the march: along the way the game planned for that party, at its "
-                              + "own speed (set by its men, horses, wounded, prisoners and loads), slowed by forest, fords and bridges and by night, as it comes. "
-                              + "It holds while the party keeps that course.");
+            if (v.Forces.Concat(v.Seen).Any(p => p.Arrives != null)) sb.AppendLine(MarchNote);
             foreach (ViewParty f in v.Forces)
             {
-                string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
-                Tools.ToolInstance held = Tools.Runner.ForParty(f.Id);
-                sb.AppendLine("- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + JoiningText(f) + (f.Arrives != null ? ", " + f.Arrives : "")
-                              + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
+                sb.AppendLine(LordLine(f));
                 JoinerLines(sb, v, f);
                 MemberLines(sb, f.Members);
             }
 
             sb.AppendLine().AppendLine("YOUR HOLDINGS (" + v.Holdings.Count + ")");
-            if (v.Holdings.Any(h => h.WallLevel > 0))
-                sb.AppendLine("A castle or town holds when its defenders' strength (garrison, militia and the lords inside) times what its walls are worth (2.4 at wall level 1, "
-                              + "2.8 at level 2, 3.2 at level 3) is at least its besiegers' strength: the game's own test for storming, once the besiegers have a ram and "
-                              + "siege towers built. Lords you shelter inside add their strength. Besiegers above that may storm, the sooner the stronger they are; "
-                              + "below it they wait, but after four days of siege the bar falls hour by hour, to the defenders' bare strength by about the sixth day. "
-                              + "SIEGES AND BATTLES runs each siege's clock.");
-            if (v.Holdings.Any(h => h.Food >= 0))
-                sb.AppendLine("A castle's or town's food comes from its lands and its unraided villages each day, and none while it is besieged; its garrison and its people eat it, "
-                              + "and once it is out a tenth of the garrison falls to hunger each day. The supply order brings it food. "
-                              + "Lords sheltering inside never eat a holding's food: each lord's men eat what he carries. A town's market sells them food every hour while it has any, "
-                              + "besieged or not; a castle has no market, so lords shut in a castle live on what they brought. "
-                              + "The clan named with each one owns it: a lord's garrison_floor takes men only from his own clan's (his look-up file names his clan).");
-            foreach (ViewHolding h in v.Holdings)
-            {
-                var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + (string.IsNullOrEmpty(h.Clan) ? "" : " of " + h.Clan) + ")");
-                if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + (h.GarrisonStrength >= 0 ? " (strength " + Text.N((int)Math.Round(h.GarrisonStrength)) + ")" : "") + ", militia " + Text.N(h.Militia));
-                if (h.Food >= 0)
-                    line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap)
-                                + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : "")
-                                + (h.FoodComing != null ? "; food coming: " + h.FoodComing : ""));
-                if (h.WallLevel > 0)
-                    line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
-                                + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")
-                                + ", so it holds against besiegers up to strength " + Text.N((int)Math.Round(h.HoldsUpTo)));
-                if (!string.IsNullOrEmpty(h.Status)) line.Append("; " + h.Status);
-                if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Roads.Both(h.ThreatDistance, h.ThreatRoad));
-                sb.AppendLine(line.Append('.').ToString());
-            }
+            if (v.Holdings.Any(h => h.WallLevel > 0)) sb.AppendLine(WallsNote);
+            if (v.Holdings.Any(h => h.Food >= 0)) sb.AppendLine(FoodNote);
+            foreach (ViewHolding h in v.Holdings) sb.AppendLine(HoldingLine(h));
 
             if (v.EnemyRealms.Count > 0)
             {
@@ -628,13 +633,7 @@ namespace BannerlordAgents
             if (v.Clocks.Count > 0)
             {
                 sb.AppendLine().AppendLine("SIEGES AND BATTLES (" + v.Clocks.Count + "), run ahead by the game's own clock");
-                sb.AppendLine("The game's rules: a siege camp builds its preparations, then one engine at a time; it may storm only once the preparations are done and an "
-                              + "engine is built, and its commander then tries about three times an hour, the likelier the more the besiegers outweigh the defenders "
-                              + "with their walls, and hardly at all while an engine stands half built. A place out of food loses a tenth of its garrison to hunger each "
-                              + "day (wounded, not killed); it never surrenders. A storm is fought one round an hour, any other battle two; in a storm the attackers' "
-                              + "blows grow only with the defenders' numbers, so a few defenders hold a great host for hours. A side that loses a round by much loses "
-                              + "morale and breaks at none, but men behind walls never break. Nobody can leave a battle once in it, and lords who reach it join it. "
-                              + "Each line counts what you can see as it is now.");
+                sb.AppendLine(ClocksNote);
                 foreach (string c in v.Clocks) sb.AppendLine("- " + c);
             }
 
@@ -642,11 +641,7 @@ namespace BannerlordAgents
             if (v.Seen.Count == 0) sb.AppendLine("- No lords or enemies in view.");
             foreach (ViewParty p in v.Seen)
             {
-                string size = p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) + " men" : Text.N(p.Men) + " men";
-                string where = p.NearestHolding == null ? Where(p)
-                             : Roads.Both(p.HoldingDistance, p.HoldingRoad) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? "; " + Where(p) : "");
-                sb.AppendLine("- " + p.Relation.ToUpperInvariant() + " " + p.Name + Tag(p) + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
-                    + "; " + where + "; " + p.Doing + JoiningText(p) + (p.Arrives != null ? ", " + p.Arrives : "") + "; seen by " + p.SeenBy + ".");
+                sb.AppendLine(SeenLine(p));
                 JoinerLines(sb, v, p);
             }
             if (v.OthersInView > 0) sb.AppendLine("- Also in view: " + v.OthersInView + " caravans, villagers and other small parties.");
@@ -654,11 +649,7 @@ namespace BannerlordAgents
             if (v.LastSeen.Count > 0)
             {
                 sb.AppendLine().AppendLine("SEEN EARLIER, NOW OUT OF SIGHT (" + v.LastSeen.Count + ")");
-                foreach (ViewParty p in v.LastSeen)
-                    sb.AppendLine("- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + (p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) : Text.N(p.Men)) + " men, strength "
-                        + Text.N((int)p.Strength) + ", last seen " + Where(p)
-                        + ", " + Math.Round(v.Hours - p.SeenHours) + " hours ago, " + p.Doing
-                        + (!double.IsNaN(p.ArrivesAt) && p.ArrivesAt > v.Hours ? " (if it kept on, there about " + Text.When(p.ArrivesAt) + ")" : "") + ".");
+                foreach (ViewParty p in v.LastSeen) sb.AppendLine(LastSeenLine(p, v.Hours));
             }
 
             if (v.Trails.Count > 0)
@@ -672,10 +663,7 @@ namespace BannerlordAgents
             if (v.Frontier.Count > 0)
             {
                 sb.AppendLine().AppendLine("ENEMY HOLDINGS NEAR YOUR LANDS (" + v.Frontier.Count + ")");
-                foreach (ViewHolding h in v.Frontier)
-                    sb.AppendLine("- " + h.Name + " [" + h.Id + "] (" + h.Kind + ", " + h.FactionName + "): "
-                        + (h.Garrison >= 0 ? "garrison " + Text.N(h.Garrison) + (h.Militia >= 0 ? ", militia " + Text.N(h.Militia) : "") : "garrison not in sight")
-                        + (string.IsNullOrEmpty(h.Status) ? "" : "; " + h.Status) + ".");
+                foreach (ViewHolding h in v.Frontier) sb.AppendLine(FrontierLine(h));
             }
 
             if (v.News.Count > 0)
@@ -685,6 +673,82 @@ namespace BannerlordAgents
             }
             return sb.ToString();
         }
+
+        // ---------- the report's lines and notes, shared with a news wake's report (0.14, Views.News) ----------
+
+        internal const string MarchNote = "\"There in about N hours\", here and below, is the game's own reckoning of the march: along the way the game planned for that party, at its "
+                                          + "own speed (set by its men, horses, wounded, prisoners and loads), slowed by forest, fords and bridges and by night, as it comes. "
+                                          + "It holds while the party keeps that course.";
+
+        internal const string WallsNote = "A castle or town holds when its defenders' strength (garrison, militia and the lords inside) times what its walls are worth (2.4 at wall level 1, "
+                                          + "2.8 at level 2, 3.2 at level 3) is at least its besiegers' strength: the game's own test for storming, once the besiegers have a ram and "
+                                          + "siege towers built. Lords you shelter inside add their strength. Besiegers above that may storm, the sooner the stronger they are; "
+                                          + "below it they wait, but after four days of siege the bar falls hour by hour, to the defenders' bare strength by about the sixth day. "
+                                          + "SIEGES AND BATTLES runs each siege's clock.";
+
+        internal const string FoodNote = "A castle's or town's food comes from its lands and its unraided villages each day, and none while it is besieged; its garrison and its people eat it, "
+                                         + "and once it is out a tenth of the garrison falls to hunger each day. The supply order brings it food. "
+                                         + "Lords sheltering inside never eat a holding's food: each lord's men eat what he carries. A town's market sells them food every hour while it has any, "
+                                         + "besieged or not; a castle has no market, so lords shut in a castle live on what they brought. "
+                                         + "The clan named with each one owns it: a lord's garrison_floor takes men only from his own clan's (his look-up file names his clan).";
+
+        internal const string ClocksNote = "The game's rules: a siege camp builds its preparations, then one engine at a time; it may storm only once the preparations are done and an "
+                                           + "engine is built, and its commander then tries about three times an hour, the likelier the more the besiegers outweigh the defenders "
+                                           + "with their walls, and hardly at all while an engine stands half built. A place out of food loses a tenth of its garrison to hunger each "
+                                           + "day (wounded, not killed); it never surrenders. A storm is fought one round an hour, any other battle two; in a storm the attackers' "
+                                           + "blows grow only with the defenders' numbers, so a few defenders hold a great host for hours. A side that loses a round by much loses "
+                                           + "morale and breaks at none, but men behind walls never break. Nobody can leave a battle once in it, and lords who reach it join it. "
+                                           + "Each line counts what you can see as it is now.";
+
+        /// <summary>One of the realm's lords or armies, as YOUR LORDS AND ARMIES lists it.</summary>
+        internal static string LordLine(ViewParty f)
+        {
+            string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
+            string held = OrderName(f);
+            return "- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + JoiningText(f) + (f.Arrives != null ? ", " + f.Arrives : "")
+                   + (held != null ? " (your order: " + held + ")" : "") + ".";
+        }
+
+        /// <summary>One of the realm's holdings, as YOUR HOLDINGS lists it.</summary>
+        internal static string HoldingLine(ViewHolding h)
+        {
+            var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + (string.IsNullOrEmpty(h.Clan) ? "" : " of " + h.Clan) + ")");
+            if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + (h.GarrisonStrength >= 0 ? " (strength " + Text.N((int)Math.Round(h.GarrisonStrength)) + ")" : "") + ", militia " + Text.N(h.Militia));
+            if (h.Food >= 0)
+                line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap)
+                            + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : "")
+                            + (h.FoodComing != null ? "; food coming: " + h.FoodComing : ""));
+            if (h.WallLevel > 0)
+                line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
+                            + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")
+                            + ", so it holds against besiegers up to strength " + Text.N((int)Math.Round(h.HoldsUpTo)));
+            if (!string.IsNullOrEmpty(h.Status)) line.Append("; " + h.Status);
+            if (h.Threat != null) line.Append("; nearest enemy in view: " + h.Threat + ", " + Text.N(h.ThreatMen) + " men at " + Roads.Both(h.ThreatDistance, h.ThreatRoad));
+            return line.Append('.').ToString();
+        }
+
+        /// <summary>A party in view, as IN VIEW lists it.</summary>
+        internal static string SeenLine(ViewParty p)
+        {
+            string size = p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) + " men" : Text.N(p.Men) + " men";
+            string where = p.NearestHolding == null ? Where(p)
+                         : Roads.Both(p.HoldingDistance, p.HoldingRoad) + " from your " + p.NearestHolding + (p.Near != p.NearestHolding ? "; " + Where(p) : "");
+            return "- " + p.Relation.ToUpperInvariant() + " " + p.Name + Tag(p) + " (" + p.FactionName + "): " + size + ", strength " + Text.N((int)p.Strength)
+                   + "; " + where + "; " + p.Doing + JoiningText(p) + (p.Arrives != null ? ", " + p.Arrives : "") + "; seen by " + p.SeenBy + ".";
+        }
+
+        /// <summary>A party seen earlier and now out of sight, as SEEN EARLIER lists it.</summary>
+        internal static string LastSeenLine(ViewParty p, double now)
+            => "- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + (p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) : Text.N(p.Men)) + " men, strength "
+               + Text.N((int)p.Strength) + ", last seen " + Where(p)
+               + ", " + Math.Round(now - p.SeenHours) + " hours ago, " + p.Doing
+               + (!double.IsNaN(p.ArrivesAt) && p.ArrivesAt > now ? " (if it kept on, there about " + Text.When(p.ArrivesAt) + ")" : "") + ".";
+
+        /// <summary>An enemy holding near the realm's lands, as ENEMY HOLDINGS NEAR YOUR LANDS lists it.</summary>
+        internal static string FrontierLine(ViewHolding h)
+            => "- " + h.Name + " [" + h.Id + "] (" + h.Kind + ", " + h.FactionName + "): "
+               + (h.Garrison >= 0 ? "garrison " + Text.N(h.Garrison) + (h.Militia >= 0 ? ", militia " + Text.N(h.Militia) : "") : "garrison not in sight")
+               + (string.IsNullOrEmpty(h.Status) ? "" : "; " + h.Status) + ".";
 
         /// <summary>The captured lords, one line per place they are held (a holding, or the party holding them), most first.</summary>
         public static List<string> CaptiveLines(List<ViewCaptive> captives)
@@ -737,8 +801,8 @@ namespace BannerlordAgents
             sb.AppendLine("  " + head + " (" + members.Count + (members.Count == 1 ? " lord" : " lords") + " beside its leader, marching with it):");
             foreach (ViewParty x in members)
             {
-                Tools.ToolInstance held = Tools.Runner.ForParty(x.Id);
-                sb.AppendLine("  - " + x.Name + Tag(x) + ": " + Text.N(x.Men) + " men, strength " + Text.N((int)x.Strength) + (held != null ? " (your order: " + held.Def.Name + ")" : "") + ".");
+                string held = OrderName(x);
+                sb.AppendLine("  - " + x.Name + Tag(x) + ": " + Text.N(x.Men) + " men, strength " + Text.N((int)x.Strength) + (held != null ? " (your order: " + held + ")" : "") + ".");
             }
         }
 

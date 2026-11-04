@@ -42,7 +42,7 @@ namespace BannerlordAgents.WarRoom
         public int Asked;
 
         public string Server => "routes";
-        public IEnumerable<string> Tools => new[] { ToolName, OddsName, RoadsName, ChaseName, EngageName, CheckName };
+        public IEnumerable<string> Tools => ToolNames().ToList();
 
         public RouteTool(string root, string logDir, string campaign, string realm, int poke, string call)
         {
@@ -122,15 +122,17 @@ namespace BannerlordAgents.WarRoom
                     };
                     break;
                 case "tools/list":
-                    result = new JsonObject { ["tools"] = new JsonArray(Definition(), OddsDefinition(), RoadsDefinition(), ChaseDefinition(), EngageDefinition(), CheckDefinition()) };
+                    result = new JsonObject { ["tools"] = Definitions() };
                     break;
                 case "tools/call":
                 {
                     string name = (string)msg["params"]?["name"];
                     JsonObject args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
                     string text = name == ToolName ? Ask(args) : name == OddsName ? Safe(() => Odds(args)) : name == RoadsName ? Safe(() => RoadsIn(args))
-                                  : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args)) : name == CheckName ? Safe(() => CheckTool(args))
-                                  : "There is no tool called " + name + ".";
+                                  : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args))
+                                  : name == CheckName && !NoCheck ? Safe(() => CheckTool(args))
+                                  : name == LookName && BookPath != null ? LookUp(args) : name == ListName && BookPath != null ? List(args) : name == ChronicleName && BookPath != null ? Chronicle(args)
+                                  : "There is no tool called " + name + " in this call.";
                     result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
                     break;
                 }

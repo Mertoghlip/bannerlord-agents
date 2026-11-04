@@ -31,6 +31,8 @@ namespace SmokeTest
             if (args.Length > 0 && args[0] == "--spin") return Spin();
             if (args.Length > 1 && args[0] == "--library") return ExportLibrary(args[1]);
             if (args.Length > 0 && args[0] == "--perf") return Perf(args);
+            if (args.Length > 0 && args[0] == "--coverage") return Coverage(args);
+            if (args.Length > 0 && args[0] == "--newspokes") return NewsPokes(args);
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-smoketest");
             try { Directory.Delete(root, true); } catch { /* first run */ }
             Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
@@ -231,6 +233,7 @@ namespace SmokeTest
             OwnToolTests(root, agentDir);
             DiplomacyTests(root, agentDir);
             AlliesTests(root, agentDir);
+            NewsTests(root);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");
@@ -2269,6 +2272,9 @@ namespace SmokeTest
             double budget = 1000;
             int bi = Array.IndexOf(args, "--budget");
             if (bi > 0 && bi + 1 < args.Length) double.TryParse(args[bi + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out budget);
+            // 0.14: the agents' news mode for the test (full, shadow or theatre): a news report and, in theatre mode, a question book with each poke
+            int ni = Array.IndexOf(args, "--news");
+            if (ni > 0 && ni + 1 < args.Length) _perfNews = args[ni + 1];
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-perf");
             try { Directory.Delete(root, true); } catch { /* first run */ }
             Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
@@ -2305,6 +2311,7 @@ namespace SmokeTest
         /// <summary>Runs the hours through the helper's two parts with a watching agent per watched realm (placed: on the helper's cores and priority).</summary>
         /// <summary>How many of the agents' own tools (the circuit) the speed test runs (0.13: 30, a realm's whole library).</summary>
         private const int OwnToolsInPerf = 30;
+        private static string _perfNews = "full";
 
         private static PerfResult PerfReplay(List<Snapshot> hours, string agentsRoot, bool placed, bool quiet, int ownTools = 0)
         {
@@ -2318,7 +2325,7 @@ namespace SmokeTest
             {
                 string f = Path.Combine(agentsRoot, realm);
                 Directory.CreateDirectory(f);
-                File.WriteAllText(Path.Combine(f, "agent.txt"), "realm = " + realm + "\nmode = shadow\nlords = all\nchannel = warroom\n");
+                File.WriteAllText(Path.Combine(f, "agent.txt"), "realm = " + realm + "\nmode = shadow\nlords = all\nchannel = warroom\nnews = " + _perfNews + "\n");
                 Settings.AgentFolders.Add(f);
             }
             Brain.Reset(hours[0].Campaign ?? "perf", double.NaN, Agents.Configured(), null);

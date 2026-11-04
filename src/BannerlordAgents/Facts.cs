@@ -317,6 +317,45 @@ namespace BannerlordAgents
             return files;
         }
 
+        /// <summary>
+        /// The look-ups of the enemy's castles and towns the realm knows (0.14: there were none, and both of Dol Guldur's calls in the Nov 2
+        /// example asked for one): those near its lands, as its report lists them, and those of a siege or battle it sees. What its eyes
+        /// counted there, if they reach it; its lords by how soon they could be there, with the muster's running totals; the enemies in
+        /// view near it.
+        /// </summary>
+        public static Dictionary<string, string> EnemyHoldings(World w, View v)
+        {
+            var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            List<Lord> lords = OwnLords(w);
+            var ids = new List<string>(v.Frontier.Select(h => h.Id));
+            foreach (ClockItem c in v.ClockItems) if (c.Place != null && !ids.Contains(c.Place)) ids.Add(c.Place);
+            foreach (string id in ids)
+            {
+                SettlementRow h = w.Holding(id);
+                if (h == null || h.Faction == w.Realm || !World.IsFort(h) || files.ContainsKey(id)) continue;
+                ViewHolding seen = v.Frontier.FirstOrDefault(x => x.Id == id);
+                var sb = new StringBuilder();
+                string counted = seen != null && seen.Garrison >= 0
+                    ? "garrison " + Text.N(seen.Garrison) + (seen.Militia >= 0 ? ", militia " + Text.N(seen.Militia) : "")
+                      + (seen.WallLevel > 0 ? "; walls level " + seen.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(seen.Defence))
+                                              + (seen.LordsInside > 0 ? " (" + Text.N((int)Math.Round(seen.LordsInside)) + " of it the lords your realm sees inside)" : "")
+                                              + ", so it holds against besiegers up to strength " + Text.N((int)Math.Round(seen.HoldsUpTo)) : "")
+                    : "its garrison is not in your sight";
+                string status = Views.Status(w.S, h);
+                sb.AppendLine(h.Name + " [" + h.Id + "], a " + h.Kind + " of " + Views.FactionName(w.S, h.Faction) + (w.HostileFaction(h.Faction) ? " (at war with you)" : "") + ": " + counted
+                              + (status != null ? "; " + status : "") + ". As of " + Text.When(w.Hours) + ".");
+                sb.AppendLine("Your lords, soonest first:");
+                foreach (Lord l in lords.Where(l => !double.IsNaN(Hours(w, l.Row, h.Id))).OrderBy(l => Hours(w, l.Row, h.Id)).Take(12)) sb.AppendLine("- " + LordLine(w, l, h.Id));
+                List<PartyRow> foes = w.EnemiesNear(h.Id, 60);
+                sb.AppendLine(foes.Count > 0 ? "Enemies in view within 60:" : "No enemy in view within 60.");
+                foreach (PartyRow e in foes.Take(10)) sb.AppendLine("- " + EnemyLine(w, e, h.Id));
+                sb.AppendLine("Muster here: every lord of yours by how soon they could be here, with running totals. * = a leader here could call them into an army at once; the others march first:");
+                foreach (string line in Muster(w, h.Id)) sb.AppendLine("- " + line);
+                files[h.Id] = sb.ToString();
+            }
+            return files;
+        }
+
         // ---------- the council of war ----------
 
         /// <summary>

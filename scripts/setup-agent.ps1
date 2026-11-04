@@ -7,6 +7,7 @@
   from it, and the game's bridge finds it in its settings ("agents = <folder>; <folder>"). The folder holds:
   - agent.txt: the realm it commands, its mode (off, shadow or live), who obeys it, and its channel folder;
   - warroom-system.md and chronicler-system.md: its instructions, and the chronicler's (who writes the story so far);
+  - warroom-news.md: the sections of its instructions a news wake reads in their place when agent.txt says news = theatre (0.14);
   - warroom.txt: its war room's settings (model, effort, thinking caps, where its logs go);
   - warroom\: the channel the bridge and the war room talk through (orders\done, lookups, the order library tools.txt);
   - memory\<campaign>\: its memory, made by the war room (docs/MEMORY.md).
@@ -39,6 +40,8 @@ param(
     [ValidateSet('', 'realm', 'lieutenant')][string]$Kind = '',
     [ValidateSet('', 'off', 'shadow', 'live')][string]$Mode = '',
     [string]$Lords = '',
+    # a news wake's report (0.14, docs/PLAN-news.md): full (as before), shadow (full sent, the theatre's written beside it) or theatre
+    [ValidateSet('', 'full', 'shadow', 'theatre')][string]$News = '',
     [string]$RealmTitle = '',
     [string]$RealmLine = '',
     [string]$SettingsFrom = 'C:\Users\karab\Projects\orc-war-council\warroom.txt',
@@ -74,6 +77,7 @@ if (-not $Realm) { Write-Host 'Name the realm: -Realm <kingdom id> (the folder h
 if (-not $Mode) { $Mode = $(if ($had['mode']) { $had['mode'] } else { 'shadow' }) }
 if (-not $Lords) { $Lords = $(if ($had['lords']) { $had['lords'] } else { 'all' }) }
 $channelName = $(if ($had['channel']) { $had['channel'] } else { 'warroom' })
+if (-not $News) { $News = $(if ($had['news']) { $had['news'] } else { 'full' }) }
 [System.IO.File]::WriteAllLines($agentFile, [string[]]@(
     '# This agent: the realm it commands and how. The game''s bridge reads this at every load (docs/WARROOM.md).',
     "realm = $Realm",
@@ -84,8 +88,10 @@ $channelName = $(if ($had['channel']) { $had['channel'] } else { 'warroom' })
     '# the folder in this one the bridge and the war room talk through',
     "channel = $channelName",
     '# realm (it plays a realm) or lieutenant (it serves the player''s own realm through the campaign map''s chat box)',
-    "kind = $Kind"), $utf8)
-Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName" -ForegroundColor Green
+    "kind = $Kind",
+    '# a news wake''s report: full (the whole report, as before), shadow (the whole report sent, the news report written beside it) or theatre (the news, its clock and what bears on it; the rest by asking)',
+    "news = $News"), $utf8)
+Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName, news $News" -ForegroundColor Green
 
 $channel = Join-Path $Workspace $channelName
 New-Item -ItemType Directory -Force (Join-Path $channel 'orders\done') | Out-Null
@@ -95,7 +101,7 @@ New-Item -ItemType Directory -Force (Join-Path $channel 'lookups') | Out-Null
 $fresh = @()
 # a lieutenant's instructions are its own, and it has no chronicler
 if ($Kind -eq 'lieutenant') { $pairs = @(, @('lieutenant-system.template.md', 'warroom-system.md')) }
-else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md')) }
+else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'), @('warroom-news.template.md', 'warroom-news.md')) }
 foreach ($pair in $pairs) {
     $to = Join-Path $Workspace $pair[1]
     if ((Test-Path $to) -and -not $Force) { Write-Host "Kept the folder's own $($pair[1])."; continue }

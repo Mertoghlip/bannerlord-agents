@@ -26,6 +26,12 @@ namespace BannerlordAgents
         /// <summary>"realm" (an agent that plays a realm), or "lieutenant" (the player's own, since 0.10).</summary>
         public string Kind = "realm";
         public bool IsLieutenant => Kind == "lieutenant";
+        /// <summary>
+        /// A news wake's report (0.14, docs/PLAN-news.md; agent.txt's "news"): "full", the whole report as before; "theatre", the news, its clock and
+        /// what bears on it, the rest in a few lines a region and by asking; "shadow", the whole report sent and the theatre's written beside it.
+        /// </summary>
+        public string News = "full";
+        public bool Theatre => News == "theatre";
         /// <summary>What was wrong with the folder, for the self-check (null: nothing).</summary>
         public string Problem;
 
@@ -52,6 +58,7 @@ namespace BannerlordAgents
                             case "lords": c.Lords = kv.Value.Length > 0 ? kv.Value : "all"; break;
                             case "channel": if (kv.Value.Length > 0) channel = kv.Value; break;
                             case "kind": c.Kind = kv.Value.Trim().ToLowerInvariant() == "lieutenant" ? "lieutenant" : "realm"; break;
+                            case "news": c.News = NewsMode(kv.Value); break;
                         }
             }
             catch (Exception e) { c.Problem = "agent.txt could not be read: " + e.Message; }
@@ -59,6 +66,13 @@ namespace BannerlordAgents
             c.ChannelDir = Path.Combine(c.Workspace, channel);
             c.LogDir = LogDirOf(c.Workspace);
             return c;
+        }
+
+        /// <summary>A news wake's report as agent.txt names it: theatre, shadow or full (anything else).</summary>
+        public static string NewsMode(string v)
+        {
+            string m = (v ?? "").Trim().ToLowerInvariant();
+            return m == "theatre" || m == "theater" ? "theatre" : m == "shadow" ? "shadow" : "full";
         }
 
         /// <summary>An agent described by the settings of 0.8 and before (and the smoke test): a realm and its channel folder.</summary>

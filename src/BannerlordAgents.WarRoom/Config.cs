@@ -79,6 +79,8 @@ namespace BannerlordAgents.WarRoom
         public string Journal => Path.Combine(AgentDir, "journal.md");
         public string MemoryDir => Path.Combine(AgentDir, "memory");
         public string SystemTemplate => Path.Combine(AgentDir, "warroom-system.md");
+        /// <summary>A news wake's sections of the instructions (0.14, theatre mode): each takes the place of the same section of warroom-system.md.</summary>
+        public string NewsTemplate => Path.Combine(AgentDir, "warroom-news.md");
         public string ChroniclerTemplate => Path.Combine(AgentDir, "chronicler-system.md");
         public bool Conversation => string.Equals(MemoryMode, "conversation", StringComparison.OrdinalIgnoreCase);
 

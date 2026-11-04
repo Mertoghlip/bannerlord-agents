@@ -2049,3 +2049,25 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The battle's memory comes back:** 10.6 GB held through the results screen, then 5.7 GB at once ~17 s after the battle ended, the map reloaded at ~8.4 GB.
 - **System memory:** the game 16.1 GB on the map before the battle, 20.7 GB in it, 18.1 GB on the map after (2 GB not handed back); free 8.5 / 6.7 / 6.4 GB; commit 79 / 84 / 81%.
 - Reading for the model choice (Mert chose a ~20B mixture model trained on a rented card): gpt-oss-20b (~12–13 GB) fits beside the campaign map with little to spare, and only off the card during battles (reload from D: after each); a 35B mixture at ~3 bits does not fit; a 14B ordinary model at 4 bits (~9 GB) could stay on the card through battles.
+
+## Tuesday, November 3
+
+### 20:35 · Install, version 0.14.0: a news wake's context, pinpoint by the clock of the news · commit COMMIT_HASH
+- **Why:** Mert, Nov 2: "stuff RELEVANT to this specific piece of news should be given and the rest should be queryable"; the reach set by "the 'clock' for the specific new development". His other answers: a first look keeps the whole report; tool writing moves to councils only; a letter's theatre is the places it names. Plan and decisions: `docs/PLAN-news.md`.
+- **What, game side:**
+  - `Theatre`: a poke's focuses, their clocks and horizons (6 hours to 3 days, a day with no clock), the lords marked against the clock with the agent's measured answer time, and who else can be there in time.
+  - `Views.NewsReport`: the news report, with THE CLOCK and THE REST OF THE WAR (regions, every lord by name and id). The whole report's text is unchanged; its lines moved into shared functions.
+  - `Views.Book`: the question book, `book\poke-N.json`, fog-checked and counted as shown. `Facts.EnemyHoldings`: look-ups for enemy castles and towns, which had none.
+  - Clock items in the view. Captures and broken armies now carry a party in their notice.
+  - `agent.txt`'s `news`: full, shadow or theatre.
+- **What, war room:** `look_up`, `list` and `chronicle` (`BookTools.cs`); the news instructions (`agent/warroom-news.template.md`, each section replacing the same one); notes and chronicle lines cut to the news; tools written in a news answer not kept, and the next council told; no Read and no `check_tool` in a news wake. `replay --news`. Councils unchanged.
+- **Mode now:** shadow, so the agents still get the whole report and the instructions as before; only the record grows. Switching to theatre is one line in `agent.txt`.
+- **Tests:** smoke test 457 checks, war room self-test, dashboard self-test, all passed; references 834, missing 0 (run just after the install, not before: my first try had a wrong path). Speed test on the run's last saved hours, 95th of a hundred: full 810 ms, theatre 643 ms, budget 1,000 ms.
+- **Measures (`docs/reports/2026-11-03-news-context.md`), from run 20261029-1903-A's recordings:**
+  - Report 35% (Dol Guldur) and 41% (orcs) of the whole one. 1,604 wakes rebuilt, no id beyond the whole report.
+  - Of what the orders named, 57% and 60% in the theatre in full, 95% named at all. **The plan's bar of about 95% in the theatre is not met:** the agent runs the whole war from news wakes, and 70% of the lords missed lay over a day beyond the horizon. The tests added the roster, the short orders, the nearest refuges, a day's floor for a passing enemy, a cap of 15 others, and an enemy's arrival at any holding as its clock.
+  - Twelve replays with real calls: first read 62,040 to 35,806 tokens (the plan said 15,000 to 20,000; the fixed part alone is about 24,500), median time 23.7 to 23.3 s, total time 16% up, questions 25 to 43 (over the plan's limit, with no way-finding questions or look-up pages in the replays); decisions: 5 the same, 3 the same at the core with more added, 2 the same main move, 2 different.
+- **Found, not fixed (Mert's call):** `Room.Section` reads each section to the end of the report, since the report's lines end in 
+. So 375 of Dol Guldur's 375 answers and 280 of the orcs' 394 counted as urgent, and 47 of 142 councils were called by words in the news or the report, some of them old chronicle lines. Left as it is so the theatre's test changes one thing at a time.
+- **Outside the repository:** `warroom-news.md` installed in `orc-war-council`, `dolguldur-war-council` and `kingdom-war-council`, each `agent.txt` given `news = shadow`. War rooms and dashboard stopped for the builds and started again.
+- **Still to do:** shadow in play, then a both-sides test run in theatre mode.

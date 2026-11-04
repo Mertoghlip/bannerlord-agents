@@ -420,6 +420,10 @@ namespace BannerlordAgents
         public string ModeText() => AgentChannel.ModeText(_agent.Config.Mode, _agent.Config.Lords);
         /// <summary>The player's lieutenant's channel (since 0.10): it gets the player's words (chat.json), never pokes.</summary>
         public bool IsLieutenant => _agent.Config.IsLieutenant;
+        /// <summary>A news wake's report for this agent (0.14): full, shadow or theatre.</summary>
+        public string NewsMode => _agent.Config.News;
+        /// <summary>The newest poke sent (-1: none yet this session).</summary>
+        public int LastPoke => _lastPoke;
 
         // ---------- the lieutenant's chat (0.10) ----------
 
@@ -601,6 +605,9 @@ namespace BannerlordAgents
         }
 
         /// <summary>Every id the agent is shown, so an order naming any other id can be flagged.</summary>
+        /// <summary>Text the agent may be shown on asking (0.14: a news wake's question book): its ids count as shown, as a report's do.</summary>
+        public void Shows(string text) => RememberIds(text);
+
         private void RememberIds(string report)
         {
             List<string> fresh = null;
@@ -652,6 +659,43 @@ namespace BannerlordAgents
             Diag.Count("files:look-ups written", count.Written);
             Diag.Count("files:look-ups unchanged", count.Unchanged);
             return count;
+        }
+
+        // ---------- a news wake's clock and question book (0.14) ----------
+
+        private readonly List<double> _lags = new List<double>();
+        private readonly HashSet<int> _lagPokes = new HashSet<int>();
+        private const int LagsKept = 60, LagsNeeded = 5;
+
+        /// <summary>
+        /// In-game hours from a poke to its fast answer's first order taking effect, over this session's last 60 answers: as a rule (the median)
+        /// and one answer in ten (the 90th); the run's measures (7 and 20 hours, Nov 2) until five answers are in.
+        /// </summary>
+        public void Lag(out double usual, out double late)
+        {
+            usual = Theatre.DefaultUsualLag;
+            late = Theatre.DefaultLateLag;
+            if (_lags.Count < LagsNeeded) return;
+            List<double> sorted = _lags.OrderBy(x => x).ToList();
+            usual = sorted[sorted.Count / 2];
+            late = Math.Max(usual, sorted[Math.Min(sorted.Count - 1, (int)Math.Ceiling(sorted.Count * 0.9) - 1)]);
+        }
+
+        /// <summary>
+        /// The question book of a poke (book\poke-N.json) or a council (book\council.json), for the war room's look_up, list and chronicle
+        /// questions; written before the poke itself, and only the newest 40 poke books are kept.
+        /// </summary>
+        public void WriteBook(string name, string json)
+        {
+            if (!On || json == null) return;
+            string dir = Paths.Ensure(Path.Combine(Dir, "book"));
+            Files.Overwrite(Path.Combine(dir, name + ".json"), json);
+            try
+            {
+                List<FileInfo> old = new DirectoryInfo(dir).GetFiles("poke-*.json").OrderByDescending(f => f.LastWriteTimeUtc).Skip(40).ToList();
+                foreach (FileInfo f in old) f.Delete();
+            }
+            catch (Exception e) { Diag.Swallowed("tidying the question books", e); }
         }
 
         /// <summary>Each tool's whole definition as tools\(name).json (0.13, A1): ours and the realm's own kept tools; files no longer written are removed.</summary>
@@ -1108,6 +1152,12 @@ namespace BannerlordAgents
                 gameHours = hours - t.Hours;
                 // when the answer took effect (0.13.22); a next order (then) starts later by design, so it does not count
                 if (status == "applied" && a.File != "then") _late.Applied(a.Poke, hours);
+                // a fast answer's lag, once per poke, for a news wake's clock (0.14): a council's answers take longer by design
+                if (status == "applied" && a.File != "then" && (a.File == null || a.File.IndexOf("council", StringComparison.OrdinalIgnoreCase) < 0) && gameHours >= 0 && _lagPokes.Add(a.Poke))
+                {
+                    _lags.Add(gameHours);
+                    if (_lags.Count > LagsKept) _lags.RemoveAt(0);
+                }
                 delay = " Answered " + seconds.ToString("0", Text.Inv) + " s after poke #" + a.Poke + " (" + gameHours.ToString("0.0", Text.Inv) + " in-game hours).";
             }
             else if (a.Poke < 0) delay = " (The file gave no poke number, so the answer time is unknown.)";

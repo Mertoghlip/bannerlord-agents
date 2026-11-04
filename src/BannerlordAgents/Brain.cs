@@ -466,10 +466,19 @@ namespace BannerlordAgents
             Memory m = Get(v.Watched);
             Tools.World w = Tools.Runner.WorldFor(v);
             View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
-            string report = Views.Report(view, null, new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true });
-            Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", Known(v, v.Watched, v.WatchedSees, m, w));
+            var extras = new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true };
+            string report = Views.Report(view, null, extras);
+            List<string> known = Known(v, v.Watched, v.WatchedSees, m, w).ToList();
+            Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", known);
             ag.Channel.OnHour(v.Hours, report);
             ag.Channel.WriteCouncil(Facts.Council(w));
+            if (ag.Config.Theatre)
+            {
+                // a news wake no longer writes the look-up files (its question book replaces them, 0.14), but a council, which keeps the whole
+                // picture as before, still reads them: written for it, from its own hour
+                try { ag.Channel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
+                catch (Exception e) { Diag.Error("the council's look-up files", e); }
+            }
             double took = Took(began);
             Diag.Sample("helper:briefing ms", took);
             Diag.Event("agent", "briefing written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), ms = Math.Round(took, 1) });
@@ -721,16 +730,54 @@ namespace BannerlordAgents
             Channel ch = AgentChannel.For(fid);
             int number = ch.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
             Tools.World w = Tools.Runner.WorldFor(s);
+            // a news wake's report (0.14, docs/PLAN-news.md): the whole report as before, or the news and what bears on it ("theatre"), or the
+            // whole report sent and the theatre's written beside it ("shadow"); the lieutenant is never poked
+            string newsMode = ch.On && !ch.IsLieutenant ? ch.NewsMode : "full";
+            bool theatreMode = newsMode == "theatre";
             ReportExtras extras = null;
             Timed(ms, "facts", () => extras = new ReportExtras
             {
                 Since = ch.On ? ch.SinceLastAnswer(number, v) : null, LastAnswered = ch.LastAnswered,
-                InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On
+                InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On && !theatreMode
             });
+            List<string> known = Known(s, fid, sees, m, w, triggers).ToList();
             string report = null;
             Timed(ms, "report", () => report = Views.Report(v, triggers, extras));
-            Timed(ms, "fog check", () => Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, Known(s, fid, sees, m, w, triggers)));
-            if (ch.On)
+            Timed(ms, "fog check", () => Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, known));
+            Theatre theatre = null;
+            string news = null;
+            List<Views.Area> areas = null;
+            if (newsMode != "full")
+            {
+                try
+                {
+                    Timed(ms, "theatre", () => { areas = Views.Areas(v); theatre = TheatreOf(s, v, triggers, w, ch); });
+                    Timed(ms, "news report", () => news = Views.NewsReport(v, triggers, extras, theatre, areas));
+                    Timed(ms, "fog check", () => Audit.CheckReport(v, news, sees, s.InspectedByWatched, "news report of poke #" + number, known));
+                }
+                catch (Exception e)
+                {
+                    // the whole report goes instead, so the agent is never left without one
+                    Diag.Error("the news report of poke #" + number, e);
+                    Diag.Alarm("news_report_failed", v.FactionName + "'s news report for poke #" + number + " could not be written (" + e.Message + "); the whole report went instead.");
+                    news = null;
+                }
+            }
+            if (theatreMode && news != null)
+            {
+                // the question book replaces the look-up files: the war room answers look_up, list and chronicle from it
+                try
+                {
+                    Dictionary<string, string> pages = null;
+                    string book = null, bookText = null;
+                    Timed(ms, "look-ups", () => { pages = Facts.Lookups(w, m.LastSeen, m.Trails); foreach (KeyValuePair<string, string> kv in Facts.EnemyHoldings(w, v)) pages[kv.Key] = kv.Value; pages.Remove("README"); });
+                    Timed(ms, "question book", () => { book = Json.Line(Views.Book(v, extras, number, areas, pages)); bookText = Views.BookText(v, extras, areas, pages); });
+                    Timed(ms, "fog check", () => Audit.CheckReport(v, bookText, sees, s.InspectedByWatched, "question book of poke #" + number, known));
+                    Timed(ms, "files", () => { ch.WriteBook("poke-" + number, book); ch.Shows(bookText); });
+                }
+                catch (Exception e) { Diag.Error("writing the question book", e); }
+            }
+            else if (ch.On)
             {
                 // the look-ups go out before the poke, so they are there when the agent wakes
                 try
@@ -747,23 +794,30 @@ namespace BannerlordAgents
                 ? "This picture is " + Math.Round(behind) + " in-game hours old: the game has moved on since. Your lords' orders still run on the newest hour.\n"
                 : null;
             long filesBegan = Stopwatch.GetTimestamp();
+            // what the agent reads: the theatre's report in theatre mode, else the whole one (shadow mode keeps the theatre's beside it)
+            string sent = theatreMode && news != null ? news : report;
+            object theatreRecord = theatre == null ? null : TheatreRecord(theatre, v, newsMode, news, report, theatreMode && news != null ? "book\\poke-" + number + ".json" : null);
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
-                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Triggers = triggers, View = v, Report = report }));
-            Episodes.Poke(fid, number, s.Hours, triggers, report, ch.On && !ch.IsLieutenant);
-            Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), report);
+                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Triggers = triggers, View = v, Report = report,
+                                News = news, NewsMode = newsMode == "full" ? null : newsMode, Theatre = theatreRecord, Sent = theatreMode && news != null ? "news" : null }));
+            Episodes.Poke(fid, number, s.Hours, triggers, sent, ch.On && !ch.IsLieutenant);
+            Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), sent);
+            if (news != null && !theatreMode) Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest_news.txt"), news);
             // the player's lieutenant is never poked (0.10): it speaks when spoken to; what became of its orders goes into the chat box
             if (ch.IsLieutenant) Lieutenant.Heard(triggers);
             if (ch.On && !ch.IsLieutenant)
-                ch.OnPoke(number, s.Hours, triggers, report, stale: stale, view: v, meta: new
+                ch.OnPoke(number, s.Hours, triggers, sent, stale: stale, view: v, meta: new
                 {
                     Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
                     LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count,
-                    History = History.ForAgent(), Run = s.Run, Arm = s.Arm
+                    History = History.ForAgent(), Run = s.Run, Arm = s.Arm,
+                    // what the war room needs to answer it as a news wake (0.14): the mode, the theatre's recipe, and the names in it
+                    News = theatreRecord ?? new { Mode = newsMode }
                 });
             ms["files"] = (ms.TryGetValue("files", out double filesBefore) ? filesBefore : 0) + Took(filesBegan);
 
-            Dictionary<string, int> sizes = Audit.Sizes(report, out int tokens);
+            Dictionary<string, int> sizes = Audit.Sizes(sent, out int tokens);
             Diag.Count("pokes");
             foreach (string kind in triggers.Select(t => t.Kind).Distinct()) Diag.Count("poke:" + kind);
             Diag.Sample("report:tokens", tokens);
@@ -773,7 +827,9 @@ namespace BannerlordAgents
             {
                 number, faction = fid, triggers = triggers.Select(t => t.Kind).ToList(), notices = triggers.Where(t => t.Notice.HasValue).Select(t => t.Notice.Value).ToList(),
                 tokens, sections = sizes, seen = v.Seen.Count, not_listed = v.SeenNotListed, last_seen = v.LastSeen.Count,
-                written_ms_after_the_hour = Math.Round(lagMs, 1), to_agent = ch.On, sent = ch.On && !ch.IsLieutenant
+                written_ms_after_the_hour = Math.Round(lagMs, 1), to_agent = ch.On, sent = ch.On && !ch.IsLieutenant,
+                news_mode = newsMode, recipe = theatre?.Recipe, full_tokens = report.Length / 4, news_tokens = news != null ? news.Length / 4 : (int?)null,
+                focuses = theatre?.Focuses.Count, lords_shown = theatre?.Lords.Count, others_shown = theatre?.Others.Count
             });
             m.PokedHoursRunning++;
             if (m.PokedHoursRunning == 12)
@@ -786,6 +842,50 @@ namespace BannerlordAgents
             if (RecentPokes.Count > 50) RecentPokes.RemoveAt(0);
             // since 0.13.7 an agent's poke is not put in the game's message log (Mert, Oct 29: on screen only his lieutenant's and the
             // game's own; the dashboard and the logs keep every poke)
+        }
+
+        /// <summary>
+        /// A poke's theatre (0.14, Theatre): the realm's lords' hours by road where the game's table knows the way (else the straight line
+        /// times Theatre.RoadFactor) at their own pace by the game's rules, as READY-MADE FACTS reckons them; a party in view or seen earlier
+        /// from where it was seen, at its own pace; the agent's answer time from this session's answers.
+        /// </summary>
+        internal static Theatre TheatreOf(Snapshot s, View v, List<Trigger> triggers, Tools.World w, Channel ch)
+        {
+            double usual = UsualPaceOf(v);
+            double Hours(ViewParty p, Focus f, double perHour)
+            {
+                double d = f.Id != null ? w.RoadDistance(p.Id, f.Id) : double.NaN;
+                if (double.IsNaN(d)) d = Views.Dist(p.X, p.Y, f.X, f.Y) * Theatre.RoadFactor;
+                return d / Math.Max(0.3, perHour);
+            }
+            Func<ViewParty, Focus, double> own = (p, f) => Hours(p, f, w.PerHour(w.Party(p.Id)));
+            Func<ViewParty, Focus, double> other = (p, f) =>
+            {
+                // in view: its pace now; seen earlier: its pace then (the realm's usual pace when not known)
+                PartyRow r = w.InView(p.Id) ? w.Party(p.Id) : null;
+                double per = r != null ? w.PerHour(r) : Theatre.PerHour(p);
+                return Hours(p, f, per > 0.06 ? per : usual);
+            };
+            Func<string, Tuple<float, float, string>> place = id => s.SettlementById.TryGetValue(id, out SettlementRow h) ? Tuple.Create(h.X, h.Y, h.Name) : null;
+            ch.Lag(out double usualLag, out double lateLag);
+            return Theatre.Build(v, triggers, own, other, place, usualLag, lateLag);
+        }
+
+        private static double UsualPaceOf(View v) => Theatre.UsualPace(v);
+
+        /// <summary>A theatre in a few fields, for the poke's record and its poke.json (the war room filters the notes and the chronicle by its names).</summary>
+        internal static object TheatreRecord(Theatre t, View v, string mode, string news, string report, string book)
+        {
+            return new
+            {
+                Mode = mode, t.Recipe, Why = t.WhyRecipe, t.Kinds, Book = book, ReportChars = (mode == "theatre" && news != null ? news : report)?.Length,
+                NewsChars = news?.Length, FullChars = report?.Length, UsualLag = Math.Round(t.UsualLag, 1), LateLag = Math.Round(t.LateLag, 1),
+                Focuses = t.Focuses.Select(f => new { f.Id, f.Name, f.Trigger, DecidedAt = double.IsNaN(f.DecidedAt) ? (double?)null : Math.Round(f.DecidedAt, 2), f.How, Horizon = Math.Round(f.Horizon, 1) }).ToList(),
+                Lords = t.Lords.Select(r => new { r.Party.Id, r.Party.Lord, Hours = Math.Round(r.Hours, 1), Focus = r.Focus.Id }).ToList(),
+                Others = t.Others.Select(r => new { r.Party.Id, r.Party.Lord, r.Party.Relation, Hours = double.IsNaN(r.Hours) ? (double?)null : Math.Round(r.Hours, 1), Heading = t.HeadingIn.Contains(r.Party.Id) }).ToList(),
+                Places = t.Places.OrderBy(x => x, StringComparer.Ordinal).ToList(),
+                Names = t.IsTheatre ? t.Names(v, local: true) : new List<string>(), Realms = v.AtWar.Concat(v.Allies).ToList()
+            };
         }
 
         /// <summary>

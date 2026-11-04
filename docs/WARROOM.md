@@ -134,6 +134,23 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - **It has no plan of ours** ([plan, decision 15](PLAN.md#decisions-for-the-build)): the instructions teach doctrine, not this war's moves ([DOCTRINE.md](DOCTRINE.md)).
 - **By hand:** `WarRoom council` sits one now (the game must be running).
 
+## News wakes (since 0.14)
+
+A poke is a news wake. `agent.txt`'s `news` says what it reads (docs/PLAN-news.md has the plan, the decisions and the measures):
+
+- `full`, the default: the whole report, as before.
+- `shadow`: the whole report goes; the news report is built too, written to `reports\<realm>_latest_news.txt` and kept in `pokes_<realm>.jsonl` beside it, for comparison.
+- `theatre`: the news report goes. Its news's focus and clock (`Theatre`, the bridge) say how far it reaches: everyone who can be there before the development is decided, at least 6 hours and at most 3 days of marching, a day where no clock runs. The rest of the realm is a line a region with each lord's name and id, and a question away. A first look and a quiet day keep the whole report; votes, offers, wars and peace get the realm's diplomacy, purse and sum.
+
+In theatre mode a news wake's call differs in four ways. Councils are untouched: they read the whole realm, the full instructions and the look-up files as before.
+
+- **Instructions:** each `## ` section of `warroom-news.md` takes the place of the same section of `warroom-system.md` (tool writing at a council only, the questions in place of the look-up files); each version keeps its own file by fingerprint, so both stay cached.
+- **Message:** the plan and the lessons whole, the notes on the enemies and realms of this news only, the chronicle lines about it.
+- **Tools:** no Read and no `check_tool`; `look_up`, `list` and `chronicle` (`BookTools.cs`) answer from the poke's question book (`book\poke-N.json`, written by the bridge before the poke, from the same hour and view, fog-checked like the report, the newest 40 kept), the realm's chronicle and the agent's notes. The bridge counts every id in the book as shown to the agent (`Channel.Shows`). The bridge no longer writes the look-up files for a news wake; it writes them for a council when the briefing is asked for.
+- **Tools written in an answer** are dropped (`tools_dropped` in `calls.jsonl`), and the next answer and the next council are told.
+
+`calls.jsonl` also gets `news_mode`, `recipe`, `message_chars`, `read_tool`, `book_asked` and `tools_offered`; `routes.jsonl` a line per book question.
+
 ## Guards
 
 - **The answer ends the call,** not Claude Code's exit: Claude Code sometimes lingers after answering, so it is closed after 2 s.
@@ -180,6 +197,8 @@ Recorded pokes are answered again in a scratch folder:
 It prints the time, tokens and steps of each call. This is how settings and models are compared: the RQ3 numbers on answer time and usage.
 
 With `--memory written` or `--memory conversation`, the pokes are answered in order instead, with the memory carried along, to compare the two memories ([MEMORY.md](MEMORY.md#comparing-the-two-memories)).
+
+News replays (0.14): `SmokeTest --newspokes pokes_<realm>.jsonl <out dir> --numbers 2041,2373` builds recorded pokes again as news wakes from their recorded views (`<out dir>\pokes.jsonl`, `<out dir>\book\poke-N.json`; a siege's or battle's clock and the look-up pages only where the record holds them), and `WarRoom replay --dir <agent> --pokes <out dir>\pokes.jsonl --numbers ... --news --calls <the war room's calls folder> [--news-template agent\warroom-news.template.md]` answers them in a scratch folder with the news instructions, the question book and the memory each original call read, cut to the news, and prints each beside what the original call did. Its logs stay in the scratch folder. `SmokeTest --coverage pokes_<realm>.jsonl <channel>\orders\done --run <id> [--out file.md]` is the coverage check.
 
 ## Not available
 

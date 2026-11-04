@@ -117,7 +117,8 @@ namespace BannerlordAgents.WarRoom
                 case "council": return new Room(c).CouncilNow("asked for by hand");
                 case "replay": return Arg(args, "--memory") != null ? ReplayInOrder(c, args) : Replay(c, args);
                 default:
-                    Console.WriteLine("Usage: WarRoom [run|once|story|council|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]");
+                    Console.WriteLine("Usage: WarRoom [run|once|story|council|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]"
+                                      + " [--news --calls <the war room's calls folder> --news-template agent/warroom-news.template.md]");
                     return 1;
             }
         }
@@ -234,20 +235,88 @@ namespace BannerlordAgents.WarRoom
             var want = new HashSet<int>(numbers.Split(',').Select(x => int.Parse(x.Trim(), CultureInfo.InvariantCulture)));
             string scratch = Path.Combine(Path.GetTempPath(), "warroom-replay");
             Config c = Scratch(live, scratch, args, "written");
-            var room = new Room(c);
+            // a news replay (0.14, docs/PLAN-news.md): its own logs, so the live calls.jsonl keeps only live calls
+            bool news = args.Contains("--news");
+            var room = news ? new Room(c, Path.Combine(scratch, "logs")) : new Room(c);
             int? cap = Arg(args, "--cap") != null ? int.Parse(Arg(args, "--cap"), CultureInfo.InvariantCulture) : (int?)null;
-            string tag = Arg(args, "--tag") ?? ("replay-" + c.Model + "-" + c.Effort + (cap.HasValue ? "-cap" + cap : ""));
+            string tag = Arg(args, "--tag") ?? ((news ? "news-" : "replay-") + c.Model + "-" + c.Effort + (cap.HasValue ? "-cap" + cap : ""));
+            string calls = Arg(args, "--calls");
             var rows = new List<string>();
             foreach (Recorded p in ReadPokes(file).Where(p => want.Contains(p.Number)))
             {
+                if (news && p.News != null)
+                {
+                    // the poke as the bridge would have sent it in theatre mode: its poke.json with its news, its question book in the channel
+                    File.WriteAllText(Path.Combine(c.ChannelDir, "poke.json"), new JsonObject
+                    {
+                        ["number"] = p.Number, ["hours"] = p.Hours, ["date"] = When(p.Hours), ["campaign"] = "replay", ["realm"] = p.Realm, ["realm_name"] = p.RealmName, ["load_id"] = "replay",
+                        ["news"] = JsonNode.Parse(p.News)
+                    }.ToJsonString(), new UTF8Encoding(false));
+                    string book = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(file)), "book", "poke-" + p.Number + ".json");
+                    Directory.CreateDirectory(Path.Combine(c.ChannelDir, "book"));
+                    if (File.Exists(book)) File.Copy(book, Path.Combine(c.ChannelDir, "book", "poke-" + p.Number + ".json"), true);
+                }
+                // the memory the original call read (its prompt up to the poke), when its calls folder is given; cut to the news in a news replay
+                room.ReplayMemory = calls != null ? OriginalMemory(calls, p.Number) : null;
                 CallResult res = room.Answer(p.Number, p.Date, PokeText(p), false, null, tag, cap);
-                rows.Add("#" + p.Number + "\t" + c.Model + "\t" + c.Effort + "\t" + res.Seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s\t" + res.OutTokens + " out\t" + res.Thinking + " thinking\t"
-                         + res.Turns + " steps\t" + (res.Ok ? "ok" : "failed: " + res.Error));
+                string was = calls != null ? Original(calls, p.Number) : "";
+                rows.Add("#" + p.Number + "\t" + c.Model + "\t" + c.Effort + "\t" + res.Seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s\t" + (res.InTokens + res.CacheRead + res.CacheWrite) + " read\t"
+                         + res.OutTokens + " out\t" + res.Thinking + " thinking\t" + res.Turns + " steps\t" + (res.Ok ? "ok" : "failed: " + res.Error) + (was.Length > 0 ? "\n\twas: " + was : ""));
             }
             Console.WriteLine();
-            Console.WriteLine("poke\tmodel\teffort\ttime\twritten\tthinking\tsteps\tresult");
+            Console.WriteLine("poke\tmodel\teffort\ttime\tread\twritten\tthinking\tsteps\tresult");
             foreach (string row in rows) Console.WriteLine(row);
+            if (news) Console.WriteLine("The calls (prompt, answer, thinking and the questions asked): " + Path.Combine(scratch, "logs"));
             return 0;
+        }
+
+        /// <summary>The call folder of a poke's own fast answer, in a war room's calls folder (its date folders), or null.</summary>
+        private static string CallFolder(string calls, int number)
+        {
+            if (!Directory.Exists(calls)) return null;
+            return Directory.GetDirectories(calls, "*-poke-" + number, SearchOption.AllDirectories).OrderBy(d => d, StringComparer.Ordinal).FirstOrDefault();
+        }
+
+        /// <summary>A poke's original call's memory: its prompt up to "Your last answer was ..." (the story, the notes, the chronicle lines), or null.</summary>
+        private static string OriginalMemory(string calls, int number)
+        {
+            string folder = CallFolder(calls, number);
+            string prompt = folder != null && File.Exists(Path.Combine(folder, "prompt.txt")) ? File.ReadAllText(Path.Combine(folder, "prompt.txt")) : null;
+            if (prompt == null) return null;
+            int at = prompt.IndexOf("Your last answer was to poke #", StringComparison.Ordinal);
+            if (at < 0) at = prompt.IndexOf("You have not answered any poke yet", StringComparison.Ordinal);
+            return at > 0 ? prompt.Substring(0, at) : null;
+        }
+
+        /// <summary>A poke's original fast answer in a few words, from its call folder: its orders, and its time, steps, tokens and questions, from the call's stream.</summary>
+        private static string Original(string calls, int number)
+        {
+            string folder = CallFolder(calls, number);
+            if (folder == null) return "(no original call found)";
+            var parts = new List<string>();
+            string answer = Path.Combine(folder, "answer.json");
+            if (File.Exists(answer) && JsonNode.Parse(File.ReadAllText(answer)) is JsonObject a)
+                parts.Add((a["orders"] as JsonArray)?.Count + " orders: " + string.Join("; ", (a["orders"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
+                    .Select(o => (string)o["lord"] + " " + (string)o["do"] + " " + ((string)o["at"] ?? (string)o["target"] ?? ""))));
+            string raw = Path.Combine(folder, "raw.jsonl");
+            if (File.Exists(raw))
+            {
+                int asks = 0;
+                foreach (string line in File.ReadLines(raw))
+                {
+                    if (line.Contains("\"type\":\"tool_use\"")) asks += Regex.Matches(line, "\"type\":\"tool_use\"").Count;
+                    if (!line.StartsWith("{\"type\":\"result\"", StringComparison.Ordinal)) continue;
+                    try
+                    {
+                        JsonObject r = JsonNode.Parse(line) as JsonObject;
+                        parts.Add(((double?)r?["duration_ms"] / 1000.0)?.ToString("0.0", CultureInfo.InvariantCulture) + " s, " + (int?)r?["num_turns"] + " steps, "
+                                  + ((long?)r?["usage"]?["input_tokens"] + (long?)r?["usage"]?["cache_read_input_tokens"] + (long?)r?["usage"]?["cache_creation_input_tokens"]) + " read in all");
+                    }
+                    catch (JsonException) { }
+                }
+                parts.Add(asks + " questions");
+            }
+            return string.Join("; ", parts);
         }
 
         /// <summary>
@@ -330,6 +399,9 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(Path.Combine(scratch, live.Channel, "orders"));
             if (File.Exists(live.SystemTemplate)) File.Copy(live.SystemTemplate, Path.Combine(scratch, "warroom-system.md"), true);
             if (File.Exists(live.ChroniclerTemplate)) File.Copy(live.ChroniclerTemplate, Path.Combine(scratch, "chronicler-system.md"), true);
+            // a news wake's sections (0.14): the agent's own, else the repository's template beside the war room
+            string newsFrom = File.Exists(live.NewsTemplate) ? live.NewsTemplate : Arg(args, "--news-template");
+            if (newsFrom != null && File.Exists(newsFrom)) File.Copy(newsFrom, Path.Combine(scratch, "warroom-news.md"), true);
             string tools = Path.Combine(live.ChannelDir, "tools.txt");
             if (File.Exists(tools)) File.Copy(tools, Path.Combine(scratch, live.Channel, "tools.txt"), true);
             var c = new Config
@@ -355,6 +427,8 @@ namespace BannerlordAgents.WarRoom
             public int Number;
             public double Hours;
             public string Date = "", Realm = "", RealmName = "", Report = "";
+            /// <summary>A news replay's poke (SmokeTest --newspokes): its theatre's news for poke.json, as JSON; null otherwise.</summary>
+            public string News;
             public List<Trigger> Triggers = new List<Trigger>();
         }
 
@@ -372,6 +446,7 @@ namespace BannerlordAgents.WarRoom
                     Number = num.GetInt32(), Hours = r.TryGetProperty("hours", out JsonElement h) ? h.GetDouble() : 0, Date = r.TryGetProperty("date", out JsonElement d) ? d.GetString() : "",
                     Realm = r.TryGetProperty("faction", out JsonElement f) ? f.GetString() : "", RealmName = r.TryGetProperty("faction_name", out JsonElement fn) ? fn.GetString() : "", Report = rep.GetString()
                 };
+                if (r.TryGetProperty("news", out JsonElement nw) && nw.ValueKind == JsonValueKind.Object) p.News = nw.GetRawText();
                 if (r.TryGetProperty("triggers", out JsonElement ts) && ts.ValueKind == JsonValueKind.Array)
                     foreach (JsonElement t in ts.EnumerateArray())
                         p.Triggers.Add(new Trigger

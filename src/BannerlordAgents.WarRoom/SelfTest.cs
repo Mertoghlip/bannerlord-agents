@@ -8,7 +8,7 @@ namespace BannerlordAgents.WarRoom
     /// lines a message carries, both memories' messages and instructions, when the story is due, and the replay's view of
     /// which recorded fights the bridge now keeps quiet. Prints ALL CHECKS PASSED, or what failed.
     /// </summary>
-    internal static class SelfTest
+    internal static partial class SelfTest
     {
         private static int _failures;
 
@@ -172,6 +172,7 @@ namespace BannerlordAgents.WarRoom
             LieutenantTests(root);
             BriefingTests(c, Path.Combine(root, "logs"));
             RecordTests(root);
+            NewsTests(root);
             ToolCheckTests(root);
 
             // the replay's view of what the bridge now keeps quiet
