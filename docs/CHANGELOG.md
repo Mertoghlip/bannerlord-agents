@@ -2072,7 +2072,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repository:** `warroom-news.md` installed in `orc-war-council`, `dolguldur-war-council` and `kingdom-war-council`, each `agent.txt` given `news = shadow`. War rooms and dashboard stopped for the builds and started again.
 - **Still to do:** shadow in play, then a both-sides test run in theatre mode.
 
-### 21:03 · War room 0.14.1: a report's sections read to their end, not the report's; the news context measured · commit COMMIT_HASH
+### 21:03 · War room 0.14.1: a report's sections read to their end, not the report's; the news context measured · commit bfa1c1c
 - **Why:** Mert: "Fix the bug, and tell me by how much we were able to reduce the context".
 - **The fix:** `Room.Section` looked for 
 
