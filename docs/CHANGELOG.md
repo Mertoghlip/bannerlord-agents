@@ -2087,7 +2087,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The Claude notes (bfdac71):** `CLAUDE.md` and `agent/CLAUDE.template.md` are out of the repository and ignored by git; they stay on this laptop, and Claude Code still reads `CLAUDE.md` here. `src/BannerlordAgents.WarRoom/Claude.cs` stays: it is source code the war room needs. Four pointers to the removed files were dropped from the docs and one comment.
 - **Left as they were:** `docs/proposal/` (dated snapshots, which also state that Claude Code helps with implementation, as the course allows), the commit history and its `Co-Authored-By` lines, and every other mention of Claude Code.
 
-### 21:44 · The history rewritten; the engine notes in the docs · commit COMMIT_NOTES (force-pushed)
+### 21:44 · The history rewritten; the engine notes in the docs · commit d944db5 (force-pushed)
 - **The history:** `CLAUDE.md` and `agent/CLAUDE.template.md` are out of all 212 commits, and 40 commit messages are reworded in the first person. Authors, dates and `Co-Authored-By` lines are unchanged. Every commit has a new id; this log's 119 citations now give the new ones.
 - **Checks:** commit by commit against the old history, the only files that differ are those two; authors, emails and dates are identical; the latest tree is byte for byte the same.
 - **Not cleaned:** old versions of the docs and comments, in earlier commits, still have their old wording. Only the latest version is rewritten.
