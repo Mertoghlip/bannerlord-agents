@@ -66,7 +66,7 @@ namespace BannerlordAgents
             {
                 if (r.Faction != s.Watched || r.Kind != "lord" || r.InSettlement == null || r.InBattle) continue;
                 if (!s.SettlementById.TryGetValue(r.InSettlement, out SettlementRow h)) continue;
-                // castles too since 0.13.4: TAOM gives them notables (CLAUDE.md, "Where volunteers are")
+                // castles too since 0.13.4: TAOM gives them notables
                 bool can = ((h.Kind == "town" || h.Kind == "castle") && h.BesiegedBy == null) || (h.Kind == "village" && (h.VillageState == null || h.VillageState == "Normal"));
                 if (!can) continue;
                 HoursAt.TryGetValue(r.Leader ?? r.Id, out int n);

@@ -14,7 +14,7 @@ It sees only what the orcs see, and acts only through orders that the game check
 | What | Where |
 |---|---|
 | The agent's folder | `C:\Users\karab\Projects\orc-war-council` |
-| Its instructions | `CLAUDE.md` there. The template is [agent/CLAUDE.template.md](../agent/CLAUDE.template.md); its goal is at the top and can be edited. |
+| Its instructions | `CLAUDE.md` there; its goal is at the top and can be edited. |
 | Its settings | `.claude\settings.json` there: Opus 5.5, auto memory off, no web, no subagents, edits allowed only in its own folder. |
 | Its journal | `journal.md` there, its memory between pokes. |
 | The connection | `channel\` there: `pokes.log`, `poke.txt`, `report.txt`, `orders\`, `receipts.log`. The fields are in [protocol/README.md](../protocol/README.md). |
