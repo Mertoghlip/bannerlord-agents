@@ -8,9 +8,9 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.13.19 (Mert, Nov 1): the supply order ("castles at my fronts with zero food due to raids on their villages"), the garrison floor on
-        /// every order ("take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the
-        /// agent"), and what the report shows for them: each own castle's and town's garrison strength and food, never an enemy's.
+        /// 0.13.19 (Nov 1): the supply order (castles at my fronts with zero food due to raids on their villages), the garrison floor on
+        /// every order (take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the
+        /// agent), and what the report shows for them: each own castle's and town's garrison strength and food, never an enemy's.
         /// </summary>
         private static void SupplyAndGarrisonTests()
         {

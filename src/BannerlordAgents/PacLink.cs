@@ -16,10 +16,10 @@ using TaleWorlds.Core;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The lieutenant and Party AI Controls together (0.11.1; Mert, Oct 23: "The liutenant should be able to work in tandem with
-    /// party ai controls. Any order given by the liutenant should override any order given by party ai controls, and it should be
-    /// able to change backup orders, troop templates, and all options as well. All changes made by the liutenant and all of its
-    /// orders should also be reflected in the dashboards of party ai controls as well.")
+    /// The lieutenant and Party AI Controls together (0.11.1, Oct 23: the lieutenant should be able to work in tandem with
+    /// Party AI Controls; any order given by the lieutenant should override any order given by Party AI Controls, and it should be
+    /// able to change backup orders, troop templates, and all options as well; all changes made by the lieutenant and all of its
+    /// orders should also be reflected in the dashboards of Party AI Controls as well.)
     /// - An order of the lieutenant's for a lord of the realm is carried out by our order layer, as every agent's is (Orders), and
     ///   shown in Party AI Controls as that lord's order: the nearest of its own kinds (PacRules.MirrorOf), or none where it has no
     ///   such kind (raid, shadow, a watch post, armies). It replaces the order he held there; his queue and backup order stay.
@@ -510,8 +510,8 @@ namespace BannerlordAgents
         /// <summary>
         /// Party AI Controls' own refill switched off for every lord it has settings for, and in its defaults for new ones (0.12.1;
         /// run 20261025-1524-C2: after the battle with Naglur on day 14 it sent Aragorn to fill his ranks and held him there to the
-        /// run's end, and the kingdom's agent could not command him. Mert: "Switch it off at setup, and make sure it is off for
-        /// everyone else as well."). Only settings that exist are changed. How many lords had it on; defaults: it was on there.
+        /// run's end, and the kingdom's agent could not command him. It is switched off at setup, and off for
+        /// everyone else as well). Only settings that exist are changed. How many lords had it on; defaults: it was on there.
         /// </summary>
         public static int AutoRecruitOff(out bool defaults)
         {

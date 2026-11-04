@@ -3,8 +3,8 @@ using System;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// Travel distance as the game itself reckons it (0.7.1; Mert, Oct 16: "distances should be given both as the crow flies
-    /// and the actual travel distance"). The game keeps the real way between every two holdings' gates (its navigation cache,
+    /// Travel distance as the game itself reckons it (0.7.1, Oct 16: distances should be given both as the crow flies
+    /// and the actual travel distance). The game keeps the real way between every two holdings' gates (its navigation cache,
     /// copied into RoadBook); from a party it counts through the holding whose gate serves the ground the party stands on
     /// (DefaultMapDistanceModel.GetDistance(MobileParty, Settlement)): straight to the party's entrance, that entrance's road to
     /// the destination, less the straight line between the two gates. Never less than the straight line. Game-free, worker.

@@ -11,8 +11,8 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// Mert's circuit order (docs/PLAN-0.13.md A3), written in the language: once a day it recruits at the realm's nearest town, at each
-        /// of its places and at its home castle (Mert, Oct 29: towns and castles both give recruits, towns the most), goes to the town at once
+        /// My circuit order (docs/PLAN-0.13.md A3), written in the language: once a day it recruits at the realm's nearest town, at each
+        /// of its places and at its home castle (Oct 29: towns and castles both give recruits, towns the most), goes to the town at once
         /// when its loot is worth selling (sold as it rides in), and between rounds patrols at home, striking small bands. The places each
         /// take their kind first.
         /// </summary>
@@ -53,7 +53,7 @@ namespace SmokeTest
 
         /// <summary>
         /// 0.13 step 2, the language grows (docs/PLAN-0.13.md A2): lists and tables, the new functions, facts and moves, the checker's new
-        /// checks with their places named, the limits on an agent's own tools, and Mert's circuit order end to end on a made-up world.
+        /// checks with their places named, the limits on an agent's own tools, and my circuit order end to end on a made-up world.
         /// </summary>
         private static void LanguageTests(string root, string agentDir)
         {
@@ -78,7 +78,7 @@ namespace SmokeTest
             // the checker: kinds first in takes, places, a table set by key, its problems named by state and rule, every state reachable
             ToolDef circuit = ToolDef.FromJson(CircuitJson, "circuit", "orcs");
             Check(circuit.Valid && circuit.Places == "friendly_holding" && circuit.At == "own_fort" && circuit.Own && circuit.TakesAbout["places"].StartsWith("other towns"),
-                  "Mert's circuit order passes the checker, its places of the friendly kind and its home one of the realm's forts" + (circuit.Valid ? "" : ": " + string.Join("; ", circuit.Problems)));
+                  "the circuit order passes the checker, its places of the friendly kind and its home one of the realm's forts" + (circuit.Valid ? "" : ": " + string.Join("; ", circuit.Problems)));
             Check(circuit.States["recruit"].Do.Verb == "recruit" && circuit.States["recruit"].Do.ArgText == "stop" && circuit.States["town"].Do.Verb == "recruit" && circuit.States["town"].Do.ArgText == "stop"
                   && circuit.States["home"].Do.Verb == "recruit" && circuit.States["home"].Do.ArgText == "at" && circuit.States["between"].Do.ArgText == "at"
                   && circuit.States["recruit"].When[0].SetAt[0] != null && circuit.States["recruit"].When[0].Set[0].Key == "visited",

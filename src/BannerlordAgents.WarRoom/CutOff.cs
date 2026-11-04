@@ -3,7 +3,7 @@ using BannerlordAgents.Routes;
 namespace BannerlordAgents.WarRoom
 {
     /// <summary>
-    /// Can they cut the way (0.13.22; Mert, Nov 1, after Dol Guldur's agent sent Zulgora's army for Westoft because "ask the way" said it
+    /// Can they cut the way (0.13.22, Nov 1, after Dol Guldur's agent sent Zulgora's army for Westoft because "ask the way" said it
     /// would get there 8 hours before Aragorn, and Aragorn, marching straight at the army, caught it about 16 hours later, long before
     /// either could reach Westoft: "who gets there first" weighs a race to the same place, not a march across the road). For each lord or
     /// army of the other side named in also_from, the first point of the way it could reach before the one asked about passes there, each

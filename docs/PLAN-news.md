@@ -1,6 +1,6 @@
 # A news wake's context: pinpoint, by the clock of the news
 
-Version 0.14. Mert's ask (Nov 2): "stuff RELEVANT to this specific piece of news should be given and the rest should be queryable", with the reach of each report set by "the 'clock' for the specific new development". This page is the plan as decided, what was built, and what the tests said.
+Version 0.14. What I asked for (Nov 2): what is relevant to this specific piece of news should be given and the rest should be queryable, with the reach of each report set by the "clock" for the specific new development. This page is the plan as decided, what was built, and what the tests said.
 
 ## Why
 
@@ -8,7 +8,7 @@ A poke's call read about 60,000 to 75,000 tokens: the same whole-realm report ev
 
 ## What was decided
 
-Mert's answers (Nov 2 and 3):
+My answers (Nov 2 and 3):
 
 1. **The reach comes from the development's own clock.** One day's march only where no clock runs.
 2. **A first look after a load keeps the whole report.**

@@ -1,33 +1,33 @@
 # The next build (0.13): diplomacy, the agents' own tools, and the training record
 
-Written Oct 28 and reviewed by Mert the same night (his decisions below). This is the working plan and the authority for everything in it; [PLAN.md](PLAN.md) points here. Each part has a plain description first and **build notes** after, with the names in the code, for whoever builds it.
+Written Oct 28 and reviewed the same night (my decisions below). This is the working plan and the authority for everything in it; [PLAN.md](PLAN.md) points here. Each part has a plain description first and **build notes** after, with the names in the code, for whoever builds it.
 
-**Where it stands (Oct 29, version 0.13.5):** steps 1 to 7 of Part F are built, tested and installed (the record; the language; the agents' own tools with "check a tool"; diplomacy; the allied channel and the lieutenant; the instructions' skeleton; everything together), each in [CHANGELOG.md](CHANGELOG.md). What is built is described in [TOOLS.md](TOOLS.md) (the language and the agents' own tools), [DIPLOMACY.md](DIPLOMACY.md), [LOGGING.md](LOGGING.md#the-training-record-since-013), [WARROOM.md](WARROOM.md) and [LIEUTENANT.md](LIEUTENANT.md). Since then, **0.13.1**: the backup, on the laptop's D: drive (decision 9, decided after the build; C6); **0.13.2**: the records themselves moved to D: (Mert: "Yes, move the records themselves to D: as well."), the backup's check that its place is not inside what it copies now follows links, and one lock guards the module's open files (the smoke test's thread had met the worker's flush). Step 8 under way (Oct 29): Mert's first correction, principle 7's raiders struck while they are alone, at work on a village or caught before they reach safety, not on their way home ([DOCTRINE.md](DOCTRINE.md#principle-7-corrected-oct-29-raiders-struck-while-they-are-alone)); the whole instructions given to him in the chat to read; his second, **0.13.3**: a "Recruiting" section (towns, castles and villages give recruits, towns the most) and his circuit example recruiting each round at the realm's nearest town and at its home castle, and the guard order's description no longer saying castles give no recruits; then **0.13.4**: the guard order takes the volunteers of the castle it guards before riding to a town or village (Mert: "Sure, lets do that"), and the recruitment log counts castles. Then **0.13.5** (Mert, Oct 29, after the first hours of that test): the orders in force carried across a save and its load, the run written at every save and when the game closes, the game starting a war room that is not running, and the lieutenant with no time limit nor thinking cap. Next: the shake-down (step 9), which Mert chose to play himself as Aragorn (arm A, Oct 29: "make ready for the test with me playing as Aragorn (Arnor & Gondor)") instead of the C1 of Part G, with the instructions as they stand ("I like the instruction set"); the rest of step 8 stays open (below). **On the docket:**
-- with Mert (step 8): the instructions' final wording and the doctrine's diplomacy principles (decision 8; the wording was given to him whole in the chat on Oct 28, with points to weigh: the opening's "war council of a realm ruled by its warlord" against Diplomacy's "You rule your realm"; the three diplomacy maxims of DOCTRINE.md to write as principles; an unanswered offer accepted after 12 hours; whether the two example tools besides his circuit steer the agents; the 16,000 characters the new sections add to every call); whether a realm allied to his gets an agent of its own (B5); letters to realms that are not allies;
+**Where it stands (Oct 29, version 0.13.5):** steps 1 to 7 of Part F are built, tested and installed (the record; the language; the agents' own tools with "check a tool"; diplomacy; the allied channel and the lieutenant; the instructions' skeleton; everything together), each in [CHANGELOG.md](CHANGELOG.md). What is built is described in [TOOLS.md](TOOLS.md) (the language and the agents' own tools), [DIPLOMACY.md](DIPLOMACY.md), [LOGGING.md](LOGGING.md#the-training-record-since-013), [WARROOM.md](WARROOM.md) and [LIEUTENANT.md](LIEUTENANT.md). Since then, **0.13.1**: the backup, on the laptop's D: drive (decision 9, decided after the build; C6); **0.13.2**: the records themselves moved to D: as well, the backup's check that its place is not inside what it copies now follows links, and one lock guards the module's open files (the smoke test's thread had met the worker's flush). Step 8 under way (Oct 29): my first correction, principle 7's raiders struck while they are alone, at work on a village or caught before they reach safety, not on their way home ([DOCTRINE.md](DOCTRINE.md#principle-7-corrected-oct-29-raiders-struck-while-they-are-alone)); the whole instructions given to me to read; my second, **0.13.3**: a "Recruiting" section (towns, castles and villages give recruits, towns the most) and my circuit example recruiting each round at the realm's nearest town and at its home castle, and the guard order's description no longer saying castles give no recruits; then **0.13.4**: the guard order takes the volunteers of the castle it guards before riding to a town or village, and the recruitment log counts castles. Then **0.13.5** (Oct 29, after the first hours of that test): the orders in force carried across a save and its load, the run written at every save and when the game closes, the game starting a war room that is not running, and the lieutenant with no time limit nor thinking cap. Next: the shake-down (step 9), which I chose to play myself as Aragorn (arm A, Arnor & Gondor, Oct 29) instead of the C1 of Part G, with the instructions as they stand (I like the instruction set); the rest of step 8 stays open (below). **On the docket:**
+- my part (step 8): the instructions' final wording and the doctrine's diplomacy principles (decision 8; the full wording was drafted on Oct 28, with points to weigh: the opening's "war council of a realm ruled by its warlord" against Diplomacy's "You rule your realm"; the three diplomacy maxims of DOCTRINE.md to write as principles; an unanswered offer accepted after 12 hours; whether the two example tools besides my circuit steer the agents; the 16,000 characters the new sections add to every call); whether a realm allied to mine gets an agent of its own (B5); letters to realms that are not allies;
 - only testable in the game (the shake-down): votes held and settled in an agent's realm, offers and their answers, the ruler's choice, mercenaries hired and released, the War of the Ring's answers asked of the pack, the try through the bridge, the lieutenant's tools, diplomacy and letters;
 - not built: a setting that is a place or a list (A2; settings stay numbers, and `places` and `lords` carry the lists); the checker's "set before read" (A4: a remembered value read before it is set is none, and the try shows it);
 - as built, to weigh in the shake-down: a vote or offer held for an agent is not in the save (a reload drops it); an offer with no answer in 12 hours is accepted, as the game does between the realms it runs; an agent that does not vote leaves its clan out of the count.
 
-**Mert, Oct 28:**
-- "Actually, before we do that, lets first implement all of the functionality (diplomacy and the agents being able to write their own tools) into the game and collect with those in action."
-- "As an example, the agent might want to keep lords in a specific area to add to its defensive capabilities, or keep them safe as they rebuild etc., whilst also having them recruit, and also having them sell loot at cities as they keep replenishing their money stock (which I believe is also a daily process). It should be able to create a new order like 'recruit in place' where an agent loops around a given list of settlements, visiting each settlement once a day for new recruits, and resting at a castle or a town or maybe patrolling to fight small bandits/raiding lords in the area once it is done with its loop for the day."
-- "If the agent wants, it can keep the tool it has written as a one-off order, or if it thinks the tool has reuse value, it can add it to its tool/order library so it is able to reuse it."
-- "We will log both my moves and the agents'. We log the agents' moves primarily to be able to train on the stuff that an agent should do which isn't really captured through my gameplay (like tool writing, responses to reports etc.), though if data from me doesn't end up being fruitful, we might just end up training on just the agents' data, so please capture everything from them as well."
+**Oct 28:**
+- First implement all of the functionality (diplomacy and the agents being able to write their own tools) in the game, and collect with those in action.
+- As an example, the agent might want to keep lords in a specific area to add to its defensive capabilities, or keep them safe as they rebuild etc., while also having them recruit, and also having them sell loot at cities as they keep replenishing their money stock (which I believe is also a daily process). It should be able to create a new order like "recruit in place", where an agent loops around a given list of settlements, visiting each settlement once a day for new recruits, and resting at a castle or a town or maybe patrolling to fight small bandits/raiding lords in the area once it is done with its loop for the day.
+- If the agent wants, it can keep the tool it has written as a one-off order, or if it thinks the tool has reuse value, it can add it to its tool/order library so it is able to reuse it.
+- We will log both my moves and the agents'. We log the agents' moves primarily to be able to train on what an agent should do that isn't really captured through my gameplay (like tool writing, responses to reports etc.), though if data from me doesn't end up being fruitful, we might end up training on just the agents' data, so everything from them is captured as well.
 
-**Mert's decisions on this plan (Oct 28), word for word, then what each means for the build:**
-1. "If by our own tools you mean the basic tools already given to them, they should still have full access to them. Tool writing should be for custom strategies they want to pursue. I would also give them a couple of examples, including the example I just gave you, in their prompt for inspiration." → Our 20 tools stay fully theirs to order, and their definitions can be read whole (A1); the instructions carry a few example tools, Mert's circuit among them (A3, Part D).
-2. "It should be able to write tools, based on my permission." → The lieutenant writes tools too, each one shown to Mert to approve before it runs or is kept (B5).
-3. "No, it should have already all of the tools we have built thus far." → No empty libraries: every run starts with our tools and every tool the realm's agent has kept so far (A6).
-4. "Yes. The game's hardcoded rules should stay. Another thing we should think about for diplomacy: agents communicating with their allies to coordinate attacks, and the player being able to communicate with their allies (who are agents) through their liutenant." → The War of the Ring's rules stand; the allied channel: letters and joint plans between allied agents, and Mert speaking to his agent allies through his lieutenant (B5).
-5. "Good." → An agent ruler may overrule its clans at the game's price.
-6. "Good, but in the spirit I described in 4." → Letters serve allies' coordination; letters to Mert's realm come through his lieutenant, not a window of their own (B5).
-7. "Good." → Tools are written in answers and councils both, councils with the longer time.
-8. "Good, but build all of the skeleton first and once all the building is done, I'll review the wording and we'll write the final prompt." → The instructions get working skeleton sections during the build; their final wording, the doctrine's diplomacy principles included, is written with Mert after all the building is done and before any run (Part D).
-9. "Keep on the docket for now, build everything first and then propose the backup location you recommend." → After the build, a proposal for the backup's place (C6). Proposed after the build (the laptop's second drive, and a private Hugging Face dataset off the laptop); Mert, Oct 28: "I would keep the data local for now, at the D: drive." Built in 0.13.1.
-10. "Build everything out now. We'll do a long run." → Every diplomatic act the game has, mercenary clans and expelling clans included (B2).
-11. "We'll compare everything however we please to spot the added value of new capabilities." → No rule on which runs compare with which.
+**My decisions on this plan (Oct 28), then what each means for the build:**
+1. The basic tools already given to them stay fully open to them. Tool writing should be for custom strategies they want to pursue. I would also give them a couple of examples, including my example above, in their prompt for inspiration. → Our 20 tools stay fully theirs to order, and their definitions can be read whole (A1); the instructions carry a few example tools, my circuit among them (A3, Part D).
+2. The lieutenant should be able to write tools, based on my permission. → The lieutenant writes tools too, each one shown to me to approve before it runs or is kept (B5).
+3. No: it should already have all of the tools we have built thus far. → No empty libraries: every run starts with our tools and every tool the realm's agent has kept so far (A6).
+4. Yes: the game's hardcoded rules should stay. Another thing to think about for diplomacy: agents communicating with their allies to coordinate attacks, and the player being able to communicate with their allies (who are agents) through their lieutenant. → The War of the Ring's rules stand; the allied channel: letters and joint plans between allied agents, and me speaking to my agent allies through my lieutenant (B5).
+5. Agreed. → An agent ruler may overrule its clans at the game's price.
+6. Agreed, but in the spirit I described in 4. → Letters serve allies' coordination; letters to my realm come through my lieutenant, not a window of their own (B5).
+7. Agreed. → Tools are written in answers and councils both, councils with the longer time.
+8. Agreed, but build all of the skeleton first, and once all the building is done, I'll review the wording and we'll write the final prompt. → The instructions get working skeleton sections during the build; their final wording, the doctrine's diplomacy principles included, is written with me after all the building is done and before any run (Part D).
+9. Keep it on the docket for now: build everything first and then propose a recommended backup location. → After the build, a proposal for the backup's place (C6). Proposed after the build (the laptop's second drive, and a private Hugging Face dataset off the laptop); my decision, Oct 28: keep the data local for now, on the D: drive. Built in 0.13.1.
+10. Build everything out now. We'll do a long run. → Every diplomatic act the game has, mercenary clans and expelling clans included (B2).
+11. We'll compare everything however we please to spot the added value of new capabilities. → No rule on which runs compare with which.
 
-**What this build is for:** the research questions it serves are RQ2 (can the model write tools that pass the checks and match ours, and does a tool library carry its skill to a smaller model), RQ5 (do goals survive distillation, in war and in diplomacy) and RQ6 (does Mert's play make the agents better), and the training sets of November (Opus only, Mert only, mixed).
+**What this build is for:** the research questions it serves are RQ2 (can the model write tools that pass the checks and match ours, and does a tool library carry its skill to a smaller model), RQ5 (do goals survive distillation, in war and in diplomacy) and RQ6 (does my play make the agents better), and the training sets of November (Opus only, mine only, mixed).
 
 ## Contents
 
@@ -52,7 +52,7 @@ Written Oct 28 and reviewed by Mert the same night (his decisions below). This i
 - **The agents' answers** are one JSON object per poke or council: `poke`, `orders`, an optional `plan` and `lessons` ([WARROOM.md](WARROOM.md)).
 - **Diplomacy:** none for the agents. The game's own AI makes every realm's wars, peace, alliances and votes; for the player's realm when an agent rules it, `Votes` settles the realm's votes as for a computer realm. The agents hear of wars, peace and alliances as notices. The doctrine keeps its diplomacy maxims for later ([DOCTRINE.md](DOCTRINE.md), "the agent has no diplomatic orders yet").
 - **What is logged already:**
-  - **Mert's play** (the recorder, since Oct 7): his party's moves, attacks, sieges, raids, armies formed and joined, his proposals, and his orders to vassals through Party AI Controls, each with what he could see and a realm summary (`data\<campaign>\record\decisions.jsonl`, raw clicks in `clicks.jsonl`, entering and leaving in `events.jsonl`). 120 records so far, of which about 90 are really his (Oct 8 to 23); the rest leaked in from the agent runs (below).
+  - **My play** (the recorder, since Oct 7): my party's moves, attacks, sieges, raids, armies formed and joined, my proposals, and my orders to vassals through Party AI Controls, each with what I could see and a realm summary (`data\<campaign>\record\decisions.jsonl`, raw clicks in `clicks.jsonl`, entering and leaving in `events.jsonl`). 120 records so far, of which about 90 are really mine (Oct 8 to 23); the rest leaked in from the agent runs (below).
   - **The agents:** every call's prompt, Claude Code's whole event stream and the answer (`logs\warroom*\calls\<date>\<time>-poke-N\`), one line per call with tokens and timings (`calls.jsonl`), each system prompt by its hash, every poke with the realm's whole view and report (`data\<campaign>\pokes_<realm>.jsonl`), the orders, receipts and the tools' steps and endings (the session trace, and the run's `events.jsonl`), the questions to "ask the way", "battle odds", "roads in", "can catch" and "engagement" (`routes.jsonl`), the memory (story, notes, chronicle).
   - **The runs:** the day lines, every battle, holding, siege and lord taken (`runs\<run>\`).
 - **What is not logged, or not well enough,** is listed in [Part C](#part-c-the-training-record).
@@ -61,7 +61,7 @@ Written Oct 28 and reviewed by Mert the same night (his decisions below). This i
 ## 2. Goals, and what "done" means
 
 1. **The agents write tools:** an agent can write a new order in the tool language in an answer or a council, have it checked and tried before it runs, use it once, or keep it in its realm's own library and use it again by name, change it (a new version) and retire it. Every tool written, every check, every use and what came of it is recorded.
-2. **The agents do diplomacy:** an agent that rules a realm can propose war, peace (with tribute), an alliance, a call to war, accept a call to war and propose a trade agreement, vote (and, as ruler, decide) on its realm's votes, fiefs and policies included, answer offers made to it, hire and let go mercenary clans, and write letters and joint plans to its allies' agents (and, through the lieutenant, to and from Mert). Everything goes through the game's own decisions, costs and rules, and the pack's (the War of the Ring). Everything is recorded.
+2. **The agents do diplomacy:** an agent that rules a realm can propose war, peace (with tribute), an alliance, a call to war, accept a call to war and propose a trade agreement, vote (and, as ruler, decide) on its realm's votes, fiefs and policies included, answer offers made to it, hire and let go mercenary clans, and write letters and joint plans to its allies' agents (and, through the lieutenant, to and from me). Everything goes through the game's own decisions, costs and rules, and the pack's (the War of the Ring). Everything is recorded.
 3. **Everything both sides do is recorded,** linked from what was seen to what was done to what came of it, tagged by run and arm, and packed per run for the dataset builder in November.
 4. **Done when:** all tests pass (smoke test, war room self-test, dashboard self-test, the speed test), a real short call writes and checks a tool, a shake-down run in the game shows tools written and kept, a diplomatic act carried out, and the run's bundle holds every record with nothing missing by its own check. Then version 0.13.0 is installed and the collection runs begin.
 
@@ -84,7 +84,7 @@ It cannot replace or change our tools (it can write its own instead), it cannot 
 
 ### A2. The language grows
 
-What Mert's example needs and the language lacks today, and what we add (the example is written out in A3):
+What my example needs and the language lacks today, and what we add (the example is written out in A3):
 
 - **Lists of places and lords.** A tool's order can take a list of places (`places`) besides `at`, `target` and `lords`, and a setting may be a place or a list. Functions on lists: how many (`count`), the first, the item at a position, whether one is in it, the next one after one (going round), the nearest of them, and the next one "due" (below).
 - **Remembering per place or per lord.** A remembered value can be a table keyed by a place or a lord: `"set": {"visited[stop]": "now"}`, read back as `visited[stop]` (none when never set). That is what "visit each settlement once a day" needs.
@@ -100,11 +100,11 @@ What Mert's example needs and the language lacks today, and what we add (the exa
   - about the area: `weakest_bandit_near(place, r)` and `bandits_near(place, r)`, beside the enemy-lord functions we have, so a tool can hunt small bandits and raiders and leave armies alone;
   - about money: `clan_gold`, and the realm's purse lines the report already gives.
 
-Mert's note that money comes in daily is right: the game pays wages every day and the clan's leader tops a lord up daily (TOOLS.md, "Money"). Tools see it through `gold` and `hours_since`.
+My note that money comes in daily is right: the game pays wages every day and the clan's leader tops a lord up daily (TOOLS.md, "Money"). Tools see it through `gold` and `hours_since`.
 
-### A3. Mert's example, written in the language (an example in the instructions, and a test)
+### A3. My example, written in the language (an example in the instructions, and a test)
 
-A **circuit** order: a list of places to recruit at, each once a day, a home holding, selling loot in a town when it is worth it, and between rounds either resting at home or patrolling there against small bands. By Mert's decision 1 it is one of the few example tools in the agents' instructions, for inspiration (Part D), and the test suite runs it on a made-up world. The other examples are written in the build, each a different kind (one that waits on an event, one that moves several lords), and shown to Mert with the instructions' wording.
+A **circuit** order: a list of places to recruit at, each once a day, a home holding, selling loot in a town when it is worth it, and between rounds either resting at home or patrolling there against small bands. By my decision 1 it is one of the few example tools in the agents' instructions, for inspiration (Part D), and the test suite runs it on a made-up world. The other examples are written in the build, each a different kind (one that waits on an event, one that moves several lords), and shown to me with the instructions' wording.
 
 ```json
 { "about": "recruits at each of its places once a day, sells loot in a town when worth it, and between rounds rests at home or patrols there against small bands",
@@ -198,7 +198,7 @@ For every run of every tool (ours too, which gives the comparison RQ2 asks for):
 
 ### B2. What an agent can do
 
-As the ruler of its realm (a live agent; never in shadow; the lieutenant on Mert's word, B5):
+As the ruler of its realm (a live agent; never in shadow; the lieutenant on my word, B5):
 - **Propose:** war on a realm; peace with a realm at war, with a daily tribute either way and how many days; an alliance; a call to an ally to join one of its wars; a trade agreement; a policy (adopt or abolish); expelling a clan. Each is the game's own vote in its realm, proposed by the ruler's clan at the game's influence price, voted by its clans as the game does.
 - **Hire and let go mercenary clans,** at the game's own terms and pay.
 - **Vote:** on every open vote in its realm (holdings to give out, policies, war, peace, alliances, expulsions), as the ruler's clan, with the support weight the game allows.
@@ -215,21 +215,21 @@ Each diplomatic act is checked when it arrives: the realms exist, the act is ope
 - **Letters received** and offers made to it, in WHAT CHANGED and as triggers.
 - **New triggers for a poke:** an offer to the realm; a vote opened or about to close; a letter; a war, peace, alliance or call to war involving the realm (today's notices, which already poke).
 
-### B4. Mert's realm when he plays (A and B)
+### B4. My realm when I play (A and B)
 
-The agents' offers to him arrive as the game's own windows (peace, alliance, calls to war). Their letters come through his lieutenant (B5). His diplomacy is his own, through the game's screens, and the recorder keeps it (Part C).
+The agents' offers to me arrive as the game's own windows (peace, alliance, calls to war). Their letters come through my lieutenant (B5). My diplomacy is my own, through the game's screens, and the recorder keeps it (Part C).
 
 ### B5. The allied channel, and the lieutenant
 
-Mert, decision 4: "agents communicating with their allies to coordinate attacks, and the player being able to communicate with their allies (who are agents) through their liutenant."
+Decision 4: agents communicating with their allies to coordinate attacks, and the player being able to communicate with their allies (who are agents) through their lieutenant.
 
 - **Letters between allies:** an agent writes to an allied realm's agent (an alliance, or a realm fighting the same enemy in a call to war); a few lines, delivered in that agent's next poke as a trigger, saying who wrote and when; the answer may reply. A letter binds no one and carries no orders: each agent commands only its own lords.
 - **Joint plans:** a letter can carry a plan in a fixed form, so both sides see the same thing: what (a siege, a field attack, holding a place, raiding), where, when (an in-game day and hour, or "when your army is within a day"), with what (each side's part in words and strength), and its state (proposed, agreed, declined, under way, done, dropped). Agreed plans appear in both realms' reports under **ALLIES AND JOINT PLANS**, beside each ally's stance, its wars, and what it has said of its forces; the record keeps every plan and what came of it.
 - **What an ally knows:** only what it is told. A letter may pass on what the writer's realm saw; nothing else is shared between realms (the fog rule holds for each).
-- **Who can be written to:** agents of allied realms; and Mert's realm, through his lieutenant, when Mert plays it. A letter to a computer realm has no reader and is refused with that reason. (Letters to realms that are not allies are a later question.)
-- **Mert through his lieutenant:** what he says to the lieutenant about his allies ("tell them to besiege Lasgalor with me on the 12th") becomes a letter or a joint plan to that ally's agent, under the lieutenant's yes rule (on his word it goes; on the lieutenant's own idea it waits for his Approve). Letters and plans from his allies arrive in the lieutenant's window, which tells him what they say and what they ask, and his reply goes back the same way.
-- **The lieutenant writes tools** (decision 2): a tool it writes, on Mert's word or its own idea, is shown in its window with what it does and its settings, and runs or is kept only once Mert approves; it may order kept tools and carry out the realm's diplomacy on his word, under the same yes rule.
-- **Which realms have agent allies today:** the orcs and Dol Guldur are at peace with each other and may ally; the Kingdom of Arnor and Gondor's possible allies (Rohan, Lothlórien's and Erebor's clans and the rest) are computer realms. For Mert to talk to an agent ally through his lieutenant, one of those realms needs an agent of its own: a new agent folder (`scripts\setup-agent.ps1`, same instructions as the others), which realm being Mert's choice before the long run.
+- **Who can be written to:** agents of allied realms; and my realm, through my lieutenant, when I play it. A letter to a computer realm has no reader and is refused with that reason. (Letters to realms that are not allies are a later question.)
+- **Me through my lieutenant:** what I say to the lieutenant about my allies ("tell them to besiege Lasgalor with me on the 12th") becomes a letter or a joint plan to that ally's agent, under the lieutenant's yes rule (on my word it goes; on the lieutenant's own idea it waits for my Approve). Letters and plans from my allies arrive in the lieutenant's window, which tells me what they say and what they ask, and my reply goes back the same way.
+- **The lieutenant writes tools** (decision 2): a tool it writes, on my word or its own idea, is shown in its window with what it does and its settings, and runs or is kept only once I approve; it may order kept tools and carry out the realm's diplomacy on my word, under the same yes rule.
+- **Which realms have agent allies today:** the orcs and Dol Guldur are at peace with each other and may ally; the Kingdom of Arnor and Gondor's possible allies (Rohan, Lothlórien's and Erebor's clans and the rest) are computer realms. For me to talk to an agent ally through my lieutenant, one of those realms needs an agent of its own: a new agent folder (`scripts\setup-agent.ps1`, same instructions as the others), which realm being my choice before the long run.
 
 ### Build notes (Part B)
 
@@ -241,8 +241,8 @@ Mert, decision 4: "agents communicating with their allies to coordinate attacks,
 - **The report:** `Views` gains DIPLOMACY and OPEN VOTES (from rows `Capture` copies hourly: stances, war tallies `StanceLink`'s numbers, tribute, alliances and calls to war, trade agreements, open decisions with supporters), the fog check learns them (they are the ruler's own screens, so their ids are allowed).
 - **Pokes:** `Notices` gains offers, votes opened and closing, letters; the war room's `urgent` and `council_after` words gain them where fitting.
 - **Letters and joint plans:** `Allies.cs` (new, worker): who is allied with whom (alliances, shared wars in calls to war), the letters' and plans' store per campaign (`allies.jsonl`), each plan's state; written by the bridge into the receiving channel's next poke (a `letter` trigger, the text in WHAT CHANGED) and the run's events; `Views` gains ALLIES AND JOINT PLANS. To the player's realm: into the lieutenant's channel (`Lieutenant`, its chat box and window), never stopping the clock.
-- **The lieutenant:** its answers gain `tools`, `diplomacy` and `letters`, all through `LieutenantRules.Gate` (on Mert's word they go; on its own idea they wait for Approve); a tool it writes is shown in `LieutenantWindow` with its `about`, settings and the checker's result before Approve; its library is the player's realm's (A6). `PacRules` stays for Party AI Controls' orders.
-- **A fourth agent** for an ally of Mert's realm, if Mert chooses one: `scripts\setup-agent.ps1` with the same instructions, `scripts\arm.ps1` learning it, `Runs` listing it among the run's realms.
+- **The lieutenant:** its answers gain `tools`, `diplomacy` and `letters`, all through `LieutenantRules.Gate` (on my word they go; on its own idea they wait for Approve); a tool it writes is shown in `LieutenantWindow` with its `about`, settings and the checker's result before Approve; its library is the player's realm's (A6). `PacRules` stays for Party AI Controls' orders.
+- **A fourth agent** for an ally of my realm, if I choose one: `scripts\setup-agent.ps1` with the same instructions, `scripts\arm.ps1` learning it, `Runs` listing it among the run's realms.
 
 ---
 
@@ -255,19 +255,19 @@ Mert, decision 4: "agents communicating with their allies to coordinate attacks,
 - **Nothing in the game changes** for the record, and the game's thread only copies; the writing is on the helper thread, as now.
 - **Off OneDrive and out of git** (plan, decision 12). Packed per run (C5).
 
-### C2. Mert's moves
+### C2. My moves
 
 **Fixes:**
-1. **Only Mert's moves:** a record is kept as his only while he rules his realm himself (arms A and B, and his own campaign). In the agent runs the game's player clan is still his, so today the realm's proposals in those runs and Party AI Controls' own refill trips (Aragorn, Oct 25) were credited to him: 37 proposals and 7 orders of the 120 records. The old records are marked by their times against the runs' spans, not deleted.
-2. **The input with each move:** the realm's report as of that hour (the same text an agent of his realm would read), kept with each move, plus one copy each in-game hour during A and B (for the moments he chose to let things run). The hourly report is already built every hour while his lieutenant is on (Brain, line ~383); with the lieutenant off it is built at each move only.
-3. **Party AI Controls' own trips** (its recruiting refills) are no longer counted as his orders.
+1. **Only my moves:** a record is kept as mine only while I rule my realm myself (arms A and B, and my own campaign). In the agent runs the game's player clan is still mine, so today the realm's proposals in those runs and Party AI Controls' own refill trips (Aragorn, Oct 25) were credited to me: 37 proposals and 7 orders of the 120 records. The old records are marked by their times against the runs' spans, not deleted.
+2. **The input with each move:** the realm's report as of that hour (the same text an agent of my realm would read), kept with each move, plus one copy each in-game hour during A and B (for the moments I chose to let things run). The hourly report is already built every hour while my lieutenant is on (Brain, line ~383); with the lieutenant off it is built at each move only.
+3. **Party AI Controls' own trips** (its recruiting refills) are no longer counted as my orders.
 
 **New kinds of moves** (the ones the agents also make):
-- **In towns and castles:** troops recruited (where, which, how many, what they cost), prisoners and loot sold or handed over, troops left in or taken from a garrison, his wage settings, food bought.
-- **The realm:** his votes on every vote (not only his own proposals), fiefs he hands out, policies, mercenaries hired and let go, his answers to offers (peace, alliance, call to war) in the game's windows, and what he tells his allies through his lieutenant and what they answer.
+- **In towns and castles:** troops recruited (where, which, how many, what they cost), prisoners and loot sold or handed over, troops left in or taken from a garrison, my wage settings, food bought.
+- **The realm:** my votes on every vote (not only my own proposals), fiefs I hand out, policies, mercenaries hired and let go, my answers to offers (peace, alliance, call to war) in the game's windows, and what I tell my allies through my lieutenant and what they answer.
 - **Armies:** lords called later, an army disbanded, a lord sent away.
 - **On the map:** fights declined or fled (leaving an encounter without a battle), waiting in a town and for how long, a siege stormed at once or waited out, a sally.
-- **His lieutenant:** each thing he says and what it did (already in the lieutenant's folder), linked into the record by time.
+- **My lieutenant:** each thing I say and what it did (already in the lieutenant's folder), linked into the record by time.
 
 **Still not recorded** (no agent makes these choices): inside battles, trading goods, troop upgrades, buildings, companions, marriages, the character's skills.
 
@@ -286,7 +286,7 @@ Mert, decision 4: "agents communicating with their allies to coordinate attacks,
 
 ### C4. What came of it: outcomes joined
 
-At each order's end (C3.3) and at the end of each in-game day (the realm's day line), the bridge writes the outcomes into the index. The dataset builder can then weigh or filter examples by what followed, for Mert's moves as for the agents' (joined by time and lord from the run's battles, holdings and day lines).
+At each order's end (C3.3) and at the end of each in-game day (the realm's day line), the bridge writes the outcomes into the index. The dataset builder can then weigh or filter examples by what followed, for my moves as for the agents' (joined by time and lord from the run's battles, holdings and day lines).
 
 ### C5. The run's bundle
 
@@ -294,17 +294,17 @@ At a run's end (and with `Runs.exe bundle <run>` for any run, older ones include
 - the run's folder (run.json, setup, day lines, events, report);
 - for each agent: its call folders and `calls.jsonl` lines within the run, `routes.jsonl` lines, the system prompts used, its library's versions, its memory files' versions, `episodes.jsonl`, `toolbook.jsonl`, `diplomacy.jsonl`;
 - the bridge's pokes (view and report) within the run, per realm;
-- Mert's records within the run: moves, clicks, events, hourly reports, the lieutenant's chats.
+- My records within the run: moves, clicks, events, hourly reports, the lieutenant's chats.
 
 ### C6. Disk
 
 - Per run, raw: about 0.1 GB of calls (1,081 calls in C1 at ~100 KB), 0.3 GB of pokes with views, 0.07 GB of hourly reports in A and B; text packs about five to eight times.
-- With 48 GB free, a pack of about 0.1 GB a run is fine, but the raw files stay too. Nothing is thinned or deleted without Mert's word.
-- **The backup** (decision 9; 0.13.1): Mert chose the laptop's second drive ("I would keep the data local for now, at the D: drive"), its own disk, with 789 GB free on Oct 28. Everything is copied to `D:\BannerlordAgents-backup` at every run's end, after the bundle, and by hand (`Runs.exe backup`): the records folder (7.2 GB on Oct 28) and every agent's folder (80 MB). It never deletes, adds only the new bytes of a file that grew, and keeps the old copy of a file that shrank or was rewritten ([LOGGING.md](LOGGING.md#the-backup-since-0131)). The sizes per run are measured on the shake-down, as planned; a copy off the laptop (the private Hugging Face dataset proposed) can follow later. Since 0.13.2 the records themselves live on D: too (`D:\BannerlordAgents`, reached at the usual place through a link), so the backup guards against mistakes, not against that disk failing: a copy off it matters more now.
+- With 48 GB free, a pack of about 0.1 GB a run is fine, but the raw files stay too. Nothing is thinned or deleted without my word.
+- **The backup** (decision 9; 0.13.1): I chose the laptop's second drive (the data stays local for now, on the D: drive), its own disk, with 789 GB free on Oct 28. Everything is copied to `D:\BannerlordAgents-backup` at every run's end, after the bundle, and by hand (`Runs.exe backup`): the records folder (7.2 GB on Oct 28) and every agent's folder (80 MB). It never deletes, adds only the new bytes of a file that grew, and keeps the old copy of a file that shrank or was rewritten ([LOGGING.md](LOGGING.md#the-backup-since-0131)). The sizes per run are measured on the shake-down, as planned; a copy off the laptop (the private Hugging Face dataset proposed) can follow later. Since 0.13.2 the records themselves live on D: too (`D:\BannerlordAgents`, reached at the usual place through a link), so the backup guards against mistakes, not against that disk failing: a copy off it matters more now.
 
 ### C7. The dataset builder (November, outline only)
 
-In `training/` (Python): read bundles only; build examples in one form for all: the system prompt (by hash), the message (memory, why asked, what changed, orders in force, facts, report), and the answer (orders, tools, diplomacy, letters, plan, lessons); for Mert's moves, his realm's report at that hour as the message and his moves, translated into the agents' order language by a fixed table, as the answer (with "let it run" examples from his quiet hours, at the rate the agents answer with no orders); split by run; check every example's report against the fog rule; the three sets (Opus only, Mert only, mixed), plus tool-writing examples (the situation, the tool written, its checks and repairs) and diplomacy examples.
+In `training/` (Python): read bundles only; build examples in one form for all: the system prompt (by hash), the message (memory, why asked, what changed, orders in force, facts, report), and the answer (orders, tools, diplomacy, letters, plan, lessons); for my moves, my realm's report at that hour as the message and my moves, translated into the agents' order language by a fixed table, as the answer (with "let it run" examples from my quiet hours, at the rate the agents answer with no orders); split by run; check every example's report against the fog rule; the three sets (Opus only, mine only, mixed), plus tool-writing examples (the situation, the tool written, its checks and repairs) and diplomacy examples.
 
 ### Build notes (Part C)
 
@@ -317,15 +317,15 @@ In `training/` (Python): read bundles only; build examples in one form for all: 
 
 ## Part D: what the agents are told
 
-- **Skeleton first, final wording last** (decision 8): during the build the instructions get working skeleton sections, enough for the tests and the toolcheck call to exercise every new part. Once all the building is done, Mert reviews the wording and we write the final prompt together, the doctrine's diplomacy principles included, before any run.
-- **The test-pollution rule** (Mert, Oct 23: "I don't want to give it the strategy that I just gave you word for word") still governs strategy: the instructions say what the agent can do and how, not what to do. By Mert's decision 1, his circuit tool is an exception he chose: it goes in as an example tool, for inspiration, beside a couple of others. The instructions stay the same for every realm's agent.
+- **Skeleton first, final wording last** (decision 8): during the build the instructions get working skeleton sections, enough for the tests and the toolcheck call to exercise every new part. Once all the building is done, I review the wording and we write the final prompt together, the doctrine's diplomacy principles included, before any run.
+- **The test-pollution rule** (Oct 23: I don't want to give it the strategy word for word) still governs strategy: the instructions say what the agent can do and how, not what to do. By my decision 1, my circuit tool is an exception I chose: it goes in as an example tool, for inspiration, beside a couple of others. The instructions stay the same for every realm's agent.
 - **New sections** in the instructions template and the realm agents' copies (backups first, as before):
   - **Writing your own tools:** what a tool is, that ours remain theirs to order and read whole (A1), the language in full (types, moves, facts, functions with their values, the limits), how to try one ("check a tool"), keep, change and retire it, how the record is shown, and the example tools (A3).
   - **Diplomacy:** the acts, what they cost, who decides, how offers come and go, that the War of the Ring forbids some, and how the realm's votes, mercenaries and expulsions work.
   - **Allies:** letters and joint plans (B5), what an ally knows and does not.
   - The answer's form gains `tools`, `diplomacy` and `letters`.
-- **The doctrine:** its diplomacy maxims (DOCTRINE.md: sow discord among allies, accept peace on good terms, Kekaumenos on paying tribute) become principles, from their classical sources, as the other principles are, written with Mert at the end.
-- **The lieutenant's instructions** gain tools (written only with Mert's approval), diplomacy and letters to his allies on his word (B5).
+- **The doctrine:** its diplomacy maxims (DOCTRINE.md: sow discord among allies, accept peace on good terms, Kekaumenos on paying tribute) become principles, from their classical sources, as the other principles are, written with me at the end.
+- **The lieutenant's instructions** gain tools (written only with my approval), diplomacy and letters to my allies on my word (B5).
 - **Never promise a tool the call does not have:** "check a tool" is offered only when the war room serves it, as "ask the way" is.
 
 ## Part E: tests
@@ -338,7 +338,7 @@ In `training/` (Python): read bundles only; build examples in one form for all: 
   - diplomacy checks on a made-up world (at war, at peace, allies, the War of the Ring rule, influence, mercenaries, expulsion), the answer's `diplomacy` and `letters` read and receipted;
   - the allied channel: a letter and a joint plan from one agent realm to its ally, delivered in the next poke, answered, agreed, shown in both reports, and recorded; a letter to a computer realm refused; a letter to the player's realm delivered to the lieutenant;
   - the lieutenant: a tool it writes waits for Approve, runs after it, and is refused on Decline;
-  - the recorder's new kinds and its "only when Mert rules" rule; the episode index, toolbook and diplomacy book lines; the bundle and its missing-check.
+  - the recorder's new kinds and its "only when I rule" rule; the episode index, toolbook and diplomacy book lines; the bundle and its missing-check.
 - **War room self-test:** "check a tool" (checker only, and with a stub bridge answering the try), answers with tools, diplomacy and letters parsed, the runaway limit for answers with tools.
 - **A real short call** (`WarRoom toolcheck`): a small model writes a two-state tool, checks it, fixes it and answers.
 - **The speed test** (`SmokeTest --perf`): within budget with 30 kept tools running.
@@ -353,18 +353,18 @@ Each step ends with every test green, a commit and push with its change-log entr
 2. **The language grows** (A2) with its tests, the circuit tool among them.
 3. **The agents' own tools** (A1, A4 to A8): the answer's `tools`, the library, the checker's messages, "check a tool" with the bridge's try, the guards, the toolbook, `tools.txt` per realm.
 4. **Diplomacy** (Part B): read the game's paths first, then the acts (mercenaries and expulsion included), checks, votes and ruler's say, offers to agents, the report's sections, pokes, the diplomacy book.
-5. **The allied channel and the lieutenant** (B5): letters, joint plans, ALLIES AND JOINT PLANS, the lieutenant's tools under Approve, its diplomacy and letters on Mert's word.
+5. **The allied channel and the lieutenant** (B5): letters, joint plans, ALLIES AND JOINT PLANS, the lieutenant's tools under Approve, its diplomacy and letters on my word.
 6. **The instructions' skeleton** (Part D): working sections for every new part, enough for the tests and a real toolcheck call.
 7. **Everything together:** all tests, the docs (TOOLS.md, WARROOM.md, LOGGING.md, LIEUTENANT.md, a new DIPLOMACY.md, MEMORY.md where needed, PLAN.md's checklist), version 0.13.0, install, push.
-8. **With Mert:** the instructions' final wording and the doctrine's diplomacy principles (decision 8); the backup's place proposed (decision 9; done: D:, built in 0.13.1); whether a realm allied to his gets an agent of its own (B5).
+8. **My part:** the instructions' final wording and the doctrine's diplomacy principles (decision 8); the backup's place proposed (decision 9; done: D:, built in 0.13.1); whether a realm allied to mine gets an agent of its own (B5).
 9. **The shake-down** in the game (Part G), fixes, then the long run.
 
-This is the biggest build since 0.4: several long sessions. Each step stands on its own, so Mert can stop after any step.
+This is the biggest build since 0.4: several long sessions. Each step stands on its own, so I can stop after any step.
 
 ## Part G: collecting, after the build
 
 1. **Shake-down** (about 10 in-game days, arm C1 so all three agents are live): tools written, checked, kept and used; a diplomatic act carried out and one refused; letters and a joint plan between the orcs and Dol Guldur (once allied); the bundle complete. Fixes from it before the long run.
-2. **The long run** (decision 10) and the runs after it, on 0.13, compared with every earlier run however serves (decision 11: "We'll compare everything however we please to spot the added value of new capabilities"): C1 (all three agents: the most tool writing and diplomacy), A (Mert against the agents: his moves with the new record, the agents' diplomacy toward him, his allies through his lieutenant if one has an agent), and C2 and C0 again as the comparisons need.
+2. **The long run** (decision 10) and the runs after it, on 0.13, compared with every earlier run however serves (decision 11: we'll compare everything however we please to spot the added value of new capabilities): C1 (all three agents: the most tool writing and diplomacy), A (me against the agents: my moves with the new record, the agents' diplomacy toward me, my allies through my lieutenant if one has an agent), and C2 and C0 again as the comparisons need.
 3. **Usage:** C1 cost $351 at list price on 0.12.5 and hit the session limit once. Tool writing and diplomacy add thinking and a longer library. Councils take most of the tool writing; effort and thinking caps stay as they are unless the shake-down says otherwise.
 
 ## Part H: risks
@@ -375,17 +375,17 @@ This is the biggest build since 0.4: several long sessions. Each step stands on 
 - **Diplomacy against the pack:** peace with the orcs and Dol Guldur cannot hold while the War of the Ring rages (B1); the agents are told, so they do not spend influence on it.
 - **The game's own AI in agent realms** still proposes and votes for its other clans; the agent rules with its ruler's say, not alone.
 - **Saves:** diplomatic acts change the game as the game's AI's would (wars, peace and votes are the game's own state); our records and the library stay out of the save.
-- **Training data balance:** the agents' records will far outnumber Mert's; the plan keeps them separate sets so either can be used alone.
+- **Training data balance:** the agents' records will far outnumber mine; the plan keeps them separate sets so either can be used alone.
 
 ## Decided, and still open
 
-**Decided by Mert on Oct 28:** the eleven decisions at the head of this plan, each with what it means for the build.
+**Decided on Oct 28:** the eleven decisions at the head of this plan, each with what it means for the build.
 
 **Still open, for after the build** (Part F, step 8):
 - the instructions' final wording and the doctrine's diplomacy principles, written together (decision 8);
-- whether a realm allied to Mert's gets an agent of its own, and which, so he can speak to an agent ally through his lieutenant (B5);
-- letters to realms that are not allies (B5 keeps them to allies and Mert's lieutenant for now);
-- the records' old copy on C: (`%LOCALAPPDATA%\BannerlordAgents-old-20261028`, 7.2 GB, as it was at the move), kept until Mert says it can go;
+- whether a realm allied to mine gets an agent of its own, and which, so I can speak to an agent ally through my lieutenant (B5);
+- letters to realms that are not allies (B5 keeps them to allies and my lieutenant for now);
+- the records' old copy on C: (`%LOCALAPPDATA%\BannerlordAgents-old-20261028`, 7.2 GB, as it was at the move), kept until I say it can go;
 - a copy off D:, now that the records and their backup share that disk (C6).
 
 ## What stays out

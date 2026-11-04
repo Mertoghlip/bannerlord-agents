@@ -205,7 +205,7 @@ namespace BannerlordAgents.WarRoom
                 r.Thinking += r2.Thinking;
             }
             int orders = answer?["orders"] is JsonArray arr ? arr.Count : 0;
-            // tools are written at a council of war only (0.14, Mert's answer 3): a news wake's are not kept, and it and the next council are told
+            // tools are written at a council of war only (0.14, decision 3): a news wake's are not kept, and it and the next council are told
             List<string> toolsDropped = news && answer?["tools"] is JsonArray wrote && wrote.Count > 0 ? ToolNamesOf(wrote) : null;
             if (toolsDropped != null)
             {

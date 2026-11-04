@@ -1,6 +1,6 @@
 # Vassal orders without Party AI Controls (checked Oct 7, 2026)
 
-**Question (Mert):** can orders to vassals go straight to the lord, through the same commands the agents and their tools use, instead of through another mod?
+**Question:** can orders to vassals go straight to the lord, through the same commands the agents and their tools use, instead of through another mod?
 
 **Answer: yes.** Five of the six dialogue orders map onto the bridge's own orders today. The sixth, patrolling one's own lands, is a multi-step behavior, which is a tool (week 2).
 

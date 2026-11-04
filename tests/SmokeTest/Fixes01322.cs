@@ -10,7 +10,7 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.13.22 (Mert, Nov 1: Dol Guldur's agent gave up Gwígar for "no food" in an answer that took effect about 20 in-game hours after the
+        /// 0.13.22 (Nov 1: Dol Guldur's agent gave up Gwígar for "no food" in an answer that took effect about 20 in-game hours after the
         /// report it answered, 13 hours after the food had come): when an answer's orders take effect 6 in-game hours or more after its report,
         /// the next poke says so, and what changed since that report at the places and lords its orders named; once, only for what changed,
         /// never for a lord's own moves.
@@ -72,7 +72,7 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// 0.13.22 (Mert, Nov 1: the lieutenant had never been told the words its own tools are written in): the agents' and the lieutenant's
+        /// 0.13.22 (Nov 1: the lieutenant had never been told the words its own tools are written in): the agents' and the lieutenant's
         /// instructions each list every move, name and function of the tool language, so neither can fall behind the library again.
         /// </summary>
         private static void LanguageWordsTests()

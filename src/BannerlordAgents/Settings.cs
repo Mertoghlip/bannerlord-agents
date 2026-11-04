@@ -105,7 +105,7 @@ namespace BannerlordAgents
         public static List<string> RunRivals = new List<string> { "mistymountainorcs", "dolguldur" };
         public static string RunKingdom = "";
         /// <summary>
-        /// The backup's place (0.13.1; Mert, Oct 28: "I would keep the data local for now, at the D: drive"): when a run ends,
+        /// The backup's place (0.13.1, Oct 28: the data stays local for now, on the D: drive): when a run ends,
         /// Runs.exe copies the records folder and every agent's folder there, after the run's bundle. Empty: no backup.
         /// </summary>
         public static string Backup = "";

@@ -15,7 +15,7 @@ using TaleWorlds.Library;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// A measured test run (0.11; Mert, Oct 23: "All tests will be for 60 in-game days, starting from the TEST START save";
+    /// A measured test run (0.11, Oct 23: all tests will be for 60 in-game days, starting from the TEST START save;
     /// docs/RUNS.md). Loading the run's save (run_save, TEST START) readies a run; it begins on the first in-game hour the clock
     /// runs (after any setting up), named by who commands each side (RunRules.Arm: A you against the agents, B you against the
     /// game's AI, C1 an agent ruling your kingdom against the agents, C2 against the game's AI). For its 60 days it keeps, in its
@@ -79,7 +79,7 @@ namespace BannerlordAgents
                 Diag.Event("run", "armed", new { run = _run.Id, save, hours = loadedAt, kingdom = _run.Kingdom });
                 return;
             }
-            // a save made while setting up, before the clock first ran (0.11.1; Mert saved TEST A first): it readies the run again from there
+            // a save made while setting up, before the clock first ran (0.11.1; I saved TEST A first): it readies the run again from there
             if (open != null && open.Status == "armed" && !string.IsNullOrEmpty(save) && open.Saves.Contains(save.Trim()))
             {
                 _run = open;
@@ -736,7 +736,7 @@ namespace BannerlordAgents
         public static readonly Dictionary<string, string> Names = new Dictionary<string, string>
         {
             ["A"] = "you against the agents", ["B"] = "you against the game's AI", ["C1"] = "an agent ruling your kingdom against the agents", ["C2"] = "an agent ruling your kingdom against the game's AI",
-            // the control (0.12.4; Mert, Oct 25: "the control test: all realms playing with the game's ai")
+            // the control (0.12.4, Oct 25: the control test, all realms playing with the game's AI)
             ["C0"] = "the control: the game's AI ruling your kingdom against the game's AI"
         };
 

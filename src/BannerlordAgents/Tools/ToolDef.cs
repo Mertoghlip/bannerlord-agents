@@ -474,7 +474,7 @@ namespace BannerlordAgents.Tools
         /// <summary>The safety rule every tool and move carries unless it opts out.</summary>
         public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when anything hostile comes close to the lord, so a fight may start where he is, and the enemy lords, armies and bandits close to him, with every enemy lord and army in view that could reach him within join_hours, are this many times stronger together, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against them and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
         public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "how close counts as close for caution, in map units" };
-        /// <summary>The hours window of a fight (0.12.3; Mert chose "Hours window only"): who could join it, by the agent's own reckoning of how long it lasts.</summary>
+        /// <summary>The hours window of a fight (0.12.3, chosen: "Hours window only"): who could join it, by the agent's own reckoning of how long it lasts.</summary>
         /// <summary>The relief rule (0.13.15, Runner.Relief): the longest a fight is waited on; one the battle clock sees lasting longer (or not ending in five days) counts as this.</summary>
         public const double MaxReliefHours = 24;
 
@@ -493,9 +493,9 @@ namespace BannerlordAgents.Tools
         public const double ReliefWinBar = 1.5;
 
         /// <summary>
-        /// Men from the clan's own garrisons while recruiting (0.13.19; Mert, Nov 1: "lets also allow orders to get lords to go to their clan's
+        /// Men from the clan's own garrisons while recruiting (0.13.19, Nov 1: orders can also get lords to go to their clan's
         /// settlements and take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the
-        /// agent"), on every move and tool: at a castle or town of his own clan, a recruiting lord (the recruit order's tour, a recruit stop)
+        /// agent), on every move and tool: at a castle or town of his own clan, a recruiting lord (the recruit order's tour, a recruit stop)
         /// takes healthy men from its garrison, best first, while the garrison's strength stays at or above this; the tour counts such places
         /// as stops. 0, the default, takes none.
         /// </summary>

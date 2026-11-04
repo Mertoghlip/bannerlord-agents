@@ -294,7 +294,7 @@ namespace BannerlordAgents
             if (verb == "wages") return WagesOrder(lord, party, a, realm, shadow, live, ref status);
             bool armyVerb = verb == "adjust" || verb == "add" || verb == "release" || verb == "disband";
             // the ruler's lieutenant may order a lord marching in an army: he is taken out of it first, once his order has passed its
-            // checks (0.13.8; Mert, Oct 29: lords "that should be controlled by my liutenant keep escaping to the game's AI"); an agent
+            // checks (0.13.8, Oct 29: lords that should be controlled by my lieutenant kept escaping to the game's AI); an agent
             // still orders the army's leader (release, disband)
             bool takeOut = lieutenant && !armyVerb && party.Army != null && party.Army.LeaderParty != party;
             if (!takeOut && party.AttachedTo != null && party.Army?.LeaderParty != party)
@@ -658,8 +658,8 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// The ruler's own army (0.13.9; Mert, Oct 29: "the liutenant should be able to form an army for me, under my name (so for example if I ask it to get
-        /// every lord stationed at imnagath to join my army, it should be able to form an army for me and automatically have them join it"): "my_army" with
+        /// The ruler's own army (0.13.9, Oct 29: the lieutenant should be able to form an army for me, under my name (so for example if I ask it to get
+        /// every lord stationed at Imnagath to join my army, it should be able to form an army for me and automatically have them join it)): "my_army" with
         /// "lords" (and "at", where it gathers, else the ruler's home). The player's party leads it: formed as the game's own army screen forms one when the
         /// ruler leads none (Kingdom.CreateArmy, a defending army), else added to; each lord named is called in at the game's price
         /// (CalculatePartyInfluenceCost), paid from the ruler's clan's influence as that screen charges it (the game charges nothing itself for a lord joining
@@ -966,7 +966,7 @@ namespace BannerlordAgents
 
         /// <summary>add, release (with lords) and disband, for a lord who leads an army.</summary>
         /// <summary>
-        /// The wages order (0.9.4; Mert: the caps "should be the agent's call"): the most a lord's party may pay in wages a day, which
+        /// The wages order (0.9.4: the caps should be the agent's call): the most a lord's party may pay in wages a day, which
         /// decides whether he may recruit: "cap" a number, or target "none" (no cap) or "game" (the game's own daily cap again).
         /// With lords, the same for those lords too. Kept until changed or the campaign is loaded again (Wages).
         /// </summary>
@@ -1675,7 +1675,7 @@ namespace BannerlordAgents
                 Diag.Alarm("held_by_other", "Something other than us has switched off the game's AI for " + orcs.Count + " lords of the watched realm: " + string.Join(", ", orcs) + ".");
         }
 
-        // TFAOMFixes (Mert's own mod) steers weak computer lords on recruiting tours with their AI off (Oct 22); asked by
+        // TFAOMFixes (my own mod) steers weak computer lords on recruiting tours with their AI off (Oct 22); asked by
         // name, as RecruitTour asks it for its offers, so those lords are not taken for something unknown holding them.
         private static System.Collections.IDictionary _tfaomTours;
         private static bool _toursLooked;
@@ -2182,9 +2182,9 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// Is this order's line for the game's message log? (0.13.7, Mert, Oct 29: "remove the other agents' orders from the logs that show
-        /// up in-game. I only want to see the stuff from my liutenant and the normal game logs and updates in-game, the dashboard should
-        /// stay the same.") Only your lieutenant's orders and your own (the console's, your vassal orders); the agents' orders are in the
+        /// Is this order's line for the game's message log? (0.13.7, Oct 29: the other agents' orders are removed from the logs that show
+        /// up in-game; I only want to see the stuff from my lieutenant and the normal game logs and updates in-game, and the dashboard should
+        /// stay the same.) Only your lieutenant's orders and your own (the console's, your vassal orders); the agents' orders are in the
         /// logs and on the dashboard, not on screen.
         /// </summary>
         private static bool OnScreen(HandOrder o) => Shown(o.Source, Lieutenant.IsRealm(o.Realm?.StringId));

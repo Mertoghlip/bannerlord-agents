@@ -13,10 +13,10 @@ using TaleWorlds.Core;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The fairer, longer test save (0.7.4; Mert, Oct 20: "a state where I own all the land from Rivendell to Mount Gram to Mount
-    /// Gundabad, and the Misty Mountain Orcs take back the rest of the land that I own in the mountains. The new fiefs they get
-    /// should be distributed reasonably amongst them. Further, all of the prisoner Misty Mountain commanders should be returned
-    /// to their realm."; the line chosen: only the old orc fortresses, their garrisons swapped to orc troops).
+    /// The fairer, longer test save (0.7.4, Oct 20: a state where I own all the land from Rivendell to Mount Gram to Mount
+    /// Gundabad, and the Misty Mountain Orcs take back the rest of the land that I own in the mountains; the new fiefs they get
+    /// should be distributed reasonably amongst them, and all of the prisoner Misty Mountain commanders should be returned
+    /// to their realm; the line chosen: only the old orc fortresses, their garrisons swapped to orc troops).
     /// "agents.rebalance" shows what it would do; "agents.rebalance apply" does it, on whatever save is loaded; save afterwards.
     /// - Every lord of the orcs held prisoner anywhere is released (EndCaptivityAction.ApplyByPeace: the game's own routines bring
     ///   each back with a party in time).

@@ -217,7 +217,7 @@ namespace BannerlordAgents.WarRoom
                 while (!got.Wait(500))
                 {
                     if (cancel.IsCancellationRequested) { stopped = "cancelled"; break; }
-                    // 0: no time limit (0.13.5, the lieutenant, Mert: "remove the time limit"); a call that hangs is still caught by the stall rule
+                    // 0: no time limit (0.13.5, the time limit removed for the lieutenant); a call that hangs is still caught by the stall rule
                     if (timeoutSeconds > 0 && sw.Elapsed.TotalSeconds > timeoutSeconds) { stopped = "the call took over " + timeoutSeconds + " s and was stopped"; break; }
                     if (sw.ElapsedMilliseconds - Interlocked.Read(ref lastEvent) > StallSeconds * 1000L) { stopped = "stalled: nothing came for " + StallSeconds + " s"; break; }
                     lock (events)

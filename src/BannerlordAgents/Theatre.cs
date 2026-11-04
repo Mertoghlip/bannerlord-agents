@@ -30,14 +30,14 @@ namespace BannerlordAgents
     }
 
     /// <summary>
-    /// The theatre of a news wake (0.14; Mert, Nov 2-3: "here are the lords 1 day away from this engagement, here are the lords in
-    /// the engagement. The agent should be able to query for all lords if it needs them", and the horizon set by "the 'clock' for
-    /// the specific new development"). A poke's news names its focus (where it happens, who is in it); the game's own clock for it
+    /// The theatre of a news wake (0.14, Nov 2-3: "here are the lords 1 day away from this engagement, here are the lords in
+    /// the engagement", the agent able to query for all lords if it needs them, and the horizon set by the "clock" for
+    /// the specific new development). A poke's news names its focus (where it happens, who is in it); the game's own clock for it
     /// (an enemy's march, a siege's storm or hunger, a battle's end, a raid's looting, a holding's food) says how long there is to act,
     /// kept between 6 hours and 3 days, one day where there is no clock; and the theatre is everyone who can be there in that time:
     /// the realm's lords, by the hours their march takes, marked against the clock with the agent's own answer time counted, and
     /// the enemies and allies who could join before it is decided, wherever they are now, and any enemy army heading there. A first
-    /// look and a quiet day keep the whole report (Mert's answer 2); votes, offers, wars and peace get the realm's diplomacy, purse
+    /// look and a quiet day keep the whole report (decision 2); votes, offers, wars and peace get the realm's diplomacy, purse
     /// and sum ("realm"); a letter's theatre is the places it names (answer 4). Built from the realm's view alone, so the same fog
     /// holds, and so a recorded poke can be built again (the coverage check, replays). Worker thread; game-free.
     /// </summary>

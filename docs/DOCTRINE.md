@@ -1,14 +1,14 @@
 # Doctrine: the study behind the agent's instructions
 
-Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 19 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17, the 18th since Oct 25, the 19th since Nov 1; the 7th corrected on Oct 29), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it (CLAUDE.md, "the agent's folder stays outside the repo").
+Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 19 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17, the 18th since Oct 25, the 19th since Nov 1; the 7th corrected on Oct 29), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it, since the agent's folder stays outside the repo.
 
 ## Why, and the rule
 
-**Mert, Oct 9:** "I want a better system prompt for the agent. It should act like a super intelligent military commander from the middle ages: for that, I want you to study doctrines and military tactics from the middle ages to really nail down the persona we want the agent to embody as well as its general strategy. It shouldn't 'have to' defend castles it is going to lose if it is smarter for it to wait out, amass a huge force, and defeat a large enemy army AND take back what it has lost, plus maybe some more, in a counter-offensive. It is important that it stays agressive but doesn't lose sight of the bigger picture and the long game."
+**Oct 9:** I want a better system prompt for the agent. It should act like a super intelligent military commander from the middle ages: for that, the study covers doctrines and military tactics from the middle ages, to really nail down the persona we want the agent to embody as well as its general strategy. It shouldn't "have to" defend castles it is going to lose if it is smarter for it to wait out, amass a huge force, and defeat a large enemy army AND take back what it has lost, plus maybe some more, in a counter-offensive. It is important that it stays aggressive but doesn't lose sight of the bigger picture and the long game.
 
-**The rule, also Mert's:** "I don't want to give it the strategy that I just gave you word for word, that would be polluting the test. It should arrive at that conclusion on its own."
+**The rule, also mine:** I don't want to give it the strategy above word for word: that would be polluting the test. It should arrive at that conclusion on its own.
 
-So the instructions teach general principles with their history, and never this war's plan. What Mert said the orcs should do in this war is in [What was left out on purpose](#what-was-left-out-on-purpose).
+So the instructions teach general principles with their history, and never this war's plan. What I said the orcs should do in this war is in [What was left out on purpose](#what-was-left-out-on-purpose).
 
 **Where it changed the instructions** (`agent/warroom-system.template.md`, installed as `warroom-system.md`):
 - **A new "Who you are":** the commander's persona, in eight lines, each tied to a writer or a campaign.
@@ -18,7 +18,7 @@ So the instructions teach general principles with their history, and never this 
 - **Two wording changes:**
   - lords without the agent's orders are led by the game's own AI, said plainly;
   - "change only what the poke needs" now applies to pokes, with the council setting the whole realm's course.
-- **The examples:** neutral ids (`lord_A`, `castle_B`) instead of a relief of Western Moria, which named the very place of Mert's test.
+- **The examples:** neutral ids (`lord_A`, `castle_B`) instead of a relief of Western Moria, which named the very place of my test.
 
 ## How the study was done
 
@@ -83,11 +83,11 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 | 16 | A besieger keeps eyes on the roads: warned in time, lift the siege, close the ways, or meet the relief on your ground. (Oct 17) | Kekaumenos xxvi ("You can't find out about the enemy except by having many scouts"); *Strategikon* VIII.1.34 (a besieging army "should keep sending out patrols"); Mountsorrel 1217 (siege raised on the scouts' word); Calais 1347 (the dunes and the bridge of Nieulay held); Antioch 1098 (foot kept the lines, the knights met the relief); against: Lincoln 1217 (the warning laughed at), Nicopolis 1396 (the bringers of the news flogged and cropped). See [below](#principles-16-and-17-oct-17-the-besiegers-eyes-and-the-weaker-sides-one-blow). | The siege order's alarm counts every enemy lord near or heading for the place (0.7.2); watch and shadow (0.7.1) put a lord on a road or on an army. |
 | 17 | The weaker side's one blow: when time is on the enemy's side, pass the lesser prize by, mass on the one blow that decides, strike before his parts join; when time is on yours, wait. Time is on your side only while waiting costs him more than you; an enemy taking your places while you wait has time on his side, however strong you are. (Oct 17; the time test since Oct 25) | Edward IV 1471 (Coventry passed by, London, Barnet, the march of "xxx myle and more" to Tewkesbury, *Arrivall*); Lincoln 1217 (every castellan's knights gathered against the larger force; Wendover); *Strategikon* IX.1; Kekaumenos lxvi; Vegetius III.26 for the other side. | Big armies walk slowly and sieges take days (TOOLS.md, "What a siege costs in hours"); every detour is hours the enemy uses. |
 | 18 | The enemy's main army first: when you can beat it, gather an overwhelming force and meet it in the field, or strike as soon as you hold the advantage if gathering all would take too long, rather than wait for it to sit down before a castle; lesser prizes wait, raiders go to small forces; then take his places quickly while he regroups. When you cannot yet beat it, principles 4 and 17. (Oct 25) | Saladin 1187 (the forces of Egypt and Syria gathered; Hattin, 4 July; Acre in about a week; Jerusalem by 2 October); Mohi, 11 April 1241, then Hungary overrun; "The Mongols preferred to deal with all field armies before moving deep into enemy territory" (May 2015). See [below](#principle-18-and-the-raiders-oct-25-the-enemys-main-army-first). | An AI realm's great army takes castle after castle while it stands (run 20261024-2110-C2: four in 34 days); the battle odds give each side's remnant. |
-| 19 | Victual the castles before the siege: a castle lives on its lands and villages, raids cut that, a siege stops it, and hunger then takes a tenth of the garrison a day; stock the places on a threatened front while the roads are open, above all those whose villages are raided, and read their food beside their walls. (Nov 1) | Vegetius IV.7 (provisions into the strongholds before the siege); Calais 1346–47 and Rouen 1418–19 (taken by hunger); Kenilworth 1266 (gave up when its food ran out); Harlech 1294–95 (held, supplied by sea). See [below](#principle-19-nov-1-victual-the-castles-before-the-siege). | Castles at the fronts with no food after their villages were raided (Mert, Nov 1, run 20261029-1903-A); the supply order and the hunger warning (0.13.19, 0.13.20). |
+| 19 | Victual the castles before the siege: a castle lives on its lands and villages, raids cut that, a siege stops it, and hunger then takes a tenth of the garrison a day; stock the places on a threatened front while the roads are open, above all those whose villages are raided, and read their food beside their walls. (Nov 1) | Vegetius IV.7 (provisions into the strongholds before the siege); Calais 1346–47 and Rouen 1418–19 (taken by hunger); Kenilworth 1266 (gave up when its food ran out); Harlech 1294–95 (held, supplied by sea). See [below](#principle-19-nov-1-victual-the-castles-before-the-siege). | Castles at the fronts with no food after their villages were raided (Nov 1, run 20261029-1903-A); the supply order and the hunger warning (0.13.19, 0.13.20). |
 
 ## Principle 15 (Oct 16): reading an army's aim
 
-**Mert, Oct 16:** "In an army, I might deviate slightly off course on my way to an objective to recruit or gather supplies, or maybe to engage an enemy I find vulnerable. The AI should still be getting the information it needs to infer what my main objective is, and slight deviations should not have it readjust its main strategy." Of the ways proposed, Mert chose two together: each enemy army's trail in the report (version 0.6.4, [TOOLS.md](TOOLS.md#what-the-agent-reads-besides-the-tools)) and a doctrine line. The line is general (judge by the course over days, beware the feint); it says nothing of this war or of how Mert plays.
+**Oct 16:** In an army, I might deviate slightly off course on my way to an objective to recruit or gather supplies, or maybe to engage an enemy I find vulnerable. The AI should still be getting the information it needs to infer what my main objective is, and slight deviations should not have it readjust its main strategy. Of the ways proposed, I chose two together: each enemy army's trail in the report (version 0.6.4, [TOOLS.md](TOOLS.md#what-the-agent-reads-besides-the-tools)) and a doctrine line. The line is general (judge by the course over days, beware the feint); it says nothing of this war or of how I play.
 
 **The research** (one pass, Oct 16; the texts opened and quoted, unless marked):
 - **The sources say the parties range, not the army.** It was the detachments that turned aside every day, while the king or the emir and the formed body kept the road, so the principle says so:
@@ -109,7 +109,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## Principles 16 and 17 (Oct 17): the besieger's eyes, and the weaker side's one blow
 
-**Mert, Oct 17,** after the siege of Hollin Gate (Naglur's army stormed into the castle's defence while about 50 of Arnor's lords came to its relief one by one, [CHANGELOG.md](CHANGELOG.md)): "The rest is more of a siege doctrine question. It should (1) post scouts around the army to figure out if a relieving force is coming during the siege so it can call it off and (2) understand that when the enemy is stronger, it is important to strike hard and quick, sometimes forgoing smaller targets in favor of guaranteeing a more important hit." The two lines are general, with their history; neither names this war, a place, a lord or an order. Principle 2's last sentence ("when you besiege, watch the roads, and leave before a stronger relief arrives") now points to principle 16, which carries Nicopolis.
+**Oct 17,** after the siege of Hollin Gate (Naglur's army stormed into the castle's defence while about 50 of Arnor's lords came to its relief one by one, [CHANGELOG.md](CHANGELOG.md)): the rest is more of a siege doctrine question. The agent should (1) post scouts around the army to figure out if a relieving force is coming during the siege so it can call it off and (2) understand that when the enemy is stronger, it is important to strike hard and quick, sometimes forgoing smaller targets in favor of guaranteeing a more important hit. The two lines are general, with their history; neither names this war, a place, a lord or an order. Principle 2's last sentence ("when you besiege, watch the roads, and leave before a stronger relief arrives") now points to principle 16, which carries Nicopolis.
 
 **The research** (one pass, Oct 17; the texts opened and quoted, unless marked):
 - **Principle 16:**
@@ -153,7 +153,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## Principle 5 rewritten (Oct 23): one main effort (softened Oct 24, below)
 
-**Mert, Oct 23**, after run C2: "We should also design the agent's system prompt to have it be more focused in its strategy." In C2 the kingdom's agent ran five to eight armies at once and lost three of them piecemeal to Dol Guldur's one army of 20 lords. Mert's reason was a general rule of war: one front gets the weight of the realm, the others are held with less, rather than every front treated alike. It is written in the doctrine's own words, the same for every agent, and nothing in it names this war's fronts, armies or places.
+**Oct 23**, after run C2: we should also design the agent's system prompt to make it more focused in its strategy. In C2 the kingdom's agent ran five to eight armies at once and lost three of them piecemeal to Dol Guldur's one army of 20 lords. My reason was a general rule of war: one front gets the weight of the realm, the others are held with less, rather than every front treated alike. It is written in the doctrine's own words, the same for every agent, and nothing in it names this war's fronts, armies or places.
 
 **What the read of runs C1 and C2 found** (CHANGELOG, Oct 23): the old principle 5 said "Concentrate", but three lines pulled the other way:
 - the council's step 3, "Give every lord a part in it";
@@ -187,7 +187,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## Principle 5 softened (Oct 24): overwhelm where you can win
 
-**Mert, Oct 24**, on the Oct 23 wording: "I don't like the wording on principle 5. It should be less strong, telling the agent to strategize such that, if it can win in a front with overwhelming force, it should concentrate overwhelming force there instead of just an adequate one, without taking away so much from the other fronts to make their forces inadequate. This might work for multiple fronts, just one, or none, based on the relative strength of its enemies." As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
+**Oct 24**, on the Oct 23 wording: I don't like the wording on principle 5. It should be less strong, telling the agent to strategize such that, if it can win on a front with overwhelming force, it should concentrate overwhelming force there instead of just an adequate one, without taking so much from the other fronts that their forces become inadequate. This might work for multiple fronts, just one, or none, based on the relative strength of its enemies. As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
 
 **What changed** (`agent/warroom-system.template.md`, and each realm agent's `warroom-system.md`):
 - **Principle 5,** now "Overwhelm where you can win; keep enough everywhere else":
@@ -213,7 +213,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## Principle 18 and the raiders (Oct 25): the enemy's main army first
 
-**Mert, Oct 25**, after the read of run C2 on 0.11.5 below: "I'm seeing a general pattern where the agent fails to prioritize engaging an enemy's main force and pays the price." Then, on the fixes offered: "I'd add more to the main army part though, something like this: Prioritize your efforts properly: if you see an enemy's main force and you can beat them, you should plan on assembling an overwhelming force and meeting them on the field, or as quickly as possible so long as you are advantageous, and crushing them. Then, you can be agressive and quickly take over their territory as they aim to regroup. I'd also add some notes on the raiding parties: armies should not be spending time chasing raiding parties and be focused on their primary objectives. Raiding parties should only be answered by smaller groups of lords that can crush them, the focus of large armies should not be diverted." As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
+**Oct 25**, after the read of run C2 on 0.11.5 below: I'm seeing a general pattern where the agent fails to prioritize engaging an enemy's main force and pays the price. Then, on the fixes offered: I'd add more to the main army part, something like this: prioritize your efforts properly: if you see an enemy's main force and you can beat them, you should plan on assembling an overwhelming force and meeting them on the field, or as quickly as possible so long as you have the advantage, and crushing them. Then you can be aggressive and quickly take over their territory as they aim to regroup. I'd also add some notes on the raiding parties: armies should not be spending time chasing raiding parties and should be focused on their primary objectives. Raiding parties should only be answered by smaller groups of lords that can crush them; the focus of large armies should not be diverted. As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
 
 **What the read of run 20261024-2110-C2 found** (the kingdom's war room calls; CHANGELOG, Oct 25):
 - From day 5 to day 39 the agent asked the battle odds against Dol Guldur's great army (Lorgath, 16,600 to 20,100 strength) 18 times in the open; every one said it would win, keeping 75 to 91% of its men. On day 5 the chase question said its army was 88% faster than Lorgath's. It never ordered an attack. Lorgath took Imnagath (twice), Framsburg and Dûglarshun meanwhile.
@@ -239,8 +239,8 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 - **Principle 3:** the battle odds are the measure of the edge: a win keeping most of your men while most of his fall; battles here can last a day or more, so judge by what each side has left, not by how long it runs. (Vegetius' "two or three hours" stays.)
 - **Principle 17:** time is on your side only while waiting costs him more than you (his army hungry or breaking up, his allies leaving); if he goes on taking your places while you wait, time is on his side however strong you are; the stronger side reads principle 18.
 - **Who you are:** "When you cannot yet beat an invader in the field, you let it burn itself out ..." (the condition is new), with "after Crécy and Poitiers, the French could not yet win it".
-- **The council of war:** step 2 begins with where each enemy's main army is and whether it can be beaten (principle 18); step 3's lesser tasks name "small groups of lords against raiders". Step 3's order (the fronts' needs first, then the blows) is Mert's of Oct 24 and stays.
-- Kept as they were: principle 5 (Mert's softened wording), principle 2, principle 6 (the divided enemy, which covers a detached army worth an army's turning aside).
+- **The council of war:** step 2 begins with where each enemy's main army is and whether it can be beaten (principle 18); step 3's lesser tasks name "small groups of lords against raiders". Step 3's order (the fronts' needs first, then the blows) is mine of Oct 24 and stays.
+- Kept as they were: principle 5 (my softened wording), principle 2, principle 6 (the divided enemy, which covers a detached army worth an army's turning aside).
 
 **What it rests on** (standard accounts and the earlier passes' sources; not opened again for this change):
 - Saladin, 1187: he gathered the forces of Egypt and Syria, drew the Kingdom of Jerusalem's field army out by besieging Tiberias, destroyed it at Hattin on 4 July, took Acre within about a week and Jerusalem on 2 October (principles 1 and 10 above, Gibb and Baldwin in Setton).
@@ -258,7 +258,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## Principle 7 corrected (Oct 29): raiders struck while they are alone
 
-**Mert, Oct 29**, reading the instructions: "And for the general system prompt: telling the ai to attack raiders 'on their way home' is wrong in terms of the game mechanics. The smarter move is to attack them when they are isolated from their allies and we can either catch them before they get to safety or if they are already bogged down in a raid, which means they are stuck, isolated, and therefore in a vulnerable position." As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
+**Oct 29**, reading the instructions: in the general system prompt, telling the AI to attack raiders "on their way home" is wrong in terms of the game mechanics. The smarter move is to attack them when they are isolated from their allies and we can either catch them before they get to safety or they are already bogged down in a raid, which means they are stuck, isolated, and therefore in a vulnerable position. As before, it is written in the doctrine's own words, the same for every agent, and names nothing of this war.
 
 **Why the old line was wrong here:**
 - It applied *On Skirmishing* 4 (Dennis, p. 159) to raiders in general. That chapter is about the whole invading host coming back through the frontier passes, "burdened with a lot of baggage, captives, and animals", tired and "anxious to get back to their own country", after days in which the themes could gather their infantry at the defiles. Leo Phokas' ambush of 950, also cited for the old line, is that case: ʿAli, "encumbered by many prisoners and vast amounts of booty", caught in the narrow defiles on his way home (Dennis' note, p. 157). *Taktika* 18.128, cited too, was not opened again.
@@ -281,7 +281,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 **Caveats:**
 - The chapter's first choice is the main body, weakened by the raiders' absence; the principle takes its second, the scattered raiders, because it gives raiders to small forces and keeps the armies on their tasks. Principle 6 covers the main body divided.
-- Chapter 4 is not wrong for its own case, a whole host coming home through passes the defenders hold; but that is a host, not a raider, and the doctrine still has no line on crossings (Mert's choice, Oct 16).
+- Chapter 4 is not wrong for its own case, a whole host coming home through passes the defenders hold; but that is a host, not a raider, and the doctrine still has no line on crossings (my choice, Oct 16).
 
 **What would show it working:**
 - Small groups of lords sent at raiders already at work on a village, or at raiders they can reach before they get back among their own.
@@ -290,7 +290,7 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## Principle 19 (Nov 1): victual the castles before the siege
 
-**Mert, Nov 1.** He saw "a lot of castles at my fronts with zero food due to raids on their villages". The supply order came out of it (0.13.19, docs/TOOLS.md). I proposed, among three extras, "A rule of thumb on stocking castles before a siege", written like the existing ones with historical examples, saying nothing about this war, and noted that the doctrine is his call. He answered: "I also like all the optional extras you proposed, so please implement them as well." It is in the doctrine's own words, the same for every realm agent, and names nothing of this war (no front, no place, no enemy).
+**Nov 1.** I saw a lot of castles at my fronts with zero food due to raids on their villages. The supply order came out of it (0.13.19, docs/TOOLS.md). Proposed among three extras: "A rule of thumb on stocking castles before a siege", written like the existing ones with historical examples, saying nothing about this war, with a note that the doctrine is my call. I took all the optional extras, to be implemented as well. It is in the doctrine's own words, the same for every realm agent, and names nothing of this war (no front, no place, no enemy).
 
 **The game's side** (1.4.8, `DefaultSettlementFoodModel`; docs/TOOLS.md "Food for a holding"):
 - A castle or town lives on its lands and its unraided bound villages.
@@ -315,8 +315,8 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## What was left out on purpose
 
-- **This war's plan, as Mert described it:** mass one great army, beat Aragorn's host, take the places that hold the most captured orc lords to free them, rebuild, then counter-attack with everyone.
-  - The doctrine states the general principles Mert now explicitly wants available: no doomed castle needs a hopeless defence; overwhelming force where a win is open, with enough kept on every other front (since Oct 23, softened Oct 24); the enemy's main army first when it can be beaten, raiders left to small forces, and his places taken quickly after (since Oct 25, Mert's own general rule, in the doctrine's words); raiders struck while they are cut off from their own, at work on a village or caught before they reach safety (since Oct 29, Mert's correction, in the doctrine's words); win with the edge; exploit; retake.
+- **This war's plan, as I described it:** mass one great army, beat Aragorn's host, take the places that hold the most captured orc lords to free them, rebuild, then counter-attack with everyone.
+  - The doctrine states the general principles I now explicitly want available: no doomed castle needs a hopeless defence; overwhelming force where a win is open, with enough kept on every other front (since Oct 23, softened Oct 24); the enemy's main army first when it can be beaten, raiders left to small forces, and his places taken quickly after (since Oct 25, my own general rule, in the doctrine's words); raiders struck while they are cut off from their own, at work on a village or caught before they reach safety (since Oct 29, my correction, in the doctrine's words); win with the edge; exploit; retake.
   - Whether, when and against whom to do any of it is the agent's to decide.
 - **Freeing one's own captured lords by taking the place that holds them,** although the third research pass recommended it (Guy freed for Ascalon; Prince Leon's ransom paid in forts). It is part of the plan above. The agent sees where its captured lords are held, grouped by place; what it does with that is the test.
 - **Diplomacy maxims** (sow discord among allies, accept peace on good terms, Kekaumenos on paying tribute): the agent has no diplomatic orders yet. They come with the coalition (plan, week 3).
@@ -325,12 +325,12 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 
 ## What would show it working
 
-These are signs to watch for in Mert's standard test: load the Summer 9, 1087 save, then march on Western Moria with more than 5,000 men. They are not instructions to the agent.
+These are signs to watch for in my standard test: load the Summer 9, 1087 save, then march on Western Moria with more than 5,000 men. They are not instructions to the agent.
 - Its council, after the first look, reads the balance of strength (its field armies against the host coming) and sets a course for the whole realm, not one place.
 - It does not feed a relief to a besieged place lord by lord, below the strength that would make the garrison sally out.
 - It masses before it strikes, or refuses battle and harasses, and it strikes when the enemy divides or wears out.
 - After a win, it follows up at once.
-- When Mert's army turns aside for a few hours (a village, a weak lord) and comes back to its road, the agent's plan holds; when the army takes a new road, the plan changes (principle 15).
+- When my army turns aside for a few hours (a village, a weak lord) and comes back to its road, the agent's plan holds; when the army takes a new road, the plan changes (principle 15).
 - When it besieges, it keeps lords out on the roads a relief must come by, and lifts the siege, or meets the relief, when a stronger one is reported (principle 16).
 - When the enemy is stronger overall, it does not spend its main army's days on small prizes on the way to the blow that matters (principle 17).
 - Its plan and lessons say why, in its own words.

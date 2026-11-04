@@ -11,8 +11,8 @@
     C2  an agent ruling your kingdom vs AI:     orcs and Dol Guldur shadow, the kingdom's agent live, lieutenant off
     C0  the control, every realm by the game's AI: orcs and Dol Guldur shadow, the kingdom's agent off (shadow with
         -KingdomWatches), lieutenant off; you switched to a wanderer as in C1 and C2
-  -RivalsOff switches the orcs' and Dol Guldur's agents fully off in B, C2 and C0 instead of shadow (Mert, Oct 23: keep them on
-  "so long as usage is fine").
+  -RivalsOff switches the orcs' and Dol Guldur's agents fully off in B, C2 and C0 instead of shadow (Oct 23: they stay on
+  so long as usage is fine).
   Each change is logged in %LOCALAPPDATA%\BannerlordAgents\runs\arms.log, and the run itself records every agent's mode.
 
 .EXAMPLE

@@ -74,7 +74,7 @@
                         </ScrollbarWidget>
                       </Children>
                     </Widget>
-                    <!--Approve and Decline are gone (0.13.8, Mert, Oct 29): the ruler answers the proposal in words-->
+                    <!--Approve and Decline are gone (0.13.8, Oct 29): the ruler answers the proposal in words-->
                   </Children>
                 </ListPanel>
 

@@ -233,7 +233,7 @@ namespace BannerlordAgents.WarRoom
             Check(a3 != null && a3.Contains("knows no lord, army or holding called \"p_hidden\""), "a party the realm never saw is refused: " + a3);
             string[] logged = File.Exists(Path.Combine(logs, "routes.jsonl")) ? File.ReadAllLines(Path.Combine(logs, "routes.jsonl")) : new string[0];
             Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
-            // 0.13.22 (Mert, Nov 1: Zulgora's army ran for Westoft, 8 hours ahead by the race, and was caught on the way about 16 hours later):
+            // 0.13.22 (Nov 1: Zulgora's army ran for Westoft, 8 hours ahead by the race, and was caught on the way about 16 hours later):
             // can the other side cut the way? Hirgon stands on Bolg's road east, Aragorn's slow army at its end; nobody can reach the pass road south first
             string c1 = Call("{\"from\":\"lord_bolg\",\"to\":\"town_b\",\"also_from\":[\"lord_sc\",\"lord_ar\"]}");
             string c2 = Call("{\"from\":\"lord_bolg\",\"to\":\"castle_c\",\"also_from\":[\"lord_sc\"]}");
@@ -348,7 +348,7 @@ namespace BannerlordAgents.WarRoom
             LieutenantRoom.WriteAnswer(channel, 8, withAll, 7);
             var written2 = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(channel, "orders", "chat-8.json")));
             Check(written2["letters"] is JsonArray wl && wl.Count == 1 && written2["tools"] is JsonArray && written2["diplomacy"] is JsonArray, "the answer file carries the lieutenant's tools, diplomacy and letters to the bridge");
-            // 0.13.16 (Mert, Nov 1: the lieutenant "was not able to see what happened at Nanduhirion"): each message says how long the realm's
+            // 0.13.16 (Nov 1: the lieutenant was not able to see what happened at Nanduhirion): each message says how long the realm's
             // whole chronicle is and at which line each of its last days begins, so it can read just that day
             File.WriteAllText(Path.Combine(channel, "chronicle.txt"), "THE CHRONICLE OF THE KINGDOM\nEverything your realm has learned.\n\n"
                 + "Autumn 21, 1087, 22:00 · Dáin II Ironfoot (Kingdom of Arnor and Gondor) was taken prisoner by Dramthak (Dol Guldur).\n"
@@ -477,7 +477,7 @@ namespace BannerlordAgents.WarRoom
                   "every check is logged with the definition, its problems and the answer (" + logged.Length + ")");
             Check(Claude.RunawayLimit("{\"poke\": 3, \"orders\": []}") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\": 3, \"tools\": [{\"name\":") == Claude.RunawayCharsWithTools,
                   "the runaway limit is raised for an answer that writes tools (" + Claude.RunawayCharsWithTools + " characters)");
-            // 0.13.5 (Mert, Oct 29: "remove the time limit on the liutenant's thinking"): a time limit of 0 is none, and the lieutenant's
+            // 0.13.5 (Oct 29: the time limit on the lieutenant's thinking removed): a time limit of 0 is none, and the lieutenant's
             // proposal, which may name every lord of the realm, gets the longer runaway limit
             string limits = Path.Combine(root, "limits");
             Directory.CreateDirectory(limits);

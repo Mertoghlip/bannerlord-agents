@@ -157,7 +157,7 @@ These are the only two pieces that hook into the game's code instead of reading 
 
 ## The helper on time (since 0.12.0)
 
-**Why:** in run 20261025-1417-C2 the background helper fell up to 142 s behind the game, about two game days at the runs' speed (an in-game hour every 3.3 s). Every order, every shelter and every poke landed that late: Beleg's four attack orders each waited about 49 s to start, and the agent's order to go inside Lasgalor landed after Thrurg had caught Aragorn. Mert: "The helper needs to be able to be on time, every time."
+**Why:** in run 20261025-1417-C2 the background helper fell up to 142 s behind the game, about two game days at the runs' speed (an in-game hour every 3.3 s). Every order, every shelter and every poke landed that late: Beleg's four attack orders each waited about 49 s to start, and the agent's order to go inside Lasgalor landed after Thrurg had caught Aragorn. The helper needs to be on time, every time.
 - **What was found:**
   - Last night's run had already needed a median 2.85 s of the helper's time per game hour when it was backed up, against the 3.3 s the game gives; that run was behind for 26% of its hours. This one needed 3.47 s and was behind for 86%.
   - A probe of the helper caught it writing look-up files in 10 samples out of 10. 216 to 339 files per agent were rewritten for each poke, each written beside the old one and swapped in. That took 1,179 ms for 216 files, against 75 ms written plainly. A swap refused while the virus scanner held the file slept 15 ms, up to four times a file.
@@ -212,7 +212,7 @@ What each side saw, what it did and what came of it, linked by ids and tagged by
 
 ### The backup (since 0.13.1)
 
-Mert, Oct 28: "I would keep the data local for now, at the D: drive." Everything the project records is copied to the laptop's second drive (its own disk), at `D:\BannerlordAgents-backup`, the place `backup` in `settings.txt` names (empty: no backup).
+Oct 28: I keep the data local for now, on the D: drive. Everything the project records is copied to the laptop's second drive (its own disk), at `D:\BannerlordAgents-backup`, the place `backup` in `settings.txt` names (empty: no backup).
 - **When:** at a run's end, right after its bundle (the bridge starts `Runs.exe bundle <run> --backup`; its words go to the run's `bundle.log`), and by hand with `Runs.exe backup [--to <folder>]`.
 - **What:** `records\` is the records folder (`%LOCALAPPDATA%\BannerlordAgents`: every campaign's records, the hourly pictures, the logs, the runs and their bundles, the settings); `agents\<folder>\` is each agent's folder named in `agents` (instructions, memory, channel, library of tools). The game's saves are not in it: they live in Documents, which OneDrive keeps.
 - **How:** it never deletes: a file gone from its place stays in the copy (the dashboard keeps the hourly pictures of only the newest `keep_loads` loads; the copy keeps all). A file that only grew (the logs, the pokes) gets its new bytes added; one that shrank or was rewritten is copied whole, and the copy it replaces goes to `earlier\<time>\`. A file another program holds shut is named and left for the next backup. It works at background priority, so the game keeps the disk, and it refuses a place inside what it copies (links followed, since 0.13.2), or a drive without room for it and 1 GB more.
@@ -221,7 +221,7 @@ Mert, Oct 28: "I would keep the data local for now, at the D: drive." Everything
 
 ## Where the files are
 
-On Mert's laptop the records folder has lived on the second disk since Oct 28 (Mert: "Yes, move the records themselves to D: as well."): `%LOCALAPPDATA%\BannerlordAgents` is a link (a junction) to `D:\BannerlordAgents`, so the bridge, the war rooms, the dashboard, Runs.exe and the scripts all find it at the usual place. Write to the usual place, never to `D:\BannerlordAgents` by name.
+On my laptop the records folder has lived on the second disk since Oct 28 (the records themselves moved to D: as well): `%LOCALAPPDATA%\BannerlordAgents` is a link (a junction) to `D:\BannerlordAgents`, so the bridge, the war rooms, the dashboard, Runs.exe and the scripts all find it at the usual place. Write to the usual place, never to `D:\BannerlordAgents` by name.
 
 `%LOCALAPPDATA%\BannerlordAgents\logs\`:
 - `bridge.log`: the readable story, across launches;
@@ -252,7 +252,7 @@ The agent cannot read any of this: a war room call can read only the channel fol
 | `agents.hooks on` or `off`; `agents.hooks witness` or `reasons on` or `off` | the two game hooks |
 | `agents.alarms on` or `off` | red alarms on screen |
 
-**What reaches the game's message log** (since 0.13.7; Mert, Oct 29: "I only want to see the stuff from my liutenant and the normal game logs and updates in-game, the dashboard should stay the same"): the game's own messages; the lieutenant's answers and what became of its orders (when its window is closed); the lines of your own orders (the console's `agents.order`, your vassal orders) as they start, arrive and end; the test run's lines (readied, carried on, day 60); and the red alarms (above). The other agents' pokes and orders no longer go there; they are in the logs, the run's events and on the dashboard as before.
+**What reaches the game's message log** (since 0.13.7; Oct 29: in-game I only want to see what comes from my lieutenant and the normal game logs and updates; the dashboard stays the same): the game's own messages; the lieutenant's answers and what became of its orders (when its window is closed); the lines of your own orders (the console's `agents.order`, your vassal orders) as they start, arrive and end; the test run's lines (readied, carried on, day 60); and the red alarms (above). The other agents' pokes and orders no longer go there; they are in the logs, the run's events and on the dashboard as before.
 | `agents.recruits` | why the watched realm's parties do or do not refill, as of now and for the last whole day |
 | `agents.map` or `agents.map again` | where the copy of the walking map stands, and the dashboard's frames this session; again: copy the map anew (0.7) |
 

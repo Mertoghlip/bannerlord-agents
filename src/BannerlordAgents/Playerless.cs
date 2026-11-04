@@ -13,10 +13,10 @@ using TaleWorlds.MountAndBlade;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The switch for the runs an agent plays without you (0.11.2; Mert, Oct 23: "The switch should be done by a command that you
-    /// write, including the giving them gold and food part. Please find a good wanderer to switch into and prepare the command";
-    /// before: "switch the player character to a wanderer in a random town, give that character a lot of money and food so it
-    /// doesn't die, and simply let the game run"). agents.run playerless shows the wanderer it would take and what it would do;
+    /// The switch for the runs an agent plays without you (0.11.2, Oct 23: the switch should be done by a written command,
+    /// including giving them gold and food, with a good wanderer found to switch into and the command prepared;
+    /// before: switch the player character to a wanderer in a random town, give that character a lot of money and food so it
+    /// doesn't die, and simply let the game run). agents.run playerless shows the wanderer it would take and what it would do;
     /// agents.run playerless go [name] does it, the game paused:
     /// - the wanderer: a free one (no clan, nobody's companion, no party, not a prisoner, not a child) in a town that is not your
     ///   kingdom's nor a rival's, at peace with your kingdom and not besieged: of those, the town farthest from every castle, town
@@ -31,7 +31,7 @@ namespace BannerlordAgents
     /// - Party AI Controls' auto-recruit is switched off for every lord it has settings for, and in its defaults (0.12.1: it held
     ///   Aragorn on a refill from day 14 to the end of run 20261025-1524-C2, where the agent could not command him);
     /// - the wanderer gets gold and grain, and goes into the town; you then choose to wait there and set the clock running.
-    /// Nothing guards against pop-ups for now (Mert: "if something does end up blocking us, we'll respond after"). Game's thread.
+    /// Nothing guards against pop-ups for now (if something does end up blocking a run, the response comes after). Game's thread.
     /// </summary>
     internal static class Playerless
     {

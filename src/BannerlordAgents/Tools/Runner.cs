@@ -884,10 +884,10 @@ namespace BannerlordAgents.Tools
         [ThreadStatic] private static List<ReliefPlan> _reliefPlans;
 
         /// <summary>
-        /// The fights the realm's held lords could ride to this hour (0.13.15; Mert, Oct 30: "lords under any order and not in an army should
+        /// The fights the realm's held lords could ride to this hour (0.13.15, Oct 30: lords under any order and not in an army should
         /// always ride with all haste to relieve lords in a fight if their combined strength beats the enemies' in the area's combined strength
-        /// for the expected duration of the fight ... Armies should still try to relieve lords if they are close enough to reach them before the
-        /// fight is done and combined strength is stronger ... but should never break up because of this"). A fight in the field (or at a
+        /// for the expected duration of the fight; armies should still try to relieve lords if they are close enough to reach them before the
+        /// fight is done and combined strength is stronger, but should never break up because of this). A fight in the field (or at a
         /// siege camp, or a raid) with a lord of ours or an ally's on one side and an enemy realm's on the other; its hours left by the battle
         /// clock (Forecast: as measured once it has run two rounds, else by the rules at middling morale); the riders, every held lord out of
         /// an army or leading one (CanRide) who can get there before it ends at his own pace; our side there, the parties in it and every
@@ -936,10 +936,10 @@ namespace BannerlordAgents.Tools
                     if (hours > endsIn - Library.ReliefSpare(endsIn)) continue;
                     can.Add(Tuple.Create(x, r, hours));
                 }
-                // who is sent (0.13.17; Mert, Nov 1): none while our side there, with every one of them, would not outweigh the enemy; else every
-                // lord free to ride, however the fight goes ("a crushing victory reduces losses compared to a close victory"); and, only while the
+                // who is sent (0.13.17, Nov 1): none while our side there, with every one of them, would not outweigh the enemy; else every
+                // lord free to ride, however the fight goes (a crushing victory reduces losses compared to a close victory); and, only while the
                 // lords in it would not win alone, lords from other orders, nearest first (one already riding to it first), until our side is
-                // Library.ReliefWinBar times the enemy ("make sure the logic assigns enough lords to tip the balance")
+                // Library.ReliefWinBar times the enemy (the logic must assign enough lords to tip the balance)
                 double bar = Library.ReliefWinBar * p.Theirs;
                 p.Needed = p.Ours < bar;
                 if (p.Ours + can.Sum(c => World.StrengthOf(c.Item2)) > p.Theirs)
@@ -974,9 +974,9 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
-        /// Is a held lord free to ride to any fight his side can win, however it goes (0.13.17; Mert, Nov 1: "lords that have a
+        /// Is a held lord free to ride to any fight his side can win, however it goes (0.13.17, Nov 1: lords that have a
         /// defend/patrol/recruit order (so lords that are basically not doing anything important) still go to relieve another lord regardless
-        /// of how the battle is going, since a crushing victory reduces losses compared to a close victory")? An order to defend, patrol, hold,
+        /// of how the battle is going, since a crushing victory reduces losses compared to a close victory)? An order to defend, patrol, hold,
         /// recruit or rest, or a realm's own recruiting tool (one with "recruit" in its name: recruit_round, home_recruit, safe_recruit). Any
         /// other order rides only when the lords in the fight would not win alone (ReliefPlans).
         /// </summary>

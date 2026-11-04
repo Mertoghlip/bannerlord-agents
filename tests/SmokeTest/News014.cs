@@ -10,7 +10,7 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.14 (Mert, Nov 2-3: a news wake's report shows what bears on the news, by the clock of the development, and the rest is asked for):
+        /// 0.14 (Nov 2-3: a news wake's report shows what bears on the news, by the clock of the development, and the rest is asked for):
         /// the theatre's focus, its clock and horizon, who is in it and who is not; the news report's sections and its fog; the whole report for a
         /// first look, the realm's diplomacy for a vote; the question book with every list and the enemy holdings' look-ups; and a poke in theatre
         /// mode end to end (poke.txt, the book, poke.json's news, the ids the book shows counted as shown), and in shadow mode.
@@ -84,7 +84,7 @@ namespace SmokeTest
                   + (leaks.Count > 0 ? ": " + string.Join("; ", leaks) : ""));
             Check(news.Length < full.Length, "the news report is shorter than the whole one (" + news.Length + " against " + full.Length + " characters)");
 
-            // a first look keeps the whole report (Mert's answer 2), with the questions it may ask; a vote gets the realm's diplomacy and purse
+            // a first look keeps the whole report (decision 2), with the questions it may ask; a vote gets the realm's diplomacy and purse
             var first = new List<Trigger> { new Trigger { Hours = 80000, Kind = "first_look", Text = "First look since the campaign was loaded." } };
             Theatre whole = Theatre.Build(v, first, Theatre.ByLine(v), Theatre.ByLine(v));
             string wholeText = Views.NewsReport(v, first, x, whole).Replace("\r", "");
@@ -96,7 +96,7 @@ namespace SmokeTest
                   && realmText.Contains("THE REST OF THE WAR") && !realmText.Contains("YOUR LORDS WHO CAN BE THERE"),
                   "a first look gets the whole report with the questions; news of a vote alone gets the realm's diplomacy, its purse and sum, and the rest of the war");
 
-            // a letter's theatre is the places it names (Mert's answer 4)
+            // a letter's theatre is the places it names (decision 4)
             var letter = new List<Trigger> { new Trigger { Hours = 80000, Kind = "letter", Text = "A letter from the ruler of Dol Guldur [dg] (l3): \"Hold Orc Keep [castle_two] until I come.\"" } };
             Theatre lt = Theatre.Build(v, letter, Theatre.ByLine(v), Theatre.ByLine(v));
             Check(lt.IsTheatre && lt.Focuses.Any(f => f.Id == "castle_two"), "a letter's theatre is the places it names: " + string.Join(", ", lt.Focuses.Select(f => f.Id)));

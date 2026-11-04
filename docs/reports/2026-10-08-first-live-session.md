@@ -2,8 +2,8 @@
 
 **In short:**
 - Everything we built ran for 27 minutes with no errors from our code.
-- The orc agent played sensibly, stayed inside its folder, and taught itself to answer faster. At the speed you played, though, it was always one to three in-game days behind.
-- The three game crashes were ghost troops hidden in battles the save was still fighting. They were not caused by our mod, and they are now fixed in your fixes mod.
+- The orc agent played sensibly, stayed inside its folder, and taught itself to answer faster. At the speed I played, though, it was always one to three in-game days behind.
+- The three game crashes were ghost troops hidden in battles the save was still fighting. They were not caused by our mod, and they are now fixed in my fixes mod.
 
 Sources:
 - this launch's logs (`%LOCALAPPDATA%\BannerlordAgents\logs\sessions\20261008-152439`);
@@ -20,7 +20,7 @@ Sources:
 | Clock running | about 3 minutes, mostly at fast speed: 199 in-game hours (8 days). That's about one in-game hour per real second on average; an uninterrupted day at fast speed took 11 seconds. |
 | Paused or in menus | about 22 minutes (the crash dialogs, then the siege menu outside Western Moria) |
 | Game window in the background | 21 minutes |
-| Phases covered | 0 set-up, 1 watching the orcs, 2 recording your play, 5 Opus watching (shadow mode) |
+| Phases covered | 0 set-up, 1 watching the orcs, 2 recording my play, 5 Opus watching (shadow mode) |
 | Phases still to run | 3 performance on and off, 4 one order by hand, 6 Opus commanding one lord |
 
 **The mod:**
@@ -32,7 +32,7 @@ Sources:
 
 ## The crashes
 
-- **What you saw:** three "TAOM caught a crash" dialogs in the first two minutes of play, and the crash again after every resume.
+- **What I saw:** three "TAOM caught a crash" dialogs in the first two minutes of play, and the crash again after every resume.
 - **The cause:** 24 ghost troop types from the October 5 trouble: 12 Harad and 12 Mordor types, each an empty copy beside the real one.
   - They were hiding inside battles that were still being fought when the save was made. A battle keeps its own lists of troops, and the load-time repair never looked there.
   - As those battles ended, the losers became three deserter parties made of ghosts, and two lords picked some up, one of them as prisoners.
@@ -41,13 +41,13 @@ Sources:
   - none of our code was on any of the three failing paths;
   - our mod never creates troops;
   - ghost copies can only appear when a save is loaded, and the repair found every party clean at that load.
-- **Fixed:** the repair in your fixes mod now also cleans battles in progress, at every load and with `tfaomfix.troop_check fix`.
+- **Fixed:** the repair in my fixes mod now also cleans battles in progress, at every load and with `tfaomfix.troop_check fix`.
   - It's installed, and the old version is kept at `C:\BannerlordArchive\TFAOMFixes.dll.148-before-battlerepair-20261008-1551`.
   - The next load's log line will say how many ghosts it found inside battles.
 
 ## The orc agent (Opus 5.5, shadow mode)
 
-**How it woke:** you messaged it at 15:27, a few seconds before the game wrote its first poke. Its own launch watcher fired 18 seconds later, but by then it was already working.
+**How it woke:** I messaged it at 15:27, a few seconds before the game wrote its first poke. Its own launch watcher fired 18 seconds later, but by then it was already working.
 
 **What it did in 6½ minutes:**
 
@@ -57,15 +57,15 @@ Sources:
 | #10 | 93 s | 44 | 11 | 7 valid, 4 refused (its target, Ingunde, had left the map) |
 | #54 | 53 s | 28 | 11 | 8 valid, 3 refused (its target, Finduilas, had left the map) |
 | #83 | 21 s | 30 | 5 | 3 valid, 2 refused (Radbug and Ufza no longer led a party, probably captured) |
-| #124 | 33 s | 1 | 5 | never checked: the game stayed paused until you quit |
+| #124 | 33 s | 1 | 5 | never checked: the game stayed paused until I quit |
 
-- **Answer time:** a median of 53 seconds. At the speed you played, that's 21 to 75 in-game hours late, and every answer was to a poke a newer one had already replaced.
+- **Answer time:** a median of 53 seconds. At the speed I played, that's 21 to 75 in-game hours late, and every answer was to a poke a newer one had already replaced.
 - **Stale orders:** 9 of the 34 orders checked (26%) were refused because the world had moved on.
 - **Orders that waited for the clock:** all 39. The game was paused each time an answer arrived (the crash dialogs, then the siege menu), and the "received, waiting for the clock" receipt worked every time.
 - **The game read each answer file** within half a second of it being written.
 
 **How it played:**
-- **It saw you coming.** On Summer 10 it noticed your army of 5,528 heading for Western Moria, called off its own attack on Hollin Gate, and ordered the Moria lords inside the walls. You laid siege to Western Moria on Summer 17.
+- **It saw me coming.** On Summer 10 it noticed my army of 5,528 heading for Western Moria, called off its own attack on Hollin Gate, and ordered the Moria lords inside the walls. I laid siege to Western Moria on Summer 17.
 - **The game's own AI did the opposite.** It took Gashnar out of Western Moria, and Isvan captured him on Summer 17.
 - **It changed its own method mid-session.** It noticed it was too slow, cut its answers from 11 orders to 5, and wrote two lessons in its journal: chasing a moving enemy lord fails by the time the order is read, so defend or garrison holdings instead; and answer only the newest poke.
 - **It made no reckless orders,** and its answers name who, where and why in plain words.
@@ -108,12 +108,12 @@ One long chat won't last an evening at this rate. The war room should send each 
 - **No real dice roll.** Scores in this pack run from about 3 to 30, so a lord always takes his best option when he rethinks; the random element in the game's AI never comes into play.
 - **One recurring option:** many lords had "defend Bar-noss" among their top options.
 
-## Your play (the recorder)
+## My play (the recorder)
 
 **Eight decisions:**
 - three marches to Western Moria;
 - two marches to a point;
-- two orders to your vassal Himrion, given in your dialogue, to fill his ranks (read from Party AI Controls);
+- two orders to my vassal Himrion, given in my dialogue, to fill his ranks (read from Party AI Controls);
 - the siege of Western Moria.
 
 Each movement settled within a quarter of an in-game hour, and one quick correction was merged.

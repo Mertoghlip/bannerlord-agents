@@ -11,7 +11,7 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.13.16 (Mert, Nov 1). The report's recent history keeps the news when it is cut: the lieutenant could not say who broke Dáin's
+        /// 0.13.16 (Nov 1). The report's recent history keeps the news when it is cut: the lieutenant could not say who broke Dáin's
         /// siege of Nanduhirion, because a day of order lines had pushed the battle and the twelve captures out of the last 25 lines.
         /// </summary>
         private static void RecentHistoryTests()

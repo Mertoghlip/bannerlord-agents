@@ -8,8 +8,8 @@ using TaleWorlds.CampaignSystem.Siege;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The agent's storm rule for one of its sieges (0.7.4; Mert, Oct 20: "give the AI a tool to dictate siege decisions,
-    /// starting with the storm time ... gated on storm immediately, storm after x siege engines constructed etc."), set by
+    /// The agent's storm rule for one of its sieges (0.7.4, Oct 20: give the AI a tool to dictate siege decisions,
+    /// starting with the storm time, gated on storm immediately, storm after x siege engines constructed etc.), set by
     /// besiege's storm settings and its relief bars, and read on the game's thread by the storm hook.
     /// </summary>
     internal sealed class StormRule

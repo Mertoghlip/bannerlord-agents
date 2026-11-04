@@ -6,8 +6,8 @@ using BannerlordAgents.Routes;
 namespace BannerlordAgents.WarRoom
 {
     /// <summary>
-    /// Two more questions the agent may ask inside its calls (0.7.4; Mert, Oct 20: battle time estimates "both for siege battles
-    /// and for field battles", and fixing the gap that a besieger sees so little of a relief coming):
+    /// Two more questions the agent may ask inside its calls (0.7.4, Oct 20: battle time estimates both for siege battles
+    /// and for field battles, and fixing the gap that a besieger sees so little of a relief coming):
     /// - battle_odds: how a battle would go and how long it would last, by the game's own battle rules (Common.GameBattle), between
     ///   lords of the realm and enemies it has seen, in the open or storming a castle or town (with the camp's preparation time
     ///   first), from the realm's own view file only: its own lords' men, strength, morale and Tactics; the enemy's men and

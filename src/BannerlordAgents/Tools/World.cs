@@ -280,7 +280,7 @@ namespace BannerlordAgents.Tools
         public double HoursTo(PartyRow e, float x, float y) => Math.Sqrt((e.X - x) * (e.X - x) + (e.Y - y) * (e.Y - y)) / Math.Max(0.3, PerHour(e));
 
         /// <summary>
-        /// Who could join a fight at a point (0.12.3; Mert: the agent decides which lords count, by an hours window, so a fight
+        /// Who could join a fight at a point (0.12.3: the agent decides which lords count, by an hours window, so a fight
         /// of 20 hours counts those who could get there within them): every hostile lord and army in view that could reach the
         /// point within so many hours at its own pace, nearest in hours first. Bandits are not counted: they do not join lords'
         /// battles.
@@ -320,9 +320,9 @@ namespace BannerlordAgents.Tools
         public double CompanyStrength(string id, double joinHours) => Company(id, joinHours).Sum(StrengthOf);
 
         /// <summary>
-        /// Our side of a fight (0.12.4; Mert, run 20261025-1831-C2: "imak is going back and forth because he is scared of khamul's
-        /// force, even though our lords' combined force is enough to take him. Why is the strength calculator not taking into
-        /// account the strength of the other lords around him?"): five lords besieged Torech Emel, each under his own order, and
+        /// Our side of a fight (0.12.4, run 20261025-1831-C2: Imák was going back and forth because he was scared of Khamûl's
+        /// force, even though our lords' combined force was enough to take him; the strength calculator was not taking into
+        /// account the strength of the other lords around him): five lords besieged Torech Emel, each under his own order, and
         /// each weighed Khamûl's relief (4,155) against himself alone (559 to 1,199). Counted with a lord, of the realm's lords and
         /// its allies' in view, out in the field: every one camped in the siege he is in or making for (besieging), wherever; and,
         /// within joinHours of the fight at their own pace, those marching to join him or his army, and those bound for the same
@@ -337,8 +337,8 @@ namespace BannerlordAgents.Tools
                 if (r.Kind != "lord" || r.Attached || (me != null && r.Id == me.Id) || !(Own(r) || (Ally(r.Faction) && Visible(r)))) continue;
                 if (besieging != null && r.Besieging == besieging) { list.Add(r); continue; }
                 // a lord marching with him (following him, by our order or the game's escort, or joining his army) counts in the field within
-                // joinHours, and inside the very holding he is in, which he leaves with him (0.13.14; Mert, Oct 30: "The logic for our orders
-                // might still be discounting the strength of nearby lords/lords following other lords"). Winter 1, 12:00: Alenon (1,137),
+                // joinHours, and inside the very holding he is in, which he leaves with him (0.13.14, Oct 30: the logic for our orders
+                // might still be discounting the strength of nearby lords/lords following other lords). Winter 1, 12:00: Alenon (1,137),
                 // to guard Tinnulas, weighed 2,087 near it against himself alone (1,135) and sheltered in Gwígar; Oropherion (961) and Arien
                 // (860), ordered to follow him, were inside Gwígar with him and not counted, 2,958 together. Tinnulas was looted by 163 men.
                 if (me != null && MarchesWith(r, me))
@@ -349,8 +349,8 @@ namespace BannerlordAgents.Tools
                 }
                 if (r.InSettlement != null || (r.InBattle && HoursTo(r, x, y) > 1) || joinHours <= 0 || HoursTo(r, x, y) > joinHours) continue;
                 if (objectives == null || objectives.Count == 0) continue;
-                // since 0.13.11 also a lord attacking the same target (Mert, Oct 29, chasing Mauhur with 3,865 men: his realm's guards struck
-                // beside him weighing only themselves)
+                // since 0.13.11 also a lord attacking the same target (Oct 29, when I was chasing Mauhur with 3,865 men: my realm's guards struck
+                // beside me weighing only themselves)
                 bool bound = (r.Besieging != null && objectives.Contains(r.Besieging))
                              || (r.Doing == "EngageParty" && r.TargetParty != null && objectives.Contains(r.TargetParty))
                              || ((r.Doing == "BesiegeSettlement" || r.Doing == "DefendSettlement") && r.TargetSettlement != null && objectives.Contains(r.TargetSettlement))
@@ -366,9 +366,9 @@ namespace BannerlordAgents.Tools
                || (Runner.ForParty(r.Id) is ToolInstance ti && string.Equals(ti.Order.Tool, "follow", StringComparison.OrdinalIgnoreCase) && ti.Order.Target == me.Id);
 
         /// <summary>
-        /// The party the realm's ruler is attacking in person now, or null (0.13.11; Mert, Oct 29: "I am currently chasing mauhur, who has 700
-        /// men, with my army of more than 4000, but allied lords around me are still not engaging him ... They should be engaging him normally
-        /// since they know I am around"): the ruling clan's leader's own party, of this realm, set on attacking a party (EngageParty).
+        /// The party the realm's ruler is attacking in person now, or null (0.13.11, Oct 29: I was chasing Mauhur, who had 700
+        /// men, with my army of more than 4000, but allied lords around me were still not engaging him; they should be engaging him normally
+        /// since they know I am around): the ruling clan's leader's own party, of this realm, set on attacking a party (EngageParty).
         /// </summary>
         public string RulerTarget()
         {
@@ -418,7 +418,7 @@ namespace BannerlordAgents.Tools
         /// <summary>
         /// The enemy the realm's ruler is attacking in person (RulerTarget) and every hostile lord and army that could join that fight within
         /// RulerHuntHours, when the ruler's force (his army, if he leads one) is the stronger; else none (0.13.11). Their threat is the ruler's fight:
-        /// a guard nearby joins it rather than shelters or flees from it (Mert, Oct 29, chasing Mauhur: his realm's guards turned back).
+        /// a guard nearby joins it rather than shelters or flees from it (Oct 29, when I was chasing Mauhur: my realm's guards turned back).
         /// </summary>
         public HashSet<string> RulerHunts() => _hunts ?? (_hunts = FindRulerHunts());
 

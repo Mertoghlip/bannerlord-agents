@@ -6,7 +6,7 @@ An agent that rules a realm makes its diplomacy by the game's own rules and cost
 
 - **A realm the game runs settles each vote the moment it is proposed** (`Kingdom.AddDecision` starts the election at once; `KingdomElection.StartElection`). Each clan's support is counted by the game's own scores (`DetermineSupportOption`), and the ruler may override the clans at random when his own view differs a lot (`GetAiChoice`), paying the game's price (`HandleInfluenceCosts`, `ClanPoliticsModel.GetInfluenceRequiredToOverrideKingdomDecision`). Only the player's own realm keeps its votes open (48 hours) for the player.
 - **Peace, an alliance, a call to war and a trade agreement between two such realms** are made by the proposer's vote alone (`MakePeaceAction.ApplyByKingdomDecision`, `StartAlliance`, `StartCallToWarAgreement`, `MakeTradeAgreement`); only the player's realm is ever asked, through the offer windows (`OnShowDecision` returns false and shows `PeaceOfferMapNotification` and the others).
-- **The pack (TAOM 2.0.26)** blocks peace between realms of hostile tiers while the War of the Ring rages (a prefix on `MakePeaceAction.ApplyInternal`), some wars (`DeclareWarAction.ApplyInternal`) and the end of alliances bound for good. TFAOMFixes' ring wars copy Gondor's wars into the player's realm. These rules stay (Mert, Oct 28).
+- **The pack (TAOM 2.0.26)** blocks peace between realms of hostile tiers while the War of the Ring rages (a prefix on `MakePeaceAction.ApplyInternal`), some wars (`DeclareWarAction.ApplyInternal`) and the end of alliances bound for good. TFAOMFixes' ring wars copy Gondor's wars into the player's realm. These rules stay (Oct 28).
 
 ## The acts (`Diplomacy.cs`, an answer's `diplomacy`)
 

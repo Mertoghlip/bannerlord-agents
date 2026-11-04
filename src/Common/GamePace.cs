@@ -5,8 +5,8 @@ namespace BannerlordAgents.Common
 {
     /// <summary>
     /// How fast a party marches, exactly as the rules in force work it out (read in the 1.4.8 code and TAOM 2.0.26 for 0.7.3,
-    /// Mert, Oct 17: "We should be adjusting our prediction of the marching speed of a force based on the game's exact
-    /// equations"). One file, built into the game module (net472) and the way-finder (net8), so the report, the facts and the
+    /// Oct 17: the prediction of the marching speed of a force is based on the game's exact
+    /// equations). One file, built into the game module (net472) and the way-finder (net8), so the report, the facts and the
     /// "ask the way" tool all reckon a march the same way.
     ///
     /// The game's own sum (DefaultPartySpeedCalculatingModel; ExplainedNumber: result = base x (1 + sum of factors), every

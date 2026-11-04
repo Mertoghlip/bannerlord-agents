@@ -9,9 +9,9 @@ using Newtonsoft.Json.Linq;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The game's clocks, run ahead (0.7.3; Mert, Oct 17: "We should be adjusting our prediction of the marching speed of a
-    /// force based on the game's exact equations, so the ai has a good idea on where its own/enemies' armies will reach their
-    /// waypoint. We should do the same about siege and battle timers so it can plan ahead."). Game-free, worker thread, from
+    /// The game's clocks, run ahead (0.7.3, Oct 17: the prediction of the marching speed of a
+    /// force is based on the game's exact equations, so the AI has a good idea of where its own/enemies' armies will reach their
+    /// waypoint, and the same goes for siege and battle timers so it can plan ahead). Game-free, worker thread, from
     /// the hourly copy only:
     /// - marching: each party's speed sum (GamePace) along the way the game planned for it, the ground under each stretch from
     ///   the walking map, the night as it comes;

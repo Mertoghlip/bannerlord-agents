@@ -6,7 +6,7 @@ using static BannerlordAgents.Runs.RunData;
 namespace BannerlordAgents.Runs
 {
     /// <summary>
-    /// The backup (0.13.1; Mert, Oct 28: "I would keep the data local for now, at the D: drive"): a copy of everything the project
+    /// The backup (0.13.1, Oct 28: the data stays local for now, on the D: drive): a copy of everything the project
     /// records, on another drive. The bridge asks for one when a run ends, right after the run's bundle (Runs.exe bundle (run)
     /// --backup); Runs.exe backup [--to (folder)] makes one by hand. The place is "backup = (folder)" in settings.txt. Into it go:
     /// - records\: the records folder (%LOCALAPPDATA%\BannerlordAgents: every campaign's records, the hourly pictures, the logs,
@@ -165,7 +165,7 @@ namespace BannerlordAgents.Runs
         }
 
         /// <summary>Where a path really is, each link on the way followed (0.13.2): the records folder can be a link to another drive
-        /// (Mert's is one to D:\BannerlordAgents since Oct 28), and a place inside where it really is must count as inside it.</summary>
+        /// (mine is one to D:\BannerlordAgents since Oct 28), and a place inside where it really is must count as inside it.</summary>
         private static string Real(string path)
         {
             string full = Path.GetFullPath(path), at = Path.GetPathRoot(full) ?? "";

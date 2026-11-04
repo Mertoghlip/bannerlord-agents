@@ -11,12 +11,12 @@ using TaleWorlds.ScreenSystem;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The lieutenant's window (0.10.1; Mert, Oct 23: "have a button work as a shortcut (say 'enter') to go into the liutenant
-    /// pop-up automatically and chat with it through that pop-up rather than through the game's own log ... its easier to approve,
-    /// disapprove, or comment on its proposals as well (we could have buttons for each)"). On the campaign map, Enter opens it
+    /// The lieutenant's window (0.10.1, Oct 23: a button works as a shortcut (say Enter) to go into the lieutenant
+    /// pop-up automatically and chat with it through that pop-up rather than through the game's own log; it is easier to approve,
+    /// disapprove, or comment on its proposals as well (there could be buttons for each)). On the campaign map, Enter opens it
     /// instead of the game's chat box, which keeps T (ChatHook, since 0.10.2). It holds the conversation (everything since the
-    /// load, newest at the bottom; since 0.10.3 it scrolls, Mert: "I should be able to scroll up and down to see the full answers
-    /// of my liutenant and the chat's history"), the lieutenant's proposal waiting with Approve and Decline (its list scrolls too),
+    /// load, newest at the bottom; since 0.10.3 it scrolls: I should be able to scroll up and down to see the full answers
+    /// of my lieutenant and the chat's history), the lieutenant's proposal waiting with Approve and Decline (its list scrolls too),
     /// a line to type in (Enter sends), and Close (Esc). The
     /// game stands still while it is open, and the clock cannot be started from the map meanwhile; it runs again as it ran when the
     /// window closes. Its look is the game's own text pop-up's (LieutenantWindow.xml). Game's thread (the UI's), every frame.
@@ -40,8 +40,8 @@ namespace BannerlordAgents
         private const int MaxLines = 200;
 
         /// <summary>
-        /// What the player had typed and not sent, kept while the window is closed (0.13.19; Mert, Nov 1: "what I have written into the prompt
-        /// menu should not be wiped when I close the liutenant screen. Sometimes I look at the map to name settlements as I write my prompts").
+        /// What the player had typed and not sent, kept while the window is closed (0.13.19, Nov 1: what I have written into the prompt
+        /// menu should not be wiped when I close the lieutenant screen; sometimes I look at the map to name settlements as I write my prompts).
         /// Back in the box when it opens again; gone once sent.
         /// </summary>
         private static string _draft = "";
@@ -137,7 +137,7 @@ namespace BannerlordAgents
             _seek = 10;
             _scrollbar = FindScrollbar();
             _toEnd = SettleFrames;
-            // the game stands still while the window is open (Mert: popups pause the game until closed; lieutenant_pause)
+            // the game stands still while the window is open (popups pause the game until closed; lieutenant_pause)
             _clockBefore = null;
             if (Settings.LieutenantPause)
             {

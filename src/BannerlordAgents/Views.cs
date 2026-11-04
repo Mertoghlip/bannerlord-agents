@@ -91,23 +91,23 @@ namespace BannerlordAgents
         public double ArrivesAt = double.NaN;
         public Common.Pace March;
         /// <summary>
-        /// The army it is marching to join (0.12.3; Mert: "every lord marching to an army within view should be listed under that
-        /// army with how far away they are from it"): the army's party id, how far from it as the crow flies, and the hours to it
+        /// The army it is marching to join (0.12.3: every lord marching to an army within view should be listed under that
+        /// army with how far away they are from it): the army's party id, how far from it as the crow flies, and the hours to it
         /// at its own pace while the army holds where it is. Set only when that army is in view or the realm's own.
         /// </summary>
         public string Joining;
         public float JoiningDistance = float.NaN;
         public double JoiningHours = double.NaN;
         /// <summary>
-        /// The lords marching in its army, when it leads one of the realm's own (0.13.8; Mert, Oct 29: "my liutenant is not able to see
-        /// folks in armies"): the report named an army's size only, so neither the lieutenant nor an agent could order its lords by name.
+        /// The lords marching in its army, when it leads one of the realm's own (0.13.8, Oct 29: the lieutenant could not see
+        /// lords in armies): the report named an army's size only, so neither the lieutenant nor an agent could order its lords by name.
         /// </summary>
         public List<ViewParty> Members;
     }
 
     /// <summary>
     /// Where the realm saw an enemy army over the last two days, oldest first (Brain.Trails): so the agent can tell an
-    /// army's road from its errands (Mert, Oct 16: an army turning aside to recruit, forage or strike has not changed
+    /// army's road from its errands (Oct 16: an army turning aside to recruit, forage or strike has not changed
     /// its aim).
     /// </summary>
     internal sealed class ViewTrail
@@ -897,7 +897,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// The food on its way to an own castle or town (0.13.21; Mert, Nov 1: Dol Guldur's agent left Gwígar as "no food" while its own
+        /// The food on its way to an own castle or town (0.13.21, Nov 1: Dol Guldur's agent left Gwígar as "no food" while its own
         /// Dûrnia was seven hours from handing over 219, since the report said only "bringing food to Gwígar"): each of the realm's supply
         /// orders to it, with what the lord can spare beyond his keep_days (when he rides there now), or what it needs (when he buys on the
         /// way first), and when he gets there. Null when none.

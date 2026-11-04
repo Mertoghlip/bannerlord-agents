@@ -6,10 +6,10 @@ using BannerlordAgents.Routes;
 namespace BannerlordAgents.WarRoom
 {
     /// <summary>
-    /// The engagement question (0.12.3; Mert, Oct 25, after Alenon's army was lost to a host split into a dozen parties: "before an
+    /// The engagement question (0.12.3, Oct 25, after Alenon's army was lost to a host split into a dozen parties: before an
     /// engagement, the agent should be able to forecast how long it will take its selected lord/lords to begin and end the
     /// engagement, and which enemy lords in view are close enough in terms of marching distance to that engagement to participate
-    /// in it as it progresses, so it can decide accordingly and set rules accordingly"):
+    /// in it as it progresses, so it can decide accordingly and set rules accordingly):
     /// - engagement: the realm's chosen lords or armies against one enemy lord or army in view: when each of them gets to where it
     ///   is now (the game's way, at each one's pace), the fight from the first one's arrival with the others joining as they come,
     ///   by the game's own battle rules; every other enemy lord and army in view with the hour it could get there, joining the

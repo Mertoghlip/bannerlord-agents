@@ -1,6 +1,6 @@
 # The war room
 
-The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program beside the game where the agent decides. Since Oct 8 it replaces the agent chat. It makes one fresh, short Claude Code call per poke, on your subscription, with no API key (plan, decision 8). Since Oct 9 (0.5) each call also carries the realm's written memory of the war: the story so far, the agent's notes and its chronicle ([MEMORY.md](MEMORY.md)).
+The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program beside the game where the agent decides. Since Oct 8 it replaces the agent chat. It makes one fresh, short Claude Code call per poke, on my subscription, with no API key (plan, decision 8). Since Oct 9 (0.5) each call also carries the realm's written memory of the war: the story so far, the agent's notes and its chronicle ([MEMORY.md](MEMORY.md)).
 
 ## Why it is faster than the agent chat
 
@@ -16,11 +16,11 @@ The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program b
 
 | Poke | About | Agent chat, Oct 8 | War room | Thinking | Written |
 |---|---|---|---|---|---|
-| #6 | your army first seen, 48 from Western Moria | not answered | 28 s | 1,240 | 2,025 |
-| #10 | your army heading for Western Moria | 93 s | 15 s | 851 | 1,507 |
+| #6 | my army first seen, 48 from Western Moria | not answered | 28 s | 1,240 | 2,025 |
+| #10 | my army heading for Western Moria | 93 s | 15 s | 851 | 1,507 |
 | #54 | Rohan's host near Starkmoore, raids | 53 s | 11 s | 565 | 1,026 |
 | #83 | Galenor raiding Celebloth | 21 s | 15 s | 646 | 962 |
-| #124 | your army at the gates of Western Moria | 33 s | 24 s | 1,871 | 2,456 |
+| #124 | my army at the gates of Western Moria | 33 s | 24 s | 1,871 | 2,456 |
 
 - **Median:** 15 seconds, against 53.
 - **Old reports:** these pokes are in the old format, without the orders in force and the ready-made facts.

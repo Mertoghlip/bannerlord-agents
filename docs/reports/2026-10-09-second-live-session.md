@@ -2,7 +2,7 @@
 
 **When:** Thursday Oct 9, 11:42 to 11:51 (the game's clock ran from about 11:47 to 11:49). Version 0.5.0, the war room in live mode for every orc lord, Opus 5.5 at high effort.
 
-**Save:** Mert loaded the save of Summer 9, 1087, 09:00, the same starting point as the first session (Oct 8). Mert then marched an army on Western Moria.
+**Save:** I loaded the save of Summer 9, 1087, 09:00, the same starting point as the first session (Oct 8). I then marched an army on Western Moria.
 
 ## What happened
 
@@ -19,13 +19,13 @@
 | #2 | 13:00 | enemy lord near Grafton | 16.1 s | 4 |
 | #3 | 15:00 | Arnor-Gondor lords heading for Eastern Moria | 15.5 s | 2 |
 | #6 | 18:00 | more lords gathering at Eastern Moria | 9.9 s | 1 |
-| #7 | 19:00 | Mert's army in view, 5,528 men, 48 from Western Moria | 29.2 s (4 look-ups) | 1 |
+| #7 | 19:00 | My army in view, 5,528 men, 48 from Western Moria | 29.2 s (4 look-ups) | 1 |
 | #9 | 22:00 | Elendara taken prisoner by Radbug; Ulga's army | 8.4 s | 1 |
 
 - **Answer time:** a median of about 16 s, against 53 s for the agent chat on Oct 8. Pokes #4, #5 and #8 came during calls; the next poke's WHAT CHANGED carried them.
 - **Orders:** 10 carried out, 2 refused, 4 waiting for the clock when the game was paused and then closed.
 
-**The answer to Mert's march:**
+**The answer to my march:**
 - The agent judged the army far too strong (strength about 14,700 against its own armies of about 600 men each).
 - It ordered Ulga's new army out of Western Moria to Methedras, beside Vrakdush's army, to relieve the town later instead of being trapped and captured inside it.
 - That reasoning came from its memory: from the chronicle's record of the spring's mass captures, it noted "Do not shut lords inside a town that an overwhelming army is coming for."

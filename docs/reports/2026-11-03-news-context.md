@@ -118,4 +118,4 @@ Budget 1,000 ms. Theatre mode is lighter since it writes no look-up files per wa
 - **Urgency:** its words were searched in the whole report. Of the run's 768 written answers, 654 counted as urgent (the larger thinking cap, 5,000 against 3,000); by the news alone, 61 would have (Dol Guldur 375 to 41, the orcs 279 to 20).
 - **Calling a council:** its words were searched there too, so old chronicle lines still in the two-day history could call one. Of the 142 councils, 47 were called by a word in the report: 31 with a dated chronicle line as the reason ("Summer 20, 1087, 23:00 · Narsha's army has formed"), 16 with the current news. The other 95 sat on the hour or after a first look.
 
-Mert asked for the fix on Nov 3. It holds in every news mode, so runs from now on think less on most pokes and may sit fewer councils than run A: a difference from its baseline, beside the news report.
+I asked for the fix on Nov 3. It holds in every news mode, so runs from now on think less on most pokes and may sit fewer councils than run A: a difference from its baseline, beside the news report.

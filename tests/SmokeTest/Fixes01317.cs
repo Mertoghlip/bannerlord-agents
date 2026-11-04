@@ -9,10 +9,10 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.13.17 (Mert, Nov 1: "your proposed fix is perfect. That being said, make sure the logic assigns enough lords to tip the balance for
-        /// relief, and that lords that have a defend/patrol/recruit order (so lords that are basically not doing anything important) still go
+        /// 0.13.17 (Nov 1: the proposed fix, and the logic must assign enough lords to tip the balance for
+        /// relief, and lords that have a defend/patrol/recruit order (so lords that are basically not doing anything important) still go
         /// to relieve another lord regardless of how the battle is going, since a crushing victory reduces losses compared to a close
-        /// victory"): a lord free to ride (defend here) goes to every fight his side can win; lords on other orders (goto here) go only while
+        /// victory): a lord free to ride (defend here) goes to every fight his side can win; lords on other orders (goto here) go only while
         /// the lords in it would not win alone, nearest first, until our side is 1.5 times the enemy; the rest keep to their orders.
         /// </summary>
         private static void TipTheBalanceTests(List<KeyValuePair<int, Move>> moves)

@@ -8,10 +8,10 @@ using Newtonsoft.Json.Linq;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The allied channel (0.13, docs/PLAN-0.13.md B5; Mert, Oct 28: "agents communicating with their allies to coordinate attacks, and the
-    /// player being able to communicate with their allies (who are agents) through their liutenant"):
+    /// The allied channel (0.13, docs/PLAN-0.13.md B5; Oct 28: agents communicating with their allies to coordinate attacks, and the
+    /// player being able to communicate with their allies (who are agents) through their lieutenant):
     /// - letters: an agent writes to an allied realm's agent (an alliance), a few lines delivered in that agent's next poke, saying who wrote
-    ///   and when; Mert's realm is written to through his lieutenant, into its window. A letter binds no one and carries no orders; it tells
+    ///   and when; the player's realm is written to through the lieutenant, into its window. A letter binds no one and carries no orders; it tells
     ///   only what its writer chose to tell (each realm's fog holds). A letter to a realm no agent reads, or to one not allied, is refused;
     /// - joint plans: a letter may carry a plan in a fixed form (what, where, when, each side's part), so both sides see the same thing;
     ///   its state (proposed, agreed, declined, under way, done, dropped) changes by later letters, and agreed plans show in both realms'

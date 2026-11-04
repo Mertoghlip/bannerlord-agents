@@ -47,8 +47,8 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// The hunger warning (0.13.20; Mert, Nov 1, on "a low-food warning ... X has only N days of food for a siege, and enemies are near": "I
-        /// also like all the optional extras you proposed"): an own castle or town not besieged with food for under LowFoodDays of siege, and an
+        /// The hunger warning (0.13.20, Nov 1: a low-food warning, "X has only N days of food for a siege, and enemies are near", with
+        /// all the proposed optional extras): an own castle or town not besieged with food for under LowFoodDays of siege, and an
         /// enemy lord or army in view within LowFoodNear of it. Told again after LowFoodEvery hours, or sooner once its food falls by a day more.
         /// </summary>
         public const double LowFoodDays = 3, LowFoodNear = 40, LowFoodEvery = 24;
@@ -840,7 +840,7 @@ namespace BannerlordAgents
             Log.Line("poke: " + line);
             RecentPokes.Add(line);
             if (RecentPokes.Count > 50) RecentPokes.RemoveAt(0);
-            // since 0.13.7 an agent's poke is not put in the game's message log (Mert, Oct 29: on screen only his lieutenant's and the
+            // since 0.13.7 an agent's poke is not put in the game's message log (Oct 29: on screen only the lieutenant's and the
             // game's own; the dashboard and the logs keep every poke)
         }
 
@@ -889,7 +889,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// Each enemy army's trail (version 0.6.4; Mert, Oct 16: an army that turns aside to recruit, gather supplies or strike
+        /// Each enemy army's trail (version 0.6.4, Oct 16: an army that turns aside to recruit, gather supplies or strike
         /// a weak enemy has not changed its main aim, and the agent should be able to see that). Each hour an enemy army is
         /// in view, a point is added when its course changed (what it is doing, or where it is going), when it has marched
         /// TrailStep map units since the last point, when TrailEvery hours have passed, or when it came back into sight.

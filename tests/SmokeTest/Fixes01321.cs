@@ -9,7 +9,7 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.13.21 (Mert, Nov 1: Dol Guldur's agent left Gwígar for "no food" while its own supply was seven hours from handing over 219):
+        /// 0.13.21 (Nov 1: Dol Guldur's agent left Gwígar for "no food" while its own supply was seven hours from handing over 219):
         /// YOUR HOLDINGS names each own holding's clan, the food coming with a supply order (how much, when), and the rule that lords inside
         /// eat their own food; no hunger warning for stores too full to take a day more.
         /// </summary>

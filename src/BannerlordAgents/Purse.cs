@@ -13,9 +13,9 @@ using TaleWorlds.Core;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// Money for the agents (0.9.4; Mert, Oct 23: "The caps should be the agent's call. It should be able to estimate the
-    /// value of loot and prisoner ransom money from a battle and decide accordingly", and the sell order must sell "loot and
-    /// just loot, instead of important food and other things"). The game's own rules (1.4.8, read in its code):
+    /// Money for the agents (0.9.4, Oct 23: the caps should be the agent's call; it should be able to estimate the
+    /// value of loot and prisoner ransom money from a battle and decide accordingly, and the sell order must sell loot and
+    /// just loot, instead of important food and other things). The game's own rules (1.4.8, read in its code):
     /// - every lord pays his men's wages each day from his own purse; his clan's leader tops him back up to 5,000 while the
     ///   leader has 4,000 or more, and a lord above 10,000 hands a tenth of the excess to the clan (DefaultClanFinanceModel);
     ///   unpaid wages cost morale, and men desert;

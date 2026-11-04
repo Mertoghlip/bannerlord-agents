@@ -285,7 +285,7 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// Who fought on each side, when a side was more than its leader (0.13.16; Mert, Nov 1: the lieutenant could not say whether Dol Guldur
+        /// Who fought on each side, when a side was more than its leader (0.13.16, Nov 1: the lieutenant could not say whether Dol Guldur
         /// had relieved Nanduhirion, and the line read "Dáin II Ironfoot against Nanduhirion; Nanduhirion won": the town's garrison led the side
         /// that Dramthak's army and about twenty orc lords fought on). Each side's lords by realm, with up to three names and their men as they
         /// joined, and its other parties. Read at the battle's end, when the beaten lords are already prisoners but their parties are still

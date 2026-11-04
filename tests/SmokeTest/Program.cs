@@ -483,7 +483,7 @@ namespace SmokeTest
             Check(thens.Any(t => t.Key == 907), "once no lord is marching to join, the army is formed and its next order starts");
             Runner.Start(909, new ToolOrder { Tool = "join", Lord = "lord_far2", LordName = "Radbug", Party = "p_far", Target = "p_vanished" });
             Check(released.Contains(909), "a join order whose army's leader is gone fails, and frees the lord");
-            // 0.13.8 (Mert, Oct 29: "my liutenant is not able to see folks in armies"): each army's lords are named under it in the report
+            // 0.13.8 (Oct 29: the lieutenant could not see lords in armies): each army's lords are named under it in the report
             Snapshot armyWorld = ToolWorld(4005, leader, member, far);
             string armyReport = Views.Report(Views.Build(armyWorld, "orcs", armyWorld.WatchedSees, armyWorld.HostileToWatched, new Brain.Memory()), new List<Trigger>());
             int armyLine = armyReport.IndexOf("- Mauhur [lord_ldr]: army of 450 men in 2 parties", StringComparison.Ordinal);
@@ -582,7 +582,7 @@ namespace SmokeTest
             Runner.Ended(912, "test over");
             Runner.Ended(913, "test over");
 
-            // ranks below the floor (0.13.4, Mert: castles recruit in this pack): first the volunteers of the castle it guards,
+            // ranks below the floor (0.13.4: castles recruit in this pack): first the volunteers of the castle it guards,
             // without calling back; still short two hours after arriving, it rides on to the nearest town or village
             var weak = Lord("p_d3", 120, 50, 300, 70);
             Brain.OnHour(ToolWorld(5002, weak));
@@ -614,7 +614,7 @@ namespace SmokeTest
                   && Diag.CountOf("tool:call-backs") == callBacks + 1, "a lord the castle's own volunteers bring up to the floor goes back to its patrol without leaving its area or calling back");
             Runner.Ended(944, "test over");
 
-            // the recruit order tours (0.9.2, Mert: "follows the logic as my own parties"): its move is a tour from its place,
+            // the recruit order tours (0.9.2: follows the logic of my own parties): its move is a tour from its place,
             // a castle may start it, and it no longer stops itself after three days there (the game's side ends it, and says why)
             var tourer = Lord("p_r1", 112, 60, 300, 80);
             Brain.OnHour(ToolWorld(5003, tourer));
@@ -886,7 +886,7 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.7.1, watch and shadow (Mert, Oct 16: a weaker lord sent to keep tabs on the road from Hollin Gate, rather than
+        /// Version 0.7.1, watch and shadow (Oct 16: a weaker lord sent to keep tabs on the road from Hollin Gate, rather than
         /// screening round Western Moria). Watch: to its post (a spot), takes up the watch, reports an enemy army within its
         /// radius and again when it is out of sight. Shadow: keeps its distance from its target (closing in, stepping back),
         /// reports at once and when the target heads for a new place, goes to where it was last seen when out of sight, and gives up.
@@ -955,7 +955,7 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.7.2 (Mert, Oct 17, after the siege of Hollin Gate, where about 50 of Arnor's lords came to its relief one
+        /// Version 0.7.2 (Oct 17, after the siege of Hollin Gate, where about 50 of Arnor's lords came to its relief one
         /// by one and the alarm, waiting for an army, never rang): besiege's relief alarm counts every enemy lord and army near
         /// the holding or heading for it, together, and calls again each time they grow by half the besieger's strength. And
         /// the report gives an enemy castle's militia beside its garrison, only where the realm's eyes reach.
@@ -1019,15 +1019,15 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.7.4, the agent's siege control (Mert, Oct 20: "a tool to dictate siege decisions, starting with the storm time",
-        /// and "the agent should set the bar here - what relief force strength level forces a withdrawal, what relief force level
-        /// forces an immediate storm ... as it begins the siege ... the logic should run as part of its siege tool"): the storm rule
+        /// Version 0.7.4, the agent's siege control (Oct 20: a tool to dictate siege decisions, starting with the storm time,
+        /// and the agent should set the bar: what relief force strength level forces a withdrawal, what relief force level
+        /// forces an immediate storm, as it begins the siege, the logic running as part of its siege tool): the storm rule
         /// sent while besieging, the relief bars acted on the hour they are met (storm as soon as the camp may; withdraw into the
         /// nearest castle, stopping without the next order), the siege clock by the rule, a storm begun now, the enemy realms as
         /// their encyclopedia pages show them, and a field battle's odds in the facts.
         /// </summary>
         /// <summary>
-        /// 0.9.4, money (Mert, Oct 23: the caps "should be the agent's call", and a battle's loot and ransom weighed): the report's
+        /// 0.9.4, money (Oct 23: the caps should be the agent's call, and a battle's loot and ransom weighed): the report's
         /// purse, the battles' takings reckoned and read back at a load, the sell order and its call-back, and the library's text.
         /// </summary>
         private static void MoneyTests(string dir, List<KeyValuePair<int, Move>> moves, List<int> released)
@@ -1100,8 +1100,8 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.12.1 (run 20261025-1524-C2, Mert: "Why are oropherion and gorli simply outside caradhras but not besieging
-        /// it?"): a lord sent close to a holding stands by its gate, and the gate of a castle or town is about 3 from its centre
+        /// Version 0.12.1 (run 20261025-1524-C2: why were Oropherion and Górli simply outside Caradhras but not besieging
+        /// it?): a lord sent close to a holding stands by its gate, and the gate of a castle or town is about 3 from its centre
         /// (Caradhras 3.3). The tools measured "within" from the centre, so Górli (4.3 from the gate, 6.8 from the centre) and
         /// Oropherion (4.7 and 7.8) waited 15 days for "within 6" and never besieged, and a watch at a gate over 3 from the centre
         /// never began. Now "within" a holding is the nearer of its centre and gate, and a lord standing still on his way, still
@@ -1181,8 +1181,8 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.12.2 (run 20261025-1609-C2, Mert: "I think its something about our defend order's calculation of an enemy
-        /// host's strength - the enemy was dispersed in a couple of different parties"): Alenon (strength 8,505) guarding Torech
+        /// Version 0.12.2 (run 20261025-1609-C2: I think it is something about our defend order's calculation of an enemy
+        /// host's strength, the enemy being dispersed in a couple of different parties): Alenon (strength 8,505) guarding Torech
         /// Emel struck Narsha (1,751), one of a dozen lords marching to join Thrurg, chased her 33 hours out of his area into
         /// them, and lost his army of 13 lords. Thalion and Girda (run 20261025-1524-C2) were caught by lords that came
         /// together, each too weak alone to make them shelter. Now: danger is counted as a group with the hosts lords march
@@ -1335,7 +1335,7 @@ namespace SmokeTest
             Check(moves.Any(m => m.Key == 1307 && m.Value.Verb == "patrol"), "40 off: it comes out and patrols again");
             Runner.Ended(1307, "test over");
 
-            // 0.12.4 (Mert: "Why is the strength calculator not taking into account the strength of the other lords around him?"):
+            // 0.12.4 (the strength calculator was not taking into account the strength of the other lords around a lord):
             // four lords camped in one siege, each under his own order, weigh a relief against all of them, not each alone
             Snapshot Camp(double h, params PartyRow[] ps)
             {
@@ -1592,8 +1592,8 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.7.3, the game's clocks (Mert, Oct 17: march speed "based on the game's exact equations", and "the same about
-        /// siege and battle timers so it can plan ahead"): the speed sum with the ground and night added in, a party covering its
+        /// Version 0.7.3, the game's clocks (Oct 17: march speed based on the game's exact equations, and the same for
+        /// siege and battle timers so it can plan ahead): the speed sum with the ground and night added in, a party covering its
         /// speed / 1.2 an hour; an arrival along the planned way across a night; the siege's preparations, engines and storm chance
         /// against the worked example of the 1.4.8 code (2,000 men at a level-1 castle: preparations 25.8 hours, a ram at 32.2, a
         /// storm more likely than not by about 50 hours); a storm's strikes per round by the game's formula; and the report.
@@ -1685,8 +1685,8 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// Version 0.7.1, road distances (Mert, Oct 16: "distances should be given both as the crow flies and the actual travel
-        /// distance"): through the party's entrance and the game's table between holdings, the nearest holding chosen by road,
+        /// Version 0.7.1, road distances (Oct 16: distances should be given both as the crow flies and the actual travel
+        /// distance): through the party's entrance and the game's table between holdings, the nearest holding chosen by road,
         /// both in the report, the poke rule by road, and times in the facts by road.
         /// </summary>
         /// <summary>
@@ -1950,7 +1950,7 @@ namespace SmokeTest
             ch.WriteChat(5, new { Number = 5, Said = "hold Goblin Town with dwarves", Pending = (object)null }, "hold Goblin Town with dwarves");
             Check(ReadIf(Path.Combine(channel, "chat.json")).Contains("\"said\":\"hold Goblin Town with dwarves\"") && ch.LastChatNumber() == 5,
                   "the player's words go into the lieutenant's channel (chat.json, chats.log), numbered on from the last");
-            // 0.13.8 (Mert, Oct 29: approve in the chat only, some orders yes and others with comments): the orders the words asked for or
+            // 0.13.8 (Oct 29: approve in the chat only, some orders yes and others with comments): the orders the words asked for or
             // agreed to are given, and a changed proposal can wait beside them in the same answer; no buttons
             Check(LieutenantRules.Gate(true, 2, 0, false) == "carry" && LieutenantRules.Gate(true, 2, 3, false) == "carry+propose" && LieutenantRules.Gate(false, 0, 3, false) == "propose"
                   && LieutenantRules.Gate(true, 0, 3, false) == "propose" && LieutenantRules.Gate(false, 0, 0, true) == "drop" && LieutenantRules.Gate(false, 0, 0, false) == "none",

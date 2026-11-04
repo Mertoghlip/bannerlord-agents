@@ -10,18 +10,18 @@ using TaleWorlds.MountAndBlade;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The player's lieutenant (0.10; Mert, Oct 22: the player types orders to "their liutenant, which then orders lords to do
-    /// stuff on the map ... it would propose sending x, x, x lords there ... I would verify and approve the order"; Oct 23: "keep
-    /// everything verbal", "Keep its answers short and concise whenever possible, make popups pause the game until the popup is
-    /// closed", it commands every lord of the realm "including my own clan's parties", and (0.10.1) a window of its own, opened
+    /// The player's lieutenant (0.10, Oct 22: the player types orders to their lieutenant, which then orders lords to do
+    /// things on the map: it proposes sending x, x, x lords there, and I verify and approve the order; Oct 23: keep
+    /// everything verbal, its answers short and concise whenever possible, popups pause the game until the popup is
+    /// closed, it commands every lord of the realm including my own clan's parties, and (0.10.1) a window of its own, opened
     /// with Enter, with buttons to approve or decline a proposal). An agent folder of kind lieutenant, "realm = player":
     /// - on the campaign map, Enter opens its window (LieutenantWindow) instead of the game's chat box, which keeps T
     ///   (ChatHook); what the player sends goes into the lieutenant's channel as chat.json, with the waiting proposal and what the
     ///   player did with the last one (notes);
     /// - its war room (LieutenantRoom) answers in orders\chat-N.json: a few words, maybe a proposal, maybe the orders the player
     ///   has just agreed to in words, maybe a longer text (shown in the window);
-    /// - it never acts unasked: since 0.13.8 (Mert, Oct 29: "I should only have to approve them in the chat since many times I
-    ///   approve some but have comments on others") it answers only the player's words, and carries out the orders those words
+    /// - it never acts unasked: since 0.13.8 (Oct 29: I should only have to approve them in the chat since many times I
+    ///   approve some but have comments on others) it answers only the player's words, and carries out the orders those words
     ///   asked for or agreed to ("carry_out"), all or some of the waiting proposal, or new ones he told it to give; what it would do
     ///   of its own idea, and what he wants changed, becomes the proposal and waits for his next words (LieutenantRules.Gate). The
     ///   Approve and Decline buttons are gone;
@@ -31,9 +31,9 @@ namespace BannerlordAgents
     /// It is never poked. Answers are shown at once, even with the game paused (the frame's queue, Background.ToUi); orders
     /// are carried out on the game's tick (Background.ToMain). Game's thread, except ReadAnswer and Heard (worker).
     ///
-    /// The conversation of a save (0.11.1; Mert, Oct 23: "the chat I have with my liutenant should be persistent within a save,
-    /// even if each prompt is technically a different session ... I want to be able to reference previous things that were
-    /// said in the chat throughout a save. The liutenant should also have access to the chat"): every line, the player's and
+    /// The conversation of a save (0.11.1, Oct 23: the chat I have with my lieutenant should be persistent within a save,
+    /// even if each prompt is technically a different session, and I want to be able to reference previous things that were
+    /// said in the chat throughout a save; the lieutenant should also have access to the chat): every line, the player's and
     /// the lieutenant's, the buttons, the proposals and what became of the orders, goes into the campaign's own
     /// lieutenant\chat.jsonl, labelled with the session and its in-game hour and wall clock. A load keeps the lines of its save's
     /// history (History.HoldsLine, the same rule as the chronicle's), shows them in the window and puts back a proposal still
@@ -568,7 +568,7 @@ namespace BannerlordAgents
     internal static class LieutenantRules
     {
         /// <summary>
-        /// What the bridge does with an answer (since 0.13.8; Mert, Oct 29: approve in the chat only, some orders yes and others with
+        /// What the bridge does with an answer (since 0.13.8, Oct 29: approve in the chat only, some orders yes and others with
         /// comments): every answer is to the player's words, so its "carry_out" orders, the ones those words asked for or agreed to,
         /// are given ("carry"); its proposal waits for the next words, beside them or alone ("carry+propose", "propose"); "drop"
         /// forgets the proposal waiting; anything else leaves it as it is ("none"). (Until 0.13.7 orders were given only when the
@@ -585,8 +585,8 @@ namespace BannerlordAgents
     }
 
     /// <summary>
-    /// Enter on the campaign map, for the lieutenant (0.10.2; Mert, Oct 23: "enter should open the liutenant window, t should
-    /// open the chat window"). The game's chat box looks at its keys every frame (GauntletChatLogView.HandleInput, through the
+    /// Enter on the campaign map, for the lieutenant (0.10.2, Oct 23: Enter should open the lieutenant window, T should
+    /// open the chat window). The game's chat box looks at its keys every frame (GauntletChatLogView.HandleInput, through the
     /// map's own keys); with a lieutenant on the campaign map and the chat box shut, Enter there opens the lieutenant's window
     /// instead, and T, and Enter while the chat box is open, stay the chat box's. While the window is open the chat box does not
     /// look at its keys, so it stays shut beneath. Missions and multiplayer are left as they are. Harmony, from GameHooks.

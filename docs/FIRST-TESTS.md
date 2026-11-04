@@ -36,7 +36,7 @@ Each install is one restart of the game.
 
 ## The fairer test save (agents.rebalance, since 0.7.5)
 
-Mert, Oct 20: "I want a fairer, longer term test save where the misty mountain orcs are of more even strength to my kingdom ... I own all the land from Rivendell to Mount Gram to Mount Gundabad, and the Misty Mountain Orcs take back the rest of the land that I own in the mountains. The new fiefs they get should be distributed reasonably amongst them. Further, all of the prisoner Misty Mountain commanders should be returned to their realm." The line he chose: only the old orc fortresses (Sirannon, Nanduhirion, Caradhras, Hollin Gate, Eastern Moria); Fennas Drúnin stays his; their garrisons become orc troops. After the first run (Oct 20, late): "The command should give what it is already giving them + western moria", and "It also ended up giving a lot of my lords to them as prisoner": since 0.7.6 Western Moria is on the list, and his realm's heroes staying in a place without a party are moved out first (the game takes them prisoner when the place changes owner: `PrisonerCaptureCampaignBehavior.HandleSettlementHeroes`; 11 were, "taken prisoner by Nanduhirion", Caradhras and Sirannon).
+Oct 20: I want a fairer, longer term test save where the Misty Mountain Orcs are of more even strength to my kingdom: I own all the land from Rivendell to Mount Gram to Mount Gundabad, and the Misty Mountain Orcs take back the rest of the land that I own in the mountains. The new fiefs they get should be distributed reasonably among them. Further, all of the prisoner Misty Mountain commanders should be returned to their realm. The line I chose: only the old orc fortresses (Sirannon, Nanduhirion, Caradhras, Hollin Gate, Eastern Moria); Fennas Drúnin stays mine; their garrisons become orc troops. After the first run (Oct 20, late): the command should give what it was already giving them plus Western Moria, and it had also ended up giving a lot of my lords to them as prisoners: since 0.7.6 Western Moria is on the list, and my realm's heroes staying in a place without a party are moved out first (the game takes them prisoner when the place changes owner: `PrisonerCaptureCampaignBehavior.HandleSettlementHeroes`; 11 were, "taken prisoner by Nanduhirion", Caradhras and Sirannon).
 
 1. Load the save, open the console (Alt + ~) and type `agents.rebalance`. It lists, without changing anything: the orc lords held prisoner (45 on Oct 20) by who holds them, and each fortress with the orc clan it goes to, its garrison and the parties to be moved out. Since 0.7.7 a battle the orcs' side is fighting at one of them or their villages (a storm, a raid) is no bar: the run breaks it off as peace would (no winner, no loot, no prisoners) and says so. It refuses only while you are in a battle there, while a garrison is sallying out from one, or with your party inside one, and a refusal says so on its first line, "REBALANCE NOT RUN". (Before 0.7.7 it refused for any battle there, under a first line that still read "CARRIED OUT": on Oct 22 the orcs' storm of Hollin Gate stopped two runs that way.)
 2. `agents.rebalance apply` does it: every orc lord held prisoner is released (the game brings each back with a party in time); each fortress, with its villages, passes to an orc clan as a treaty would pass it (since 0.7.6 your realm's heroes staying there without a party, families and lords between parties, are first moved to your nearest castle or town not being handed over; a governor stops governing) (towns first; the clan with the fewest castles and towns, then the higher tier, then the greater renown; mercenary bands hold no land); a siege of it is ended; the parties inside at war with the orcs leave; its garrison becomes orc troops man for man, tier for tier and by kind (foot, archers, horse) where the orcs have them; orc soldiers in its prison join the garrison.
@@ -50,7 +50,7 @@ Mert, Oct 20: "I want a fairer, longer term test save where the misty mountain o
 - the bridge is in **live** mode for **every** orc lord, answering through `C:\Users\karab\Projects\orc-war-council\warroom`;
 - the war room is running in the background on this laptop. To run it yourself instead: `powershell -ExecutionPolicy Bypass -File scripts\warroom.ps1`, which runs in its window until Ctrl+C.
 
-**You:**
+**To do:**
 1. Close the old agent chat: the VS Code window open on `orc-war-council`. It has nothing left to answer, and on Oct 9 it was still waking every 30 minutes and writing into the old journal.
 2. Start the game with Bannerlord Agents ticked, and load your campaign.
 3. In the console (Alt + ~):
@@ -99,9 +99,9 @@ Your three newest saves were copied to `C:\BannerlordArchive\save-backups` befor
 | 7 · Opus commands the realm | `agents.agent live` (every lord; set already). |
 | Your vassals | `agents.vassal <your lord> defend <your castle>` orders one of your own lords directly, with the agents' orders, and records it as your decision ([notes](notes/vassal-orders.md)). |
 
-Nothing needs sending: I read the files myself. Just tell me which phases you ran, and anything that looked wrong. Everything is in `%LOCALAPPDATA%\BannerlordAgents`, laid out in [protocol/README.md](../protocol/README.md).
+Nothing needs sending: everything is in `%LOCALAPPDATA%\BannerlordAgents`, laid out in [protocol/README.md](../protocol/README.md). Note which phases ran, and anything that looked wrong.
 
-**The logs (since Oct 8, version 0.3).** Everything the strategists do is recorded in detail ([LOGGING.md](LOGGING.md)). A red "[Agents] Problem: ..." line on screen means a serious alarm (at most one a minute). `agents.health` lists the alarms so far and the state right now; `agents.blackbox` writes the black box if something looks wrong and you want me to see that moment. If the game freezes, the freeze probe runs by itself after 20 seconds; if it hangs on a loading screen, `scripts\probe.ps1` runs it by hand.
+**The logs (since Oct 8, version 0.3).** Everything the strategists do is recorded in detail ([LOGGING.md](LOGGING.md)). A red "[Agents] Problem: ..." line on screen means a serious alarm (at most one a minute). `agents.health` lists the alarms so far and the state right now; `agents.blackbox` writes the black box if something looks wrong, to keep that moment. If the game freezes, the freeze probe runs by itself after 20 seconds; if it hangs on a loading screen, `scripts\probe.ps1` runs it by hand.
 
 ## Ground rules for every phase
 
@@ -115,9 +115,9 @@ Nothing needs sending: I read the files myself. Just tell me which phases you ra
 
 **Built:** a settings file that names the realm under watch, the Misty Mountain Orcs by default. The status command reports the realm it found.
 
-**You:**
+**To do:**
 1. Close the game.
-2. I copy your newest save aside and install the mod.
+2. Copy the newest save aside and install the mod.
 3. You tick Bannerlord Agents in the launcher, below your usual mods, and start the game.
 
 Expect one slow load, because the game rebuilds its shaders after any change to the mod list.
@@ -143,7 +143,7 @@ Expect one slow load, because the game rebuilds its shaders after any change to 
 - **`agents.view`** prints the report an agent would get, word for word.
 - **A sight check for your own party:** our rule against the game's own view.
 
-**You:** play as usual. Once, march an army toward an orc army or holding, let them see you, then pull back out of sight.
+**To do:** play as usual. Once, march an army toward an orc army or holding, let them see it, then pull back out of sight.
 
 **Check:**
 - The log shows "enemy army in view: (your army)" at about the moment, and at about the distance, they'd plausibly spot you. Afterwards it lists your army as last seen, with the time.
@@ -167,7 +167,7 @@ Expect one slow load, because the game rebuilds its shaders after any change to 
 - **Clicks:** map clicks you correct within moments are merged into one decision. The raw clicks are kept separately.
 - **Control:** `agents.record on`, `off` or `status`.
 
-**You:** play an evening as usual. Afterwards I print a few records in plain words, and you confirm they match what you did. Two examples of the form, with made-up details:
+**To do:** play an evening as usual. Afterwards, print a few records in plain words and check they match what I did. Two examples of the form, with made-up details:
 - "Day 412, 14:00: you turned from Caras Galadhon toward an orc army near Mount Gram (3,200 against your 2,100), six hours after first seeing it."
 - "Day 412, 15:00: you told a vassal to defend Fornost while that army was a day's march away."
 
@@ -185,7 +185,7 @@ Expect one slow load, because the game rebuilds its shaders after any change to 
 - a once-a-second frame-rate log on the campaign map;
 - a core-by-core load sample.
 
-**You:** stand still on the campaign map. Then play at your usual speed for 3 minutes with the bridge on, and 3 minutes with it off.
+**To do:** stand still on the campaign map. Then play at the usual speed for 3 minutes with the bridge on, and 3 minutes with it off.
 
 **Check:**
 - The frame rate with the bridge on and off differs by no more than normal noise.
@@ -202,7 +202,7 @@ This also gives the first campaign-map numbers for the busy core and the idle on
 - **The order in the log:** its progress, and how it ended and why.
 - **The save-time hand-back** (plan, decision 3).
 
-**You:**
+**To do:**
 1. Pick an orc lord near your army.
 2. Order that lord to garrison an orc castle, and watch for three in-game days.
 3. Order the same lord to patrol around it.
@@ -221,7 +221,7 @@ This also gives the first campaign-map numbers for the busy core and the idle on
 
 **Built:** the agent channel. The bridge writes the orcs' pokes and report into the agent's folder. The agent answers each poke with an orders file. In shadow mode, every order is checked against the game and receipted, and none is carried out.
 
-**You:** play as usual. Glance at the agent now and then.
+**To do:** play as usual. Glance at the agent now and then.
 
 **Measured:**
 - answer time, in seconds and in in-game hours at your usual speed;
@@ -242,7 +242,7 @@ One lord shows whether the live loop works. The whole realm follows in phase 7, 
 
 **Built:** `agents.agent live <lord>`. Opus's orders are carried out for that one lord. They pass the same checks as hand orders, and are checked again on arrival (plan, decision 4).
 
-**You:** keep that lord in view for a while.
+**To do:** keep that lord in view for a while.
 
 **Check:**
 - The lord follows Opus's orders.
@@ -262,7 +262,7 @@ One lord shows whether the live loop works. The whole realm follows in phase 7, 
 - Opus can form armies with the game's own rules, and order them like a single lord.
 - The realm's pokes are merged, and the late-order checks are on.
 
-**You:** play an evening as usual, at war with them. The steps are in [Testing version 0.4](#testing-versions-04-and-05-opus-commands-the-orcs-with-tools-and-memory).
+**To do:** play an evening as usual, at war with them. The steps are in [Testing version 0.4](#testing-versions-04-and-05-opus-commands-the-orcs-with-tools-and-memory).
 
 **Check:**
 - Their lords keep moving sensibly while Opus thinks.

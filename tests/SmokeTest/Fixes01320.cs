@@ -9,7 +9,7 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// 0.13.20 (Mert, Nov 1: "I also like all the optional extras you proposed"): the hunger warning (an own castle or town not besieged
+        /// 0.13.20 (Nov 1, with all the proposed optional extras): the hunger warning (an own castle or town not besieged
         /// with food for under 3 days of siege and an enemy lord or army in view within 40), told once a day or sooner as it falls a day
         /// more; and food_at / food_days_at in the order language, for the realm's own castles and towns.
         /// </summary>

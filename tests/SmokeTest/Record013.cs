@@ -198,7 +198,7 @@ namespace SmokeTest
             var refused = Runs("backup --to \"" + inside + "\"");
             Check(refused.Code == 2 && !Directory.Exists(inside), "a backup place inside what it copies is refused");
 
-            // the records folder can be a link to where it really is (Mert's has been one to D: since Oct 28): a place in there is inside it too
+            // the records folder can be a link to where it really is (mine has been one to D: since Oct 28): a place in there is inside it too
             string link = Path.Combine(root, "backup-test", "records-link"), deep = Path.Combine(records, "copy-here-too");
             var mklink = new ProcessStartInfo("cmd.exe", "/c mklink /J \"" + link + "\" \"" + records + "\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
             using (Process p = Process.Start(mklink)) { p.StandardOutput.ReadToEnd(); p.WaitForExit(10000); }

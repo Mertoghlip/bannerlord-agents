@@ -169,7 +169,7 @@ namespace BannerlordAgents.WarRoom
                 // its tools, diplomatic acts and letters wait for the same yes (0.13)
                 foreach (string part in new[] { "tools", "diplomacy", "letters" })
                     if (p[part] is JsonArray pa && pa.Count > 0) sb.AppendLine(part + ": " + pa.ToJsonString());
-                // 0.13.8 (Mert, Oct 29): answered in words only, all of it, some of it, or some with changes
+                // 0.13.8 (Oct 29): answered in words only, all of it, some of it, or some with changes
                 sb.AppendLine("If your ruler's words below agree to all or some of it, give what they agree to with \"carry_out\": true in \"orders\" (changed as they say),"
                               + " with its tools, diplomacy and letters in \"tools\", \"diplomacy\" and \"letters\" if they agree to those; what they want changed goes, changed, in \"propose\""
                               + " in the same answer, for their next words; what they refuse is left out.");
@@ -194,8 +194,8 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>
-        /// Where the realm's whole chronicle is and where its last days begin in it (0.13.16; Mert, Nov 1: the lieutenant "was not able to
-        /// see what happened at Nanduhirion": the report's recent history had cut the battle and the twelve captures, which were all in
+        /// Where the realm's whole chronicle is and where its last days begin in it (0.13.16, Nov 1: the lieutenant was not able to
+        /// see what happened at Nanduhirion: the report's recent history had cut the battle and the twelve captures, which were all in
         /// chronicle.txt, a file it was never told of). chronicle.txt is dated line by line, oldest first, too long to read whole, so the
         /// line each of the last days begins at lets it read just that day (the Read tool's offset). Null without one.
         /// </summary>

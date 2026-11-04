@@ -11,8 +11,8 @@ namespace SmokeTest
     internal static partial class Program
     {
         /// <summary>
-        /// Version 0.13.5 (Mert, Oct 29: "make sure that the test logs and the agents' records survive the game being closed and reloaded
-        /// into the same save, so the test continues"): a tool run written down as it stands, cleared as a load clears it, and taken up
+        /// Version 0.13.5 (Oct 29: the test logs and the agents' records must survive the game being closed and reloaded
+        /// into the same save, so the test continues): a tool run written down as it stands, cleared as a load clears it, and taken up
         /// again from what was written goes on exactly as it would have: its state and the hour it entered it, its remembered values (a
         /// table of the circuit's visits, a guard's refill check), its settings and the move in force, given again.
         /// </summary>
@@ -101,8 +101,8 @@ namespace SmokeTest
             broken["state"] = "no_such_state";
             Check(Runner.Resume(broken, null)?.Contains("not one of its tool's") == true, "a run whose state its tool no longer has is not carried on, and says why");
 
-            // 0.13.7 (Mert, Oct 29: on screen only his lieutenant's and the game's own): an order's line goes to the game's message log
-            // only for the lieutenant's realm or his own orders (the console's, his vassal orders), never another agent's
+            // 0.13.7 (Oct 29: on screen only the lieutenant's and the game's own): an order's line goes to the game's message log
+            // only for the lieutenant's realm or the player's own orders (the console's, the player's vassal orders), never another agent's
             Check(Orders.Shown("agent", true) && Orders.Shown("hand", false) && Orders.Shown("you", false) && !Orders.Shown("agent", false) && !Orders.Shown("then", false),
                   "an order's line goes on screen for the lieutenant's orders and your own, never for another agent's");
             RulerChaseTests(moves);
@@ -116,8 +116,8 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// 0.13.11 (Mert, Oct 29, chasing Mauhur with 3,865 men: "allied lords around me are still not engaging him ... They should be engaging him
-        /// normally since they know I am around"): a guard joins its realm ruler's own attack on an enemy near it, weighing the ruler's force on its
+        /// 0.13.11 (Oct 29, when I was chasing Mauhur with 3,865 men: allied lords around me were still not engaging him; they should be engaging him
+        /// normally since they know I am around): a guard joins its realm ruler's own attack on an enemy near it, weighing the ruler's force on its
         /// side, follows it past its own area (up to three times its radius from the holding) while the ruler chases, and goes back once he stops.
         /// </summary>
         private static void RulerChaseTests(List<KeyValuePair<int, Move>> moves)
@@ -163,9 +163,9 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// 0.13.15 (Mert, Oct 30: "lords under any order and not in an army should always ride with all haste to relieve lords in a fight if
-        /// their combined strength beats the enemies' in the area's combined strength for the expected duration of the fight ... Armies should
-        /// still try to relieve lords ... but should never break up because of this"): held lords out of an army, and an army's leader with his
+        /// 0.13.15 (Oct 30: lords under any order and not in an army should always ride with all haste to relieve lords in a fight if
+        /// their combined strength beats the enemies' in the area's combined strength for the expected duration of the fight; armies should
+        /// still try to relieve lords, but should never break up because of this): held lords out of an army, and an army's leader with his
         /// army, ride to a lord of ours fighting in the field when they can get there before it ends and our side with them outweighs the
         /// enemies in it and those who could join it; a lord in another's army, one camped in a siege and one too far do not; none rides when
         /// the enemy outweighs; each goes back to his order once the fight is over.
@@ -224,8 +224,8 @@ namespace SmokeTest
         }
 
         /// <summary>
-        /// 0.13.14 (Mert, Oct 30: "The logic for our orders might still be discounting the strength of nearby lords/lords following other
-        /// lords"): Alenon (1,137), to guard Tinnulas, weighed 2,087 near it against himself alone and sheltered in Gwígar, though Oropherion
+        /// 0.13.14 (Oct 30: the logic for our orders might still be discounting the strength of nearby lords/lords following other
+        /// lords): Alenon (1,137), to guard Tinnulas, weighed 2,087 near it against himself alone and sheltered in Gwígar, though Oropherion
         /// (961) and Arien (860), ordered to follow him, were inside Gwígar with him. A lord following another counts on his side, in the field
         /// within the hours given and inside the very holding he is in; another lord inside that holding, on no order with him, does not.
         /// </summary>

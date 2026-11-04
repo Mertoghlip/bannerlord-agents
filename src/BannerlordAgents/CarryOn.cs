@@ -14,9 +14,9 @@ using TaleWorlds.CampaignSystem.Party;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The orders in force carried across a reload of the same save (0.13.5; Mert, Oct 29: "make sure that the test logs and the
-    /// agents' records survive the game being closed and reloaded into the same save, so the test continues when I have to step
-    /// off the game and back on it with time"). Orders live only in memory and every load clears them, so until now a run carried
+    /// The orders in force carried across a reload of the same save (0.13.5, Oct 29: the test logs and the
+    /// agents' records must survive the game being closed and reloaded into the same save, so the test continues when I have to step
+    /// off the game and come back to it later). Orders live only in memory and every load clears them, so until now a run carried
     /// on from its save with every agent's lords left to the game's own AI until the agent ordered them again, and each tool's
     /// progress (a guard's refill, a siege's storm rules, a circuit's visits) was lost. Now at every save the orders in force are
     /// written down beside the save's history note, never in the save: each tool order with the very definition it runs, its
@@ -193,7 +193,7 @@ namespace BannerlordAgents
     }
 
     /// <summary>
-    /// The war rooms of this load's agents (0.13.5, for Mert's "step off the game and back on it with time"): a running war room
+    /// The war rooms of this load's agents (0.13.5, for when I step off the game and come back to it later): a running war room
     /// holds a lock named after its folder (WarRoom LiveLock). At each load, an agent switched on whose war room is not running is
     /// started when settings.txt names the war room's program (war_room), with no window, else an alarm says so. Game's thread.
     /// </summary>

@@ -52,7 +52,7 @@ The report's last section, **RECENT HISTORY, LAST TWO DAYS**, is drawn from the 
   - The news comes first, up to 40 lines: battles, captures, sieges, raids, holdings, lords killed or freed, armies, wars, votes. That is every line but the orders' own.
   - The orders' own lines (given, called back, ended, refused) fill what is left of 25.
   - Lines go by whole in-game hours, newest first. The newest hour of news is always shown.
-- **Why (Mert, Nov 1):** the lieutenant could not say who broke Dáin's siege of Nanduhirion.
+- **Why (Nov 1):** the lieutenant could not say who broke Dáin's siege of Nanduhirion.
   - A day of lords sheltering and finding few recruits had pushed the battle and the twelve captures out of the last 25.
   - The cut fell inside their very hour, between the battle and "the siege was lifted".
 - **The battle line:** since 0.13.16 it also says who fought on each side when a side was more than its leader (`Notices.WhoFought`: each side's lords by realm, up to three names, their men as they joined, the garrison, other parties). A capture names the captor's realm.

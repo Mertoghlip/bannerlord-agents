@@ -1,6 +1,6 @@
 # The dashboard
 
-Version 0.7 (Oct 16). Mert asked to make watching and diagnosing the agents much easier: "a dashboard with a live map of the game. I basically want to be able to see exactly what each agent sees, have everything they see be depicted by icons with a legend, switch between agents, and have a log depicting the moves of the agent I am following on the side. When I click on a given icon on the map, I should be able to see where it is moving."
+Version 0.7 (Oct 16). The aim is to make watching and diagnosing the agents much easier: a dashboard with a live map of the game. I want to be able to see exactly what each agent sees, have everything it sees depicted by icons with a legend, switch between agents, and have a log on the side depicting the moves of the agent I am following. When I click on a given icon on the map, I should be able to see where it is moving.
 
 ## Starting it
 

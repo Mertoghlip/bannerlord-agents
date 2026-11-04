@@ -6,7 +6,7 @@ using BannerlordAgents.Routes;
 namespace BannerlordAgents.WarRoom
 {
     /// <summary>
-    /// The chase question (0.9.3; Mert, Oct 23: a party or army hunting an enemy faster than itself, while it has other work,
+    /// The chase question (0.9.3, Oct 23: a party or army hunting an enemy faster than itself, while it has other work,
     /// wastes itself; the agent should be able to ask an enemy's speed before it gives a hunt order):
     /// - can_catch: one of the realm's lords or armies against one enemy its report shows: each side's pace by the game's rules
     ///   (the enemy's as the map shows it, or as it was when last seen), the way between them, how long to reach it if it holds

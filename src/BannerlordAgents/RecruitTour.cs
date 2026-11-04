@@ -16,9 +16,9 @@ using TaleWorlds.ObjectSystem;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The recruit order as a tour (since 0.9.2). Mert, Oct 22: a lord with a recruit order from an agent "also follows the
-    /// logic as my own parties". The same rules as the player's own parties on a recruit order and as the computer's lords
-    /// (both in TFAOMFixes, his own mod; this is the agents' copy, kept in this module):
+    /// The recruit order as a tour (since 0.9.2). Oct 22: a lord with a recruit order from an agent also follows the
+    /// logic of my own parties. The same rules as the player's own parties on a recruit order and as the computer's lords
+    /// (both in TFAOMFixes, my own mod; this is the agents' copy, kept in this module):
     /// - from the order's place, then the nearest town, castle or village of the realm, an ally or a realm at peace with it,
     ///   within reach (four times the usual gap between neighbouring towns), not swept by this order in the last day; one
     ///   after another;
@@ -163,8 +163,8 @@ namespace BannerlordAgents
 
         /// <summary>
         /// Takes healthy men from his clan's garrison where he stands, the highest tier first, one at a time, as long as the garrison's strength
-        /// (the game's estimate, worked out again after each) stays at or above the floor (Mert, Nov 1: "take troops from those garrisons as they
-        /// recruit up until the strength of the garrison falls to a floor set by the agent"). Returns how many.
+        /// (the game's estimate, worked out again after each) stays at or above the floor (Nov 1: take troops from those garrisons as they
+        /// recruit up until the strength of the garrison falls to a floor set by the agent). Returns how many.
         /// </summary>
         private static int FromGarrison(MobileParty p, Settlement s, double floor, Func<CharacterObject, bool> lines)
         {

@@ -13,9 +13,9 @@ using TaleWorlds.Library;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The supply order (0.13.19; Mert, Nov 1: "I'm seeing a lot of castles at my fronts with zero food due to raids on their villages, and I
-    /// think agents and the liutenant should be able to order lords to donate extra food to settlements to make sure they can outlast
-    /// sieges"; "Lets do that": buy first, every realm's agents). A lord brings food into a castle or town of his realm or an ally's:
+    /// The supply order (0.13.19, Nov 1: I am seeing a lot of castles at my fronts with zero food due to raids on their villages, and I
+    /// think agents and the lieutenant should be able to order lords to donate extra food to settlements to make sure they can outlast
+    /// sieges; the choice: buy first, every realm's agents). A lord brings food into a castle or town of his realm or an ally's:
     /// - what it needs: enough to last the order's days of siege at what it eats a day under siege (its people's prosperity / 40 and its
     ///   garrison's men / 20, the game's food model, nothing coming in), at most what its stores hold (Town.FoodStocksUpperLimit), less what
     ///   it has;

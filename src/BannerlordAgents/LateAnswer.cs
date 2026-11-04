@@ -5,7 +5,7 @@ using System.Linq;
 namespace BannerlordAgents
 {
     /// <summary>
-    /// The late answer (0.13.22; Mert, Nov 1: Dol Guldur's agent gave up Gwígar for "no food" in an answer that took effect about 20 in-game
+    /// The late answer (0.13.22, Nov 1: Dol Guldur's agent gave up Gwígar for "no food" in an answer that took effect about 20 in-game
     /// hours after the report it answered, 13 hours after food had been handed in): when an answer's orders take effect hours after that
     /// report, the agent's next poke says so, and what changed since that report at the places and lords its orders named, so it can
     /// change course at once. Each poke keeps a few facts of what its report showed (Notes, copied: the realm's memory changes its own
