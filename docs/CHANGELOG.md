@@ -2109,3 +2109,13 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The agent's descriptions of `supply` and `recruit` say when the next order starts, and `recruit` now also says it can end for lack of money.
 - **Checks:** smoke test 467 checks, 10 of them new, war room and dashboard self-tests all passed. The tests cover the part that decides what starts and when. The part that runs inside the game (`Orders.MoveThen`, `Orders.EndMove`) can't run in the smoke test and hasn't run in play yet; the next test run is its first real test.
 - **Install:** module 0.14.2 into the game, with the game closed. War rooms and dashboard stopped for the build and started again; the war rooms themselves did not change in behaviour.
+
+### 15:14 · The news wake study in the reports folder · commit PENDING
+- **What:** `docs/reports/2026-11-06-news-wake-study.md`: which news wakes are needless and what each kind needs, from run A's 744 fast answers, 4,611 older answers and 73 new replays (about $24), plus the new design. Claude Code ran the analysis and replays and drafted it. Its figures match the study's working page number for number; only the wording and the design section changed.
+- **What I decided:**
+  - The wake rule goes straight in, on by default from now on, with no log-only step first.
+  - Test runs only of the finished version: first with the vanilla rules, then with the agent able to edit them and write its own.
+  - Any answer can change rules. 700 strength and the 6-hour wait are starting settings the agent can edit. First look, the council clock, marked letters, a lord taken, an own holding besieged or lost, and votes about to close stay locked.
+  - The lists of lords with no order and chances to strike stay in the design.
+- **Found while planning:** the war room checks whether a council is due only when a wake arrives, and reads the big-event words only after a fast answer. With fewer wakes, councils would slip, so the wake rule has to wake the agent when one is due.
+- **Not built yet:** everything except the follow-up fix (0.14.2). No install; the game, the agents and the code didn't change.
