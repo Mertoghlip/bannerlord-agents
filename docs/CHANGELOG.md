@@ -2110,7 +2110,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test 467 checks, 10 of them new, war room and dashboard self-tests all passed. The tests cover the part that decides what starts and when. The part that runs inside the game (`Orders.MoveThen`, `Orders.EndMove`) can't run in the smoke test and hasn't run in play yet; the next test run is its first real test.
 - **Install:** module 0.14.2 into the game, with the game closed. War rooms and dashboard stopped for the build and started again; the war rooms themselves did not change in behaviour.
 
-### 15:14 · The news wake study in the reports folder · commit PENDING
+### 15:14 · The news wake study in the reports folder · commit 58b2e32
 - **What:** `docs/reports/2026-11-06-news-wake-study.md`: which news wakes are needless and what each kind needs, from run A's 744 fast answers, 4,611 older answers and 73 new replays (about $24), plus the new design. Claude Code ran the analysis and replays and drafted it. Its figures match the study's working page number for number; only the wording and the design section changed.
 - **What I decided:**
   - The wake rule goes straight in, on by default from now on, with no log-only step first.
