@@ -117,6 +117,8 @@ namespace BannerlordAgents.Tools
         public static Action<int, Move> MoveSink = (id, m) => Background.ToMain.Enqueue(() => Orders.ToolMove(id, m));
         public static Action<int, string> ReleaseSink = (id, why) => Background.ToMain.Enqueue(() => Orders.ToolRelease(id, why));
         public static Action<int, JObject> ThenSink = (id, then) => Background.ToMain.Enqueue(() => Orders.ToolThen(id, then));
+        /// <summary>A move that ended on the game's side (MoveEnded): its lord's next order starts; the hold is already over.</summary>
+        public static Action<ToolOrder, JObject> NextSink = (o, then) => Background.ToMain.Enqueue(() => Orders.MoveThen(o.Lord, o.Realm, o.Source, o.Poke, then));
         /// <summary>The storm rules for the game's storm hook (StormGate is safe to write from the worker); a null party clears them all.</summary>
         public static Action<string, StormRule> StormSink = StormGate.Set;
 
@@ -365,6 +367,25 @@ namespace BannerlordAgents.Tools
             Diag.Count("tool:ended");
             Diag.Event("tool", "ended", new { id, tool = t.Def.Name, lord = t.Order.Lord, why, state = t.State, steps = t.Steps, hours = Math.Round(Diag.Hours - t.Started, 1) });
             Outcomes.End(id, HowOf(why), why, RowOf(t), Diag.Hours);
+        }
+
+        /// <summary>
+        /// A move that ends on the game's side ended (0.14.2): supply and recruit have no rule of their own to finish by (Finish), so the game's
+        /// thread says what came of them (Orders.Hourly). reached: it did what it was sent to do, and its next order (then) starts, as at
+        /// Finish; otherwise that order, which assumed it worked, does not. Run A: 0 of 92 next orders of these two started, since only Finish started one.
+        /// </summary>
+        public static void MoveEnded(int id, string why, bool reached)
+        {
+            if (!ById.TryGetValue(id, out ToolInstance t)) return;
+            ToolOrder o = t.Order;
+            JObject then = o.Then;
+            if (then != null)
+            {
+                Diag.Event("tool", reached ? "then" : "then skipped", new { id, tool = t.Def.Name, lord = o.Lord, next = then.ToString(Newtonsoft.Json.Formatting.None) });
+                if (reached) Outcomes.End(id, "done, next order", why, RowOf(t), Diag.Hours);
+            }
+            Ended(id, why);
+            if (reached && then != null) NextSink(o, then);
         }
 
         /// <summary>The tool's lord's row in its realm's newest hour (null when gone).</summary>

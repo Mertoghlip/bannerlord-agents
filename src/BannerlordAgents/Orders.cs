@@ -55,6 +55,8 @@ namespace BannerlordAgents
             public string ToolText;
             /// <summary>The tool order's every part (ToolOrder.Signature), to keep it when the very same order comes again (0.12.0).</summary>
             public string Signature;
+            /// <summary>The tool order has a next order (then), so that the news of its end can say what became of it (0.14.2).</summary>
+            public bool HasNext;
             public double Since;
             public double ArrivedAt = -1;
             public int Reissued;
@@ -561,7 +563,7 @@ namespace BannerlordAgents
             var h = new HandOrder
             {
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = o.Source, Poke = o.Poke, Verb = "hold",
-                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours, Signature = o.Signature()
+                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours, Signature = o.Signature(), HasNext = o.Then != null
             };
             // its settings as the runner keeps them (0.13.19): each given one within its range, the tool's default for the rest
             foreach (SettingDef sd in def.Settings.Values)
@@ -598,7 +600,7 @@ namespace BannerlordAgents
                 {
                     ["tool_id"] = o.ToolId, ["party"] = o.Party.StringId, ["lord"] = o.Lord.StringId, ["realm"] = o.Realm?.StringId, ["source"] = o.Source, ["poke"] = o.Poke,
                     ["tool"] = o.Tool, ["text"] = o.ToolText, ["signature"] = o.Signature, ["since"] = o.Since, ["arrived"] = o.Arrived, ["arrived_at"] = o.ArrivedAt,
-                    ["settings"] = JObject.FromObject(o.Settings)
+                    ["settings"] = JObject.FromObject(o.Settings), ["has_next"] = o.HasNext
                 });
             }
             return list;
@@ -638,7 +640,7 @@ namespace BannerlordAgents
             {
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = source, Poke = (int?)row["poke"] ?? -1, Verb = "hold", ToolId = toolId,
                 Tool = (string)row["tool"], ToolText = (string)row["text"], Signature = (string)row["signature"], Since = (double?)row["since"] ?? now,
-                Arrived = (bool?)row["arrived"] ?? false, ArrivedAt = (double?)row["arrived_at"] ?? -1
+                Arrived = (bool?)row["arrived"] ?? false, ArrivedAt = (double?)row["arrived_at"] ?? -1, HasNext = (bool?)row["has_next"] ?? false
             };
             // its settings (0.13.19; a save of 0.13.18 or before has none: garrison_floor 0, the supply order's defaults)
             if (row["settings"] is JObject set)
@@ -819,22 +821,51 @@ namespace BannerlordAgents
         {
             HandOrder o = Active.FirstOrDefault(x => x.ToolId == toolId);
             if (o == null || o.Lord == null) return;
-            Kingdom realm = o.Realm ?? Bridge.Watched;
-            var a = AgentChannel.OrderFrom(then, o.Lord.StringId, o.Poke, "then");
-            a.Realm = realm?.StringId;
-            string status = "refused";
-            string reason;
-            try { reason = realm == null ? "no realm is under watch" : Issue(a, realm, o.Source, true, ref status); }
-            catch (Exception e) { reason = "it could not be carried out (" + e.Message + ")"; Diag.Error("starting a next order", e); }
-            if (status != "applied" && status != "posted")
+            StartNext(o.Lord, o.Realm ?? Bridge.Watched, o.Source, o.Poke, then, reason =>
             {
                 // the next order no longer fits: the lord stops, and the agent hears why
                 End(o, "its next order was refused: " + reason, "then refused");
                 Active.Remove(o);
                 Changed();
+            });
+        }
+
+        /// <summary>
+        /// A supply or recruit order ended and its next order (then) starts for the same lord (0.14.2; Runner.MoveEnded). Its hold is already over, so
+        /// there is none to replace: a lord who holds another order by now (an answer that came in meanwhile) keeps that one. A refusal is told to
+        /// the agent as news, since the lord is back with the game's own AI.
+        /// </summary>
+        public static void MoveThen(string lordId, string realmId, string source, int poke, JObject then)
+        {
+            Hero lord = string.IsNullOrEmpty(lordId) ? null : Hero.Find(lordId);
+            if (lord == null) return;
+            if (Active.Any(x => x.Lord == lord))
+            {
+                Diag.Event("order", "next order passed over", new { lord = lordId, why = "the lord holds a newer order", next = then.ToString(Newtonsoft.Json.Formatting.None) });
+                return;
             }
+            Kingdom realm = Bridge.SeatOf(realmId) ?? Bridge.Watched;
+            StartNext(lord, realm, source, poke, then, reason =>
+            {
+                string line = Names.Hero(lord) + "'s next order was refused: " + reason;
+                Log.Line("order: " + line);
+                Diag.Event("order", "next order refused", new { lord = lordId, reason, next = then.ToString(Newtonsoft.Json.Formatting.None) });
+                if (realm != null && Bridge.IsSeat(realm)) Notices.Order(realm, "order_ended", line + ".", lord.PartyBelongedTo?.StringId);
+            });
+        }
+
+        /// <summary>A next order (then), checked against the game as it stands now; what to do when it is refused, before the agent's receipt.</summary>
+        private static void StartNext(Hero lord, Kingdom realm, string source, int poke, JObject then, Action<string> refused)
+        {
+            var a = AgentChannel.OrderFrom(then, lord.StringId, poke, "then");
+            a.Realm = realm?.StringId;
+            string status = "refused";
+            string reason;
+            try { reason = realm == null ? "no realm is under watch" : Issue(a, realm, source, true, ref status); }
+            catch (Exception e) { reason = "it could not be carried out (" + e.Message + ")"; Diag.Error("starting a next order", e); }
+            if (status != "applied" && status != "posted") refused(reason);
             double hours = CampaignTime.Now.ToHours;
-            if (o.Source == "agent" && status != "posted")
+            if (source == "agent" && status != "posted")
             {
                 string s = status, r = reason;
                 Background.Post("agent receipt", () => AgentChannel.Receipt(a, s, r, hours));
@@ -1338,7 +1369,7 @@ namespace BannerlordAgents
                     string supplyEnd = Supply.Step(o, now, out string supplyKey, out bool movedOn);
                     if (supplyEnd != null)
                     {
-                        End(o, supplyEnd, supplyKey);
+                        EndMove(o, supplyEnd, supplyKey, Supply.Reached(supplyKey));
                         Active.RemoveAt(i);
                         changed = true;
                         continue;
@@ -1363,7 +1394,8 @@ namespace BannerlordAgents
                     string tourEnd = RecruitTour.Step(o, now, out string tourKey, out bool movedOn);
                     if (tourEnd != null)
                     {
-                        End(o, tourEnd, tourKey);
+                        // every end of a tour is a recruit order done as far as it can be: ranks full, nothing left, or no money for more
+                        EndMove(o, tourEnd, tourKey, true);
                         Active.RemoveAt(i);
                         changed = true;
                         continue;
@@ -1868,7 +1900,11 @@ namespace BannerlordAgents
             return null;
         }
 
-        private static void End(HandOrder o, string why, string key)
+        /// <summary>A supply or recruit order ended here on the game's side: the news says what becomes of its next order, and the runner starts it when reached (0.14.2).</summary>
+        private static void EndMove(HandOrder o, string why, string key, bool reached)
+            => End(o, !o.HasNext ? why : why + (reached ? "; its next order starts" : ", so its next order does not start"), key, reached);
+
+        private static void End(HandOrder o, string why, string key, bool? reached = null)
         {
             bool stillOff = false;
             try
@@ -1899,7 +1935,12 @@ namespace BannerlordAgents
             {
                 int tid = o.ToolId;
                 string w = why;
-                Background.PostFirst("tool ended", () => Runner.Ended(tid, w));
+                if (reached.HasValue)
+                {
+                    bool r = reached.Value;
+                    Background.PostFirst("tool ended", () => Runner.MoveEnded(tid, w, r));
+                }
+                else Background.PostFirst("tool ended", () => Runner.Ended(tid, w));
             }
             // the lieutenant's order comes off Party AI Controls' panel, and his next order there starts (PacLink)
             try { PacLink.OnOrderEnded(o.Party, o.Id, key); }

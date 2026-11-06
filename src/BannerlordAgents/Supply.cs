@@ -51,6 +51,9 @@ namespace BannerlordAgents
             return e;
         }
 
+        /// <summary>Did the errand that ended under this key do what it was sent to do (Step's key)? The food is in, or the place needs none: its next order starts (0.14.2). A place lost or besieged first, or nothing to bring: it does not.</summary>
+        public static bool Reached(string key) => key == "supplied" || key == "stocked";
+
         /// <summary>What a castle or town eats a day under siege: its people and its garrison, by the game's food model.</summary>
         public static float PerDay(Town town)
         {

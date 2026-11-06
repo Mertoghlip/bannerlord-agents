@@ -2094,3 +2094,18 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **The way back:** `D:\BannerlordAgents-backup\repo-history-rewrite-20261103\` holds a bundle of the old history, the old-to-new id map (`map.txt`) and copies of the two files as they stood. Run records and notes written before today may cite old ids; `map.txt` translates them.
 - **Other copies:** any other clone of this repository needs cloning afresh.
 - **The engine notes:** moved word for word from the local `CLAUDE.md` to `docs/ENGINE-NOTES.md`. `CLAUDE.md` keeps my rules, the build notes and the code map, and points to them.
+
+## Friday, November 6
+
+### 14:58 · Install, version 0.14.2: supply and recruit orders start their next order · commit PENDING
+- **Why:** the news wake study of run A found that a supply or recruit order's next order (`then`) never started on its own: 0 of 92. Those two end on the game's side, and only a tool that ended by its own rules started its next order. The lord went back to the game's AI until a later answer ordered him again; 5 of the 70 supply lords got no new order for 48 in-game hours.
+- **How those 92 ended:** 70 supply orders handed over their food; 18 recruit orders ran out of gold and 4 hit their wage cap, at between 14% and 82% of their ranks. All 92 would now go on to their next order. Next orders are mostly `defend` (47), `home_recruit` (23) and `garrison` (17). In 52 of the 92 the later answer gave the same kind of order anyway.
+- **The fix:**
+  - A supply order goes on when the food is in or the place needs none. It doesn't go on when the place was besieged or lost first, or when the lord had nothing to bring, since the next order assumed it worked.
+  - A recruit order goes on at every end, including when the lord can't pay for more: the order was done as far as it could be.
+  - The news of the end now says "its next order starts" or "so its next order does not start". The agent is still told and woken as before, and can replace the next order. Whether that wake is needed is for the wake rule to settle.
+  - If the next order is refused by the time it starts, the agent hears that as news. A lord who has been given a newer order in the meantime keeps that one.
+  - The run's record says "done, next order" for these, as for any other tool. An order carried across a save keeps its next order.
+  - The agent's descriptions of `supply` and `recruit` say when the next order starts, and `recruit` now also says it can end for lack of money.
+- **Checks:** smoke test 467 checks, 10 of them new, war room and dashboard self-tests all passed. The tests cover the part that decides what starts and when. The part that runs inside the game (`Orders.MoveThen`, `Orders.EndMove`) can't run in the smoke test and hasn't run in play yet; the next test run is its first real test.
+- **Install:** module 0.14.2 into the game, with the game closed. War rooms and dashboard stopped for the build and started again; the war rooms themselves did not change in behaviour.
