@@ -2097,7 +2097,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Friday, November 6
 
-### 14:58 · Install, version 0.14.2: supply and recruit orders start their next order · commit PENDING
+### 14:58 · Install, version 0.14.2: supply and recruit orders start their next order · commit 3f9c8eb
 - **Why:** the news wake study of run A found that a supply or recruit order's next order (`then`) never started on its own: 0 of 92. Those two end on the game's side, and only a tool that ended by its own rules started its next order. The lord went back to the game's AI until a later answer ordered him again; 5 of the 70 supply lords got no new order for 48 in-game hours.
 - **How those 92 ended:** 70 supply orders handed over their food; 18 recruit orders ran out of gold and 4 hit their wage cap, at between 14% and 82% of their ranks. All 92 would now go on to their next order. Next orders are mostly `defend` (47), `home_recruit` (23) and `garrison` (17). In 52 of the 92 the later answer gave the same kind of order anyway.
 - **The fix:**
