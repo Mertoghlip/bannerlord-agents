@@ -1,0 +1,44 @@
+{
+  "about": "The vanilla wake rule (0.15, docs/reports/2026-11-06-news-wake-study.md). Every news line gets a kind (the sorts, for a tool's own words; else its notice's kind) and then the first rule that matches gives it a lane: now wakes the agent, wait wakes it once the line has waited wait_hours, digest never wakes it and rides the next call. A line no rule matches wakes the agent. Rules marked locked are the ones an agent will never be able to change.",
+  "wait_hours": 6,
+  "sorts": [
+    ["shelter", "is sheltering"],
+    ["fallback", "is falling back|falling back\\.$|pulling back"],
+    ["relief_ride", "rides with all haste to relieve"],
+    ["watch_sees_army", "sees an enemy army"],
+    ["watch_sees_lord", "keeping watch.*sees an enemy lord"],
+    ["watch", "shadowing|keeping watch|taken up the watch|lost sight|lost track|in sight again|screen near"],
+    ["target_gone", "is beaten or gone|is gone \\(beaten|is gone before"],
+    ["few_recruits", "found few recruits"],
+    ["refill", "still below its floor|refilled to|broke off refilling"],
+    ["cashed", "cashed in"],
+    ["stuck", "has not moved for"],
+    ["gave_up", "gave up the chase"],
+    ["no_hold", "would not hold against"],
+    ["rested", " rested \\d+ days"],
+    ["back_clear", "is clear again|got away|reached "],
+    ["siege_relief", "A relief is coming|lifts the siege"],
+    ["army_form", "army has formed|waited \\d+ hours|army marches now|broke up before|The army is at"],
+    ["siege_note", "is besieged by|is taken"],
+    ["strike_note", "too weak to strike|too strong for|has lost strength|raids .*; striking"]
+  ],
+  "rules": [
+    { "name": "first_look", "kinds": ["first_look"], "lane": "now", "locked": true },
+    { "name": "letter_marked", "kinds": ["letter"], "if": "urgent", "lane": "now", "locked": true },
+    { "name": "lord_taken", "kinds": ["captured"], "lane": "now", "locked": true },
+    { "name": "holding_attacked", "kinds": ["besieged", "siege_started", "holding_changed"], "lane": "now", "locked": true },
+    { "name": "vote_closing", "kinds": ["vote_closing"], "lane": "now", "locked": true },
+
+    { "name": "letter", "kinds": ["letter"], "lane": "wait" },
+    { "name": "order_over", "kinds": ["ended_captured", "ended_supply", "ended_recruit_stop", "ended_recruit", "ended_other", "gave_up", "target_gone"], "lane": "wait" },
+
+    { "name": "enemy_lord_at_work", "kinds": ["enemy_lord"], "if": "chasing or inside or besieging or raiding", "lane": "now" },
+    { "name": "enemy_lord_strong", "kinds": ["enemy_lord"], "if": "strength >= line", "settings": { "line": 700 }, "lane": "now" },
+    { "name": "raider_within_reach", "kinds": ["enemy_lord"], "if": "on_way_to_raid and own_near >= margin * strength", "settings": { "margin": 1.5 }, "lane": "now" },
+    { "name": "raider_out_of_reach", "kinds": ["enemy_lord"], "if": "on_way_to_raid", "lane": "wait" },
+    { "name": "weak_lord_passing", "kinds": ["enemy_lord"], "lane": "digest" },
+
+    { "name": "order_reports", "kinds": ["shelter", "fallback", "relief_ride", "watch", "refill", "few_recruits", "cashed", "rested", "back_clear", "army_form"], "lane": "digest" },
+    { "name": "for_the_record", "kinds": ["alliance", "proposal", "decided", "vote_settled", "offer_settled", "looted", "order_arrived"], "lane": "digest" }
+  ]
+}

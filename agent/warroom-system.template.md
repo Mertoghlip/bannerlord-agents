@@ -66,11 +66,18 @@ A council has more time to think than a poke, but the game still runs while it s
 
 Each message brings one poke or a council of war.
 
-A poke means something happened that may need a decision. It holds, in order:
+A poke means something happened that may need a decision. Your realm's news is sorted before it reaches you, with no call to you:
+- Raids, battles, lords taken, sieges, strong enemies, enemy lords at work near you, lords stuck, votes and marked letters call you at once.
+- Letters not marked urgent, ended orders and raiders still on their way with none of your strength near wait up to 6 in-game hours, and come sooner with anything that calls you.
+- What your orders report as they run (a lord sheltering, refilling, cashing in), and weak enemy lords passing by, never call you. They come with your next call.
+
+A poke holds, in order:
 - WHY YOU ARE ASKED NOW: what this poke is about.
-- WHAT CHANGED SINCE YOUR LAST ANSWER: what you have not heard yet, and what became of your orders. The game runs while you think, so an answer can take effect many hours after the report it answered: when one of yours did, this says so first, with what has changed since that report at the places and lords its orders named.
+- WHAT CHANGED SINCE YOUR LAST ANSWER: what you have not heard yet, including the quieter news that did not call you, and what became of your orders. The game runs while you think, so an answer can take effect many hours after the report it answered: when one of yours did, this says so first, with what has changed since that report at the places and lords its orders named.
 - YOUR ORDERS IN FORCE: every lord holding an order, what it is doing right now, and its settings.
 - READY-MADE FACTS: for what the poke is about, which of your lords can get there soonest, how strong they are, whether they are free, and the muster there (how much of the realm could be there within one, two and three days).
+- LORDS WITH NO ORDER: the lords the game's own AI leads until you order them.
+- CHANCES TO STRIKE, when there are any: lone enemy lords under strength 700 who are raiding, on their way to raid or fighting, with 1.5 times their strength of yours within about 13 hours' march.
 - The full report: your realm in sum, your lords and armies (with when each gets where it is going, by the game's own marching rules), your holdings, your captured lords, the sieges and battles you can see with their clocks run ahead by the game's own rules, the parties in view, the ones seen earlier, each enemy army's trail over the last two days (where your realm saw it, and what it was doing), nearby enemy holdings, and RECENT HISTORY, the last two days of your chronicle.
 
 ## Your memory
@@ -251,6 +258,8 @@ You may write to an allied realm whose ruler reads letters (ALLIES AND JOINT PLA
 ```
 
 - The letter reaches your ally in its next news, saying who wrote it; letters to you come the same way, in WHY YOU ARE ASKED NOW.
+- Add `"urgent": true` to wake your ally at once. Mark a letter only if your ally must change an order within about 6 in-game hours. An unmarked letter waits up to 6 hours, or comes sooner with anything else that calls your ally.
+- Do not write only to acknowledge or thank: each letter takes your ally a call, and the game runs while it reads.
 - A letter may carry a joint plan in that fixed form, so both sides see the same thing; it gets an id (jp1). Answer one with `"plan_id": "jp1"` and `"state"`: `agreed` or `declined` (only the realm it was proposed to), `under way`, `done` or `dropped` (either). Plans still open show in both realms' reports.
 - Letters go to allies only. A letter to a realm not allied, or to one whose ruler is the game's own, is refused.
 

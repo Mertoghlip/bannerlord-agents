@@ -96,6 +96,25 @@ namespace BannerlordAgents.WarRoom
             Check(quiet == null && due != null && due.Contains("Orc Keep is besieged by Aragorn"),
                   "a word only in the report's history calls no council; the same word in the news does (" + due + ")");
 
+            // the council clock between pokes (0.15): the game's clock.txt says the hour, with no poke
+            var clocked = new Room(new Config { AgentDir = dir, Channel = "warroom", CouncilGapHours = 6, CouncilEveryHours = 24 }, Path.Combine(dir, "logs"));
+            clocked.CouncilSat(2000, null);
+            string clockFile = Path.Combine(channel, "clock.txt");
+            File.WriteAllText(clockFile, "2030.5\nSpring 3, 1088, 06:30");
+            File.SetLastWriteTimeUtc(clockFile, DateTime.UtcNow.AddSeconds(-5));
+            clocked.ReadClock();
+            Check(clocked.CouncilHoursNow == 2030.5 && clocked.CouncilDue(clocked.CouncilHoursNow) != null, "the game's clock makes a council due between pokes (" + clocked.CouncilHoursNow + ")");
+            File.Delete(clockFile);
+
+            // many lords stuck at once, or a fast answer out of time, call a council (0.15)
+            var stuck = new Room(new Config { AgentDir = dir, Channel = "warroom", CouncilGapHours = 6 }, Path.Combine(dir, "logs"));
+            stuck.CouncilSat(1000, null);
+            stuck.AfterAnswer("WHY YOU ARE ASKED NOW\n- Shelza has not moved for 6 hours.\n- Boldog has not moved for 6 hours.\n\nOTHER", noOrders);
+            string two = stuck.CouncilDue(1010);
+            stuck.AfterAnswer("WHY YOU ARE ASKED NOW\n- Shelza has not moved for 6 hours.\n- Boldog has not moved for 6 hours.\n- Muzgash has not moved for 7 hours.\n\nOTHER", noOrders);
+            string three = stuck.CouncilDue(1010);
+            Check(two == null && three != null && three.Contains("3 of your lords"), "three lords stuck in one wake's news call a council, two do not (" + three + ")");
+
             // poke.json's news, as the bridge writes it
             File.WriteAllText(Path.Combine(channel, "poke.json"), "{\"number\":12,\"hours\":1000,\"campaign\":\"camp-n\",\"realm\":\"orcs\",\"news\":{\"mode\":\"theatre\",\"recipe\":\"theatre\",\"book\":\"book\\\\poke-12.json\",\"names\":[\"Aragorn\",\"Orc Castle\"]}}");
             PokeMeta meta = room.ReadMetaForTest(12);

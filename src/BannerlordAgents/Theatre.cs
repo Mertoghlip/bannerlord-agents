@@ -76,7 +76,7 @@ namespace BannerlordAgents
         public double UsualLag = DefaultUsualLag, LateLag = DefaultLateLag;
         public const double DefaultUsualLag = 7, DefaultLateLag = 20;
 
-        private static readonly HashSet<string> WholeKinds = new HashSet<string> { "first_look", "quiet_day" };
+        private static readonly HashSet<string> WholeKinds = new HashSet<string> { "first_look", "quiet_day", "letter" };
         private static readonly HashSet<string> RealmKinds = new HashSet<string>
         {
             "war", "peace", "alliance", "alliance_ended", "call_to_war", "call_to_war_ended", "peace_offer", "proposal", "decided",
@@ -139,7 +139,9 @@ namespace BannerlordAgents
             if (triggers.Any(x => WholeKinds.Contains(x.Kind ?? "")))
             {
                 t.Recipe = "whole";
-                t.WhyRecipe = triggers.Any(x => x.Kind == "first_look") ? "a first look reads the whole realm" : "a quiet day: the whole realm, to review";
+                t.WhyRecipe = triggers.Any(x => x.Kind == "first_look") ? "a first look reads the whole realm"
+                            : triggers.Any(x => x.Kind == "letter") ? "a letter is about the whole war: the study's replays saved 13% on a small report and took twice as long"
+                            : "a quiet day: the whole realm, to review";
                 return t;
             }
             t.Diplomacy = triggers.Any(x => RealmKinds.Contains(x.Kind ?? ""));

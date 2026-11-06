@@ -74,6 +74,8 @@ namespace BannerlordAgents
     internal sealed class ViewParty
     {
         public string Id, Lord, Name, Faction, FactionName, Relation, Kind, Doing, Near, SeenBy, NearestHolding;
+        /// <summary>One of the realm's own lords, when his gold is near the floor for recruiting (0.15, PurseView.PoorText).</summary>
+        public string Poor;
         /// <summary>The holding its doing names (going to, besieging, raiding, defending, patrolling around), when it names one: for the dashboard and the "ask the way" tool.</summary>
         public string Toward;
         public int Men, ArmyMen, ArmyParties;
@@ -157,6 +159,10 @@ namespace BannerlordAgents
         public string Ruler;
         public int LastAnswered = -1;
         public bool Lookups;
+        /// <summary>The chances to strike (0.15, Views.ChanceLines); with it, the report holds both short lists. Null: neither.</summary>
+        public List<string> Chances;
+        /// <summary>A council's report: the news the wake rule held back, which it reads instead of being woken for it (0.15).</summary>
+        public string Held;
     }
 
     /// <summary>Builds views and reports on the worker, from a snapshot. No game objects here.</summary>
@@ -567,7 +573,9 @@ namespace BannerlordAgents
             if (x?.Since != null)
                 sb.AppendLine().AppendLine("WHAT CHANGED SINCE YOUR LAST ANSWER" + (x.LastAnswered >= 0 ? " (to poke #" + x.LastAnswered + ")" : "")).AppendLine(x.Since);
             if (x?.InForce != null) sb.AppendLine().AppendLine("YOUR ORDERS IN FORCE").AppendLine(x.InForce);
+            if (x?.Held != null) sb.AppendLine().AppendLine("NEWS THAT DID NOT CALL YOU, SINCE YOUR LAST ANSWER").AppendLine(x.Held);
             if (x?.Facts != null) sb.AppendLine().AppendLine("READY-MADE FACTS").AppendLine(x.Facts);
+            ListsSection(sb, v, x);
 
             if (v.Sum != null)
             {
@@ -706,7 +714,7 @@ namespace BannerlordAgents
             string size = f.ArmyMen > 0 ? "army of " + Text.N(f.ArmyMen) + " men in " + f.ArmyParties + " parties" : Text.N(f.Men) + " men";
             string held = OrderName(f);
             return "- " + f.Name + Tag(f) + ": " + size + ", strength " + Text.N((int)f.Strength) + "; " + Where(f) + "; " + f.Doing + JoiningText(f) + (f.Arrives != null ? ", " + f.Arrives : "")
-                   + (held != null ? " (your order: " + held + ")" : "") + ".";
+                   + (f.Poor != null ? "; " + f.Poor : "") + (held != null ? " (your order: " + held + ")" : "") + ".";
         }
 
         /// <summary>One of the realm's holdings, as YOUR HOLDINGS lists it.</summary>
@@ -857,6 +865,7 @@ namespace BannerlordAgents
                 X = r.X, Y = r.Y, Doing = Doing(s, r), SeenBy = seen?.By, SeenHours = s.Hours
             };
             vp.Toward = Toward(r);
+            if (relation == "own") vp.Poor = PurseView.PoorText(r);
             vp.Entrance = r.InSettlement ?? r.Entrance;
             if (r.Kind == "lord")
             {

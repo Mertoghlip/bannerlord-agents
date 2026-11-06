@@ -42,6 +42,8 @@ namespace BannerlordAgents
             public int Pokes, PokedHoursRunning;
             /// <summary>What the hourly look found to poke about (sightings, the first look), waiting for the next report round (0.12.0).</summary>
             public readonly List<Trigger> Waiting = new List<Trigger>();
+            /// <summary>The news the wake rule sorted and has not sent yet (0.15, TakeSorted).</summary>
+            public readonly List<Trigger> Held = new List<Trigger>();
             /// <summary>Each own holding last warned about for hunger (0.13.20, LowFood): the hour, and the days of food it had then.</summary>
             public readonly Dictionary<string, KeyValuePair<double, double>> HungerTold = new Dictionary<string, KeyValuePair<double, double>>();
         }
@@ -429,10 +431,12 @@ namespace BannerlordAgents
             SeatsReported[realm] = v;
             Memory m = Get(v.Watched);
             Timed(ms, "sight", () => Audit.Sight(v));
-            List<Trigger> triggers = TakeTriggers(v, m);
+            List<Trigger> digest = null;
+            List<Trigger> triggers = ag.Config.WakeRule ? TakeSorted(v, m, ag.Channel, out digest) : TakeTriggers(v, m);
             View view = null;
             if (triggers.Count > 0 || ag.On || Settings.Dashboard) Timed(ms, "view", () => view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m));
-            if (triggers.Count > 0) Poke(v, v.Watched, v.WatchedSees, v.HostileToWatched, m, view, triggers, ms, files);
+            if (triggers.Count > 0) Poke(v, v.Watched, v.WatchedSees, v.HostileToWatched, m, view, triggers, ms, files, digest);
+            if (ag.Config.WakeRule) ag.Channel.Clock(v.Hours);
             if (view != null && (ag.On || Settings.Dashboard)) RoundViews.Add(new KeyValuePair<Snapshot, View>(v, view));
             // the lieutenant (0.10) serves the player: its report says where the player's own party is, and its look-ups are kept
             // fresh every hour, since it is never poked and answers whenever the player speaks. A realm agent's situation report
@@ -467,6 +471,19 @@ namespace BannerlordAgents
             Tools.World w = Tools.Runner.WorldFor(v);
             View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
             var extras = new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true };
+            if (ag.Config.WakeRule)
+            {
+                extras.Chances = Views.ChanceLines(view, (own, foe) => MarchHours(w, own, foe));
+                // what the wake rule holds goes to the council, as the study walked it: the council hears it, so it no longer calls a fast answer; "now" lines still do
+                List<Trigger> held = m.Held.Where(t => t.Lane != WakeRules.Now).ToList();
+                if (held.Count > 0)
+                {
+                    extras.Held = string.Join("\n", held.Take(60).Select(t => "- " + t.Text)) + (held.Count > 60 ? "\n- ... and " + (held.Count - 60) + " more." : "");
+                    m.Held.RemoveAll(t => t.Lane != WakeRules.Now);
+                    m.Recent.AddRange(held);
+                    Files.Append(Path.Combine(Dir, "wake_" + v.Watched + ".jsonl"), Json.Line(new { Type = "council", Realm = v.Watched, Run = v.Run, Arm = v.Arm, Hours = v.Hours, Lines = held.Count }));
+                }
+            }
             string report = Views.Report(view, null, extras);
             List<string> known = Known(v, v.Watched, v.WatchedSees, m, w).ToList();
             Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", known);
@@ -601,7 +618,8 @@ namespace BannerlordAgents
                 {
                     Hours = s.Hours, Kind = "enemy_in_view", Party = r.Id,
                     Text = "Enemy " + (r.ArmyMen > 0 ? "army" : "lord") + " in view: " + vp.Name + " (" + vp.FactionName + "), "
-                           + Text.N(men) + " men, strength " + Text.N((int)Math.Round(vp.Strength)) + ", " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + "."
+                           + Text.N(men) + " men, strength " + Text.N((int)Math.Round(vp.Strength)) + ", " + where + "; " + vp.Doing + "; seen by " + kv.Value.By + ".",
+                    Facts = new LineFacts { Strength = Math.Round(vp.Strength), Men = men, Army = r.ArmyMen > 0, Doing = WakeRules.DoingOf(vp.Doing), Realm = r.Faction, Near = vp.NearestHolding, OwnNear = OwnStrengthNear(s, fid, r.X, r.Y) }
                 };
                 triggers.Add(sighting);
                 if (!isPlayer) Sighted(m, s, r, vp);
@@ -634,6 +652,16 @@ namespace BannerlordAgents
             PokesPlayer++;
             Files.Append(Path.Combine(Dir, "record", "pokes_you.jsonl"),
                 Json.Line(new { Type = "poke", Faction = fid, Hours = s.Hours, Date = s.Date, Triggers = mine, Seat = false }));
+        }
+
+        /// <summary>The realm's lords' and armies' strength within WakeRules.Reach of a point (0.15: the wake rule's own_near).</summary>
+        private static double OwnStrengthNear(Snapshot s, string fid, float x, float y)
+        {
+            double sum = 0;
+            foreach (PartyRow p in s.Parties)
+                if (p.Kind == "lord" && p.Faction == fid && !p.Attached && Math.Sqrt((p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y)) <= WakeRules.Reach)
+                    sum += p.ArmyStrength > 0 ? p.ArmyStrength : p.Strength;
+            return sum;
         }
 
         /// <summary>The hunger warnings of this hour (LowFoodDays): one line per own castle or town short of food with an enemy in view near it.</summary>
@@ -690,8 +718,7 @@ namespace BannerlordAgents
                 triggers.AddRange(m.Waiting);
                 m.Waiting.Clear();
             }
-            foreach (Notice n in m.Pending)
-                triggers.Add(new Trigger { Hours = n.Hours, Kind = n.Kind, Text = n.Text, Party = n.Party, Place = n.Place, Notice = n.Id });
+            foreach (Notice n in m.Pending) triggers.Add(LineOf(n));
             m.Pending.Clear();
 
             if (triggers.Count == 0)
@@ -713,9 +740,73 @@ namespace BannerlordAgents
             return triggers;
         }
 
-        /// <summary>A watched realm's poke (reporting lane): its report, fog-checked, its look-ups, and the files the agent reads.</summary>
+        private static Trigger LineOf(Notice n) => new Trigger
+        {
+            Hours = n.Hours, Kind = n.Kind, Text = n.Text, Party = n.Party, Place = n.Place, Notice = n.Id, Facts = n.Urgent ? new LineFacts { Urgent = true } : null
+        };
+
+        /// <summary>A poke the war room has not answered holds back the next for at most this many in-game hours (a call that failed never answers).</summary>
+        private const double HoldForAnswerHours = 12;
+
+        /// <summary>
+        /// The wake rule (0.15, docs/reports/2026-11-06-news-wake-study.md): the news of this hour is sorted into lanes and held. A wake comes when a line of the "now" lane
+        /// is in, or a line of the "wait" lane has waited its hours, or a full day has passed; every line of both lanes then goes as the wake's news, and the digest lane rides along
+        /// (digest). No wake while the last poke is unanswered, so the report it reads is fresh, as the study walked it: one call at a time. A first look reads everything.
+        /// </summary>
+        private static List<Trigger> TakeSorted(Snapshot s, Memory m, Channel ch, out List<Trigger> digest)
+        {
+            digest = null;
+            var fresh = new List<Trigger>(m.Waiting);
+            m.Waiting.Clear();
+            foreach (Notice n in m.Pending) fresh.Add(LineOf(n));
+            m.Pending.Clear();
+            string book = Path.Combine(Dir, "wake_" + s.Watched + ".jsonl");
+            foreach (Trigger t in fresh)
+            {
+                WakeRules.Sort(t);
+                m.Held.Add(t);
+                Diag.Count("wake:" + t.Lane);
+                Files.Append(book, Json.Line(new { Type = "line", Realm = s.Watched, Run = s.Run, Arm = s.Arm, t.Hours, At = s.Hours, t.Kind, t.Sub, t.Lane, t.Rule, t.Text, t.Party, t.Place, t.Facts, t.Notice }));
+            }
+            bool first = m.Held.Any(t => t.Kind == "first_look");
+            string why = first ? "first look" : m.Held.Any(t => t.Lane == WakeRules.Now) ? "news that wakes at once"
+                       : m.Held.Any(t => t.Lane == WakeRules.Wait && s.Hours - t.Hours >= WakeRules.WaitHours - 1e-6) ? "news that waited its hours" : null;
+            if (why == null)
+            {
+                double since = double.IsNaN(m.LastPoke) ? m.Started : m.LastPoke;
+                if (s.Hours - since < 24)
+                {
+                    m.PokedHoursRunning = 0;
+                    return new List<Trigger>();
+                }
+                why = "a quiet day";
+                m.Held.Add(new Trigger
+                {
+                    Hours = s.Hours, Kind = "quiet_day", Sub = "quiet_day", Lane = WakeRules.Now,
+                    Text = m.Held.Count == 0 ? "A full day has passed with nothing new." : "A full day has passed with nothing that called for you."
+                });
+            }
+            if (!first && ch.AwaitingAnswer && s.Hours - m.LastPoke < HoldForAnswerHours)
+            {
+                Diag.Count("wake:held for an answer");
+                return new List<Trigger>();
+            }
+            List<Trigger> wake = first ? m.Held.ToList() : m.Held.Where(t => t.Lane != WakeRules.Digest).ToList();
+            digest = first ? new List<Trigger>() : m.Held.Where(t => t.Lane == WakeRules.Digest).ToList();
+            m.Held.Clear();
+            Diag.Count("wake:wakes");
+            Files.Append(book, Json.Line(new { Type = "wake", Realm = s.Watched, Run = s.Run, Arm = s.Arm, Hours = s.Hours, Why = why, Lines = wake.Count, Digest = digest.Count, Waited = wake.Count > 0 ? Math.Round(s.Hours - wake.Min(t => t.Hours), 2) : 0 }));
+            m.LastPoke = s.Hours;
+            m.Pokes++;
+            m.Recent.AddRange(wake);
+            m.Recent.AddRange(digest);
+            m.Recent.RemoveAll(t => s.Hours - t.Hours > 24);
+            return wake;
+        }
+
+        /// <summary>A watched realm's poke (reporting lane): its report, fog-checked, its look-ups, and the files the agent reads. digest: the news that did not call it, riding this poke (0.15).</summary>
         private static void Poke(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> hostile, Memory m, View v, List<Trigger> triggers,
-                                 Dictionary<string, double> ms, FileTally files)
+                                 Dictionary<string, double> ms, FileTally files, List<Trigger> digest = null)
         {
             // the record of the player's own play keeps its pokes when the player's realm has an agent of its own (the
             // lieutenant), which then takes the place of the player's pass above (Oct 22)
@@ -729,6 +820,7 @@ namespace BannerlordAgents
             PokesWatched++;
             Channel ch = AgentChannel.For(fid);
             int number = ch.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
+            if (digest != null && digest.Count > 0) ch.Digest(number, digest.Select(t => t.Text).ToList());
             Tools.World w = Tools.Runner.WorldFor(s);
             // a news wake's report (0.14, docs/PLAN-news.md): the whole report as before, or the news and what bears on it ("theatre"), or the
             // whole report sent and the theatre's written beside it ("shadow"); the lieutenant is never poked
@@ -738,9 +830,10 @@ namespace BannerlordAgents
             Timed(ms, "facts", () => extras = new ReportExtras
             {
                 Since = ch.On ? ch.SinceLastAnswer(number, v) : null, LastAnswered = ch.LastAnswered,
-                InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On && !theatreMode
+                InForce = Tools.Runner.InForce(w), Facts = Facts.ForPoke(w, triggers), Lookups = ch.On && !theatreMode,
+                Chances = ch.On && !ch.IsLieutenant ? Views.ChanceLines(v, (own, foe) => MarchHours(w, own, foe)) : null
             });
-            List<string> known = Known(s, fid, sees, m, w, triggers).ToList();
+            List<string> known = Known(s, fid, sees, m, w, digest != null ? triggers.Concat(digest).ToList() : triggers).ToList();
             string report = null;
             Timed(ms, "report", () => report = Views.Report(v, triggers, extras));
             Timed(ms, "fog check", () => Audit.CheckReport(v, report, sees, s.InspectedByWatched, "report of poke #" + number, known));
@@ -798,7 +891,7 @@ namespace BannerlordAgents
             string sent = theatreMode && news != null ? news : report;
             object theatreRecord = theatre == null ? null : TheatreRecord(theatre, v, newsMode, news, report, theatreMode && news != null ? "book\\poke-" + number + ".json" : null);
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
-                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Triggers = triggers, View = v, Report = report,
+                Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Triggers = triggers, Digest = digest, View = v, Report = report,
                                 News = news, NewsMode = newsMode == "full" ? null : newsMode, Theatre = theatreRecord, Sent = theatreMode && news != null ? "news" : null }));
             Episodes.Poke(fid, number, s.Hours, triggers, sent, ch.On && !ch.IsLieutenant);
             Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest.txt"), sent);
@@ -825,7 +918,7 @@ namespace BannerlordAgents
             double lagMs = s.Wall > 0 ? (DateTime.UtcNow.Ticks - s.Wall) / 10000.0 : -1;
             Diag.Event("poke", "#" + number, new
             {
-                number, faction = fid, triggers = triggers.Select(t => t.Kind).ToList(), notices = triggers.Where(t => t.Notice.HasValue).Select(t => t.Notice.Value).ToList(),
+                number, faction = fid, triggers = triggers.Select(t => t.Kind).ToList(), digest = digest?.Count ?? 0, notices = triggers.Where(t => t.Notice.HasValue).Select(t => t.Notice.Value).ToList(),
                 tokens, sections = sizes, seen = v.Seen.Count, not_listed = v.SeenNotListed, last_seen = v.LastSeen.Count,
                 written_ms_after_the_hour = Math.Round(lagMs, 1), to_agent = ch.On, sent = ch.On && !ch.IsLieutenant,
                 news_mode = newsMode, recipe = theatre?.Recipe, full_tokens = report.Length / 4, news_tokens = news != null ? news.Length / 4 : (int?)null,
@@ -842,6 +935,14 @@ namespace BannerlordAgents
             if (RecentPokes.Count > 50) RecentPokes.RemoveAt(0);
             // since 0.13.7 an agent's poke is not put in the game's message log (Oct 29: on screen only the lieutenant's and the
             // game's own; the dashboard and the logs keep every poke)
+        }
+
+        /// <summary>The hours from one of the realm's lords to an enemy in view: by road where the game's table knows the way, at his own pace (0.15, the chances to strike).</summary>
+        private static double MarchHours(Tools.World w, ViewParty own, ViewParty foe)
+        {
+            double d = w.RoadDistance(own.Id, foe.Id);
+            if (double.IsNaN(d)) d = Views.Dist(own.X, own.Y, foe.X, foe.Y) * Theatre.RoadFactor;
+            return d / Math.Max(0.3, w.PerHour(w.Party(own.Id)));
         }
 
         /// <summary>

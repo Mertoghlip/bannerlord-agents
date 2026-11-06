@@ -401,6 +401,8 @@ namespace BannerlordAgents
         /// <summary>The newest poke the agent has answered this session, and what happened since, for the next poke.</summary>
         private int _lastAnswered = -1;
         private readonly List<KeyValuePair<int, List<string>>> PokeReasons = new List<KeyValuePair<int, List<string>>>();
+        /// <summary>The news that did not call the agent and rides each poke (0.15, the wake rule's digest).</summary>
+        private readonly List<KeyValuePair<int, List<string>>> PokeDigests = new List<KeyValuePair<int, List<string>>>();
         private readonly List<KeyValuePair<DateTime, string>> Lines = new List<KeyValuePair<DateTime, string>>();
 
         /// <summary>When the folder was last checked (Stopwatch ticks); the watchdog alarms if this stops.</summary>
@@ -424,6 +426,18 @@ namespace BannerlordAgents
         public string NewsMode => _agent.Config.News;
         /// <summary>The newest poke sent (-1: none yet this session).</summary>
         public int LastPoke => _lastPoke;
+        /// <summary>The newest poke sent has had no answer yet (0.15: the wake rule waits for it, so the next report is fresh when the war room can read it).</summary>
+        public bool AwaitingAnswer => _lastPoke >= 0 && _lastPoke > _lastAnswered;
+
+        /// <summary>The in-game hour and date, each reported hour, for the war room's council clock between pokes (0.15: fewer pokes must not make councils late).</summary>
+        public void Clock(double hours) => Files.Overwrite(Path.Combine(Dir, "clock.txt"), hours.ToString("R", Text.Inv) + "\n" + Text.When(hours));
+
+        /// <summary>The news that did not call the agent, to ride poke n (0.15): told in WHAT CHANGED, where the council's words are read too.</summary>
+        public void Digest(int n, List<string> lines)
+        {
+            PokeDigests.Add(new KeyValuePair<int, List<string>>(n, lines));
+            if (PokeDigests.Count > 300) PokeDigests.RemoveRange(0, PokeDigests.Count - 300);
+        }
 
         // ---------- the lieutenant's chat (0.10) ----------
 
@@ -475,6 +489,7 @@ namespace BannerlordAgents
             _silenceAlarmed = false;
             _lastAnswered = -1;
             PokeReasons.Clear();
+            PokeDigests.Clear();
             _late.Clear();
             Lines.Clear();
             AnswerFiles = OrdersReceived = Applied = Checked = Refused = 0;
@@ -552,6 +567,16 @@ namespace BannerlordAgents
             }
             if (more > 0) sb.AppendLine("- ... and " + more + " more.");
             if (shown == 0) sb.AppendLine("- No other pokes came since your last answer (to #" + _lastAnswered + ").");
+            var quiet = new List<string>();
+            foreach (KeyValuePair<int, List<string>> kv in PokeDigests)
+                if (kv.Key > _lastAnswered && kv.Key <= current)
+                    foreach (string r in kv.Value) if (seen.Add(r)) quiet.Add(r);
+            if (quiet.Count > 0)
+            {
+                sb.AppendLine("Quieter news since then, which did not call you:");
+                foreach (string q in quiet.Take(40)) sb.AppendLine("- " + q);
+                if (quiet.Count > 40) sb.AppendLine("- ... and " + (quiet.Count - 40) + " more.");
+            }
             // the tools' call-backs are already among the reasons above
             List<string> lines = Lines.Where(l => l.Key >= last.Wall && !l.Value.StartsWith("tool: ", StringComparison.Ordinal)).Select(l => l.Value).ToList();
             if (lines.Count > 0)

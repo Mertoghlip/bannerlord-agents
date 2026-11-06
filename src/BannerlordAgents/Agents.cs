@@ -32,6 +32,12 @@ namespace BannerlordAgents
         /// </summary>
         public string News = "full";
         public bool Theatre => News == "theatre";
+        /// <summary>
+        /// What wakes the agent (0.15; agent.txt's "wake"): "rule", the wake rule sorts each line first (WakeRules; the default for every agent folder); "all", every line wakes it,
+        /// as before. Only a realm's agent that is switched on goes by the rule.
+        /// </summary>
+        public string Wake = "rule";
+        public bool WakeRule => Wake == "rule" && On && !IsLieutenant;
         /// <summary>What was wrong with the folder, for the self-check (null: nothing).</summary>
         public string Problem;
 
@@ -59,6 +65,7 @@ namespace BannerlordAgents
                             case "channel": if (kv.Value.Length > 0) channel = kv.Value; break;
                             case "kind": c.Kind = kv.Value.Trim().ToLowerInvariant() == "lieutenant" ? "lieutenant" : "realm"; break;
                             case "news": c.News = NewsMode(kv.Value); break;
+                            case "wake": c.Wake = kv.Value.Trim().ToLowerInvariant() == "all" ? "all" : "rule"; break;
                         }
             }
             catch (Exception e) { c.Problem = "agent.txt could not be read: " + e.Message; }
@@ -82,7 +89,7 @@ namespace BannerlordAgents
             try { workspace = Path.GetDirectoryName(channelDir.TrimEnd('\\', '/')); } catch { }
             return new AgentConfig
             {
-                Realm = realm, ChannelDir = channelDir, Workspace = workspace, Mode = mode, Lords = string.IsNullOrWhiteSpace(lords) ? "all" : lords,
+                Realm = realm, ChannelDir = channelDir, Workspace = workspace, Mode = mode, Lords = string.IsNullOrWhiteSpace(lords) ? "all" : lords, Wake = "all",
                 LogDir = workspace != null ? LogDirOf(workspace) : DefaultLogDir
             };
         }

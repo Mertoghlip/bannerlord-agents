@@ -57,6 +57,9 @@ namespace BannerlordAgents.WarRoom
         private CancellationTokenSource _storyStop;
         private DateTime _storyFailedAt = DateTime.MinValue, _lastCallEnded = DateTime.MinValue, _storyLooked = DateTime.MinValue;
         private double _pokeHours = double.NaN;
+        // the game's hour between pokes (0.15, clock.txt): with the wake rule pokes are fewer, and a council's time must not wait for one
+        private DateTime _clockSeen = DateTime.MinValue;
+        private string _clockDate;
         private static readonly object LogGate = new object();
         private readonly object _systemGate = new object();
 
@@ -204,6 +207,9 @@ namespace BannerlordAgents.WarRoom
                 r.OutTokens += r2.OutTokens;
                 r.Thinking += r2.Thinking;
             }
+            // a fast answer that ran out of time: the news is too big for one, so a council takes it up (0.15: both of the study's replays that hit the limit were lords caught up in one siege)
+            if (answer == null && write && !_c.Conversation && (problem ?? "").Contains("took over"))
+                lock (_councilGate) _councilDue ??= "your fast answer to poke #" + number + " ran out of time, so this news needs a council";
             int orders = answer?["orders"] is JsonArray arr ? arr.Count : 0;
             // tools are written at a council of war only (0.14, decision 3): a news wake's are not kept, and it and the next council are told
             List<string> toolsDropped = news && answer?["tools"] is JsonArray wrote && wrote.Count > 0 ? ToolNamesOf(wrote) : null;
@@ -565,7 +571,40 @@ namespace BannerlordAgents.WarRoom
                     if (w.StartsWith("First look", StringComparison.OrdinalIgnoreCase)) _councilFirstLook = true;
                     break;
                 }
+                // many lords caught up in one big event (0.15): the decision is the whole front's, not one wake's
+                if (_councilDue == null)
+                {
+                    int stuck = reasons.Split('\n').Count(l => l.IndexOf(StuckWords, StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (stuck >= StuckForCouncil) _councilDue = stuck + " of your lords have not moved for hours, in the same news";
+                }
             }
+        }
+
+        private const string StuckWords = "has not moved for";
+        private const int StuckForCouncil = 3;
+
+        /// <summary>
+        /// The game's newest hour between pokes (0.15): clock.txt, written every reported hour. Its hour and date, as a new poke's would be, are what a council's time is
+        /// reckoned from, so that fewer pokes do not make councils late.
+        /// </summary>
+        internal void ReadClock()
+        {
+            string file = Path.Combine(_c.ChannelDir, "clock.txt");
+            try
+            {
+                if (!File.Exists(file)) return;
+                DateTime written = File.GetLastWriteTimeUtc(file);
+                if (written == _clockSeen) return;
+                _clockSeen = written;
+                string[] lines = File.ReadAllText(file).Split('\n');
+                if (lines.Length > 0 && double.TryParse(lines[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double hours))
+                {
+                    _pokeHours = hours;
+                    _clockDate = lines.Length > 1 ? lines[1].Trim() : null;
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
 
         /// <summary>The lords an answer's orders name: each order's lord, and the lords it calls (gather, add).</summary>
@@ -606,6 +645,7 @@ namespace BannerlordAgents.WarRoom
         {
             if (_mem == null || (_council != null && !_council.IsCompleted)) return;
             if ((DateTime.Now - _councilFailedAt).TotalMinutes < 5) return;
+            ReadClock();
             string why = CouncilDue(_pokeHours);
             if (why == null || !Fresh(out _)) return;
             _councilStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
@@ -637,10 +677,13 @@ namespace BannerlordAgents.WarRoom
         /// <summary>The game is running: its latest poke was written within the last ten minutes (0.12.0: the briefing is written only when asked for).</summary>
         private bool Fresh(out string why)
         {
-            string poke = Path.Combine(_c.ChannelDir, "poke.json");
+            string poke = Path.Combine(_c.ChannelDir, "poke.json"), clock = Path.Combine(_c.ChannelDir, "clock.txt");
             why = !File.Exists(poke) ? "no poke from the game yet (poke.json)" : null;
             if (why != null) return false;
-            double age = (DateTime.Now - File.GetLastWriteTime(poke)).TotalMinutes;
+            // the game's clock counts too (0.15): with the wake rule a quiet realm goes longer between pokes
+            DateTime latest = File.GetLastWriteTime(poke);
+            if (File.Exists(clock) && File.GetLastWriteTime(clock) > latest) latest = File.GetLastWriteTime(clock);
+            double age = (DateTime.Now - latest).TotalMinutes;
             if (age > 10) { why = "the latest poke is " + Math.Round(age) + " minutes old: the game is closed or long paused"; return false; }
             return true;
         }
@@ -682,6 +725,12 @@ namespace BannerlordAgents.WarRoom
             PokeMeta meta = ReadMeta(-1);
             if (meta == null || _mem == null) { Say("Council of war: no poke yet in this run, so it waits."); return false; }
             int number = meta.Number;
+            // between pokes (0.15): the hour and the date are the game's clock's, not the last poke's
+            if (!double.IsNaN(_pokeHours) && _pokeHours > meta.Hours && _clockDate != null)
+            {
+                meta.Hours = _pokeHours;
+                meta.Date = _clockDate;
+            }
             // the briefing from the game's newest hour, written for this council (0.12.0)
             if (!RequestBriefing(out string late))
             {
@@ -806,6 +855,8 @@ namespace BannerlordAgents.WarRoom
         }
 
         internal double NextCouncilHours { get { lock (_councilGate) return _nextCouncilHours; } }
+        /// <summary>For the self-test: the newest in-game hour the war room knows.</summary>
+        internal double CouncilHoursNow => _pokeHours;
 
         /// <summary>For the self-test: a council sitting (fast answers' lords are then noted), and the note for the next fast message.</summary>
         internal void CouncilSitting(bool sitting) { lock (_councilGate) { if (sitting) BeginSitting(); else _councilSitting = false; } }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Helpers;
 using Newtonsoft.Json.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
@@ -93,6 +94,8 @@ namespace BannerlordAgents
         public static void Fill(PartyRow r, MobileParty p)
         {
             r.Gold = p.PartyTradeGold;
+            Hero leader = p.LeaderHero;
+            r.RecruitFloor = leader != null && leader.Clan != Clan.PlayerClan ? (int)HeroHelper.StartRecruitingMoneyLimit(leader) : 0;
             r.Wages = p.TotalWage;
             r.WageCap = p.HasLimitedWage() ? p.PaymentLimit : -1;
             r.CapOurs = Wages.Has(p);

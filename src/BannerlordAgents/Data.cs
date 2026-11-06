@@ -69,6 +69,8 @@ namespace BannerlordAgents
         /// ransom by the game's reckoning); and his last sale (the hour, and in words).
         /// </summary>
         public int Gold = -1, Wages, WageCap = -1, Loot, LootPieces, Prisoners, PrisonerLords, Ransom;
+        /// <summary>The gold below which the game keeps this lord from recruiting (0.15; 0: no such floor, or not worked out).</summary>
+        public int RecruitFloor;
         public bool CapOurs;
         public double SaleHours = double.NaN;
         public string SaleText;
@@ -312,6 +314,8 @@ namespace BannerlordAgents
         public bool RecordOnly;
         /// <summary>The test run it happened in (RunTags, 0.13); null outside a run.</summary>
         public string Run = RunTags.Id;
+        /// <summary>A letter its writer marked to wake its reader now (0.15).</summary>
+        public bool Urgent;
     }
 
     /// <summary>
@@ -515,5 +519,8 @@ namespace BannerlordAgents
         public string Place;
         /// <summary>The notice it came from, if any.</summary>
         public int? Notice;
+        /// <summary>The wake rule's sorting of it (0.15, WakeRules): its finer kind, its lane, the rule that gave it, and the facts it was read from.</summary>
+        public string Sub, Lane, Rule;
+        public LineFacts Facts;
     }
 }

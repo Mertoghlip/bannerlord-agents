@@ -1,6 +1,6 @@
 # News wakes: which are needless, and what each kind needs (Nov 6)
 
-A study of every news wake in run 20261029-1903-A (arm A, 60 in-game days, both agents playing against me), and the new design that came out of it. Claude Code ran the analysis and the replays, read the wakes by hand and drafted this report. I set the questions and made the decisions, which are in [the new design](#3-the-new-design). So far only the follow-up fix is built.
+A study of every news wake in run 20261029-1903-A (arm A, 60 in-game days, both agents playing against me), and the new design that came out of it. Claude Code ran the analysis and the replays, read the wakes by hand and drafted this report. I set the questions and made the decisions, which are in [the new design](#3-the-new-design). Version 0.15.0 builds that design, except the agent editing its own rules, which is the second test. None of it has been played yet.
 
 **Words used here:**
 - A **wake** (or poke) is the game calling an agent because something happened. The war room answers only the newest one, and news from the ones it skips goes into its next report. Numbers like #6301 are wake numbers.
@@ -408,22 +408,22 @@ The call then reads the news report, or the whole report when a letter is in it.
 
 The council keeps the whole picture, with no gate. It picks up errands and everything in the digest.
 
-**The council can't stay exactly as it is.** The study's first draft said it could, and that was wrong. The war room checks whether a council is due only when a wake arrives, by that wake's in-game hour (`Room.CouncilDue`), and it reads the big-event words only after a fast answer (`Room.AfterAnswer`). With fewer wakes, councils would slip, and a digest line such as "army has formed" wouldn't call one. So the game must wake the agent when a council is due, and digest lines must be checked for those words.
+**The council can't stay exactly as it is.** The study's first draft said it could, and that was wrong. The war room checks whether a council is due only when a wake arrives, by that wake's in-game hour (`Room.CouncilDue`), and it reads the big-event words only after a fast answer (`Room.AfterAnswer`). With fewer wakes, councils would slip, and a digest line such as "army has formed" wouldn't call one. So the game now writes the hour for the war room every hour, and a council sits on time without a wake. Digest lines reach the agent in WHAT CHANGED, where the war room reads the council's words, so at worst they call a council at the next wake.
 
 ### What changes
 
 | Change | What it does | Why | Status |
 |---|---|---|---|
 | **1. Fix the follow-up** | A supply or recruit order that ends starts its next order, as other orders do. | 0 of 92 follow-ups started. Removes some wakes and stops lords drifting. | **Done in 0.14.2** |
-| **2. The wake rule** | The game sorts each line into three lanes. It is on by default, with a setting to turn it off. Every line logs its lane and the rule that sorted it. | About 44% fewer calls, and important news answered sooner. | To build |
-| **3. Letter marks** | A letter says whether it must wake its reader. The instructions say to mark it only if the ally must change an order within about 6 hours, and not to reply just to acknowledge. | A third of timed letters are urgent, and half of replies open with thanks. | To build |
-| **4. News report on, except letters** | Switch on the news report built on Nov 3 for every kind we wake for. Wakes with a letter keep the whole report. | Letters saved only 13% on a small report and took twice as long. The rest saved 27 to 60%. | To build |
-| **5. Lords with no order** | One line in every report: name, strength, where, gold short or not. | 360 of 905 orders went to these lords, and there are only about 4 at a time. | To build |
-| **6. Chances to strike** | A short list in every report: lone enemy lords under 700, raiding, fighting or on their way to raid, with 1.5 times their strength of ours within reach. | Keeps the strikes the agent finds by looking around. About 1.3 lines on average, before counting raiders on their way. | To build |
-| **7. Too poor to recruit** | Show a lord's gold beside him when it's near the floor, or refuse the recruit order up front with the reason. | 69 recruit orders ended early for money. A lord's gold wasn't in the report for 59 of the 67 that could be checked. | To build |
-| **8. Big events go to the council** | When many lords are caught up in one siege or battle, the wake calls a council. The war room can already do this on set words. | Both replays that hit the 120-second limit were this. The original #6033 took 115 seconds and cost $1.00. | To build |
-| **9. Council clock** | The game wakes the agent when a council is due, and digest lines are checked for the council's words. | See above. | To build |
-| **10. The agent's own wake rules** | The agent can edit the vanilla rules and write its own, in any answer. | See below. | To build, for the second test run |
+| **2. The wake rule** | The game sorts each line into three lanes. It is on by default, with a setting to turn it off. Every line logs its lane and the rule that sorted it. | About 44% fewer calls, and important news answered sooner. | Built in 0.15.0 |
+| **3. Letter marks** | A letter says whether it must wake its reader. The instructions say to mark it only if the ally must change an order within about 6 hours, and not to reply just to acknowledge. | A third of timed letters are urgent, and half of replies open with thanks. | Built in 0.15.0 |
+| **4. News report on, except letters** | Switch on the news report built on Nov 3 for every kind we wake for. Wakes with a letter keep the whole report. | Letters saved only 13% on a small report and took twice as long. The rest saved 27 to 60%. | Built in 0.15.0 |
+| **5. Lords with no order** | One line in every report: name, strength, where, gold short or not. | 360 of 905 orders went to these lords, and there are only about 4 at a time. | Built in 0.15.0 |
+| **6. Chances to strike** | A short list in every report: lone enemy lords under 700, raiding, fighting or on their way to raid, with 1.5 times their strength of ours within reach. | Keeps the strikes the agent finds by looking around. On run A's wakes, as built: 0.6 lines a wake for the Orcs and 0.1 for Dol Guldur, at most 5. | Built in 0.15.0 |
+| **7. Too poor to recruit** | Show a lord's gold beside him when it's within a fifth of the floor. | 69 recruit orders ended early for money. A lord's gold wasn't in the report for 59 of the 67 that could be checked. | Built in 0.15.0 |
+| **8. Big events go to the council** | Three lords stuck in one wake's news, or a fast answer that runs out of time, call a council. | Both replays that hit the 120-second limit were this. The original #6033 took 115 seconds and cost $1.00. | Built in 0.15.0 |
+| **9. Council clock** | The game tells the war room the hour every hour, so a council sits on time with no wake and no extra fast answer. Digest lines reach WHAT CHANGED, where the council's words are read. | See above. | Built in 0.15.0 |
+| **10. The agent's own wake rules** | The agent can edit the vanilla rules and write its own, in any answer. | See below. | Not built: the second test run |
 | **11. Reports by kind, later** | A small table of sections by kind on top of the news report (the cards). | Up to 33% smaller than the news report, for about $20 more saved per run on Claude. Mostly useful for the local model. | Later |
 
 **Left alone:** first looks, the question book, and one shared copy of the instructions on Claude. By-kind instructions only matter for the local model, where 25,000 tokens cost graphics memory on every wake (step 9 in the back-up).
@@ -441,28 +441,35 @@ The smoke test covers the part that decides what starts and when. The part insid
 
 Misty Orcs, Spring 10, 1088, wake #6301. The wake's news was a weak Rohan lord passing (Unthery, 163 men, strength 240, 27.6 from Linhamm), plus 16 backlog lines, none about Celeborn. The agent found him by reading the whole report and sent Morznak, who took him prisoner and lost 13 men.
 
-From that wake's recorded data, the two sections would read like this. The wording is a sketch:
+Built from that wake's recording, the two sections read like this:
 
 ```
-LORDS WITH NO ORDER (1 of 48)
-- Morznak: army of 664 men in 4 parties, strength 1,177; 3 from Mazûg-salth,
-  heading to defend Nanduhirion.
+LORDS WITH NO ORDER (1 of your 48; the game's own AI leads each until you order him)
+- Morznak [lord_MM10_2]: army of 664 men in 4 parties, strength 1,177; 3.1 from Mazûg-salth;
+  defending Nanduhirion.
 
-CHANCES TO STRIKE
-- Celeborn (Arnor and Gondor): 131 men, strength 333, on the way to raid
-  Mazûg-salth, there in about an hour. Yours near: Morznak 4 away (no order);
-  Bargha 12 and Shagash 12 (going to garrison Nanduhirion).
-- Haleth Halethring (Rohan): 159 men, strength 392, on the way to raid Grafton.
-  Yours near: Tûba and Maukhash, 31 away (garrisoning Starkmoore).
-- Cadda Tordaging (Rohan): 63 men, strength 129, on the way to raid Feldham.
-  Yours near: the same two, 31 away.
-- Fighting (Rohan): Hilda Bonecrusher 121, Waldæg Bregdaning 70, Leofwine 26.
-  Yours near: the same two, about 22 away.
+CHANCES TO STRIKE (lone enemy lords under strength 700, raiding, on their way to raid or
+fighting, with 1.5 times their strength of yours within about 13 hours' march)
+- Celeborn, Lord of Lothlórien [lord_L1_2] (Kingdom of Arnor and Gondor): 131 men, strength 333;
+  on the way to raid Mazûg-salth, there in about an hour (Spring 10, 1088, 04:00) by road at its
+  pace, 1.5 to go by road. Yours near: Morznak [lord_MM10_2] 1,177, about 3 hours away (no order),
+  Shagash [lord_MM15_5] 331, about 5 hours away (garrison), Bargha [lord_MM9_10] 373, about
+  6 hours away (garrison), and 5 more.
 ```
 
-The list leaves out any enemy over 700 strength or in an army, and any enemy without 1.5 times its strength of ours within 40 map units. The wake rule wouldn't have dropped this wake, since its backlog held two battles and two lords taken.
+The list leaves out any enemy of 700 strength or more or in an army, and any enemy without 1.5 times its strength of ours within about 13 hours' march. The wake rule wouldn't have dropped this wake, since its backlog held two battles and two lords taken.
 
-**What the list needs before it's built.** At #6248 the rule above gives 16 lines, 15 of them Rohan lords fighting about the same distance from the same two lords. So those get grouped into one line, the list is capped at 5, and reach is measured in hours of march, not straight-line distance.
+**What the first version got wrong.** At #6248 the study's raw rule gave 16 lines, 15 of them Rohan lords fighting about the same distance from the same two lords. So lords fighting near one holding for one realm are now one line, measured together, the list stops at 5, and reach is in hours of march, not straight-line distance. #6248 now gives one line.
+
+**On all of run A's wakes, built from their recordings** (reach by the straight line times 1.3, since a recording has no road table):
+
+| | Misty Orcs | Dol Guldur |
+|---|---|---|
+| Wakes | 942 | 662 |
+| Chances a wake: mean, most | 0.6, 5 | 0.1, 2 |
+| Wakes with no chance | 58% | 87% |
+| Lords with no order a wake: mean, median, most shown | 7.2, 6, 13 | 4.1, 2, 13 |
+| The two lists' size, characters: mean, largest | 890, 2,823 | 381, 1,439 |
 
 ### Letter marks, on real letters
 
@@ -484,7 +491,7 @@ The study's first draft held this back. I decided otherwise, and want it tested:
 "wake_rules": [
   {"name": "rohan_passing_linhamm", "lane": "digest", "days": 5,
    "if": "realm == 'rohan' and strength < 500 and near == 'Linhamm' and not raiding"},
-  {"name": "weak_lord_passing", "set": {"strength": 400}},
+  {"name": "enemy_lord_strong", "set": {"line": 400}},
   {"name": "rohan_passing_linhamm", "retire": true}
 ]
 ```
@@ -497,11 +504,21 @@ The study's first draft held this back. I decided otherwise, and want it tested:
 6. **Feedback at councils.** A short section lists each rule, the lines it held, and any held line whose same enemy then raided, besieged or took something within 12 hours. It goes in the report and not the instructions, so a rule change doesn't throw away the cached prompt. The instructions explain how rules work and give no advice on what to silence.
 7. **Records.** Every rule change logs the answer it came from. Rules start empty in each test run, unlike tools, so the runs stay comparable.
 
+### What 0.15.0 adds beyond the plan
+
+- **One call at a time.** While a poke has no answer, news waits, so the next report is fresh when the war room can read it. That is how the study walked the run. After 12 in-game hours without an answer, the next poke goes anyway, since a failed call never answers.
+- **A council hears what is held.** A council's report has a section for the lines held back, and those lines no longer wake the agent. The walk assumed this too.
+- **A record of every line.** `wake_<realm>.jsonl` beside each realm's pokes holds each line's kind, lane and rule, every wake and why it came, and what each council took up.
+
+**Checked against the study:** `SmokeTest --wake-check` ran all 3,465 of run A's recorded news lines through the code. It sorted every one into the same lane as the study's script, with no differences. Marks on letters are the writer's now, so that check counts every letter as unmarked. How the agents will use the mark is untested.
+
 ### Order of work and testing
 
-1. Fix the follow-up bug. **Done.**
-2. Build the finished version, with the wake rule on by default and rule editing off. There is no log-only step first.
-3. **Test run 1:** the vanilla rules, both sides live.
+I play the Kingdom of Arnor and Gondor in every test. Agents play the Misty Mountain Orcs, Dol Guldur, Rhun and Gundabad: both realms' lords were already in the war in my last test, under the game's own AI. The figures in this report are for two agents, so with four, expect about twice the calls and cost.
+
+1. Fix the follow-up bug. **Done (0.14.2).**
+2. Build the finished version, with the wake rule on by default and rule editing off. There is no log-only step first. **Done (0.15.0).**
+3. **Test run 1:** the vanilla rules. The agents can't edit them.
 4. Add rule editing.
 5. Replay about 10 recorded councils (about $6) to see what rules the agent writes, then run those rules over run A's news.
 6. **Test run 2:** from the same save and for the same length, with the agent able to edit and write rules.

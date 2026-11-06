@@ -25,6 +25,8 @@ namespace BannerlordAgents
         {
             public string Id, From, FromName, To, ToName, Text, Plan, State, Source;
             public double Hours;
+            /// <summary>Its writer marked it to wake its reader now (0.15).</summary>
+            public bool Urgent;
         }
 
         internal sealed class Plan
@@ -59,7 +61,7 @@ namespace BannerlordAgents
                     Letters.Add(new Letter
                     {
                         Id = (string)l["id"], From = (string)l["from"], FromName = (string)l["from_name"], To = (string)l["to"], ToName = (string)l["to_name"], Text = (string)l["text"],
-                        Plan = l["plan"]?.Type == JTokenType.String ? (string)l["plan"] : null, State = (string)l["state"], Source = (string)l["source"], Hours = (double?)l["hours"] ?? double.NaN
+                        Plan = l["plan"]?.Type == JTokenType.String ? (string)l["plan"] : null, State = (string)l["state"], Source = (string)l["source"], Hours = (double?)l["hours"] ?? double.NaN, Urgent = (bool?)l["urgent"] ?? false
                     });
                 else if (kind == "plan" && l["plan"] is JObject p)
                 {
@@ -136,7 +138,7 @@ namespace BannerlordAgents
         // ---------- a letter ----------
 
         /// <summary>
-        /// One letter of an answer: {"to": ally, "text": "...", "plan": {"what", "where", "when", "parts": {realm: words}}} for a new joint plan,
+        /// One letter of an answer: {"to": ally, "text": "...", "urgent": true (0.15: wakes its reader now; else it waits), "plan": {"what", "where", "when", "parts": {realm: words}}} for a new joint plan,
         /// or "plan_id" with "state" to answer or update one. Checked, delivered and recorded; returns what became of it (status: sent, refused).
         /// </summary>
         public static string Send(Snapshot s, string from, JObject l, string source, int poke, out string status)
@@ -174,7 +176,7 @@ namespace BannerlordAgents
             }
             var letter = new Letter
             {
-                Id = "l" + (++_letters), From = from, FromName = Name(s, from), To = to, ToName = Name(s, to), Text = text, Plan = plan?.Id, State = plan?.State, Source = source, Hours = hours
+                Id = "l" + (++_letters), From = from, FromName = Name(s, from), To = to, ToName = Name(s, to), Text = text, Plan = plan?.Id, State = plan?.State, Source = source, Hours = hours, Urgent = (bool?)l["urgent"] ?? false
             };
             Letters.Add(letter);
             Keep(letter, plan, poke);
@@ -188,13 +190,13 @@ namespace BannerlordAgents
             var line = new JObject
             {
                 ["load"] = Bridge.History?.Label ?? Brain.History?.Label, ["h"] = letter.Hours, ["w"] = DateTime.Now.ToString("o", Text.Inv), ["k"] = "letter", ["id"] = letter.Id,
-                ["from"] = letter.From, ["from_name"] = letter.FromName, ["to"] = letter.To, ["to_name"] = letter.ToName, ["text"] = letter.Text, ["plan"] = letter.Plan, ["state"] = letter.State,
+                ["from"] = letter.From, ["from_name"] = letter.FromName, ["to"] = letter.To, ["to_name"] = letter.ToName, ["text"] = letter.Text, ["plan"] = letter.Plan, ["state"] = letter.State, ["urgent"] = letter.Urgent,
                 ["source"] = letter.Source, ["hours"] = letter.Hours, ["poke"] = poke, ["run"] = RunTags.Id, ["arm"] = RunTags.Arm
             };
             if (_file != null) Files.Append(_file, line.ToString(Newtonsoft.Json.Formatting.None));
             if (plan != null && _file != null)
                 Files.Append(_file, new JObject { ["load"] = line["load"], ["h"] = letter.Hours, ["w"] = line["w"], ["k"] = "plan", ["plan"] = PlanJson(plan), ["by"] = letter.From, ["letter"] = letter.Id }.ToString(Newtonsoft.Json.Formatting.None));
-            DiploBook.Write(new { Type = "letter", Realm = letter.From, Run = RunTags.Id, Arm = RunTags.Arm, Hours = letter.Hours, Id = letter.Id, letter.To, letter.Text, letter.Plan, letter.State, letter.Source, Poke = poke });
+            DiploBook.Write(new { Type = "letter", Realm = letter.From, Run = RunTags.Id, Arm = RunTags.Arm, Hours = letter.Hours, Id = letter.Id, letter.To, letter.Text, letter.Plan, letter.State, letter.Source, letter.Urgent, Poke = poke });
             if (plan != null) DiploBook.Write(new { Type = "plan", Realm = letter.From, Run = RunTags.Id, Arm = RunTags.Arm, Hours = letter.Hours, plan.Id, plan.From, plan.To, plan.What, plan.Where, plan.When, plan.Parts, plan.State, Letter = letter.Id });
             Diag.Count("allies:letters");
         }
@@ -203,14 +205,14 @@ namespace BannerlordAgents
         private static void Deliver(Snapshot s, Letter letter, Plan plan)
         {
             Reads(letter.To, out string how);
-            string text = "A letter from the ruler of " + letter.FromName + " [" + letter.From + "] (" + letter.Id + "): \"" + letter.Text + "\"" + (plan != null ? " " + PlanText(s, plan) : "");
+            string text = "A letter from the ruler of " + letter.FromName + " [" + letter.From + "] (" + letter.Id + "): \"" + letter.Text + "\"" + (plan != null ? " " + PlanText(s, plan) : "") + (letter.Urgent ? " (Marked urgent by its writer.)" : "");
             if (how == "lieutenant")
             {
                 ToLieutenant?.Invoke(letter, plan);
                 Brain.OnNotice(new Notice { Id = NoticeIds.Next(), Hours = letter.Hours, Kind = "letter", Text = text, Factions = { letter.To }, RecordOnly = true });
                 return;
             }
-            Brain.OnNotice(new Notice { Id = NoticeIds.Next(), Hours = letter.Hours, Kind = "letter", Text = text, Factions = { letter.To } });
+            Brain.OnNotice(new Notice { Id = NoticeIds.Next(), Hours = letter.Hours, Kind = "letter", Text = text, Factions = { letter.To }, Urgent = letter.Urgent });
         }
 
         /// <summary>A plan in words: what, where, when, each side's part, its state.</summary>

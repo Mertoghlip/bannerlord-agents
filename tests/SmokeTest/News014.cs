@@ -96,10 +96,10 @@ namespace SmokeTest
                   && realmText.Contains("THE REST OF THE WAR") && !realmText.Contains("YOUR LORDS WHO CAN BE THERE"),
                   "a first look gets the whole report with the questions; news of a vote alone gets the realm's diplomacy, its purse and sum, and the rest of the war");
 
-            // a letter's theatre is the places it names (decision 4)
+            // a letter reads the whole report since 0.15: the study's replays saved 13% on a small report and took twice as long
             var letter = new List<Trigger> { new Trigger { Hours = 80000, Kind = "letter", Text = "A letter from the ruler of Dol Guldur [dg] (l3): \"Hold Orc Keep [castle_two] until I come.\"" } };
             Theatre lt = Theatre.Build(v, letter, Theatre.ByLine(v), Theatre.ByLine(v));
-            Check(lt.IsTheatre && lt.Focuses.Any(f => f.Id == "castle_two"), "a letter's theatre is the places it names: " + string.Join(", ", lt.Focuses.Select(f => f.Id)));
+            Check(lt.Whole && lt.WhyRecipe.Contains("a letter"), "a letter reads the whole report: " + lt.WhyRecipe);
 
             // the question book: every list, the regions, and the look-ups, the enemy's castle near the realm's lands among them
             Dictionary<string, string> pages = Facts.Lookups(w, Brain.Get("orcs").LastSeen, Brain.Get("orcs").Trails);

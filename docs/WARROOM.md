@@ -151,6 +151,18 @@ In theatre mode a news wake's call differs in four ways. Councils are untouched:
 
 `calls.jsonl` also gets `news_mode`, `recipe`, `message_chars`, `read_tool`, `book_asked` and `tools_offered`; `routes.jsonl` a line per book question.
 
+## The wake rule (since 0.15)
+
+Each agent's `agent.txt` says `wake = rule` (the default) or `all` (every line of news wakes it, as before). The study behind it is [reports/2026-11-06-news-wake-study.md](reports/2026-11-06-news-wake-study.md).
+
+- **The lanes.** The game sorts each line of news before any call, by the list in `src/BannerlordAgents/Wake/wake-rules.json`, the first rule that matches: `now` wakes the agent, `wait` wakes it after 6 in-game hours, `digest` never does and rides the next call. A line no rule matches wakes it. The rules are data in the behavior language; agents can't change them yet.
+- **What a wake holds.** The `now` and `wait` lines are its news, in WHY YOU ARE ASKED NOW. The digest goes in WHAT CHANGED. A first look takes everything as news.
+- **One call at a time.** While a poke has no answer the game holds the news, at most 12 in-game hours, so the next report is fresh.
+- **Letters.** A letter marked `"urgent": true` wakes its reader at once; others wait. A wake with a letter reads the whole report, not the news report.
+- **The council.** The game writes `clock.txt` in the channel every reported hour, and the war room reckons a council's time from it, so a council sits on time with no poke. It reads the lines held back, which then no longer wake the agent. Three lords stuck in one wake's news, or a fast answer that runs out of time, also call one.
+- **The record.** `wake_<realm>.jsonl` in the campaign's data folder: each line's kind, lane, rule and facts, each wake and why it came, and what each council took up. A poke's own record keeps each line's lane, and its digest apart.
+- **The check.** `SmokeTest --wake-check <pokes_realm.jsonl> --run <id> --out <lines.jsonl> [--show 6301,6248]` runs a recorded run through the rule and the two short lists.
+
 ## Guards
 
 - **The answer ends the call,** not Claude Code's exit: Claude Code sometimes lingers after answering, so it is closed after 2 s.

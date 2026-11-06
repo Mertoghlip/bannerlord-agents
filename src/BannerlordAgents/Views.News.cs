@@ -96,6 +96,7 @@ namespace BannerlordAgents
                 HoldingsSection(sb, v, t);
             }
             if (x?.Facts != null && t.IsTheatre) sb.AppendLine().AppendLine("READY-MADE FACTS").AppendLine(LookupFile.Replace(x.Facts, "look_up $1"));
+            ListsSection(sb, v, x);
             OrdersSection(sb, x, ids, t);
 
             if (v.Open.Count > 0)

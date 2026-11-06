@@ -2119,3 +2119,25 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The lists of lords with no order and chances to strike stay in the design.
 - **Found while planning:** the war room checks whether a council is due only when a wake arrives, and reads the big-event words only after a fast answer. With fewer wakes, councils would slip, so the wake rule has to wake the agent when one is due.
 - **Not built yet:** everything except the follow-up fix (0.14.2). No install; the game, the agents and the code didn't change.
+
+### 15:52 · Install, version 0.15.0: the wake rule on by default, letter marks, the news report on, the two short lists, the council clock; agents for Rhun and Gundabad · commit PENDING
+- **Why:** the design from the news wake study ([report](reports/2026-11-06-news-wake-study.md)), as the finished version for the first test run. The agents can't edit the rules yet: that is the second test. I play the Kingdom of Arnor and Gondor in every test, and Rhun's and Gundabad's lords were already in the war in my last test.
+- **The wake rule:** the game sorts every line of news before any call, into wake now, wait up to 6 in-game hours, or digest (never wakes, rides the next call). The rules are data (`src/BannerlordAgents/Wake/wake-rules.json`), read over each line's facts. On by default (`wake = rule` in `agent.txt`, `all` for the old way). No log-only step first, by decision. While a poke has no answer the news waits, at most 12 in-game hours, so the next report is fresh.
+- **Letter marks:** a letter with `"urgent": true` wakes its reader at once; others wait. The instructions say when to mark one, and not to write only to acknowledge or thank.
+- **The news report on:** every realm agent is on `news = theatre`. A wake with a letter reads the whole report (the Nov 3 decision that a letter's theatre is the places it names is replaced: the study's replays saved 13% on a small report and took twice as long).
+- **The two short lists:** LORDS WITH NO ORDER and CHANCES TO STRIKE in every report of a news wake and council. Fights near one holding are one line, measured together; at most 5 chances; reach in hours of march.
+- **Too poor to recruit:** a lord's gold shows beside him when it is within a fifth of the game's floor for recruiting.
+- **Councils:** the game writes the hour into the channel every hour (`clock.txt`), so a council sits on time with no wake and no extra fast answer. A council reads the lines held back, which then no longer wake the agent. Three lords stuck in one wake's news, or a fast answer that runs out of time, also call one.
+- **The record:** `wake_<realm>.jsonl` in the campaign's data folder holds each line's kind, lane, rule and facts, each wake and why it came, and what each council took up.
+- **Checks:**
+  - `SmokeTest --wake-check` ran all 3,465 recorded news lines of run A through the code: every one went in the same lane as the study's script, no differences. Letters all count as unmarked in that check.
+  - The two lists on run A's 1,604 recorded wakes: chances 0.6 a wake for the Orcs and 0.1 for Dol Guldur, at most 5; lords with no order 7.2 and 4.1, at most 13 shown; together 890 and 381 characters on average, at most 2,823. #6301 lists Celeborn and Morznak; #6248, 16 lines before, gives one.
+  - Smoke test 501 checks, 34 of them new, war room and dashboard self-tests all passed. The reference check reports 834 game members, 0 missing.
+  - **Not tested:** nothing here has run in the game, and no real model has read the new instructions. Wait times and call counts are still the study's estimates.
+- **Outside the repository:**
+  - New agents: `C:\Users\karab\Projects\rhun-war-council` (`khuzait`) and `C:\Users\karab\Projects\gundabad-war-council` (`gundabad`), live, fresh from the templates, in the bridge's `agents` list and `run_rivals`.
+  - `warroom-system.md` and `warroom-news.md` in `orc-war-council`, `dolguldur-war-council` and `kingdom-war-council` have the same new text as the templates, with copies kept as `.bak-20261106-before-wake-rule`. Each `agent.txt` has `news = theatre` and `wake = rule`.
+  - `scripts\arm.ps1` sets the two new agents with the other rivals. The modes now are arm A.
+  - The study's scripts and working files are in `D:\BannerlordAgents-backup\news-wake-study-20261106` (239 MB), to reuse on the new runs.
+  - War rooms and dashboard stopped for the build and started again, six war rooms now. The game was closed.
+- **What to expect:** the study's figures are for two agents, so with four, about twice the calls and cost. Runs from now on are not like for like with run A: several things changed at once, and two more realms have agents.

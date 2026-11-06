@@ -32,6 +32,7 @@ namespace SmokeTest
             if (args.Length > 1 && args[0] == "--library") return ExportLibrary(args[1]);
             if (args.Length > 0 && args[0] == "--perf") return Perf(args);
             if (args.Length > 0 && args[0] == "--coverage") return Coverage(args);
+            if (args.Length > 1 && args[0] == "--wake-check") return WakeCheck(args);
             if (args.Length > 0 && args[0] == "--newspokes") return NewsPokes(args);
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-smoketest");
             try { Directory.Delete(root, true); } catch { /* first run */ }
@@ -234,6 +235,7 @@ namespace SmokeTest
             DiplomacyTests(root, agentDir);
             AlliesTests(root, agentDir);
             NewsTests(root);
+            WakeTests(root);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");

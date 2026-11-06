@@ -42,6 +42,8 @@ param(
     [string]$Lords = '',
     # a news wake's report (0.14, docs/PLAN-news.md): full (as before), shadow (full sent, the theatre's written beside it) or theatre
     [ValidateSet('', 'full', 'shadow', 'theatre')][string]$News = '',
+    # what wakes the agent (0.15, docs/WARROOM.md): rule (the wake rule sorts each line of news first) or all (every line wakes it, as before)
+    [ValidateSet('', 'rule', 'all')][string]$Wake = '',
     [string]$RealmTitle = '',
     [string]$RealmLine = '',
     [string]$SettingsFrom = 'C:\Users\karab\Projects\orc-war-council\warroom.txt',
@@ -77,7 +79,8 @@ if (-not $Realm) { Write-Host 'Name the realm: -Realm <kingdom id> (the folder h
 if (-not $Mode) { $Mode = $(if ($had['mode']) { $had['mode'] } else { 'shadow' }) }
 if (-not $Lords) { $Lords = $(if ($had['lords']) { $had['lords'] } else { 'all' }) }
 $channelName = $(if ($had['channel']) { $had['channel'] } else { 'warroom' })
-if (-not $News) { $News = $(if ($had['news']) { $had['news'] } else { 'full' }) }
+if (-not $News) { $News = $(if ($had['news']) { $had['news'] } elseif ($Kind -eq 'lieutenant') { 'full' } else { 'theatre' }) }
+if (-not $Wake) { $Wake = $(if ($had['wake']) { $had['wake'] } else { 'rule' }) }
 [System.IO.File]::WriteAllLines($agentFile, [string[]]@(
     '# This agent: the realm it commands and how. The game''s bridge reads this at every load (docs/WARROOM.md).',
     "realm = $Realm",
@@ -90,8 +93,10 @@ if (-not $News) { $News = $(if ($had['news']) { $had['news'] } else { 'full' }) 
     '# realm (it plays a realm) or lieutenant (it serves the player''s own realm through the campaign map''s chat box)',
     "kind = $Kind",
     '# a news wake''s report: full (the whole report, as before), shadow (the whole report sent, the news report written beside it) or theatre (the news, its clock and what bears on it; the rest by asking)',
-    "news = $News"), $utf8)
-Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName, news $News" -ForegroundColor Green
+    "news = $News",
+    '# what wakes the agent: rule (the wake rule sorts each line of news first: some wakes it now, some waits, some rides its next call) or all (every line wakes it)',
+    "wake = $Wake"), $utf8)
+Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName, news $News, wake $Wake" -ForegroundColor Green
 
 $channel = Join-Path $Workspace $channelName
 New-Item -ItemType Directory -Force (Join-Path $channel 'orders\done') | Out-Null

@@ -115,6 +115,21 @@ namespace BannerlordAgents
 
         public static string CapWords(PartyRow r) => r.WageCap < 0 ? "no cap" : "cap " + Text.N(r.WageCap) + (r.CapOurs ? " (yours)" : " (the game's)");
 
+        /// <summary>How close to the floor a lord's gold shows beside him: this many times the floor (0.15).</summary>
+        private const double NearFloor = 1.2;
+
+        /// <summary>
+        /// A lord's gold, when it is near the floor below which the game keeps him from recruiting (0.15; run A: 69 recruit orders ended for money, and a lord's gold was not in
+        /// the report for 59 of the 67 that could be checked); null when he has room.
+        /// </summary>
+        public static string PoorText(PartyRow r)
+        {
+            if (r.Gold < 0 || r.RecruitFloor <= 0 || r.Gold >= r.RecruitFloor * NearFloor) return null;
+            return r.Gold <= r.RecruitFloor
+                ? "gold " + Text.N(r.Gold) + ", too little to recruit (the game keeps him from recruiting below " + Text.N(r.RecruitFloor) + ")"
+                : "gold " + Text.N(r.Gold) + ", close to the " + Text.N(r.RecruitFloor) + " below which the game keeps him from recruiting";
+        }
+
         /// <summary>One lord's purse, for his look-up and the council.</summary>
         public static string LordLine(PartyRow r)
         {
