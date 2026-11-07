@@ -74,7 +74,7 @@ namespace BannerlordAgents
     internal sealed class ViewParty
     {
         public string Id, Lord, Name, Faction, FactionName, Relation, Kind, Doing, Near, SeenBy, NearestHolding;
-        /// <summary>One of the realm's own lords, when his gold is near the floor for recruiting (0.15, PurseView.PoorText).</summary>
+        /// <summary>One of the realm's own lords, when his gold is near the floor for recruiting (0.15) or his wages near their cap (0.16): PurseView.RecruitNote.</summary>
         public string Poor;
         /// <summary>The holding its doing names (going to, besieging, raiding, defending, patrolling around), when it names one: for the dashboard and the "ask the way" tool.</summary>
         public string Toward;
@@ -865,7 +865,7 @@ namespace BannerlordAgents
                 X = r.X, Y = r.Y, Doing = Doing(s, r), SeenBy = seen?.By, SeenHours = s.Hours
             };
             vp.Toward = Toward(r);
-            if (relation == "own") vp.Poor = PurseView.PoorText(r);
+            if (relation == "own") vp.Poor = PurseView.RecruitNote(r);
             vp.Entrance = r.InSettlement ?? r.Entrance;
             if (r.Kind == "lord")
             {

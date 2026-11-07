@@ -32,6 +32,9 @@ namespace BannerlordAgents
         // the conversation's scrollbar (found once the window is up) and the frames left to hold it at the newest line
         private static ScrollbarWidget _scrollbar;
         private static int _seek, _toEnd;
+        // the words' own scrollbar (0.16: the box grows to eight lines, then scrolls) and the frames left to hold it at their end while they grow
+        private static ScrollbarWidget _inputBar;
+        private static int _inputSeek, _inputToEnd, _inputLength;
         // a new line's height is known a frame or two after it is added, so the view is held at the end a few frames
         private const int SettleFrames = 8;
 
@@ -103,6 +106,12 @@ namespace BannerlordAgents
                 if (_closeAsked || !OnMap() || ScreenManager.TopScreen != _screen) { _closeAsked = false; Close(); return; }
                 if (_scrollbar == null && _seek > 0) { _seek--; _scrollbar = FindScrollbar(); }
                 if (_toEnd > 0) { _toEnd--; if (_scrollbar != null) _scrollbar.ValueFloat = _scrollbar.MaxValue; }
+                // the words typed: while they grow, the box keeps their end in view (no allocation: their length only)
+                if (_inputBar == null && _inputSeek > 0) { _inputSeek--; _inputBar = FindBar("InputScrollbar"); }
+                int typed = _vm.InputText?.Length ?? 0;
+                if (typed > _inputLength) _inputToEnd = SettleFrames;
+                _inputLength = typed;
+                if (_inputToEnd > 0) { _inputToEnd--; if (_inputBar != null) _inputBar.ValueFloat = _inputBar.MaxValue; }
                 if (_layer.Input.IsHotKeyReleased("Exit")) Close();
                 else if (_layer.Input.IsHotKeyReleased("Confirm")) _vm.ExecuteSend();
             }
@@ -120,6 +129,12 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("the lieutenant's window's scrollbar", e); _seek = 0; return null; }
         }
 
+        private static ScrollbarWidget FindBar(string id)
+        {
+            try { return _layer.UIContext.Root.FindChild(id, true) as ScrollbarWidget; }
+            catch (Exception e) { Diag.Swallowed("the lieutenant's window's " + id, e); _inputSeek = 0; return null; }
+        }
+
         private static void Open()
         {
             _vm = new LieutenantVM();
@@ -133,10 +148,14 @@ namespace BannerlordAgents
             _layer.IsFocusLayer = true;
             _screen.AddLayer(_layer);
             ScreenManager.TrySetFocus(_layer);
-            // opens at the newest line
+            // opens at the newest line, and with the words kept from before at their end
             _seek = 10;
             _scrollbar = FindScrollbar();
             _toEnd = SettleFrames;
+            _inputSeek = 10;
+            _inputBar = FindBar("InputScrollbar");
+            _inputLength = 0;
+            _inputToEnd = SettleFrames;
             // the game stands still while the window is open (popups pause the game until closed; lieutenant_pause)
             _clockBefore = null;
             if (Settings.LieutenantPause)
@@ -168,6 +187,8 @@ namespace BannerlordAgents
             _screen = null;
             _scrollbar = null;
             _seek = _toEnd = 0;
+            _inputBar = null;
+            _inputSeek = _inputToEnd = _inputLength = 0;
             _vm?.OnFinalize();
             _vm = null;
             try
@@ -197,7 +218,7 @@ namespace BannerlordAgents
         [DataSourceProperty] public string CloseText => "Close";
         [DataSourceProperty] public string ApproveText => "Approve";
         [DataSourceProperty] public string DeclineText => "Decline";
-        [DataSourceProperty] public string HintText => "Type to your lieutenant and press Enter. Scroll for earlier lines. Esc closes, and keeps what you have typed for when you open it again. The game is paused while this is open.";
+        [DataSourceProperty] public string HintText => "Type to your lieutenant, as much as you like, and press Enter. Scroll for earlier lines. Esc closes, and keeps what you have typed for when you open it again. The game is paused while this is open.";
 
         [DataSourceProperty]
         public MBBindingList<LieutenantLineVM> Lines

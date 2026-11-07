@@ -71,6 +71,16 @@ namespace BannerlordAgents
         public int Gold = -1, Wages, WageCap = -1, Loot, LootPieces, Prisoners, PrisonerLords, Ransom;
         /// <summary>The gold below which the game keeps this lord from recruiting (0.15; 0: no such floor, or not worked out).</summary>
         public int RecruitFloor;
+        /// <summary>
+        /// What keeps him from paying for any recruit now (0.16, Offers.Bar): null when nothing does, else "wage cap", "no gold" or "clan purse";
+        /// the language's can_recruit, and the reason a recruiting order is refused up front.
+        /// </summary>
+        public string RecruitBar;
+        /// <summary>
+        /// The holdings his order names (its at and places) with the volunteers waiting there that he could take now, by the game's own reach
+        /// rule (0.16, Offers.Fill; the language's offers); null when he holds no such order.
+        /// </summary>
+        public Dictionary<string, int> Offers;
         public bool CapOurs;
         public double SaleHours = double.NaN;
         public string SaleText;

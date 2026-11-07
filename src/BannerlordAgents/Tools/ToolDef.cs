@@ -56,6 +56,11 @@ namespace BannerlordAgents.Tools
         public string Name, Kind = "tool", About, CallsBack, At, Target, Start;
         /// <summary>The kind of holding each of an order's places must be (0.13): a tool that takes a list of places has one.</summary>
         public string Places;
+        /// <summary>
+        /// What an order that gives no places gets instead (0.16, the standard defend): "at_and_villages", the order's holding and then its
+        /// villages, each next the nearest from the last. Null: places must be given.
+        /// </summary>
+        public string PlacesDefault;
         public bool Lords, Safety = true;
         /// <summary>
         /// Who wrote it (0.13): "ours" for the library that ships with the mod, else the realm whose agent wrote it; its version (1 for
@@ -126,7 +131,9 @@ namespace BannerlordAgents.Tools
             "me", "strength", "men", "ranks", "wounded", "food_days", "pace", "hours_in_state", "hours_running", "in_army", "leads_army",
             "army_lords", "army_coming", "army_complete", "army_joining", "in_settlement", "besieging", "in_battle", "at", "target", "caution", "danger_radius", "now",
             // 0.13: his money and his loot, the last stop's recruits and sale, whether the move has arrived, the hour of the day and the day
-            "gold", "loot_value", "prisoners", "ransom", "wage_cap_reached", "ranks_full", "recruited_last", "sold_last", "arrived", "clan_gold", "hour_of_day", "day"
+            "gold", "loot_value", "prisoners", "ransom", "wage_cap_reached", "ranks_full", "recruited_last", "sold_last", "arrived", "clan_gold", "hour_of_day", "day",
+            // 0.16: whether the game lets him pay for a recruit now (his wage cap, his gold, his clan's purse)
+            "can_recruit"
         };
 
         /// <summary>The functions, with how many values each takes.</summary>
@@ -150,7 +157,9 @@ namespace BannerlordAgents.Tools
             // 0.13.11: the party the realm's ruler attacks in person
             ["ruler_target"] = 0,
             // 0.13.20: a castle's or town's food (the supply order)
-            ["food_at"] = 1, ["food_days_at"] = 1
+            ["food_at"] = 1, ["food_days_at"] = 1,
+            // 0.16: the volunteers a stop of his order has for him, or for another lord of the realm on an order naming it
+            ["offers"] = 1, ["offers_of"] = 2
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -165,7 +174,9 @@ namespace BannerlordAgents.Tools
             ["nearest_town"] = "nearest_town(): the nearest town of yours or an ally's not under siege", ["nearest_town_of_realm"] = "nearest_town_of_realm(): the nearest town of your own, not under siege",
             ["ruler_target"] = "ruler_target(): the enemy party your realm's ruler is attacking in person now, none when he is not",
             ["food_at"] = "food_at(h): the food in a castle or town of yours now (none for a village or another realm's)",
-            ["food_days_at"] = "food_days_at(h): how many days a castle or town of yours would last a siege on its food now, at what it eats under siege (none for a village or another realm's)"
+            ["food_days_at"] = "food_days_at(h): how many days a castle or town of yours would last a siege on its food now, at what it eats under siege (none for a village or another realm's)",
+            ["offers"] = "offers(h): how many volunteers waiting at h he could take now, by the game's own rule for how far down each notable's line he may recruit (his standing with the notable, his realm, his skills); 0 where he may not recruit (an enemy's holding, a siege, a raid); counted each hour for the at and places of his order, none for any other holding. It leaves out his purse: can_recruit says whether he can pay. Above 80% of his ranks he takes only his clan's own troop lines, so he may take fewer",
+            ["offers_of"] = "offers_of(lord, h): the same for another of your lords, at a holding his own order names (none otherwise)"
         };
 
         private static readonly Regex NamePattern = new Regex("^[a-z][a-z0-9_]{1,31}$", RegexOptions.Compiled);
@@ -174,6 +185,20 @@ namespace BannerlordAgents.Tools
 
         /// <summary>One of the agents' own (0.13), not ours.</summary>
         public bool Own => Author != "ours";
+
+        /// <summary>
+        /// A recruiting order (0.16): ours, the recruit order's tour, or any whose first move recruits (recruit, tour or recruit_here), as an agent's
+        /// recruiting loop does. One that guards or rides a loop and recruits on the way is not: it has other work. Such an order is refused up front
+        /// when the lord cannot pay for a single recruit (Orders, Offers.Bar).
+        /// </summary>
+        public bool IsRecruiting
+        {
+            get
+            {
+                if (Start == null || !States.TryGetValue(Start, out StateDef st) || st.Do == null) return false;
+                return st.Do.Verb == "tour" || st.Do.Verb == "recruit" || st.Do.Verb == "recruit_here";
+            }
+        }
 
         // ---------- reading ----------
 
@@ -194,6 +219,7 @@ namespace BannerlordAgents.Tools
             d.Target = (string)o["target"];
             d.Lords = (bool?)o["lords"] ?? false;
             d.Places = (string)o["places"];
+            d.PlacesDefault = (string)o["places_default"];
             d.Safety = (bool?)o["safety"] ?? true;
             d.Start = (string)o["start"];
             // what the tool takes, each with its kind and the writer's own words: "places": "friendly_holding: the towns to recruit at" (0.13)
@@ -336,6 +362,8 @@ namespace BannerlordAgents.Tools
             if (At != null && !AtKinds.Contains(At)) Problems.Add("at must be one of " + string.Join(", ", AtKinds));
             if (Target != null && !TargetKinds.Contains(Target)) Problems.Add("target must be one of " + string.Join(", ", TargetKinds));
             if (Places != null && (!AtKinds.Contains(Places) || Places == "spot_or_holding")) Problems.Add("places must be one of " + string.Join(", ", AtKinds.Where(k => k != "spot_or_holding")));
+            if (PlacesDefault != null && PlacesDefault != "at_and_villages") Problems.Add("places_default must be at_and_villages (the order's holding, then its villages)");
+            else if (PlacesDefault != null && (Places == null || At == null)) Problems.Add("places_default needs a tool that takes both at and places");
             foreach (SettingDef s in Settings.Values)
             {
                 if (s.Min > s.Max) Problems.Add("setting " + s.Name + ": min is above max");
@@ -430,7 +458,7 @@ namespace BannerlordAgents.Tools
             {
                 At != null ? "at: " + Words("at", Plain(At)) : null,
                 Target != null ? "target: " + Words("target", Plain(Target)) : null,
-                Places != null ? "places: " + Words("places", "a list, each " + Plain(Places)) : null,
+                Places != null ? "places: " + Words("places", "a list, each " + Plain(Places)) + (PlacesDefault == "at_and_villages" ? " (may be left out: then the holding at, and its villages, nearest first)" : "") : null,
                 Lords ? "lords: " + Words("lords", "a list of your lords") : null
             }.Where(x => x != null));
             sb.Append("- **" + Name + "**" + (Own ? " (yours, " + VersionText + ")" : "") + (takes.Length > 0 ? " (" + takes + ")" : "") + ": " + About);
@@ -529,6 +557,21 @@ namespace BannerlordAgents.Tools
         }
 
         public static ToolDef Get(string name) => name != null && All.TryGetValue(name.Trim(), out ToolDef d) ? d : null;
+
+        /// <summary>
+        /// For the smoke test only: one of our tools swapped for another definition of the same name (null puts the shipped one back). Since
+        /// 0.16 the checks written for the defend of 0.6 to 0.15 run on that definition, kept beside them, since what they test is the order
+        /// engine's own rules (and it is what orders carried on from a save of before 0.16 run); the standard defend has its own.
+        /// </summary>
+        internal static void SwapForTest(string name, ToolDef def)
+        {
+            lock (Gate)
+            {
+                Dictionary<string, ToolDef> all = All;
+                if (def != null) { all[name] = def; return; }
+                _all = null;
+            }
+        }
 
         /// <summary>Every problem the checker found in the library (should be none).</summary>
         public static List<string> Problems() => All.Values.SelectMany(d => d.Problems.Select(p => d.Name + ": " + p)).ToList();

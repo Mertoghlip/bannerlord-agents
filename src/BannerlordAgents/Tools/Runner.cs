@@ -1489,11 +1489,15 @@ namespace BannerlordAgents.Tools
                     case "clan_gold": { ClanRow c = me?.Clan != null ? _w.S.Clans?.FirstOrDefault(x => x.Id == me.Clan) : null; return c != null && c.Gold >= 0 ? (double)c.Gold : (object)null; }
                     case "hour_of_day": return Math.Floor(((_w.Hours % 24) + 24) % 24);
                     case "day": return Math.Floor(_w.Hours / 24);
+                    // 0.16: nothing keeps him from paying for a recruit now (his wage cap, his gold, his clan's purse; Offers.Bar)
+                    case "can_recruit": return me != null && me.Gold >= 0 ? me.RecruitBar == null : (object)null;
                 }
                 if (_t.Settings.TryGetValue(name, out double v)) return v;
                 if (_t.Memory.TryGetValue(name, out object o)) return o;
                 return null;
             }
+
+            private static object OffersAt(PartyRow r, string place) => r?.Offers != null && place != null && r.Offers.TryGetValue(place, out int n) ? (double)n : (object)null;
 
             public object Call(string fn, object[] a)
             {
@@ -1633,6 +1637,13 @@ namespace BannerlordAgents.Tools
                     case "bandits_near": return (double)_w.BanditsNear(Id(a[0]), Expr.Number(a[1])).Count;
                     case "nearest_town": return _w.NearestTown(_t.Order.Party, true)?.Id;
                     case "nearest_town_of_realm": return _w.NearestTown(_t.Order.Party, false)?.Id;
+                    // ---------- 0.16: what a stop has for him, counted each hour for the holdings his order names (Offers.Fill) ----------
+                    case "offers": return OffersAt(me, Id(a[0]));
+                    case "offers_of":
+                        {
+                            PartyRow r = _w.Party(Id(a[0]));
+                            return r != null && r.Faction == _w.Realm ? OffersAt(r, Id(a[1])) : null;
+                        }
                 }
                 throw new InvalidOperationException("no function " + fn);
             }

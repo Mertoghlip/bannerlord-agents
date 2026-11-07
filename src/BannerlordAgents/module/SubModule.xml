@@ -2,7 +2,7 @@
 <Module>
   <Name value="Bannerlord Agents"/>
   <Id value="BannerlordAgents"/>
-  <Version value="v0.15.2"/>
+  <Version value="v0.16.0"/>
   <DefaultModule value="false"/>
   <ModuleCategory value="Singleplayer"/>
   <ModuleType value="Community"/>

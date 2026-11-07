@@ -75,8 +75,33 @@ namespace BannerlordAgents
             public Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             /// <summary>The supply move's holding (0.13.19), while Place is the market he buys at on the way.</summary>
             public Settlement SupplyFor;
+            /// <summary>
+            /// The holdings a tool order names (its at, then its places, 0.16): the hourly copy counts the volunteers he could take at each
+            /// (Offers, the language's offers), so a loop can pass by a stop that has nothing for him.
+            /// </summary>
+            public Settlement[] Stops;
 
             public double Setting(string name, double otherwise) => Settings.TryGetValue(name, out double v) ? v : otherwise;
+        }
+
+        /// <summary>The order a party holds now, or null (the hourly copy, 0.16).</summary>
+        internal static HandOrder HeldBy(MobileParty p)
+        {
+            for (int i = 0; i < Active.Count; i++) if (Active[i].Party == p) return Active[i];
+            return null;
+        }
+
+        /// <summary>A tool order's at and places as the game's holdings, for the volunteers' count (0.16); spots and unknown ids left out.</summary>
+        private static Settlement[] StopsOf(string at, IEnumerable<string> places)
+        {
+            var list = new List<Settlement>();
+            foreach (string id in new[] { at }.Concat(places ?? Enumerable.Empty<string>()))
+            {
+                if (string.IsNullOrEmpty(id) || Spots.Is(id)) continue;
+                Settlement s = Settlement.Find(id);
+                if (s != null && !list.Contains(s)) list.Add(s);
+            }
+            return list.Count > 0 ? list.ToArray() : null;
         }
 
         private sealed class Released
@@ -131,6 +156,7 @@ namespace BannerlordAgents
             LastCulprit.Clear();
             HandedBack.Clear();
             RecruitTour.Reset();
+            Offers.Reset();
             Supply.Reset();
             Mirror();
         }
@@ -326,6 +352,15 @@ namespace BannerlordAgents
             }
             ToolOrder o = PrepareTool(lord, party, def, a, realm, out error, out List<string> notes);
             if (o == null) return error;
+            // a recruiting order he cannot pay for is refused up front, with why (0.16; test A1: 47 of Dol Guldur's 64 recruit orders ended at the wage cap or the
+            // gold floor, 29 lords again and again)
+            string unpaid = RecruitRefusal(def, party);
+            if (unpaid != null)
+            {
+                Diag.Count("order:recruiting refused up front");
+                Diag.Event("order", "recruiting refused", new { source, poke = a.Poke, lord = lord.StringId, tool = def.Name, bar = Offers.Bar(party), wages = party.TotalWage, cap = party.HasLimitedWage() ? party.PaymentLimit : -1, gold = lord.Gold });
+                return name + "'s " + def.Name + " order was not given: " + unpaid;
+            }
             o.Source = source;
             string words = ((a.Lord ?? "") + " " + verb + " " + (a.At ?? a.Target ?? "")).Trim();
             o.Words = words;
@@ -358,6 +393,14 @@ namespace BannerlordAgents
         }
 
         private static string Notes(List<string> notes) => notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : "";
+
+        /// <summary>Why a recruiting order (ToolDef.IsRecruiting) is refused up front: his wage cap, his gold or his clan's purse leaves him unable to pay for any recruit; null otherwise.</summary>
+        private static string RecruitRefusal(ToolDef def, MobileParty party)
+        {
+            if (def == null || !def.IsRecruiting) return null;
+            string bar = Offers.Bar(party);
+            return bar == null ? null : Offers.BarWords(party, bar) + ".";
+        }
 
         /// <summary>The mode of the agent playing that realm (off, shadow or live).</summary>
         private static string ModeOf(IFaction realm) => Agents.Of(realm?.StringId)?.Config.Mode ?? Settings.Agent;
@@ -470,7 +513,24 @@ namespace BannerlordAgents
                 }
             else if (a.Lords.Count > 0) notes.Add(def.Name + " takes no lords, so they were left out");
             // a tool's list of holdings (0.13), each of the kind it takes, in the order given
-            if (def.Places != null)
+            if (def.Places != null && a.Places.Count == 0 && def.PlacesDefault == "at_and_villages" && o.At != null && Settlement.Find(o.At) is Settlement home)
+            {
+                // no places given (0.16, the standard defend): the holding itself, then its villages, each next the nearest from the last
+                o.Places.Add(home.StringId);
+                var left = home.IsFortification && home.BoundVillages != null
+                    ? home.BoundVillages.Select(v => v?.Settlement).Where(v => v != null && CheckAt(def.Places, v, realm) == null).ToList()
+                    : new List<Settlement>();
+                Vec2 from = home.GatePosition.ToVec2();
+                while (left.Count > 0)
+                {
+                    Settlement next = left.OrderBy(v => v.GatePosition.ToVec2().DistanceSquared(from)).First();
+                    o.Places.Add(next.StringId);
+                    left.Remove(next);
+                    from = next.GatePosition.ToVec2();
+                }
+                notes.Add("no places were given, so the loop is " + string.Join(", ", o.Places.Select(id => Names.Settlement(Settlement.Find(id)))));
+            }
+            else if (def.Places != null)
             {
                 if (a.Places.Count == 0) { error = def.Name + " needs \"places\": a list, each " + ToolDef.Plain(def.Places) + "."; return null; }
                 foreach (string w in a.Places)
@@ -563,7 +623,8 @@ namespace BannerlordAgents
             var h = new HandOrder
             {
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = o.Source, Poke = o.Poke, Verb = "hold",
-                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours, Signature = o.Signature(), HasNext = o.Then != null
+                ToolId = id, Tool = def.Name, ToolText = DescribeTool(def, o), Since = CampaignTime.Now.ToHours, Signature = o.Signature(), HasNext = o.Then != null,
+                Stops = StopsOf(o.At, o.Places)
             };
             // its settings as the runner keeps them (0.13.19): each given one within its range, the tool's default for the rest
             foreach (SettingDef sd in def.Settings.Values)
@@ -612,7 +673,7 @@ namespace BannerlordAgents
         /// held again under its old tool run's id; the runner takes the tool up where it was. Null when carried on, else why not, in
         /// the agent's words. at and target: the order's, for Party AI Controls' panel.
         /// </summary>
-        public static string Resume(JObject row, string lords, string at, string target)
+        public static string Resume(JObject row, string lords, string at, string target, IEnumerable<string> places = null)
         {
             string id = (string)row["lord"];
             Hero lord = string.IsNullOrEmpty(id) ? null : Hero.Find(id);
@@ -640,7 +701,8 @@ namespace BannerlordAgents
             {
                 Id = ++_nextId, Party = party, Lord = lord, Realm = realm, Source = source, Poke = (int?)row["poke"] ?? -1, Verb = "hold", ToolId = toolId,
                 Tool = (string)row["tool"], ToolText = (string)row["text"], Signature = (string)row["signature"], Since = (double?)row["since"] ?? now,
-                Arrived = (bool?)row["arrived"] ?? false, ArrivedAt = (double?)row["arrived_at"] ?? -1, HasNext = (bool?)row["has_next"] ?? false
+                Arrived = (bool?)row["arrived"] ?? false, ArrivedAt = (double?)row["arrived_at"] ?? -1, HasNext = (bool?)row["has_next"] ?? false,
+                Stops = StopsOf(at, places)
             };
             // its settings (0.13.19; a save of 0.13.18 or before has none: garrison_floor 0, the supply order's defaults)
             if (row["settings"] is JObject set)

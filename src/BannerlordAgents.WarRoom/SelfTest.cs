@@ -376,6 +376,17 @@ namespace BannerlordAgents.WarRoom
             string system = File.Exists(TemplatePath("lieutenant-system.template.md")) ? File.ReadAllText(TemplatePath("lieutenant-system.template.md")) : "";
             Check(system.Length == 0 || (system.Contains("`chronicle.txt`") && system.Contains("before you answer that you cannot tell")),
                   "the lieutenant's instructions tell it of the realm's whole chronicle and to read it before saying it cannot tell what happened");
+            // 0.16: its talks with the ruler in his other saves, one file a save, which the bridge writes at each load
+            string noTalks = LieutenantRoom.OtherTalksNote(channel);
+            Directory.CreateDirectory(Path.Combine(channel, "other_chats"));
+            File.WriteAllText(Path.Combine(channel, "other_chats", "index.txt"), "YOUR TALKS WITH YOUR RULER IN HIS OTHER SAVES (written at this load)\nEach file ...\n"
+                + "- 'TEST A1': saved at Autumn 8, 1087, 08:00 (Nov 7, 2026 14:53 by the clock); 23 messages from him, 400 lines, Summer 20, 1087 to Autumn 8, 1087; other_chats/TEST A1.txt\n"
+                + "- 'TEST CONTINUOUS SAVE' (another campaign, c2): saved at Spring 16, 1088, 08:00 (Nov 2, 2026 14:11 by the clock); 96 messages from him, 900 lines; other_chats/TEST CONTINUOUS SAVE (c2).txt\n");
+            string talks = LieutenantRoom.OtherTalksNote(channel);
+            string m5 = LieutenantRoom.Message(chat, history, "REPORT FOR X", new List<string>(), string.Join("\n\n", new[] { index, talks }.Where(x => x != null)));
+            Check(noTalks == null && talks != null && talks.Contains("lists the 2 other saves he has talked with you in ('TEST A1', 'TEST CONTINUOUS SAVE')") && m5.Contains("YOUR TALKS IN YOUR RULER'S OTHER SAVES")
+                  && (system.Length == 0 || system.Contains("`other_chats/index.txt`")),
+                  "the lieutenant's message and instructions tell it where its talks in the ruler's other saves are: " + talks);
         }
 
         /// <summary>The repo's agent template of that name, from the war room's build folder up (null outside the repo).</summary>

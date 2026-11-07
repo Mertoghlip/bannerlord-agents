@@ -108,7 +108,7 @@ namespace BannerlordAgents
                 else if (!SameFolder(serving.ChannelDir, (string)tool["owner"])) reason = "another agent commands the realm now";
                 else
                 {
-                    try { reason = Orders.Resume(hand, serving.Lords, (string)tool["order"]?["at"], (string)tool["order"]?["target"]); }
+                    try { reason = Orders.Resume(hand, serving.Lords, (string)tool["order"]?["at"], (string)tool["order"]?["target"], (tool["order"]?["places"] as JArray)?.Select(x => (string)x)); }
                     catch (Exception x) { reason = "it could not be carried on (" + x.Message + ")"; Diag.Error("carrying on an order from the save", x); }
                 }
                 if (reason != null) { Refuse(realm, what + " (" + reason + ")"); Diag.Event("order", "not carried on", new { save, lord = (string)hand["lord"], tool = (string)hand["tool"], why = reason }); }

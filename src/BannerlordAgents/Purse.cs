@@ -99,6 +99,8 @@ namespace BannerlordAgents
             r.Wages = p.TotalWage;
             r.WageCap = p.HasLimitedWage() ? p.PaymentLimit : -1;
             r.CapOurs = Wages.Has(p);
+            // 0.16: what keeps him from paying for a recruit, and what his order's stops have for him
+            Offers.Fill(r, p);
             if (!Cache.TryGetValue(p, out Carried c)) Cache[p] = c = new Carried();
             if (c.Items != p.ItemRoster.VersionNo)
             {

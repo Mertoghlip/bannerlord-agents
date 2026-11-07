@@ -85,16 +85,34 @@ namespace BannerlordAgents
                     if ((string)o["save"] != save) continue;
                     double h = (double?)o["hours"] ?? double.NaN;
                     if (double.IsNaN(h) || double.IsNaN(loadedAt) || Math.Abs(h - loadedAt) > 0.05) continue;
-                    var steps = new List<HistoryStep>();
-                    if (o["before"] is JArray before)
-                        foreach (JToken t in before)
-                            steps.Add(new HistoryStep { Load = (string)t["load"], Until = (double?)t["until"] ?? double.NaN, Wall = Wall(t["wall"]) });
-                    steps.Add(new HistoryStep { Load = (string)o["load"], Until = h, Wall = Wall(o["wall"]) });
-                    return new History { Load = load ?? "", Before = steps, Save = save, Found = "marked" };
+                    History marked = FromNote(o);
+                    marked.Load = load ?? "";
+                    return marked;
                 }
             History u = Unmarked(load, loadedAt);
             u.Save = save;
             return u;
+        }
+
+        /// <summary>The history a save's note holds (0.16, also for the lieutenant's talks in other saves): its sessions, each up to its hour; no session of its own.</summary>
+        public static History FromNote(JObject o)
+        {
+            double h = (double?)o["hours"] ?? double.NaN;
+            var steps = new List<HistoryStep>();
+            if (o["before"] is JArray before)
+                foreach (JToken t in before)
+                    steps.Add(new HistoryStep { Load = (string)t["load"], Until = (double?)t["until"] ?? double.NaN, Wall = Wall(t["wall"]) });
+            steps.Add(new HistoryStep { Load = (string)o["load"], Until = h, Wall = Wall(o["wall"]) });
+            return new History { Load = "", Before = steps, Save = (string)o["save"], Found = "marked" };
+        }
+
+        /// <summary>Every save's latest note in a campaign's folder, by save name (a save of the same name is overwritten, so the latest is the save as it is now).</summary>
+        public static Dictionary<string, JObject> LatestNotes(string campaignDir)
+        {
+            var latest = new Dictionary<string, JObject>(StringComparer.Ordinal);
+            foreach (JObject o in Notes(campaignDir))
+                if ((string)o["type"] == "save" && !string.IsNullOrEmpty((string)o["save"])) latest[(string)o["save"]] = o;
+            return latest;
         }
 
         /// <summary>The note to write when this session saves: the save, its hour, this session, and this session's history.</summary>

@@ -130,6 +130,30 @@ namespace BannerlordAgents
                 : "gold " + Text.N(r.Gold) + ", close to the " + Text.N(r.RecruitFloor) + " below which the game keeps him from recruiting";
         }
 
+        /// <summary>How close to his cap a lord's wages show beside him: within this share of the cap (0.16).</summary>
+        private const double NearCap = 0.15;
+
+        /// <summary>
+        /// A lord's wages beside him, when they are at their cap or near it (0.16; test A1: 47 of Dol Guldur's 64 recruit orders ended at the cap
+        /// or the gold floor, and the cap showed only in YOUR PURSE's list, cut at 16 lords); null when he has room.
+        /// </summary>
+        public static string CapText(PartyRow r)
+        {
+            if (r.Gold < 0 || r.WageCap < 0) return null;
+            string whose = r.CapOurs ? " (yours)" : " (the game's)";
+            if (AtCap(r)) return "wages " + Text.N(r.Wages) + " a day of his " + Text.N(r.WageCap) + " cap" + whose + ": at his cap, so he cannot recruit";
+            int room = r.WageCap - r.Wages - 5;
+            if (room >= r.WageCap * NearCap) return null;
+            return "wages " + Text.N(r.Wages) + " a day of his " + Text.N(r.WageCap) + " cap" + whose + ": room for " + Text.N(Math.Max(0, room)) + " a day of new men's wages";
+        }
+
+        /// <summary>What may keep a lord from recruiting, beside him in the report's lists (0.15 his gold, 0.16 his wages too); null when nothing does.</summary>
+        public static string RecruitNote(PartyRow r)
+        {
+            string gold = PoorText(r), cap = CapText(r);
+            return gold == null ? cap : cap == null ? gold : gold + "; " + cap;
+        }
+
         /// <summary>One lord's purse, for his look-up and the council.</summary>
         public static string LordLine(PartyRow r)
         {

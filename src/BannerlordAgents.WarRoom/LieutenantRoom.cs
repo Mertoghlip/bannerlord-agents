@@ -79,7 +79,7 @@ namespace BannerlordAgents.WarRoom
             List<string> receipts = Tail(Path.Combine(_c.ChannelDir, "receipts.log"), 12);
             RouteTool routes = Routes(campaign, realm, n);
             string system = SystemFile(routes != null);
-            string prompt = Message(chat, history, report, receipts, ChronicleIndex(_c.ChannelDir));
+            string prompt = Message(chat, history, report, receipts, string.Join("\n\n", new[] { ChronicleIndex(_c.ChannelDir), OtherTalksNote(_c.ChannelDir) }.Where(x => x != null)));
             string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-chat-" + n);
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
@@ -244,6 +244,29 @@ namespace BannerlordAgents.WarRoom
             var where = starts.Skip(Math.Max(0, starts.Count - days)).Reverse().Select(s => s.Key + " at line " + s.Value.ToString("N0", CultureInfo.InvariantCulture));
             return "YOUR WHOLE CHRONICLE: chronicle.txt, " + n.ToString("N0", CultureInfo.InvariantCulture) + " lines, oldest first, every line dated. "
                    + "Where its last days begin: " + string.Join("; ", where) + ".";
+        }
+
+        /// <summary>
+        /// The ruler's other saves the lieutenant has talked with him in (0.16, Nov 7: I want it to have access to chats from other saves, so I can reference
+        /// them): the bridge writes each one's whole conversation into other_chats at every load, listed in other_chats/index.txt. Null when there are none.
+        /// </summary>
+        internal static string OtherTalksNote(string dir)
+        {
+            string index = Path.Combine(dir ?? "", "other_chats", "index.txt");
+            if (!File.Exists(index)) return null;
+            List<string> saves;
+            try
+            {
+                using var fs = new FileStream(index, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var sr = new StreamReader(fs, Encoding.UTF8);
+                saves = sr.ReadToEnd().Split('\n').Where(l => l.StartsWith("- '", StringComparison.Ordinal))
+                          .Select(l => l.IndexOf('\'', 3) is int close && close > 3 ? l.Substring(2, close - 1) : null).Where(x => x != null).ToList();
+            }
+            catch (IOException) { return null; }
+            if (saves.Count == 0) return null;
+            return "YOUR TALKS IN YOUR RULER'S OTHER SAVES: other_chats/index.txt lists the " + saves.Count + " other save" + (saves.Count == 1 ? "" : "s") + " he has talked with you in ("
+                   + string.Join(", ", saves.Take(12)) + (saves.Count > 12 ? ", and " + (saves.Count - 12) + " more" : "") + "), each with the whole of that save's conversation in a file of its own. "
+                   + "When he refers to another save, an earlier test or something said there, read that file, from where it bears on his words.";
         }
 
         /// <summary>The answer object: the last JSON object in the text with "say"; its order lists checked (each order names a lord and an order).</summary>

@@ -366,6 +366,10 @@ namespace BannerlordAgents
             return a;
         }
 
+        /// <summary>An answer's orders with its wage caps first, the rest in the order given (0.16: a recruiting order is checked against the cap the answer sets).</summary>
+        public static List<AgentOrder> WagesFirst(List<AgentOrder> orders)
+            => orders.OrderBy(o => string.Equals((o.Do ?? "").Trim(), "wages", StringComparison.OrdinalIgnoreCase) ? 0 : 1).ToList();
+
         /// <summary>An id written as a string, a number or ["id"].</summary>
         private static string Str(JToken t)
         {
@@ -944,6 +948,8 @@ namespace BannerlordAgents
                 Line("poke #" + poke + ", " + name + ": RECEIVED " + orders.Count + " order" + (orders.Count == 1 ? "" : "s") + ". The game's clock is stopped right now "
                      + "(paused, in a menu or in a battle), so they will be checked and carried out when it runs again, and answered here then.");
             }
+            // wage caps first (0.16): a recruiting order he cannot pay for is refused up front, so a cap the same answer raises counts, wherever it stands in the answer
+            orders = AgentChannel.WagesFirst(orders);
             foreach (AgentChannel.AgentOrder o in orders)
             {
                 OrdersReceived++;

@@ -2185,3 +2185,28 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - War rooms and dashboard stopped for the build and started again.
   - The game was closed. I saved `TEST A1` at 14:53, on day 9.
   - My review scripts for test A1 (screen time, Celebrían's recruiting, the agents' first nine days) are kept in `D:\BannerlordAgents-backup\news-wake-study-20261106\test-a1-review`.
+
+### 15:36 · Install, version 0.16.0: the guard loop is the standard defend, the stop check, recruiting orders refused when the lord cannot pay, the lieutenant's talks in other saves, and a box to write in that grows
+- **Why:** Nov 7, after test A1's first nine days:
+  - The custom orders my lieutenant wrote in this test should be the standard defend order from now on, for the agents too. Its last guard loop (`guard_supply_loop` v7) fought 76 times and won 75, took 17 enemy lords and lost 1, over 161 runs.
+  - Celebrían rode into Mount Gundabad and took no one: Elrohir, on the same loop 14 hours ahead, had taken every volunteer her standing reached, and the loop could not tell.
+  - 47 of Dol Guldur's 64 recruit orders ended at once or soon at the wage cap or the gold floor, 29 lords again and again.
+  - I want the lieutenant to have access to the chats of my other saves, so I can reference them; no limit on what I write to it; and the box to grow as I write, up to a limit, so it is easier to edit.
+- **What:**
+  - `defend.json` is the guard loop, with four changes. Guards ride into the fort when an enemy marches on it only where its defenders, with them, would hold, else they shelter elsewhere (`stay_inside` 1 keeps v7's way). They join the ruler's own attack, as the old defend did. A fight is weighed and begun in the hour it is seen (v7 took up to three hours: one change of state each for its three passes), with the lieutenant's own numbers and formula. A group's size comes from its `lords`. With no `places`, the loop is the holding and then its villages, nearest first (`places_default`). The old defend is gone from the library; orders carried on from a save keep the definition they were given with.
+  - The stop check: `offers(h)`, `offers_of(lord, h)` and `can_recruit` in the order language (`Offers.cs`, on the game's thread in each own lord's hourly copy: the volunteers within his reach at each holding his order names, by the game's own reach rule, kept a day; and his wage cap, gold floor and clan purse). The standard defend rides on after an hour from a stop where no lord of its group has anything left.
+  - A recruiting order (ours, or any whose first move recruits) for a lord who cannot pay for a single recruit is refused at once, with the numbers and what to do (`Orders.RecruitRefusal`). An answer's wage orders go first, so a cap raised in the same answer counts (`AgentChannel.WagesFirst`, the lieutenant's too).
+  - Each lord's wages and cap show beside him in the report when he is at it or within 15% of it (`PurseView.RecruitNote`).
+  - The lieutenant: at each load, `other_chats\` in its folder holds the whole talk of each of my other saves with something said in it, and an index (`LieutenantChats`, `History.FromNote`); its message names them and its instructions say to read the one I mean. Its box has no length limit (it had 400 letters) and grows from one line to eight, then scrolls, keeping the end in view while I type.
+  - Both instruction templates name `offers`, `offers_of` and `can_recruit`, the example answer gives a pair of guards their turns, and `relief_within` is written with its values in their real order (hours, then reach; it said the reverse).
+  - [TOOLS.md](TOOLS.md) and [LIEUTENANT.md](LIEUTENANT.md) describe all of it.
+- **Checks:**
+  - Smoke test 516 checks, all pass, 12 of them new (the standard defend's loop, the stop check, its fight weighed in one hour, riding in or not by whether the fort would hold, the language's new words, wage caps beside the lords, wage orders first, the other saves' talks). The checks written for the old defend run on its definition, kept in `tests/SmokeTest/Fixtures/defend-0.15.json`.
+  - War room self-test (1 new check) and dashboard self-test pass.
+  - The reference check reports 835 game members, 0 missing.
+  - The other saves' talks, written from the real records into a scratch folder: 3 saves with talks (BACKUPS, TEST END A, TEST CONTINUOUS SAVE), about 500 KB each, in 0.3 s.
+  - **Not tested:** none of it has run in the game yet, the growing box least of all (only the game draws it).
+- **Outside the repository:**
+  - The agents' instructions rebuilt from the templates, each keeping its own title and opening line: Misty Mountain Orcs, Dol Guldur, Kingdom of Arnor and Gondor, and the lieutenant (backups `warroom-system.md.bak-20261107-before-0.16`). Rhun and Gundabad stay as they are until the last test.
+  - War rooms and dashboard stopped for the build and started again.
+  - The lieutenant's own `guard_supply_loop` and `safe_recruit_loop` stay in its library as they are; it can move its guards to the standard defend and add the stop check to its recruiting loop when I ask.

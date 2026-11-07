@@ -6,7 +6,7 @@
        type in (focused when the window opens), and Close and Send. LieutenantWindow.cs opens it with Enter on the campaign map
        and finds LinesScrollbar by its Id to follow the newest line; the data is LieutenantVM. -->
   <Window>
-    <TextQueryParentWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" TextInputWidget="Panel\Content\InputParent\InputWidget">
+    <TextQueryParentWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" TextInputWidget="Panel\Content\InputParent\InputPanel\InputClip\InputWidget">
       <Children>
 
         <!-- the map behind, darkened -->
@@ -78,10 +78,28 @@
                   </Children>
                 </ListPanel>
 
-                <!--The line to type in-->
-                <Widget Id="InputParent" DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="700" SuggestedHeight="62" HorizontalAlignment="Center" MarginTop="10" Sprite="General\CharacterCreation\name_input_area">
+                <!--The words to type in (0.16): no limit on their length (MaxLength -1), and the box grows with them, a line at a time, from one line
+                    to eight (the text wraps at the box's width, and the box covers it up to the clip's MaxHeight); past that the words scroll (the wheel,
+                    or the bar on the right), and the window keeps the end in view while they are typed (LieutenantWindow follows InputScrollbar)-->
+                <!--its MaxHeight bounds what the scrollbar (stretched to it) measures; the bar is hidden until the words overflow, so until then the box
+                    is just the words' height-->
+                <Widget Id="InputParent" WidthSizePolicy="Fixed" HeightSizePolicy="CoverChildren" SuggestedWidth="700" MinHeight="62" MaxHeight="240" HorizontalAlignment="Center" MarginTop="10" Sprite="General\CharacterCreation\name_input_area">
                   <Children>
-                    <EditableTextWidget Id="InputWidget" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="16" MarginRight="16" MarginTop="12" MarginBottom="12" Brush="Review.NameInput.Text" Brush.FontSize="20" Brush.TextHorizontalAlignment="Left" RealText="@InputText" MaxLength="400" />
+                    <ScrollablePanel Id="InputPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MinHeight="38" MaxHeight="216" MarginLeft="16" MarginRight="28" MarginTop="12" MarginBottom="12" AutoHideScrollBars="true" ClipRect="InputClip" InnerPanel="InputClip\InputWidget" VerticalScrollbar="..\InputScrollbar">
+                      <Children>
+                        <Widget Id="InputClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MinHeight="38" MaxHeight="216" ClipContents="true">
+                          <Children>
+                            <EditableTextWidget Id="InputWidget" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MinHeight="38" Brush="Review.NameInput.Text" Brush.FontSize="20" Brush.TextHorizontalAlignment="Left" Brush.TextVerticalAlignment="Top" RealText="@InputText" MaxLength="-1" />
+                          </Children>
+                        </Widget>
+                      </Children>
+                    </ScrollablePanel>
+                    <ScrollbarWidget Id="InputScrollbar" IsVisible="false" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="8" HorizontalAlignment="Right" VerticalAlignment="Top" MarginRight="10" MarginTop="12" MarginBottom="12" AlignmentAxis="Vertical" Handle="InputScrollbarHandle" MaxValue="100" MinValue="0">
+                      <Children>
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4" HorizontalAlignment="Center" Sprite="BlankWhiteSquare_9" Color="#5A4033FF" AlphaFactor="0.5" />
+                        <ImageWidget Id="InputScrollbarHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedHeight="10" SuggestedWidth="10" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+                      </Children>
+                    </ScrollbarWidget>
                   </Children>
                 </Widget>
                 <TextWidget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="26" MarginLeft="34" MarginRight="34" MarginTop="4" Brush="Popup.Description.Text" Brush.FontSize="15" Text="@HintText" />

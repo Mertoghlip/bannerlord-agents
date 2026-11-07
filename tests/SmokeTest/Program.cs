@@ -45,6 +45,11 @@ namespace SmokeTest
         {
             const string campaign = "smoketest";
             Check(Paths.Root == root, "the test writes to its own folder, never the game's (" + Paths.Root + ")");
+            // 0.16: the standard defend is the guard loop; the checks written for the defend of 0.6 to 0.15 test the order engine's own rules with it, so
+            // they run on that definition (kept in Fixtures, and what an order carried on from a save of before 0.16 runs), and DefendTests check the new one
+            ToolDef oldDefend = ToolDef.FromJson(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Fixtures", "defend-0.15.json")), "defend");
+            Check(oldDefend.Valid && oldDefend.States.ContainsKey("patrol"), "the defend of 0.15 reads, for the checks written for it: " + string.Join("; ", oldDefend.Problems));
+            Library.SwapForTest("defend", oldDefend);
             Diag.StartLaunch();
             Check(Diag.SessionDir != null && Diag.SessionDir.StartsWith(root), "a log folder for this launch: " + Diag.SessionDir);
             string dir = Paths.Data(campaign);
@@ -236,6 +241,7 @@ namespace SmokeTest
             AlliesTests(root, agentDir);
             NewsTests(root);
             WakeTests(root);
+            DefendTests(root, agentDir);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");

@@ -136,6 +136,18 @@ namespace BannerlordAgents
                 }
             }
             if (Thread.Count > 0) Diag.Event("lieutenant", "conversation restored", new { lines = Thread.Count, shown, pending = _pending?.Chat, save = history.Save });
+            // the talks of every other save, for the lieutenant to read when the ruler refers to one (0.16)
+            string channel = Agent?.Channel?.Dir, campaign = Bridge.CampaignId, save = history.Save;
+            if (channel != null)
+                Background.Post("lieutenant's talks in other saves", () =>
+                {
+                    try
+                    {
+                        List<LieutenantChats.Talk> talks = LieutenantChats.Write(channel, Path.Combine(Paths.Root, "data"), campaign, save);
+                        Diag.Event("lieutenant", "other saves' talks written", new { saves = talks.Count, lines = talks.Sum(t => t.Lines) });
+                    }
+                    catch (Exception e) { Diag.Error("writing the lieutenant's talks in other saves", e); }
+                });
         }
 
         private static bool Resolves(string kind) => kind == "approved" || kind == "declined" || kind == "carried" || kind == "dropped" || kind == "proposal";
@@ -548,7 +560,8 @@ namespace BannerlordAgents
                                            Channel channel, Action<AgentChannel.AgentOrder> give, Action<string> sayRefused)
         {
             int given = 0;
-            foreach (AgentChannel.AgentOrder order in orders)
+            // wage caps first (0.16), as an agent's answer: a recruiting order is checked against the cap the same answer sets
+            foreach (AgentChannel.AgentOrder order in AgentChannel.WagesFirst(orders))
             {
                 string verb = (order.Do ?? "").Trim();
                 if (refused != null && refused.TryGetValue(verb, out string why))
