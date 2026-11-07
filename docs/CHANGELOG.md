@@ -2151,7 +2151,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Their two war rooms are stopped. The other four and the dashboard kept running. The game was closed.
 - **What to expect:** the study's estimates for two agents apply again. The test is still not like for like with run A, since several things changed at once.
 
-### 21:45 · Install, version 0.15.1: an extra council as my battle begins · commit PENDING
+### 21:45 · Install, version 0.15.1: an extra council as my battle begins · commit 4c0990b
 - **Why:** my battle stops the game's clock for minutes, and a regular council loses a median of 5 to 8 in-game hours while it thinks. One sitting in a battle loses none. Battles only: menus are too short and stops on the map can't be foretold ([the table](WARROOM.md#the-extra-council-as-my-battle-begins-since-0151)).
 - **What:**
   - The game, at the screen change into a scene while the player is in a battle on the map (`Watchdog.SceneBegan`, `MapEvent.PlayerMapEvent`), writes `spare.txt` in each realm agent's channel on the helper thread.
