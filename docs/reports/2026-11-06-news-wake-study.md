@@ -517,7 +517,7 @@ The study's first draft held this back. I decided otherwise, and want it tested:
 I play the Kingdom of Arnor and Gondor in every test. Agents play the Misty Mountain Orcs and Dol Guldur, the two realms this report's figures are for. Rhun and Gundabad stay with the game's own AI until the last step below.
 
 1. Fix the follow-up bug. **Done (0.14.2).**
-2. Build the finished version, with the wake rule on by default and rule editing off. There is no log-only step first. **Done (0.15.0).**
+2. Build the finished version, with the wake rule on by default and rule editing off. There is no log-only step first. **Done (0.15.0).** Added after this study: an extra council as my battle begins, 0.15.1 ([WARROOM.md](../WARROOM.md#the-extra-council-as-my-battle-begins-since-0151)).
 3. **Test run 1:** the vanilla rules. The agents can't edit them.
 4. Add rule editing.
 5. Replay about 10 recorded councils (about $6) to see what rules the agent writes, then run those rules over run A's news.

@@ -22,6 +22,7 @@ namespace BannerlordAgents
     ///   answer, the mode, and the full report with the reasons for the poke.
     /// - report.txt and council.txt: the situation now and the council's briefing, written when the war room puts a
     ///   council-request*.json in orders\ as a council sits (0.12.0); the lieutenant's report.txt every in-game hour.
+    /// - spare.txt: the in-game hour, written as the player's own battle begins, for the war room's extra council (0.15.1). No agent reads it.
     /// - receipts.log: one line per order the agent gave (applied, checked in shadow mode, or refused and why), how long
     ///   the answer took after its poke, and later what became of each order. When the game's clock is stopped, a file
     ///   is acknowledged at once as RECEIVED and its orders answered when the clock runs again.
@@ -150,6 +151,13 @@ namespace BannerlordAgents
 
         /// <summary>Any thread: asks the worker to look at every orders folder.</summary>
         public static void RequestScan() { foreach (Channel c in All) c.RequestScan(); }
+
+        /// <summary>Worker: the player's own battle has begun, so the game's clock stands still for minutes: each realm agent's war room may sit an extra council (0.15.1).</summary>
+        public static void PlayerBattle(double hours)
+        {
+            foreach (Channel c in All) c.PlayerBattle(hours);
+            Diag.Event("agent", "the player's battle began", new { hours, date = Text.When(hours) });
+        }
 
         /// <summary>Worker: looks at every orders folder now.</summary>
         public static void Scan() { foreach (Channel c in All) c.Scan(); }
@@ -431,6 +439,12 @@ namespace BannerlordAgents
 
         /// <summary>The in-game hour and date, each reported hour, for the war room's council clock between pokes (0.15: fewer pokes must not make councils late).</summary>
         public void Clock(double hours) => Files.Overwrite(Path.Combine(Dir, "clock.txt"), hours.ToString("R", Text.Inv) + "\n" + Text.When(hours));
+
+        /// <summary>The player's own battle has begun (0.15.1): told to a realm agent's war room, which may sit an extra council. The lieutenant has no councils.</summary>
+        public void PlayerBattle(double hours)
+        {
+            if (On && !IsLieutenant) Files.Overwrite(Path.Combine(Dir, "spare.txt"), hours.ToString("R", Text.Inv));
+        }
 
         /// <summary>The news that did not call the agent, to ride poke n (0.15): told in WHAT CHANGED, where the council's words are read too.</summary>
         public void Digest(int n, List<string> lines)

@@ -74,6 +74,7 @@ namespace BannerlordAgents
                     {
                         Diag.Event("state", s, new { from = State });
                         State = s;
+                        if (st is MissionState) SceneBegan();
                     }
                 }
                 Campaign c = Campaign.Current;
@@ -118,6 +119,17 @@ namespace BannerlordAgents
             LastHourlyHours = -1;
             Diag.Hours = -1;
             _hourlyAlarmed = false;
+        }
+
+        /// <summary>
+        /// A scene has begun. When it is the player's own battle (not a walk through a town, and not an auto-resolve, which opens no scene) the game's clock stands
+        /// still for minutes (run A: 4.9 minutes at the shortest, against councils of 72 s), so the realm agents' war rooms are told (0.15.1).
+        /// </summary>
+        private static void SceneBegan()
+        {
+            if (!Bridge.Running || !Settings.Bridge || TaleWorlds.CampaignSystem.MapEvents.MapEvent.PlayerMapEvent == null) return;
+            double hours = Diag.Hours;
+            Background.PostFirst("the player's battle began", () => AgentChannel.PlayerBattle(hours));
         }
 
         private static string Describe(TaleWorlds.Core.GameState st, Type t, bool atMenu)

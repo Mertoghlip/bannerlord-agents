@@ -87,6 +87,7 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 | `council_after` | First look since the campaign was loaded, passed from, declared war on, made peace, is besieged by, army has formed, offers peace, offers an alliance, offers a call to war (the last three since 0.13) | words in a poke's reasons (or in what changed since the last answer) that call a council |
 | `thinking_display` | summarized | how each call asks Claude Code for the model's thinking (0.13): summarized keeps its summary (`thinking.txt`), omitted leaves it out |
 | `council_effort`, `council_thinking_cap`, `council_timeout_seconds` | high, 12000, 420 | the council's call: room to think about the whole realm |
+| `council_at_battle` | on | an extra council as my own battle begins, beside the regular ones ([below](#the-extra-council-as-my-battle-begins-since-0151)) |
 | `claude_path` | (empty) | the newest Claude Code in VS Code's extension folder, else claude on the path |
 | `log_dir` | (empty) | where its logs go; empty is `%LOCALAPPDATA%\BannerlordAgents\logs\warroom`. A second agent's war room keeps its own (since 0.8) |
 
@@ -133,6 +134,32 @@ Since 0.6 (Oct 9). A poke's answer is fast and local: it decides what that poke 
 - **Its answer** is the same JSON object as a poke's, with any number of orders, and an optional `"council_in"`: in how many in-game hours the next council should sit. The orders go to `orders\poke-N-council-<time>.json` (N: the newest poke), which the bridge reads like any answer; the plan, enemies and lessons go into the notes.
 - **It has no plan of ours** ([plan, decision 15](PLAN.md#decisions-for-the-build)): the instructions teach doctrine, not this war's moves ([DOCTRINE.md](DOCTRINE.md)).
 - **By hand:** `WarRoom council` sits one now (the game must be running).
+
+### The extra council as my battle begins (since 0.15.1)
+
+My own battle stops the game's clock for minutes, so a council sitting then loses no game time. A regular council loses a median of 5 to 8 in-game hours while it thinks (run A: up to 45), because the clock runs on. So each realm agent gets one extra council when my battle begins.
+
+- **When:** the game writes `spare.txt` in each realm agent's channel when a scene begins while I am in a battle on the map. A walk through a town opens a scene but no battle, and an auto-resolve opens no scene. Agents that are off and the lieutenant get no word.
+- **The regular councils are left alone:** it does not move their times or count toward their gap. Its `council_in` can only bring the next one sooner. If it fails, no regular council waits for it.
+- **When it does not sit:** a council is already sitting; a regular council is due, which sits instead; the last council of either kind read this same in-game hour's report, so a reload after a crash doesn't pay twice; the game's word is over two minutes old; or the game's briefing doesn't come in time, since an old briefing would defeat the point.
+- **What the agent reads:** that it is an extra look over the realm, and that its regular councils keep their times. It isn't told why there is time for one, so it doesn't learn I am in a battle.
+- **What it doesn't know:** how the battle ends. It reads the newest in-game hour's report. An order for a lord taken in that battle is refused like any other. Its orders are read at once and carried out when the clock runs again.
+- **The record:** `calls.jsonl` has `"extra": true` on its line, and its call's folder ends in `-extra`.
+- **A local model:** this needs the model running during the battle. A local model unloaded for battles couldn't sit these.
+
+Why battles and nothing else, from the screen changes in run A's launch logs (one run, one player; time with the game window in front; 6 of the 16 battle visits ended in a crash, so those are cut short):
+
+| Where | Visits | Average | Typical | Lasted over 75 s |
+|---|---|---|---|---|
+| Battles (10 separate ones) | 16 | 10.5 min | 9.6 min | all |
+| Stopped on the map, for 30 s or more | 48 | 95 s | 74 s | 47% |
+| Town and castle menus | 69 | 63 s | 11 s | 13% |
+| Inventory | 22 | 27 s | 21 s | 4% |
+| Party | 33 | 19 s | 16 s | none |
+| Kingdom | 7 | 15 s | 15 s | none |
+| Clan | 12 | 11 s | 11 s | none |
+
+A council took a median of 72 s, and 250 s at the longest. The shortest battle, counting time with the window behind, was 293 s. 6 of run A's 142 councils happened to sit wholly inside a battle, and the 30 orders of the two I checked were all carried out once the clock ran again. Stops on the map can't be foretold: of those that had already lasted a minute, 31% lasted the next 75 s.
 
 ## News wakes (since 0.14)
 

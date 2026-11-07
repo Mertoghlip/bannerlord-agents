@@ -63,6 +63,8 @@ namespace BannerlordAgents.WarRoom
         public string CouncilEffort = "high";
         public int CouncilThinkingCap = 12000;
         public int CouncilTimeoutSeconds = 420;
+        /// <summary>An extra council as the player's own battle begins, while the game's clock stands still (0.15.1). The regular councils keep their times.</summary>
+        public bool CouncilAtBattle = true;
         /// <summary>
         /// How each call asks for the model's thinking (0.13, the training record): "summarized" keeps the API's summary of it in the
         /// call's raw.jsonl and thinking.txt; "omitted" leaves it out; empty asks nothing (Claude Code's own default).
@@ -135,6 +137,7 @@ namespace BannerlordAgents.WarRoom
                     case "council_effort": if (v.Length > 0) c.CouncilEffort = v; break;
                     case "council_thinking_cap": if (int.TryParse(v, out int ctc) && ctc >= 0) c.CouncilThinkingCap = ctc; break;
                     case "council_timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ct) && ct > 10) c.CouncilTimeoutSeconds = ct; break;
+                    case "council_at_battle": c.CouncilAtBattle = v == "on" || v == "true" || v == "yes"; break;
                     case "thinking_display": c.ThinkingDisplay = v == "summarized" || v == "omitted" ? v : ""; break;
                 }
             }
@@ -190,6 +193,8 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("council_effort = " + CouncilEffort);
             sb.AppendLine("council_thinking_cap = " + CouncilThinkingCap.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("council_timeout_seconds = " + CouncilTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# an extra council as the player's own battle begins, while the game's clock stands still; the regular councils keep their times");
+            sb.AppendLine("council_at_battle = " + (CouncilAtBattle ? "on" : "off"));
             sb.AppendLine("# the model's thinking: summarized (the API's summary of it is kept with each call, for the training record), omitted, or empty (Claude Code's default)");
             sb.AppendLine("thinking_display = " + ThinkingDisplay);
             File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));

@@ -2150,3 +2150,16 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `C:\Users\karab\Projects\rhun-war-council` and `C:\Users\karab\Projects\gundabad-war-council` are kept, with `mode = off` in each `agent.txt`.
   - Their two war rooms are stopped. The other four and the dashboard kept running. The game was closed.
 - **What to expect:** the study's estimates for two agents apply again. The test is still not like for like with run A, since several things changed at once.
+
+### 21:45 · Install, version 0.15.1: an extra council as my battle begins · commit PENDING
+- **Why:** my battle stops the game's clock for minutes, and a regular council loses a median of 5 to 8 in-game hours while it thinks. One sitting in a battle loses none. Battles only: menus are too short and stops on the map can't be foretold ([the table](WARROOM.md#the-extra-council-as-my-battle-begins-since-0151)).
+- **What:**
+  - The game, at the screen change into a scene while the player is in a battle on the map (`Watchdog.SceneBegan`, `MapEvent.PlayerMapEvent`), writes `spare.txt` in each realm agent's channel on the helper thread.
+  - The war room (`Room.SpareOffered`, `SpareDue`, `SpareSat`, `BriefingFor`) sits one extra council. The regular councils' times and gap are not touched, its `council_in` can only bring the next one sooner, and its failure holds none up. It doesn't sit while a council sits, when a regular one is due, when the last council read this same in-game hour's report, on a word over two minutes old, or on an old briefing. `council_at_battle = off` turns it off.
+  - The agent reads only that it is an extra look over the realm. The instructions didn't change, so the cached prompt stays.
+- **Checks:**
+  - Smoke test and war room self-test pass, with 2 and 15 new checks; dashboard self-test passes. The reference check reports 835 game members, 0 missing.
+  - A rehearsal on the real `WarRoom.exe` in a scratch folder, with stand-ins for the model and the game: 14 of 14. The game's word brought an extra council, marked in `calls.jsonl`; a second word at the same hour brought none; the regular council still sat 24 hours after the last regular one; a word during a council brought no second one; a failed extra council left the next regular one on time; `council_in` brought the next one sooner.
+  - **Not tested:** nothing here has run in the game, so the battle check itself hasn't been seen working. No real model has read the new reason line.
+- **Cost to expect:** run A had 10 separate battles, so about $7 to $12 a run for the two agents, at $0.55 to $0.69 a council.
+- **Outside the repository:** war rooms and dashboard stopped for the build and started again, four war rooms. The game was closed. The screen-time scripts, the rehearsal and `wake_compare.py` are copied to `D:\BannerlordAgents-backup\news-wake-study-20261106` to reuse on the new runs.

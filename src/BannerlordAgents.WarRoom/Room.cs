@@ -73,6 +73,12 @@ namespace BannerlordAgents.WarRoom
         private DateTime _councilFailedAt = DateTime.MinValue;
         private readonly object _councilGate = new object();
         private bool _councilSitting;
+        // the extra council as the player's own battle begins (0.15.1): the game's spare.txt, the hour the last extra one read, and how long the game's word holds
+        private DateTime _spareSeen = DateTime.MinValue;
+        private double _lastSpareHours = double.NaN;
+        internal const double SpareFreshSeconds = 120;
+        /// <summary>An extra council's reason. It says nothing of why there is time for it: the agent is not told what the player is doing.</summary>
+        internal const string SpareWhy = "an extra look over the whole realm, beside your regular councils. They keep their times; \"council_in\" here can only bring the next one sooner";
         private readonly HashSet<string> _orderedMeanwhile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // the lords the fast answers ordered in the last minute (0.12.4): a council that sits right after one is briefed on a world
         // that may not have its orders in it yet (run 20261025-1831-C2: the first answer sent Aragorn to sell at Mount Gundabad the
@@ -641,21 +647,61 @@ namespace BannerlordAgents.WarRoom
             }
         }
 
+        /// <summary>
+        /// The game has just said the player's own battle began (0.15.1, spare.txt): true once for each time it says so. A word older than two minutes, from before this
+        /// war room started or while it was busy, is let go: most of the stillness is gone by then.
+        /// </summary>
+        internal bool SpareOffered()
+        {
+            if (!_c.CouncilAtBattle) return false;
+            string file = Path.Combine(_c.ChannelDir, "spare.txt");
+            try
+            {
+                if (!File.Exists(file)) return false;
+                DateTime written = File.GetLastWriteTimeUtc(file);
+                if (written == _spareSeen) return false;
+                _spareSeen = written;
+                return (DateTime.UtcNow - written).TotalSeconds <= SpareFreshSeconds;
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+        }
+
+        /// <summary>
+        /// Why an extra council should sit at this hour, or null: not while a council sits, and not when the last council of either kind read this same in-game hour's
+        /// report, which also keeps a reload after a crash from paying for the same battle twice. The regular councils' times and gap do not come into it.
+        /// </summary>
+        internal string SpareDue(double nowHours)
+        {
+            if (!_c.Council || _c.Conversation || !_c.CouncilAtBattle || double.IsNaN(nowHours)) return null;
+            lock (_councilGate)
+            {
+                if (_councilSitting || SameHour(nowHours, _lastCouncilHours) || SameHour(nowHours, _lastSpareHours)) return null;
+                return SpareWhy;
+            }
+        }
+
+        private static bool SameHour(double now, double last) => !double.IsNaN(last) && Math.Abs(now - last) < 1 - 1e-6;
+
         private void CouncilIfDue(CancellationToken stop)
         {
+            bool offered = SpareOffered();   // seen once, even when no extra council comes of it
             if (_mem == null || (_council != null && !_council.IsCompleted)) return;
             if ((DateTime.Now - _councilFailedAt).TotalMinutes < 5) return;
             ReadClock();
             string why = CouncilDue(_pokeHours);
+            // a regular council due sits as itself; only otherwise is this one extra
+            bool extra = why == null && offered && (why = SpareDue(_pokeHours)) != null;
             if (why == null || !Fresh(out _)) return;
             _councilStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
             CancellationToken token = _councilStop.Token;
             lock (_councilGate) BeginSitting();
             _council = Task.Run(() =>
             {
-                try { SitCouncil(why, token); }
+                try { SitCouncil(why, token, extra ? "extra" : null, true, extra); }
                 catch (Exception e) when (e is IOException || e is InvalidOperationException || e is JsonException)
                 {
+                    if (extra) { Say("Extra council: it could not sit (" + e.Message + ")."); return; }   // it holds up no regular council
                     _councilFailedAt = DateTime.Now;
                     Say("Council of war: it could not sit (" + e.Message + "); tried again in five minutes.");
                 }
@@ -683,6 +729,9 @@ namespace BannerlordAgents.WarRoom
             // the game's clock counts too (0.15): with the wake rule a quiet realm goes longer between pokes
             DateTime latest = File.GetLastWriteTime(poke);
             if (File.Exists(clock) && File.GetLastWriteTime(clock) > latest) latest = File.GetLastWriteTime(clock);
+            // the player's battle beginning says so too (0.15.1): the clock may have stood still for long in the menu before it
+            string spare = Path.Combine(_c.ChannelDir, "spare.txt");
+            if (File.Exists(spare) && File.GetLastWriteTime(spare) > latest) latest = File.GetLastWriteTime(spare);
             double age = (DateTime.Now - latest).TotalMinutes;
             if (age > 10) { why = "the latest poke is " + Math.Round(age) + " minutes old: the game is closed or long paused"; return false; }
             return true;
@@ -718,8 +767,24 @@ namespace BannerlordAgents.WarRoom
             return false;
         }
 
-        /// <summary>A council sits now (also "WarRoom council"): the reason given; true when its answer was read and written.</summary>
-        public bool SitCouncil(string why, CancellationToken cancel = default, string tag = null, bool write = true)
+        /// <summary>
+        /// Asks for the council's briefing; false when it cannot sit. A regular council that gets none in time reads the last one written, if any. An extra one does not sit
+        /// (0.15.1): it is there to read the newest hour, and the last one written could be days old.
+        /// </summary>
+        internal bool BriefingFor(bool extra)
+        {
+            if (RequestBriefing(out string late)) return true;
+            if (extra) { Say("Extra council: " + late + ", so it does not sit."); return false; }
+            if (!File.Exists(Path.Combine(_c.ChannelDir, "council.txt"))) { Say("Council of war: " + late + ", and there is none from before, so it waits."); return false; }
+            Say("Council of war: " + late + "; the last one written is used.");
+            return true;
+        }
+
+        /// <summary>
+        /// A council sits now (also "WarRoom council"): the reason given; true when its answer was read and written. extra: it sits beside the regular councils and leaves their times
+        /// alone (0.15.1, SpareSat), and if it fails it holds none of them up.
+        /// </summary>
+        public bool SitCouncil(string why, CancellationToken cancel = default, string tag = null, bool write = true, bool extra = false)
         {
             DateTime began = DateTime.Now;
             PokeMeta meta = ReadMeta(-1);
@@ -732,11 +797,7 @@ namespace BannerlordAgents.WarRoom
                 meta.Date = _clockDate;
             }
             // the briefing from the game's newest hour, written for this council (0.12.0)
-            if (!RequestBriefing(out string late))
-            {
-                if (!File.Exists(Path.Combine(_c.ChannelDir, "council.txt"))) { Say("Council of war: " + late + ", and there is none from before, so it waits."); return false; }
-                Say("Council of war: " + late + "; the last one written is used.");
-            }
+            if (!BriefingFor(extra)) return false;
             string briefing = ReadShared(Path.Combine(_c.ChannelDir, "council.txt")) ?? "";
             string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
             string council = CouncilText(why, meta, number, briefing, situation);
@@ -744,7 +805,7 @@ namespace BannerlordAgents.WarRoom
             string folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-council-" + number + (tag != null ? "-" + tag : ""));
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
-            Say("Council of war (after poke #" + number + ", " + meta.Date + "): " + why + ". Asking " + _c.Model + " at effort " + _c.CouncilEffort + ", thinking up to " + _c.CouncilThinkingCap + " tokens...");
+            Say((extra ? "Extra council" : "Council of war") + " (after poke #" + number + ", " + meta.Date + "): " + why + ". Asking " + _c.Model + " at effort " + _c.CouncilEffort + ", thinking up to " + _c.CouncilThinkingCap + " tokens...");
             RouteTool routes = Routes(meta, number, "council", write);
             CallResult r = Claude.Run(_claude, SystemFile(routes != null), prompt, _c.Model, _c.CouncilEffort, _c.ChannelDir, _c.Lookups, _c.CouncilTimeoutSeconds, _c.CouncilThinkingCap, cancel: cancel, tools: routes);
             File.WriteAllText(Path.Combine(folder, "raw.jsonl"), r.Raw ?? "");
@@ -775,16 +836,17 @@ namespace BannerlordAgents.WarRoom
             double seconds = (DateTime.Now - began).TotalSeconds;
             if (answer != null)
             {
-                CouncilSat(meta.Hours, councilIn);
+                if (extra) SpareSat(meta.Hours, councilIn);
+                else CouncilSat(meta.Hours, councilIn);
                 if (dropped.Count > 0 && write)
                     lock (_councilGate)
                         _councilNote = "YOUR COUNCIL OF WAR (" + meta.Date + ") gave " + (orders + dropped.Count) + " orders; " + dropped.Count + " of them did not go out, because a faster answer of yours ordered those lords while it sat: "
                                        + string.Join("; ", dropped) + ".";
             }
-            else _councilFailedAt = DateTime.Now;
+            else if (!extra) _councilFailedAt = DateTime.Now;
             Log(new
             {
-                kind = "council", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), poke = number, when = meta.Date, why, model = _c.Model, effort = _c.CouncilEffort,
+                kind = "council", extra, at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), poke = number, when = meta.Date, why, model = _c.Model, effort = _c.CouncilEffort,
                 thinking_cap = _c.CouncilThinkingCap, ok = answer != null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), api_ms = r.ApiMs, ttft_ms = r.TtftMs, turns = r.Turns,
                 tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
                 context_tokens = r.InTokens + r.CacheRead + r.CacheWrite, story_words = storyWords, gap_lines = gapLines, briefing_chars = briefing.Length, situation_chars = situation.Length,
@@ -851,6 +913,16 @@ namespace BannerlordAgents.WarRoom
                 _nextCouncilHours = hours + (councilIn ?? _c.CouncilEveryHours);
                 _councilDue = null;
                 _councilFirstLook = false;
+            }
+        }
+
+        /// <summary>An extra council sat at this in-game hour (0.15.1): the regular councils keep their times and their gap; its council_in can only bring the next one sooner.</summary>
+        internal void SpareSat(double hours, double? councilIn)
+        {
+            lock (_councilGate)
+            {
+                _lastSpareHours = hours;
+                if (councilIn != null && hours + councilIn.Value < _nextCouncilHours) _nextCouncilHours = hours + councilIn.Value;
             }
         }
 

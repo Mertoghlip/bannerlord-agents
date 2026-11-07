@@ -287,6 +287,23 @@ namespace SmokeTest
             Files.FlushAll();
             Check(status == "sent" && Allies.AllLetters().Last().Urgent && Brain.Get("dg").Pending.Last().Urgent && Brain.Get("dg").Pending.Last().Text.Contains("(Marked urgent by its writer.)"),
                   "a letter marked urgent carries the mark to its reader's news: " + st);
+            BattleWordTests(root);
+        }
+
+        /// <summary>0.15.1: as the player's own battle begins, a realm agent that is on gets the word in its channel; one that is off and the lieutenant do not.</summary>
+        private static void BattleWordTests(string root)
+        {
+            string Word(string kind, string mode)
+            {
+                string dir = Path.Combine(root, "spare-" + kind + "-" + mode);
+                Directory.CreateDirectory(dir);
+                new RealmAgent(new AgentConfig { Realm = "r_" + kind + mode, ChannelDir = dir, Kind = kind, Mode = mode }).Channel.PlayerBattle(2192838.5);
+                Files.FlushAll();
+                string f = Path.Combine(dir, "spare.txt");
+                return File.Exists(f) ? File.ReadAllText(f) : null;
+            }
+            Check(Word("realm", "live") == "2192838.5" && Word("realm", "shadow") == "2192838.5", "a realm agent on live or shadow is told the player's battle began, with the hour");
+            Check(Word("realm", "off") == null && Word("lieutenant", "live") == null, "an agent that is off and the lieutenant are not told");
         }
     }
 }

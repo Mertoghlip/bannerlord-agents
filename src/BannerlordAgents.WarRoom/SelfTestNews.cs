@@ -115,6 +115,51 @@ namespace BannerlordAgents.WarRoom
             string three = stuck.CouncilDue(1010);
             Check(two == null && three != null && three.Contains("3 of your lords"), "three lords stuck in one wake's news call a council, two do not (" + three + ")");
 
+            // an extra council as the player's own battle begins (0.15.1)
+            var extra = new Room(new Config { AgentDir = dir, Channel = "warroom", CouncilGapHours = 6, CouncilEveryHours = 24 }, Path.Combine(dir, "logs"));
+            extra.CouncilSat(3000, 12);
+            string spareFile = Path.Combine(channel, "spare.txt");
+            if (File.Exists(spareFile)) File.Delete(spareFile);
+            Check(!extra.SpareOffered(), "no word from the game, no extra council");
+            File.WriteAllText(spareFile, "3005");
+            bool first = extra.SpareOffered(), again = extra.SpareOffered();
+            Check(first && !again, "the game's word that a battle began is taken once");
+            File.SetLastWriteTimeUtc(spareFile, DateTime.UtcNow.AddSeconds(-Room.SpareFreshSeconds - 30));
+            Check(!extra.SpareOffered(), "a word older than two minutes is let go");
+            File.WriteAllText(spareFile, "3005");
+            var off = new Room(new Config { AgentDir = dir, Channel = "warroom", CouncilAtBattle = false }, Path.Combine(dir, "logs"));
+            off.CouncilSat(3000, 12);
+            Check(!off.SpareOffered() && off.SpareDue(3005) == null, "with council_at_battle off there is no extra council");
+            File.Delete(spareFile);
+            Check(extra.SpareDue(3005) != null && extra.CouncilDue(3005) == null, "an extra council may sit between regular ones, with none due");
+            Check(extra.SpareDue(3000) == null && extra.SpareDue(3000.6) == null, "not when the last council read this same in-game hour's report");
+            Check(extra.SpareDue(3001) != null, "and it may once a newer hour's report is there");
+            extra.CouncilSitting(true);
+            bool whileSitting = extra.SpareDue(3005) == null;
+            extra.CouncilSitting(false);
+            Check(whileSitting, "not while a council sits");
+            Check(!System.Text.RegularExpressions.Regex.IsMatch(Room.SpareWhy, "battle|fight|player|paused|stopped|clock", System.Text.RegularExpressions.RegexOptions.IgnoreCase), "its reason does not tell the agent what the player is doing: " + Room.SpareWhy);
+            extra.SpareSat(3005, null);
+            Check(extra.NextCouncilHours == 3012 && extra.CouncilDue(3011) == null && extra.CouncilDue(3012) != null, "it leaves the regular council's time alone");
+            Check(extra.SpareDue(3005) == null && extra.SpareDue(3005.5) == null && extra.SpareDue(3006) != null, "one extra council an in-game hour, so a reload into the same battle does not pay twice");
+            extra.AfterAnswer("WHY YOU ARE ASKED NOW\n- Orc Keep is besieged by Aragorn.\n\nOTHER", noOrders);
+            Check(extra.CouncilDue(3006) != null, "it does not count toward the gap between regular councils: a big event 1 hour after it, 6 after the regular one, still calls one");
+            extra.CouncilSat(3000, 12);
+            extra.SpareSat(3005, 72);
+            Check(extra.NextCouncilHours == 3012, "asking for its next council later than the regular time changes nothing");
+            extra.SpareSat(3005, 4);
+            Check(extra.NextCouncilHours == 3009, "asking sooner brings the next one sooner");
+            // no fresh briefing: a regular council reads the last one written, an extra one does not sit
+            TimeSpan briefingWait = Room.BriefingWait;
+            Room.BriefingWait = TimeSpan.FromMilliseconds(300);
+            string briefingFile = Path.Combine(channel, "council.txt");
+            File.WriteAllText(briefingFile, "AN OLD BRIEFING");
+            File.SetLastWriteTimeUtc(briefingFile, DateTime.UtcNow.AddDays(-2));
+            bool extraSits = extra.BriefingFor(true), regularSits = extra.BriefingFor(false);
+            Room.BriefingWait = briefingWait;
+            File.Delete(briefingFile);
+            Check(!extraSits && regularSits, "with no fresh briefing an extra council does not sit on an old one; a regular one still does");
+
             // poke.json's news, as the bridge writes it
             File.WriteAllText(Path.Combine(channel, "poke.json"), "{\"number\":12,\"hours\":1000,\"campaign\":\"camp-n\",\"realm\":\"orcs\",\"news\":{\"mode\":\"theatre\",\"recipe\":\"theatre\",\"book\":\"book\\\\poke-12.json\",\"names\":[\"Aragorn\",\"Orc Castle\"]}}");
             PokeMeta meta = room.ReadMetaForTest(12);
