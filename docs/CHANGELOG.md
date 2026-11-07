@@ -2186,7 +2186,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The game was closed. I saved `TEST A1` at 14:53, on day 9.
   - My review scripts for test A1 (screen time, Celebrían's recruiting, the agents' first nine days) are kept in `D:\BannerlordAgents-backup\news-wake-study-20261106\test-a1-review`.
 
-### 15:36 · Install, version 0.16.0: the guard loop is the standard defend, the stop check, recruiting orders refused when the lord cannot pay, the lieutenant's talks in other saves, and a box to write in that grows
+### 15:36 · Install, version 0.16.0: the guard loop is the standard defend, the stop check, recruiting orders refused when the lord cannot pay, the lieutenant's talks in other saves, and a box to write in that grows · commit f5a7165
 - **Why:** Nov 7, after test A1's first nine days:
   - The custom orders my lieutenant wrote in this test should be the standard defend order from now on, for the agents too. Its last guard loop (`guard_supply_loop` v7) fought 76 times and won 75, took 17 enemy lords and lost 1, over 161 runs.
   - Celebrían rode into Mount Gundabad and took no one: Elrohir, on the same loop 14 hours ahead, had taken every volunteer her standing reached, and the loop could not tell.
