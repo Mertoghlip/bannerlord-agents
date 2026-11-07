@@ -2166,7 +2166,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Saturday, November 7
 
-### 14:55 · Install, version 0.15.2: the lieutenant's answers land in order, it hears which orders wait for the clock, and it has room for long answers · commit PENDING
+### 14:55 · Install, version 0.15.2: the lieutenant's answers land in order, it hears which orders wait for the clock, and it has room for long answers · commit d61f91d
 - **Why:** test A1 (Nov 6), with the game paused from the load:
   - The report kept saying no orders were in force, so the lieutenant took its orders for lost and wrote all 80, and two whole tools, again in every answer: 3.5 to 6.6 minutes each. Once I told it the game was paused, it answered in 33 s.
   - When the clock first ran, the queued answers landed in the order 74, 78, 76, 77. The NOLDOR template that 78 took off my four clan lords came back on with 77.
