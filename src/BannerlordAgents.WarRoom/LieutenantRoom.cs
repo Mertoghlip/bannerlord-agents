@@ -119,6 +119,21 @@ namespace BannerlordAgents.WarRoom
                 + (carried > 0 ? ", carrying out " + carried + " orders" : "") + (problem != null ? " (" + problem + ")" : "") + ".");
         }
 
+        /// <summary>
+        /// The orders waiting for the game's clock (0.15.2). Nov 6, test A1, the game paused from the load: with no word of them it took its orders for lost, and wrote all 80 and two
+        /// whole tools again in every answer, 3.5 to 6.6 minutes each. Told, it took 33 s.
+        /// </summary>
+        private static void WaitingForClock(StringBuilder sb, JsonObject chat)
+        {
+            int orders = chat["orders_waiting"] != null ? (int)Num(chat["orders_waiting"]) : 0, answers = chat["answers_waiting"] != null ? (int)Num(chat["answers_waiting"]) : 0;
+            if (orders <= 0) return;
+            string which = orders + " order" + (orders == 1 ? "" : "s") + " of your last " + (answers > 1 ? answers + " answers" : "answer") + (orders == 1 ? " has" : " have");
+            sb.AppendLine("ORDERS WAITING FOR THE CLOCK");
+            sb.AppendLine("The game's clock has not moved since you gave them, so " + which + " not started, and any tools written in those answers are not kept yet. That is why they are not in force, in the receipts or among your tools. Nothing is wrong with them. "
+                          + "When the clock runs they start in the order you gave them, a later order for a lord replacing an earlier one. Do not give them again: give only what your ruler wants changed.");
+            sb.AppendLine();
+        }
+
         /// <summary>The message: the conversation so far, what became of its orders, the waiting proposal, the realm now, the player's words.</summary>
         internal static string Message(JsonObject chat, List<JsonObject> history, string report, List<string> receipts, string chronicle = null)
         {
@@ -148,6 +163,7 @@ namespace BannerlordAgents.WarRoom
             if (receipts.Count == 0) sb.AppendLine("- Nothing yet.");
             foreach (string l in receipts) sb.AppendLine("- " + l);
             sb.AppendLine();
+            WaitingForClock(sb, chat);
             // what the ruler did with a proposal by the window's buttons (0.10.1), since your last answer
             if (chat["notes"] is JsonArray notes && notes.Count > 0)
             {

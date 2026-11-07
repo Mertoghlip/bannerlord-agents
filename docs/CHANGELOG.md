@@ -2163,3 +2163,25 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - **Not tested:** nothing here has run in the game, so the battle check itself hasn't been seen working. No real model has read the new reason line.
 - **Cost to expect:** run A had 10 separate battles, so about $7 to $12 a run for the two agents, at $0.55 to $0.69 a council.
 - **Outside the repository:** war rooms and dashboard stopped for the build and started again, four war rooms. The game was closed. The screen-time scripts, the rehearsal and `wake_compare.py` are copied to `D:\BannerlordAgents-backup\news-wake-study-20261106` to reuse on the new runs.
+
+## Saturday, November 7
+
+### 14:55 · Install, version 0.15.2: the lieutenant's answers land in order, it hears which orders wait for the clock, and it has room for long answers · commit PENDING
+- **Why:** test A1 (Nov 6), with the game paused from the load:
+  - The report kept saying no orders were in force, so the lieutenant took its orders for lost and wrote all 80, and two whole tools, again in every answer: 3.5 to 6.6 minutes each. Once I told it the game was paused, it answered in 33 s.
+  - When the clock first ran, the queued answers landed in the order 74, 78, 76, 77. The NOLDOR template that 78 took off my four clan lords came back on with 77.
+  - An audit's answer was stopped at 48,000 characters on its 60th order of 70, twice, after 16 minutes, and all of it was lost.
+- **What:**
+  - `Lieutenant.Carry`: every answer goes through the helper's thread, with tools or without, first in its queue; then its diplomatic acts and orders go to the game's thread. So answers land in the order they came.
+  - `chat.json` says how many orders and answers are waiting for the clock (`orders_waiting`, `answers_waiting`, counted from the clock's last tick). The lieutenant's message then has ORDERS WAITING FOR THE CLOCK: what waits, that nothing is wrong with them, and not to give them again.
+  - The limit that stops a runaway is 150,000 characters for the lieutenant's answers, up from 48,000. A realm agent's limits are unchanged.
+  - [LIEUTENANT.md](LIEUTENANT.md) says all three.
+- **Checks:**
+  - Smoke test, war room self-test and dashboard self-test all pass, with 2 and 2 new checks.
+  - The order check fails on the old code (lord_azog before lord_bolg) and passes on the new.
+  - The reference check reports 835 game members, 0 missing.
+  - **Not tested:** none of it has run in the game yet.
+- **Outside the repository:**
+  - War rooms and dashboard stopped for the build and started again.
+  - The game was closed. I saved `TEST A1` at 14:53, on day 9.
+  - My review scripts for test A1 (screen time, Celebrían's recruiting, the agents' first nine days) are kept in `D:\BannerlordAgents-backup\news-wake-study-20261106\test-a1-review`.

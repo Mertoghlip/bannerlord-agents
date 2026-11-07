@@ -45,7 +45,7 @@ namespace BannerlordAgents
         public const string Name = "Lieutenant";
         private const uint Voice = 0xFFE6C36Au, You = 0xFFC8C8C8u, Aside = 0xFF8FB3D9u, Refused = 0xFFD98F8Fu, Post = 0xFFB8D98Fu;
 
-        private sealed class Proposal
+        internal sealed class Proposal
         {
             public int Chat;
             public string Say, Words, List;
@@ -91,6 +91,7 @@ namespace BannerlordAgents
 
         public static void Reset()
         {
+            ForgetWaiting();
             _pending = null;
             _next = -1;
             Thinking = false;
@@ -233,7 +234,7 @@ namespace BannerlordAgents
                 Campaign = Bridge.CampaignId, Realm = realm.StringId, RealmName = Names.Faction(realm), LoadId = Bridge.LoadId, Ruler = Names.Hero(Hero.MainHero),
                 Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Tools, _pending.Diplomacy, _pending.Letters, _pending.Hours },
                 History = before.Skip(Math.Max(0, before.Count - HistoryLines)).ToList(), HistoryTotal = before.Count, Save = Bridge.History?.Save, PartyAi = pac,
-                Run = RunTags.Id, Arm = RunTags.Arm
+                Run = RunTags.Id, Arm = RunTags.Arm, OrdersWaiting = WaitingOrders, AnswersWaiting = WaitingAnswers
             };
             Notes.Clear();
             Mail.Clear();
@@ -270,7 +271,7 @@ namespace BannerlordAgents
             Keep("approved", p.List, p.Chat);
             Recorder.OnLieutenantAnswered(p.Chat, true, p.List);
             Notes.Add("The ruler approved your proposal of message #" + p.Chat + " with the button, and its orders were given.");
-            if (ag != null) { string realm = ag.Realm; Background.ToMain.Enqueue(() => Carry(p, p.Chat, realm)); }
+            if (ag != null) { string realm = ag.Realm; NoteCarried(p.Orders?.Count ?? 0); Background.ToMain.Enqueue(() => Carry(p, p.Chat, realm)); }
             LieutenantWindow.Refresh();
             Diag.Event("lieutenant", "approved", new { chat = p.Chat, orders = p.Orders?.Count, tools = p.Tools?.Count, diplomacy = p.Diplomacy?.Count, letters = p.Letters?.Count });
         }
@@ -337,6 +338,7 @@ namespace BannerlordAgents
             if (gate == "carry" || gate == "carry+propose")
             {
                 Proposal agreed = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
+                NoteCarried(agreed.Orders?.Count ?? 0);
                 Background.ToMain.Enqueue(() => Carry(agreed, n, realmId));
                 Keep("carried", agreed.List, n);
                 Recorder.OnLieutenantAgreed(n, agreed.List);
@@ -436,12 +438,41 @@ namespace BannerlordAgents
         /// What the player agreed to (game's thread): its orders through the door every agent's go through; its tools into your realm's library,
         /// its diplomatic acts through the agents' own diplomacy, its letters to your allies' agents (0.13). Each refusal is said in the window.
         /// </summary>
-        private static void Carry(Proposal p, int chat, string realmId)
+        // the orders given since the game's clock last moved (0.15.2): they wait for its next tick. Nov 6, test A1, the game paused from the load: the report kept saying no orders
+        // were in force, so the lieutenant took them for lost and wrote all 80 again in every answer, 3.5 to 6.6 minutes each. Told the game was paused, it took 33 s.
+        private static long _carriedAtTick = -1;
+        private static int _waitingOrders, _waitingAnswers;
+
+        internal static void ForgetWaiting()
+        {
+            _carriedAtTick = -1;
+            _waitingOrders = _waitingAnswers = 0;
+        }
+
+        internal static void NoteCarried(int orders)
+        {
+            if (Watchdog.CampaignTicks != _carriedAtTick)
+            {
+                _carriedAtTick = Watchdog.CampaignTicks;
+                _waitingOrders = _waitingAnswers = 0;
+            }
+            _waitingOrders += orders;
+            _waitingAnswers++;
+        }
+
+        internal static int WaitingOrders => Watchdog.CampaignTicks == _carriedAtTick ? _waitingOrders : 0;
+        internal static int WaitingAnswers => Watchdog.CampaignTicks == _carriedAtTick ? _waitingAnswers : 0;
+
+        /// <summary>For the smoke test: takes an order in place of the game.</summary>
+        internal static Action<AgentChannel.AgentOrder> GivenForTest;
+
+        internal static void Carry(Proposal p, int chat, string realmId)
         {
             string file = "chat-" + chat + ".json";
             void Say(string text, uint colour) => Background.ToUi.Enqueue(() => { LieutenantWindow.Add(text, colour, true); Keep(colour == Refused ? "refused" : "heard", text.Trim('(', ')'), chat); });
             void Give(AgentChannel.AgentOrder order)
             {
+                if (GivenForTest != null) { GivenForTest(order); return; }
                 string lord = order.Lord;
                 Orders.FromAgent(order, (status, reason) =>
                 {
@@ -451,7 +482,8 @@ namespace BannerlordAgents
             // an answer with tools of its own (0.13.13): its tools first, on the helper's thread where the realm's library lives, then its
             // orders, so an order can name a tool written in the same answer, as an agent's answer does (AgentChannel, A8). Oct 30,
             // chat-18: recruit_pair was written and ordered in one answer; the orders were refused as unknown and the tool kept after them.
-            bool toolsFirst = (p.Tools?.Count ?? 0) > 0;
+            // Since 0.15.2 an answer with no tools goes the same way, so answers land in the order they came. Nov 6, test A1, with the clock stopped: chat-78, with no tools, gave
+            // its orders ahead of chat-76 and 77, whose orders waited for their tools, so the NOLDOR template 78 took off four lords came back on.
             int i = 0;
             var orders = new List<AgentChannel.AgentOrder>();
             foreach (JObject o in (p.Orders ?? new JArray()).OfType<JObject>())
@@ -459,21 +491,21 @@ namespace BannerlordAgents
                 AgentChannel.AgentOrder order = AgentChannel.OrderFrom(o, null, -1, file);
                 order.Index = ++i;
                 order.Realm = realmId;
-                if (toolsFirst) orders.Add(order);
-                else Give(order);
+                orders.Add(order);
             }
             Diag.Count("lieutenant:orders carried out", i);
             int d = 0;
+            var acts = new List<DiploAct>();
             foreach (JObject o in (p.Diplomacy ?? new JArray()).OfType<JObject>())
             {
                 DiploAct act = DiploAct.From(o, -1, file, ++d);
                 act.Realm = realmId;
-                Diplomacy.FromAgent(act, (status, reason) => Say((status == "refused" ? "(Refused: " : "(") + act + ": " + reason + ")", status == "refused" ? Refused : Aside));
+                acts.Add(act);
             }
-            // tools and letters are the helper's: the realm's library and the allied channel live there
+            // tools and letters are the helper's: the realm's library and the allied channel live there. First in the helper's queue, one answer after another, so the
+            // order they came in holds and no backlog of reports holds them up
             JArray tools = p.Tools, letters = p.Letters;
-            if ((tools?.Count ?? 0) + (letters?.Count ?? 0) == 0) return;
-            Background.Post("lieutenant's tools and letters", () =>
+            Background.PostFirst("lieutenant's answer", () =>
             {
                 RealmAgent ag = Agents.Of(realmId);
                 var written = new Dictionary<string, Tools.ToolDef>(StringComparer.OrdinalIgnoreCase);
@@ -492,7 +524,9 @@ namespace BannerlordAgents
                     if (r.Usable) written[r.Name] = r.Def;
                     else if (r.Status == "refused") refused[r.Name] = r.Reason;
                 }
-                // then the orders that waited for them (0.13.13), to the game's thread
+                // then its diplomatic acts and the orders that waited for its tools (0.13.13), to the game's thread
+                foreach (DiploAct act in acts)
+                    Background.ToMain.Enqueue(() => Diplomacy.FromAgent(act, (status, reason) => Say((status == "refused" ? "(Refused: " : "(") + act + ": " + reason + ")", status == "refused" ? Refused : Aside)));
                 GiveAfterTools(orders, written, refused, ag?.Channel, o => Background.ToMain.Enqueue(() => Give(o)), s => Say(s, Refused));
                 int l = 0;
                 foreach (JToken letter in letters ?? new JArray())

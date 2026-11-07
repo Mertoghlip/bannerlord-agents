@@ -311,6 +311,18 @@ namespace BannerlordAgents.WarRoom
                   && m.Contains("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER") && m.Contains("- The ruler declined your proposal of message #5")
                   && m.IndexOf("WHAT YOUR RULER DID", StringComparison.Ordinal) < m.IndexOf("YOUR PROPOSAL WAITING", StringComparison.Ordinal),
                   "the lieutenant's message: the conversation, what became of its orders, what the ruler did with the buttons, the waiting proposal, the realm, then the ruler's words");
+            // 0.15.2: a lieutenant's long answer is not taken for a runaway; a realm agent's limits stay as they were
+            Check(Claude.RunawayLimit("{\"say\":\"Done.\",\"carry_out\":true,\"orders\":[") == Claude.RunawayCharsLieutenant && Claude.RunawayCharsLieutenant > 100000
+                  && Claude.RunawayLimit("{\"poke\":7,\"orders\":[") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\":7,\"tools\":[") == Claude.RunawayCharsWithTools,
+                  "the lieutenant's answers get room for every lord of the realm; a realm agent's limits are unchanged");
+            // 0.15.2: told when its orders wait for the clock, so it does not write them all again
+            string waiting = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":8,\"said\":\"go on\",\"orders_waiting\":338,\"answers_waiting\":6}"), history, "REPORT", new List<string>());
+            string oneWaiting = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":8,\"said\":\"go on\",\"orders_waiting\":1,\"answers_waiting\":1}"), history, "REPORT", new List<string>());
+            string noneWaiting = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":8,\"said\":\"go on\",\"orders_waiting\":0,\"answers_waiting\":0}"), history, "REPORT", new List<string>());
+            Check(waiting.Contains("ORDERS WAITING FOR THE CLOCK") && waiting.Contains("338 orders of your last 6 answers have not started") && waiting.Contains("Do not give them again")
+                  && oneWaiting.Contains("1 order of your last answer has not started")
+                  && !noneWaiting.Contains("ORDERS WAITING FOR THE CLOCK") && !m.Contains("ORDERS WAITING FOR THE CLOCK"),
+                  "the lieutenant is told how many of its orders wait for the clock, and only when some do");
             // 0.11.3: raw line breaks typed inside a JSON string (the orcs' chronicler did it) are read, not thrown away
             string broken = "{\"story\": \"First part.\n\nSecond part.\", \"lessons\": [\"one\"]}";
             JsonObject fixedStory = JsonNode.Parse(Room.EscapeBreaks(broken)) as JsonObject;
@@ -483,7 +495,7 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(limits);
             File.WriteAllText(Path.Combine(limits, "warroom.txt"), "timeout_seconds = 0\nthinking_cap = 0\n");
             Config none = Config.Load(limits);
-            Check(none.TimeoutSeconds == 0 && none.ThinkingCap == 0 && Claude.RunawayLimit("{\"say\": \"My proposal\", \"propose\": [{\"lord\":") == Claude.RunawayCharsWithTools,
+            Check(none.TimeoutSeconds == 0 && none.ThinkingCap == 0 && Claude.RunawayLimit("{\"say\": \"My proposal\", \"propose\": [{\"lord\":") == Claude.RunawayCharsLieutenant && Claude.RunawayLimit("{\"propose\": [{\"lord\":") == Claude.RunawayCharsWithTools,
                   "a time limit and a thinking cap of 0 are read as none, and a proposal gets the longer runaway limit");
         }
 

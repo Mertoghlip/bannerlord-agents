@@ -78,8 +78,15 @@ namespace BannerlordAgents.WarRoom
         /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8): each tool's definition is long, so it may run longer; and (0.13.5) for the lieutenant's proposal, which may name every lord of the realm (Oct 29: 64 orders in about 6,000 characters).</summary>
         public const int RunawayCharsWithTools = 48000;
 
-        /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools".</summary>
-        internal static int RunawayLimit(string written) => written.Contains("\"tools\"") || written.Contains("\"propose\"") ? RunawayCharsWithTools : RunawayChars;
+        /// <summary>
+        /// The same for the lieutenant's answers (0.15.2), which may name every lord of the realm, each with its stops, its company and its next order. Nov 6, test A1: an audit's answer
+        /// was stopped at 48,000 characters on its 60th order of 70, twice, after 16 minutes, and all of it was lost. The stall rule still catches a call that hangs.
+        /// </summary>
+        public const int RunawayCharsLieutenant = 150000;
+
+        /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools", and for the lieutenant's answers, which alone say "say" and "carry_out".</summary>
+        internal static int RunawayLimit(string written) => written.Contains("\"say\"") || written.Contains("\"carry_out\"") ? RunawayCharsLieutenant
+                                                            : written.Contains("\"tools\"") || written.Contains("\"propose\"") ? RunawayCharsWithTools : RunawayChars;
 
         /// <summary>
         /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on

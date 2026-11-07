@@ -97,6 +97,30 @@ namespace SmokeTest
                   && said18.Contains("(lord_azog broken): REFUSED. its tool broken was refused (the checker found a problem)"),
                   "the lieutenant's orders follow its answer's tools: one naming the tool it just wrote carries that tool, one naming a refused tool is refused with it: " + said18);
 
+            // 0.15.2 (Nov 6, test A1, the clock stopped: chat-78, with no tools, gave its orders ahead of chat-76 and 77, which had tools, and NOLDOR came back on): answers land in the order they came
+            while (Background.ToMain.TryDequeue(out _)) { }
+            var landed = new List<string>();
+            Lieutenant.GivenForTest = o => landed.Add(o.Lord);
+            Lieutenant.Carry(new Lieutenant.Proposal { Chat = 901, Tools = new JArray(Tool("first_sweep", false, Sweep)), Orders = new JArray(JObject.Parse("{\"lord\": \"lord_bolg\", \"do\": \"first_sweep\", \"at\": \"castle_orc\"}")) }, 901, "orcs");
+            Lieutenant.Carry(new Lieutenant.Proposal { Chat = 902, Orders = new JArray(JObject.Parse("{\"lord\": \"lord_azog\", \"do\": \"defend\", \"at\": \"castle_orc\"}")) }, 902, "orcs");
+            for (int w = 0; w < 500 && landed.Count < 2; w++) { Background.DrainToMain(); Thread.Sleep(10); }
+            Lieutenant.GivenForTest = null;
+            while (Background.ToUi.TryDequeue(out _)) { }
+            Files.FlushAll();
+            Check(landed.SequenceEqual(new[] { "lord_bolg", "lord_azog" }), "an answer with no tools lands after an earlier answer with tools, not ahead of it: " + string.Join(", ", landed));
+            // and how many orders wait for the clock
+            Lieutenant.ForgetWaiting();
+            long ticks = Watchdog.CampaignTicks;
+            Lieutenant.NoteCarried(73);
+            Lieutenant.NoteCarried(79);
+            bool counted = Lieutenant.WaitingOrders == 152 && Lieutenant.WaitingAnswers == 2;
+            Watchdog.CampaignTicks = ticks + 1;
+            bool moved = Lieutenant.WaitingOrders == 0 && Lieutenant.WaitingAnswers == 0;
+            Lieutenant.NoteCarried(4);
+            bool fresh = Lieutenant.WaitingOrders == 4 && Lieutenant.WaitingAnswers == 1;
+            Lieutenant.ForgetWaiting();
+            Check(counted && moved && fresh && Lieutenant.WaitingOrders == 0, "the orders given since the clock last moved are counted, and the count starts again once it moves or at a load");
+
             // a change: v2 kept while an order on v1 runs on with v1; the same definition again changes nothing
             ToolDef v1 = OwnLibrary.Find("orcs", "circuit");
             var onV1 = new ToolOrder { Tool = "circuit", Def = v1, Lord = "lord_bolg", LordName = "Bolg", Party = "p_bolg", At = "castle_orc", Realm = "orcs" };
