@@ -2141,3 +2141,12 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The study's scripts and working files are in `D:\BannerlordAgents-backup\news-wake-study-20261106` (239 MB), to reuse on the new runs.
   - War rooms and dashboard stopped for the build and started again, six war rooms now. The game was closed.
 - **What to expect:** the study's figures are for two agents, so with four, about twice the calls and cost. Runs from now on are not like for like with run A: several things changed at once, and two more realms have agents.
+
+### 21:06 · Setup: Rhun and Gundabad put off to the last test · commit PENDING
+- **Why:** the tests should measure the wake rule and the context on the same two rival realms as run A. Agents for Rhun and Gundabad are the last step, once the tools and the shaping of the context are final. This replaces the 15:52 entry's setup and its "what to expect".
+- **What changed in the repository:** `scripts\arm.ps1` no longer sets the two; `docs/RUNS.md` and the [study report](reports/2026-11-06-news-wake-study.md) have the new setup and the last test as step 7. No game code changed, so nothing was installed: version 0.15.0 stands.
+- **Outside the repository:**
+  - The bridge's `settings.txt`: `agents` back to the Orcs, Dol Guldur, the lieutenant and the kingdom's agent, `run_rivals` back to `mistymountainorcs; dolguldur`.
+  - `C:\Users\karab\Projects\rhun-war-council` and `C:\Users\karab\Projects\gundabad-war-council` are kept, with `mode = off` in each `agent.txt`.
+  - Their two war rooms are stopped. The other four and the dashboard kept running. The game was closed.
+- **What to expect:** the study's estimates for two agents apply again. The test is still not like for like with run A, since several things changed at once.

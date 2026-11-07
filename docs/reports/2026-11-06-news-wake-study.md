@@ -514,7 +514,7 @@ The study's first draft held this back. I decided otherwise, and want it tested:
 
 ### Order of work and testing
 
-I play the Kingdom of Arnor and Gondor in every test. Agents play the Misty Mountain Orcs, Dol Guldur, Rhun and Gundabad: both realms' lords were already in the war in my last test, under the game's own AI. The figures in this report are for two agents, so with four, expect about twice the calls and cost.
+I play the Kingdom of Arnor and Gondor in every test. Agents play the Misty Mountain Orcs and Dol Guldur, the two realms this report's figures are for. Rhun and Gundabad stay with the game's own AI until the last step below.
 
 1. Fix the follow-up bug. **Done (0.14.2).**
 2. Build the finished version, with the wake rule on by default and rule editing off. There is no log-only step first. **Done (0.15.0).**
@@ -522,8 +522,9 @@ I play the Kingdom of Arnor and Gondor in every test. Agents play the Misty Moun
 4. Add rule editing.
 5. Replay about 10 recorded councils (about $6) to see what rules the agent writes, then run those rules over run A's news.
 6. **Test run 2:** from the same save and for the same length, with the agent able to edit and write rules.
+7. **The last test:** agents for Rhun and Gundabad as well, once the tools and the shaping of the context are final. Both realms' lords were already in the war in my last test, under the game's own AI. With four agents, expect about twice the calls and cost of two.
 
-Reports by kind come after that, when the local model needs them. They can build on the same lanes and cards.
+Reports by kind come after test run 2, when the local model needs them. They can build on the same lanes and cards.
 
 **What the runs compare:** calls, cost, how fast raids, battles and sieges get answered, lords taken and lost, holdings lost, money, held lines followed by harm, and how many rules get written and retired. These runs are the only test of whether the agent plays as well.
 

@@ -11,7 +11,7 @@
     C2  an agent ruling your kingdom vs AI:     the rival realms shadow, the kingdom's agent live, lieutenant off
     C0  the control, every realm by the game's AI: the rival realms shadow, the kingdom's agent off (shadow with
         -KingdomWatches), lieutenant off; you switched to a wanderer as in C1 and C2
-  The rival realms are the Misty Mountain Orcs, Dol Guldur, Rhun and Gundabad (since 0.15).
+  The rival realms are the Misty Mountain Orcs and Dol Guldur. Rhun and Gundabad get agents in the last test (docs/RUNS.md).
   -RivalsOff switches the rivals' agents fully off in B, C2 and C0 instead of shadow (Oct 23: they stay on
   so long as usage is fine).
   Each change is logged in %LOCALAPPDATA%\BannerlordAgents\runs\arms.log, and the run itself records every agent's mode.
@@ -25,8 +25,6 @@ param(
     [switch]$KingdomWatches,
     [string]$Orcs = 'C:\Users\karab\Projects\orc-war-council',
     [string]$DolGuldur = 'C:\Users\karab\Projects\dolguldur-war-council',
-    [string]$Rhun = 'C:\Users\karab\Projects\rhun-war-council',
-    [string]$Gundabad = 'C:\Users\karab\Projects\gundabad-war-council',
     [string]$Lieutenant = 'C:\Users\karab\Projects\lieutenant',
     [string]$Kingdom = 'C:\Users\karab\Projects\kingdom-war-council'
 )
@@ -48,7 +46,7 @@ function Set-Mode([string]$folder, [string]$mode) {
     if ($new -ne $text) { [System.IO.File]::WriteAllText($f, $new, $utf8) }
 }
 
-$folders = [ordered]@{ 'Misty Mountain Orcs' = $Orcs; 'Dol Guldur' = $DolGuldur; 'Rhun' = $Rhun; 'Gundabad' = $Gundabad; 'your lieutenant' = $Lieutenant; 'the kingdom''s agent' = $Kingdom }
+$folders = [ordered]@{ 'Misty Mountain Orcs' = $Orcs; 'Dol Guldur' = $DolGuldur; 'your lieutenant' = $Lieutenant; 'the kingdom''s agent' = $Kingdom }
 if ($Arm -eq 'show') {
     foreach ($k in $folders.Keys) { "{0,-22} {1}" -f $k, (Get-Mode $folders[$k]) }
     exit 0
@@ -58,8 +56,6 @@ $rival = if ($Arm -in 'A', 'C1') { 'live' } elseif ($RivalsOff) { 'off' } else {
 $modes = [ordered]@{
     'Misty Mountain Orcs' = $rival
     'Dol Guldur'          = $rival
-    'Rhun'                = $rival
-    'Gundabad'            = $rival
     'your lieutenant'     = $(if ($Arm -in 'A', 'B') { 'live' } else { 'off' })
     'the kingdom''s agent' = $(if ($Arm -in 'C1', 'C2') { 'live' } elseif ($Arm -eq 'C0' -and $KingdomWatches) { 'shadow' } else { 'off' })
 }
