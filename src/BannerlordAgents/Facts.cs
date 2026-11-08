@@ -314,6 +314,13 @@ namespace BannerlordAgents
                               + "- an enemy: where it is or was last seen, its strength, for an army its trail over the last two days, your holdings near it, your lords who can reach it soonest.\n"
                               + "lookups/captured.txt lists all your lords held prisoner, by where they are held.\n"
                               + "Travel hours are by road where the game knows the way (else as the crow flies), at the lord's own pace by the game's rules (its speed / 1.2 map units an hour on open ground, night counted); forest, fords and bridges on the way slow it further.\n";
+            // the human player (0.17.3): who he is, how his battles are fought, every battle of his the realm knows of, and what it saw him do
+            if (w.S.PlayerParty != null && w.S.PartyById.TryGetValue(w.S.PlayerParty, out PartyRow hp))
+            {
+                List<string> seen = Agents.Of(w.Realm)?.Chronicle?.Mentioning(new[] { hp.Name, hp.Id }, 60);
+                string text = InPerson.Lookup(w.S, w.Realm, seen);
+                if (text != null) files[InPerson.LookupName] = text;
+            }
             return files;
         }
 
@@ -403,6 +410,9 @@ namespace BannerlordAgents
                 foreach (SettlementRow h in forts)
                     sb.AppendLine("- " + h.Name + " [" + h.Id + "]" + (w.Besieged(h) ? " (UNDER SIEGE)" : "") + ": " + MusterLine(w, h.Id) + ".");
             }
+
+            string human = InPerson.Section(s, w.Realm);
+            if (human != null) sb.AppendLine().AppendLine(human);
 
             List<ViewCaptive> captives = s.Captives.Select(c => Views.Captive(s, c)).ToList();
             sb.AppendLine().AppendLine("YOUR CAPTURED LORDS (" + captives.Count + (captives.Count > 0 ? ", by where they are held)" : ")"));

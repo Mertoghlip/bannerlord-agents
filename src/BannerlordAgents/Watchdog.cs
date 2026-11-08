@@ -128,6 +128,9 @@ namespace BannerlordAgents
         private static void SceneBegan()
         {
             if (!Bridge.Running || !Settings.Bridge || TaleWorlds.CampaignSystem.MapEvents.MapEvent.PlayerMapEvent == null) return;
+            // the sides of the human player's battle as he fights it, the ring's joiners in (0.17.3, PlayerBattles)
+            try { PlayerBattles.AsFought(); }
+            catch (Exception e) { Diag.Swallowed("the sides of the player's battle as it is fought", e); }
             double hours = Diag.Hours;
             Background.PostFirst("the player's battle began", () => AgentChannel.PlayerBattle(hours));
         }

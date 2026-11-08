@@ -209,6 +209,14 @@ namespace BannerlordAgents
             }
         }
 
+        /// <summary>The last lines that name a party or a lord (0.17.3: what the realm saw the human player do), newest last.</summary>
+        public List<string> Mentioning(IEnumerable<string> words, int max)
+        {
+            List<string> w = words.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            if (w.Count == 0) return new List<string>();
+            lock (Gate) return Entries.Where(e => e.Text != null && w.Any(x => e.Text.IndexOf(x, StringComparison.Ordinal) >= 0)).Skip(0).Reverse().Take(max).Reverse().Select(Show).ToList();
+        }
+
         /// <summary>For the console: the last lines, and where the whole chronicle is.</summary>
         public string Last(int n)
         {

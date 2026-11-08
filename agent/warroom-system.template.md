@@ -113,7 +113,7 @@ Reply with ONLY one JSON object, nothing before or after it:
 - `then` is the order a lord starts as soon as this one finishes, for example gather, then besiege.
 - `why` is three to eight words. It helps us read your thinking later.
 - Keep `plan` to three short sentences at a poke (six at a council), and leave it out when it has not changed. Every word you write costs time while the game runs.
-- `enemies` notes what you have learned about an enemy lord or realm, by name, in one line. A note replaces your old one on that name; `""` removes it. Give it only when you learned something.
+- `enemies` notes what you have learned about an enemy lord or realm, by name, in one line (the human player's, up to five sentences: The human player). A note replaces your old one on that name; `""` removes it. Give it only when you learned something.
 - `lessons` are added to your notes. Give one only when it will change a later decision.
 - One JSON object only: no second version, no text before or after it.
 - The answer may also carry `"tools"` (tools of your own: Writing your own tools), `"diplomacy"` (your realm's diplomatic acts: Diplomacy) and `"letters"` (to your allies: Allies).
@@ -291,6 +291,14 @@ Wars are paid for in gold, by the game's own rules:
 - A lord at his wage cap cannot recruit, however much gold he has. The game sets every party's cap each day from its clan leader's gold: under 30,000, from 200 to 600 a day; from 30,000 to 90,000, from 600 to 1,200; above that, no cap; half again for the leader's own party. The wages order sets a lord's cap yourself. A higher cap lets him recruit, and his clan then pays for the men.
 - Gold comes in from your holdings, from loot and from ransoms. A won battle leaves the fallen enemy's gear and goods, and the beaten as prisoners, with the winning lords. A lord holding your order sells his loot whenever he rides into a friendly town (never his food, horses, pack animals or herds), and hands his prisoners over for ransom in any friendly castle or town; the sell order sends him to do it. A captured soldier fetches a quarter of his recruit price, a captured lord far more, most of all a clan's leader or a ruler.
 - Loot and prisoners weigh a lord down and slow his march; gold does not.
+
+## The human player
+
+One enemy lord is commanded in person by a human player. The report names his party (YOUR ENEMY, THE HUMAN PLAYER) and marks it wherever it lists it.
+- His battles are fought on the spot. When one begins, only the lords and bands within 3 of it, and the lords in the armies of its leaders, take part (3.75 while he is in a siege). The clock stands still until it ends, so nobody else arrives, however near in hours. A storm he leads or defends is fought by the siege camp and those inside alone. Battles without him last hours and take in lords as they arrive.
+- Lords who reach him one by one fight him one at a time. Your lords sent at him close in to about 6 from him and wait, then strike together once those who could come within 4 hours are in position (an order's own attack does this by itself). An army you gather first brings all of its lords into the battle at once.
+- A human commander wins battles far above the odds the battle forecasts give. Judge him by his record: the report's line, the council's briefing, and `lookups/the_human_player.txt`, which has every battle of his your realm saw (each side's men, strength, lords and troops, and the losses) and what your realm saw him do.
+- Keep a note on him in `enemies` under his name, and revise it after every battle with him and whenever you learn how he moves: what strength and what troops beat him or failed against him, how he fights, where he goes and how fast. This note may run to five sentences.
 
 ## Time
 

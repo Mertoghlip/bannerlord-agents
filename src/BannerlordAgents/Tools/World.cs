@@ -380,6 +380,49 @@ namespace BannerlordAgents.Tools
             return t != null && HostileFaction(t.Faction) ? t.Id : null;   // an enemy only
         }
 
+        /// <summary>
+        /// The ring of a battle the human player fights (0.17.3, Nov 8: battle times work differently when the player is fighting the battle; read in
+        /// 1.4.8's DefaultEncounterModel.FindNonAttachedNpcPartiesWhoWillJoinPlayerEncounter): when one begins, the lords, patrols and bands within 3 of
+        /// it join a side, those in armies come with their leader, and the clock stands still until it ends (3.75 while he is in a siege; a storm he
+        /// leads or defends takes only the siege camp and those inside).
+        /// </summary>
+        public const double Ring = 3;
+
+        /// <summary>Is this the human player's own party, or an army he leads, or a lord marching in it (0.17.3)?</summary>
+        public bool InPerson(string id)
+        {
+            string pp = S.PlayerParty;
+            if (id == null || pp == null) return false;
+            if (id == pp) return true;
+            PartyRow r = Party(id);
+            return r != null && (r.ArmyLeader == pp || Lead(r)?.Id == pp);
+        }
+
+        /// <summary>Our side of a battle with the human player begun where this lord stands (0.17.3): he and the lords of ours and our allies' in view within the ring of him.</summary>
+        public double RingSide(PartyRow me)
+        {
+            if (me == null) return 0;
+            double sum = StrengthOf(me);
+            foreach (PartyRow r in S.Parties)
+            {
+                if (r.Kind != "lord" || r.Attached || r.Id == me.Id || r.InSettlement != null || r.InBattle || !(Own(r) || (Ally(r.Faction) && Visible(r)))) continue;
+                double d = Distance(me.Id, r.Id);
+                if (!double.IsNaN(d) && d <= Ring) sum += StrengthOf(r);
+            }
+            return sum;
+        }
+
+        /// <summary>The human player's side of a battle with him begun now (0.17.3): his party (his army with it) and the enemy lords and bands in view within the ring of him.</summary>
+        public double RingEnemy(string id)
+        {
+            PartyRow lead = Lead(Party(id));
+            if (lead == null) return 0;
+            double sum = StrengthOf(lead);
+            foreach (PartyRow e in EnemiesNear(lead.Id, Ring))
+                if (e.Id != lead.Id && !e.Attached) sum += StrengthOf(e);
+            return sum;
+        }
+
         /// <summary>A lord with our side of a fight: his own strength and every friend's (Friends) together.</summary>
         public double SideStrength(PartyRow me, float x, float y, double joinHours, string besieging, ICollection<string> objectives, List<PartyRow> with = null)
         {

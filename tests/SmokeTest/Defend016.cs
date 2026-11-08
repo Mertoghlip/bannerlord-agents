@@ -171,6 +171,7 @@ namespace SmokeTest
                   "an answer's wage orders are carried out first, so a recruit order is checked against the cap the same answer sets: " + string.Join(",", sorted.Select(o => o.Do)));
 
             GeneralRulesTests();
+            InPersonTests();
             LieutenantChatsTests(root);
         }
 

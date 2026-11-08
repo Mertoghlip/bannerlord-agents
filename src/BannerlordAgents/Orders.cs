@@ -161,6 +161,7 @@ namespace BannerlordAgents
             RecruitTour.Reset();
             Offers.Reset();
             Tools.Threats.Reset();
+            PlayerBattles.Reset();
             Supply.Reset();
             Mirror();
         }

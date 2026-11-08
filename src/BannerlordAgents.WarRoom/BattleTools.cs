@@ -80,6 +80,7 @@ namespace BannerlordAgents.WarRoom
             var enemies = (view["seen"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().Concat((view["last_seen"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()).ToList();
             var lines = new List<string>();
             var ours = new List<Force>();
+            bool human = false;
             foreach (string q in oursQ)
             {
                 string id = q.Trim().Trim('[', ']');
@@ -88,6 +89,7 @@ namespace BannerlordAgents.WarRoom
                 double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 double str = F(o["army_strength"]) > 0 ? F(o["army_strength"]) : F(o["strength"]);
                 ours.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = str, Morale = o["morale"] is JsonValue ? F(o["morale"]) : -1, Tactics = F(o["tactics"]) });
+                if (InPerson(o)) human = true;
             }
             var theirs = new List<Force>();
             foreach (string q in theirsQ)
@@ -97,6 +99,7 @@ namespace BannerlordAgents.WarRoom
                 if (o == null) { lines.Add("(" + q + ": your realm has seen no enemy by that id.)"); continue; }
                 double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 theirs.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = F(o["strength"]) });
+                if (InPerson(o)) human = true;
             }
             if (ours.Count == 0) return string.Join("\n", lines.Prepend("Name at least one of your lords or armies in ours."));
             // a storm: an enemy place your lords would storm, or one of yours their lords would storm
@@ -161,6 +164,8 @@ namespace BannerlordAgents.WarRoom
                 lines.Add("- Run ahead: " + Outcome(o, runs, "you", "they", "your", "their", mine.Men, enemy.Men) + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat.");
                 if (o.Winner == "attackers") lines.Add(TakingsLine(view, enemy.Men - o.DefendersLeft));
             }
+            // 0.17.3: a battle of the human player's is fought on the spot, and he wins far above these odds
+            if (human) lines.Add(HumanNote);
             Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, ours = oursQ, theirs = theirsQ, place = atQ, lines });
             return string.Join("\n", lines);
         }
@@ -218,6 +223,12 @@ namespace BannerlordAgents.WarRoom
         }
 
         private static bool Eq(string a, string b) => a != null && b != null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>A party of the view that is the human player's, or an army he leads (0.17.3: the bridge marks it in_person).</summary>
+        internal static bool InPerson(JsonObject o) => o?["in_person"] is JsonValue v && v.TryGetValue(out bool b) && b;
+
+        /// <summary>The note a battle forecast adds when the human player fights in it (0.17.3).</summary>
+        internal const string HumanNote = "- The human player fights this one in person (his party, or an army he leads, is on a side): it is fought on the spot, so only the lords and bands within 3 of it when it begins, and the armies of its leaders, take part (3.75 while he is in a siege; a storm he leads or defends: the siege camp and those inside), and nobody else arrives. A human commander wins far above the odds these rules give: weigh his record (lookups/the_human_player.txt).";
 
         /// <summary>An answer, or what went wrong in words (never an exception into the call).</summary>
         private static string Safe(Func<string> answer)

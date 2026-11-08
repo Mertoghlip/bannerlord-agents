@@ -104,6 +104,7 @@ namespace BannerlordAgents
                 sb.AppendLine().AppendLine("OPEN VOTES AND OFFERS (" + v.Open.Count + "; answer them in \"diplomacy\": vote, decide, accept_..., decline_...)");
                 foreach (string l in v.Open) sb.AppendLine("- " + l);
             }
+            HumanPlayerSection(sb, v);
             if (!t.IsTheatre || t.Diplomacy)
             {
                 if (v.Sum != null) SumSection(sb, v.Sum);

@@ -18,6 +18,8 @@ namespace BannerlordAgents
         public List<ViewParty> Seen = new List<ViewParty>();
         public int SeenNotListed;
         public List<ViewParty> LastSeen = new List<ViewParty>();
+        /// <summary>Who the human player is and how his battles are fought, with his record in a line (0.17.3, InPerson.Lines).</summary>
+        public List<string> HumanPlayer = new List<string>();
         /// <summary>Each enemy army's trail over the last two days, as the realm saw it (0.6.4).</summary>
         public List<ViewTrail> Trails = new List<ViewTrail>();
         public List<ViewHolding> Frontier = new List<ViewHolding>();
@@ -76,6 +78,8 @@ namespace BannerlordAgents
         public string Id, Lord, Name, Faction, FactionName, Relation, Kind, Doing, Near, SeenBy, NearestHolding;
         /// <summary>One of the realm's own lords, when his gold is near the floor for recruiting (0.15) or his wages near their cap (0.16): PurseView.RecruitNote.</summary>
         public string Poor;
+        /// <summary>The human player's own party, or an army he leads or a lord marching in it (0.17.3): his battles are fought on the spot.</summary>
+        public bool InPerson;
         /// <summary>The holding its doing names (going to, besieging, raiding, defending, patrolling around), when it names one: for the dashboard and the "ask the way" tool.</summary>
         public string Toward;
         public int Men, ArmyMen, ArmyParties;
@@ -303,6 +307,8 @@ namespace BannerlordAgents
                 v.Sum = Sum(s, fid, own);
                 v.Purse = PurseView.Lines(s, fid);
             }
+            // who the human player is and how his battles are fought (0.17.3): for every realm, told in plain words
+            v.HumanPlayer = InPerson.Lines(s, fid);
             v.Clocks = Clocks(s, fid, sees, allies, v.ClockItems);
             v.EnemyRealms = EnemyRealms(s, fid, sees);
             // its diplomacy and its open votes and offers, as its ruler's screens show them (0.13, B3)
@@ -609,6 +615,7 @@ namespace BannerlordAgents
             if (v.Holdings.Any(h => h.Food >= 0)) sb.AppendLine(FoodNote);
             foreach (ViewHolding h in v.Holdings) sb.AppendLine(HoldingLine(h));
 
+            HumanPlayerSection(sb, v);
             if (v.EnemyRealms.Count > 0)
             {
                 sb.AppendLine().AppendLine("ENEMY REALMS, AS THEIR ENCYCLOPEDIA PAGES SHOW ANY RULER");
@@ -866,6 +873,7 @@ namespace BannerlordAgents
             };
             vp.Toward = Toward(r);
             if (relation == "own") vp.Poor = PurseView.RecruitNote(r);
+            vp.InPerson = s.PlayerParty != null && (r.Id == s.PlayerParty || r.ArmyLeader == s.PlayerParty);
             vp.Entrance = r.InSettlement ?? r.Entrance;
             if (r.Kind == "lord")
             {
@@ -1014,7 +1022,15 @@ namespace BannerlordAgents
             }
         }
 
-        private static string Tag(ViewParty p) => " [" + (p.Lord ?? p.Id) + "]";
+        private static string Tag(ViewParty p) => " [" + (p.Lord ?? p.Id) + "]" + (p.InPerson ? " (the human player, in person)" : "");
+
+        /// <summary>The report's section on the human player (0.17.3): who he is, how his battles are fought, his record in a line.</summary>
+        internal static void HumanPlayerSection(StringBuilder sb, View v)
+        {
+            if (v.HumanPlayer == null || v.HumanPlayer.Count == 0) return;
+            sb.AppendLine().AppendLine(v.HumanPlayer[0].StartsWith("You, ", StringComparison.Ordinal) ? "YOUR OWN BATTLES, THE HUMAN PLAYER'S" : "YOUR ENEMY, THE HUMAN PLAYER");
+            foreach (string l in v.HumanPlayer) sb.AppendLine("- " + l);
+        }
 
         /// <summary>An enemy army's trail, its first line: who, how strong, and whether it is in sight now.</summary>
         public static string TrailHead(ViewTrail t, double now)

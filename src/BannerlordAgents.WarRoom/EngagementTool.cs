@@ -162,6 +162,8 @@ namespace BannerlordAgents.WarRoom
             lines.Add("- For your orders: the fight would end about " + Words.N(until) + " hours from now. To have an order's rules (its caution, a strike's or a hunt's weighing of its target) count the enemy lords who could join it, "
                       + "give that order join_hours " + Words.N(Math.Ceiling(until)) + " (each counts those who could march to the fight within that many hours from the hour it looks); a smaller number counts only those nearer.");
             Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = EngageName, ours = ours.Select(x => x.Id).ToList(), target = q.Id, lines });
+            // 0.17.3: the human player's battles are fought on the spot
+            if (InPerson(qo)) lines.Add(HumanNote);
             return string.Join("\n", lines);
         }
 

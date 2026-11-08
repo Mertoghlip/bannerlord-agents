@@ -87,6 +87,9 @@ namespace BannerlordAgents.Tools
         public long CallBackDay = long.MinValue;
         public int DayCallBacks, SlowHours;
         public double LastMs;
+        /// <summary>An attack on the human player (0.17.3, CloseIn): the party it closes in on, the one it has struck, and since when its lord has been in position.</summary>
+        public string CloseOn, Struck;
+        public double CloseSince = double.NaN;
         public readonly List<string> Held = new List<string>();
     }
 
@@ -137,6 +140,7 @@ namespace BannerlordAgents.Tools
             if (ById.Count > 0) Diag.Event("tool", "cleared", new { count = ById.Count });
             ById.Clear();
             NamesSeen.Clear();
+            CloseTold.Clear();
             StormSink(null, null);
         }
 
@@ -511,6 +515,8 @@ namespace BannerlordAgents.Tools
                     t.HasPending = true;
                 }
                 if (!t.Finished && t.Shelter == null && t.SupplyAt == null) Stalled(t, me, w, scope);
+                // an attack on the human player closes in and strikes together (0.17.3)
+                if (!t.Finished && t.Shelter == null && t.SupplyAt == null && t.ReliefOf == null) CloseIn(t, me, w, scope);
             }
             Issue(t, w);
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t));
@@ -692,14 +698,14 @@ namespace BannerlordAgents.Tools
         /// it steps back to keep + 3; within two of keep, it stays where it is. The target out of sight: where it was last seen.
         /// Worked out again every hour, as the target moves.
         /// </summary>
-        private static Move Shadow(ToolInstance t, World w, string id)
+        private static Move Shadow(ToolInstance t, World w, string id, double keepAt = double.NaN)
         {
             PartyRow me = w.Party(t.Order.Party);
             PartyRow target = w.Lead(w.Party(id));
             string tid = target?.Id ?? id;
             if (me == null || !w.Where(tid, out float tx, out float ty)) return new Move { Verb = "hold" };
             if (!w.InView(tid)) return new Move { Verb = "toward", Party = tid, X = tx, Y = ty };
-            double keep = t.Settings.TryGetValue("keep", out double k) ? k : 8;
+            double keep = !double.IsNaN(keepAt) ? keepAt : t.Settings.TryGetValue("keep", out double k) ? k : 8;
             double dx = me.X - tx, dy = me.Y - ty, d = Math.Sqrt(dx * dx + dy * dy);
             if (d < 0.01) { dx = 1; dy = 0; d = 1; }
             double at;
@@ -932,6 +938,8 @@ namespace BannerlordAgents.Tools
             foreach (BattleRow b in w.S.Battles)
             {
                 if (b.Kind != "field" && b.Kind != "siege_outside" && b.Kind != "raid") continue;   // not a storm or a sally behind walls
+                // a fight of the human player's is fought on the spot, the clock standing still until it ends: nobody rides to it in time (0.17.3)
+                if (w.S.PlayerParty != null && (b.Attackers.Parties.Contains(w.S.PlayerParty) || b.Defenders.Parties.Contains(w.S.PlayerParty))) continue;
                 bool att = Friendly(b.Attackers), def = Friendly(b.Defenders);
                 if (att == def) continue;
                 BattleSideRow ours = att ? b.Attackers : b.Defenders, theirs = att ? b.Defenders : b.Attackers;
@@ -1077,6 +1085,117 @@ namespace BannerlordAgents.Tools
             return true;
         }
 
+        // ---------- 0.17.3: an attack on the human player closes in and strikes together ----------
+
+        /// <summary>
+        /// How far from the human player's party the lords sent at him wait (map units: outside the ring of 3 a battle with him takes in), and the most
+        /// hours a lord waits there once in position (Nov 8: they should close in and wait to strike together automatically). Within CloseKeep + 3 of him
+        /// counts as in position.
+        /// </summary>
+        internal const double CloseKeep = 6, CloseHours = 4;
+
+        // the realm and target each closing-in was last told of, so a dozen lords sent at him make one call-back, not twelve
+        private static readonly Dictionary<string, double> CloseTold = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        /// <summary>The other lords of the realm holding our orders who are closing in on this target or striking it (0.17.3).</summary>
+        private static List<KeyValuePair<ToolInstance, PartyRow>> PartnersAt(World w, ToolInstance t, string target)
+        {
+            var list = new List<KeyValuePair<ToolInstance, PartyRow>>();
+            foreach (ToolInstance o in InForceOf(w))
+            {
+                if (o == t || o.Finished || o.Shelter != null || o.SupplyAt != null) continue;
+                bool aimed = o.CloseOn == target || o.Struck == target || (o.HasCurrent && o.Current.Verb == "engage" && o.Current.Party == target)
+                             || (o.HasPending && o.Pending.Verb == "engage" && o.Pending.Party == target);
+                if (!aimed) continue;
+                PartyRow r = w.Party(o.Order.Party);
+                if (r != null && !r.Attached) list.Add(new KeyValuePair<ToolInstance, PartyRow>(o, r));
+            }
+            return list;
+        }
+
+        private static bool InPosition(World w, PartyRow r, string target) { double d = w.Distance(r.Id, target); return !double.IsNaN(d) && d <= CloseKeep + 3; }
+
+        private static bool CanClose(World w, PartyRow r, string target)
+        {
+            double d = w.Distance(r.Id, target), pace = w.PerHour(r);
+            return !double.IsNaN(d) && (d <= CloseKeep + 3 || (pace > 0 && (d - CloseKeep) / pace <= CloseHours));
+        }
+
+        /// <summary>The strength of the lords sent at the human player who will strike with this one: in position, or able to be within CloseHours; those within the ring of him are counted with him already.</summary>
+        internal static double PartnerStrength(World w, ToolInstance t, string target, PartyRow me)
+        {
+            double sum = 0;
+            foreach (KeyValuePair<ToolInstance, PartyRow> p in PartnersAt(w, t, target))
+            {
+                double d = me != null ? w.Distance(me.Id, p.Value.Id) : double.NaN;
+                if (!double.IsNaN(d) && d <= World.Ring) continue;
+                if (CanClose(w, p.Value, target)) sum += World.StrengthOf(p.Value);
+            }
+            return sum;
+        }
+
+        /// <summary>
+        /// An attack on the human player (0.17.3, Nov 8: Dol Guldur's lords attacked me in force, but only few of them could join the battle because they
+        /// were not in the reinforcement radius in time; they should close in and wait to strike together automatically). His battles are fought on the
+        /// spot, so lords who arrive one by one fight him one at a time. A state whose move attacks his party (or the army he leads) instead closes in to
+        /// CloseKeep of him and waits there; it strikes once its lord is in position and the lords sent at him in position are four fifths of those who
+        /// could be within CloseHours, or one of them in position strikes, or he comes within the ring, or CloseHours have passed in position. Once struck,
+        /// it keeps striking. Any order's attack, ours or an agent's own.
+        /// </summary>
+        private static void CloseIn(ToolInstance t, PartyRow me, World w, Scope scope)
+        {
+            if (me.InBattle) return;
+            if (!t.Def.States.TryGetValue(t.State, out StateDef st) || st.Do?.Verb != "engage") { t.CloseOn = t.Struck = null; return; }
+            Move m = Resolve(t, st.Do, scope, w);
+            if (m.Verb != "engage" || !w.InPerson(m.Party)) { if (t.CloseOn != null) { t.Pending = m; t.HasPending = true; } t.CloseOn = t.Struck = null; return; }
+            string target = m.Party;
+            if (t.Struck == target) { if (!(t.HasCurrent && t.Current.Same(m))) { t.Pending = m; t.HasPending = true; } return; }
+            if (t.CloseOn != target) { t.CloseOn = target; t.CloseSince = double.NaN; }
+            List<KeyValuePair<ToolInstance, PartyRow>> partners = PartnersAt(w, t, target);
+            bool mineIn = InPosition(w, me, target);
+            if (mineIn && double.IsNaN(t.CloseSince)) t.CloseSince = w.Hours;
+            double total = World.StrengthOf(me), there = mineIn ? World.StrengthOf(me) : 0;
+            bool anyStruck = false;
+            foreach (KeyValuePair<ToolInstance, PartyRow> p in partners)
+            {
+                bool inPos = InPosition(w, p.Value, target);
+                if (inPos || CanClose(w, p.Value, target)) total += World.StrengthOf(p.Value);
+                if (inPos) there += World.StrengthOf(p.Value);
+                if (inPos && p.Key.Struck == target) anyStruck = true;
+            }
+            double gap = w.Distance(me.Id, target);
+            // never in the hour the order came (the other lords of the same answer hold theirs only from the next), unless he is upon us
+            bool contact = !double.IsNaN(gap) && gap <= World.Ring + 0.5;
+            bool ready = contact || (mineIn && w.Hours - t.Started >= 1 && (anyStruck || there >= 0.8 * total || w.Hours - t.CloseSince >= CloseHours));
+            string key = (w.Realm ?? "") + "|" + target;
+            string who = w.Name(target);
+            if (ready)
+            {
+                t.Struck = target;
+                t.Pending = m;
+                t.HasPending = true;
+                Log(t, t.State, t.State, "strikes the human player together");
+                if (!CloseTold.TryGetValue(key + "|strike", out double toldS) || w.Hours - toldS > 12)
+                {
+                    CloseTold[key + "|strike"] = w.Hours;
+                    int count = 1 + partners.Count(p => InPosition(w, p.Value, target));
+                    Poke(t, t.Order.LordName + (count > 1 ? " and the " + (count - 1) + " other lords of yours in position" : "") + " strike " + who + " together: strength "
+                            + Text.N((int)there) + " of the " + Text.N((int)total) + " sent at him that could be there within " + ToolDef.Num(CloseHours) + " hours. His battles are fought on the spot, "
+                            + "so only those within " + ToolDef.Num(World.Ring) + " of a battle when it begins take part.", w);
+                }
+                return;
+            }
+            t.Pending = Shadow(t, w, target, CloseKeep);
+            t.HasPending = true;
+            if (!CloseTold.TryGetValue(key, out double told) || w.Hours - told > 12)
+            {
+                CloseTold[key] = w.Hours;
+                Poke(t, "Your lords sent at " + who + " close in and wait about " + ToolDef.Num(CloseKeep) + " from him to strike together (" + (1 + partners.Count) + " of them, strength "
+                        + Text.N((int)total) + " that could be there within " + ToolDef.Num(CloseHours) + " hours): his battles are fought on the spot, so only the lords within "
+                        + ToolDef.Num(World.Ring) + " of a battle when it begins take part, and lords who arrive one by one would fight him one at a time.", w);
+            }
+        }
+
         /// <summary>
         /// A fight's place after "fighting X" (0.13.16): "the spot 2 north-west of Düglar-mauz" read "fighting Mirkwood Stalkers the spot 2
         /// north-west of Düglar-mauz"; now "2 north-west of Düglar-mauz", "at Brak-gash", or "at the spot p673_994".
@@ -1118,8 +1237,13 @@ namespace BannerlordAgents.Tools
             {
                 List<PartyRow> g = w.DangerAround(me.Id, within, JoinHoursOf(t), Spared);
                 double sum = g.Sum(World.StrengthOf);
-                if (g.Count == 0 || sum < caution * Math.Max(1, mine)) return null;
-                return new Danger { Lead = g.OrderByDescending(World.StrengthOf).First(), Strength = sum, Count = g.Count, Ids = new HashSet<string>(g.Select(x => x.Id)), Ours = ours };
+                // 0.17.3: when the human player's party is among them, a battle with him is fought on the spot, so only the lords of ours within the ring of
+                // this one (3, the game's own) would fight beside him, not those who could come within join_hours
+                bool inPerson = g.Any(x => w.InPerson(x.Id));
+                double side = inPerson ? w.RingSide(me) : mine;
+                if (g.Count == 0 || sum < caution * Math.Max(1, side)) return null;
+                string sideText = inPerson ? t.Order.LordName + "'s " + Text.N((int)World.StrengthOf(me)) + (side > World.StrengthOf(me) + 0.5 ? ", " + Text.N((int)side) + " with your lords within " + ToolDef.Num(World.Ring) + " of him (a battle with the human player is fought on the spot)" : " (a battle with the human player is fought on the spot, and none of your lords is within " + ToolDef.Num(World.Ring) + " of him)") : ours;
+                return new Danger { Lead = g.OrderByDescending(World.StrengthOf).First(), Strength = sum, Count = g.Count, Ids = new HashSet<string>(g.Select(x => x.Id)), Ours = sideText };
             }
             // the order's own holding: always the shelter with stay_inside 1 (garrison's default); tried first, and kept only
             // if it would hold, with stay_inside 0 (defend's default)
@@ -1580,6 +1704,16 @@ namespace BannerlordAgents.Tools
                 }
                 PartyRow f = _w.Party(foe);
                 if (f == null && !(_w.KnownStrength(foe) > 0)) return null;
+                // the human player's battles are fought on the spot (0.17.3): his side is he (his army) and the enemies within the ring of him, ours the lords
+                // within the ring of this one and those sent at him who close in to strike with him; nobody else arrives, however long it lasts
+                if (_w.InPerson(foe))
+                {
+                    string lead = _w.Lead(f)?.Id ?? foe;
+                    double theirs0 = _w.RingEnemy(foe), ours0 = _w.RingSide(me) + PartnerStrength(_w, _t, lead, me);
+                    double pace0 = _w.PerHour(me), d0 = _w.Distance(me.Id, lead);
+                    double hours0 = BattleHours(theirs0, ours0);
+                    return new Fight { Reach = double.IsNaN(d0) || !(pace0 > 0) ? 0 : d0 / pace0, Hours = hours0, Mid = theirs0, End = theirs0, Ours = ours0, Odds = theirs0 / Math.Max(1, ours0) };
+                }
                 double pace = _w.PerHour(me), d = _w.Distance(me.Id, foe);
                 double reach = double.IsNaN(d) || !(pace > 0) ? 0 : d / pace;
                 bool bandit = f?.Kind == "bandit";

@@ -127,6 +127,7 @@ namespace BannerlordAgents
             Audit.Reset();
             LiveMap.Reset();
             Takings.Reset(_dir);
+            InPerson.Reset(_dir, History);
         }
 
         /// <summary>
@@ -183,6 +184,12 @@ namespace BannerlordAgents
         /// </summary>
         internal static IEnumerable<string> Known(Snapshot s, string realm, Dictionary<string, Sighting> sees, Memory m, Tools.World w, List<Trigger> triggers = null)
         {
+            // the human player's own party and hero (0.17.3, Nov 8: the agents are told which party is the human player's, in plain words)
+            if (s.PlayerParty != null)
+            {
+                yield return s.PlayerParty;
+                if (s.PartyById.TryGetValue(s.PlayerParty, out PartyRow pp) && pp.Leader != null) yield return pp.Leader;
+            }
             foreach (PartyRow r in s.Parties)
             {
                 if (r.Kind != "lord" || r.Faction == null || r.Faction != realm) continue;

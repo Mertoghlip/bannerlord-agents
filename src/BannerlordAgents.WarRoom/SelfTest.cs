@@ -208,7 +208,7 @@ namespace BannerlordAgents.WarRoom
             File.WriteAllText(Path.Combine(live, "current.json"), "{\"calendar\":{\"hours_in_day\":24,\"days_in_season\":21,\"seasons_in_year\":4,\"season_names\":[\"Spring\",\"Summer\",\"Autumn\",\"Winter\"]}}");
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"),
                 "{\"hours\":1000,\"map\":\"test\",\"own\":[{\"id\":\"p_bolg\",\"lord\":\"lord_bolg\",\"name\":\"Bolg\",\"x\":20,\"y\":29,\"men\":300,\"strength\":400,\"morale\":60,\"tactics\":50,\"pace\":4,\"doing\":\"holding position\"}],"
-                + "\"seen\":[{\"id\":\"p_ar\",\"lord\":\"lord_ar\",\"name\":\"Aragorn\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":900,\"army_men\":5000,\"strength\":12000,\"x\":80,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":1000},"
+                + "\"seen\":[{\"id\":\"p_ar\",\"lord\":\"lord_ar\",\"name\":\"Aragorn\",\"in_person\":true,\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":900,\"army_men\":5000,\"strength\":12000,\"x\":80,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":1000},"
                 + "{\"id\":\"p_sc\",\"lord\":\"lord_sc\",\"name\":\"Hirgon\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":30,\"strength\":40,\"x\":30,\"y\":29,\"doing\":\"holding position\",\"seen_hours\":1000}],"
                 + "\"takings\":{\"battles\":4,\"fallen\":400,\"loot\":8000,\"prisoners\":160,\"ransom\":3200,\"loot_per_fallen\":20,\"prisoners_per_fallen\":0.4,\"ransom_per_prisoner\":20},\"takings_enough\":3,"
                 + "\"last_seen\":[],\"trails\":[{\"id\":\"p_ar\",\"points\":[{\"hours\":990,\"x\":90,\"y\":29},{\"hours\":1000,\"x\":80,\"y\":29}]}],\"holdings\":[],"
@@ -272,6 +272,9 @@ namespace BannerlordAgents.WarRoom
             string o3 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"theirs\":[\"lord_sc\"]}");
             Check(o3 != null && o3.Contains("you win") && o3.Contains("What a win would bring in, by your realm's 4 won battles on record: about 30 of theirs fall, leaving about 600 in loot and 12 prisoners worth about 240 in ransom"),
                   "a field battle won says what the win would bring in, by the realm's own battles: " + o3?.Replace("\n", " | "));
+            // 0.17.3: a battle of the human player's is fought on the spot, and he wins far above the rules' odds
+            Check(o1 != null && o1.Contains("The human player fights this one in person") && o1.Contains("lookups/the_human_player.txt") && o3 != null && !o3.Contains("human player"),
+                  "the battle odds say when the human player fights in a battle, and only then: " + o1?.Replace("\n", " | "));
             // 0.11.6: the run's end says what each side has left of what it brought, the loser too
             Check(o3 != null && System.Text.RegularExpressions.Regex.IsMatch(o3, @"you win in about [^;]*, with about [\d,]+ of your [\d,]+ still standing; (they (break|retreat) with about [\d,]+ of their [\d,]+|all [\d,]+ of their men are down)")
                   && o1 != null && System.Text.RegularExpressions.Regex.IsMatch(o1, @"they win in about [^;]*, with about [\d,]+ of their [\d,]+ still standing; (you (break|retreat) with about [\d,]+ of your [\d,]+|all [\d,]+ of your men are down)"),
