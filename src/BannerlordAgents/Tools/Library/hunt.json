@@ -6,14 +6,14 @@
   "target": "enemy_lord",
   "settings": {
     "lose_hours": [6, 1, 48, "give up when the target has not been seen for this many hours"],
-    "bigger_ratio": [1.2, 0.3, 5, "stop when the enemies who could be in a fight with the target by its middle or its end (the march to it and the battle's own hours, by the game's rules: the target with every enemy who could join it within join_hours, and those due where it is) grow to this many times your side's strength there"]
+    "bigger_ratio": [1.2, 0.3, 5, "stop when the enemies who could be in a fight with the target by its middle or its end (the march to it and the battle's own hours, by the game's rules: the target with every enemy who could join it within join_hours, and those due where it is) grow to this many times your side's strength there (weighed from its second hour on, so the other lords sent at the same target count)"]
   },
   "start": "chase",
   "states": {
     "chase": { "about": "hunting {target}", "do": "engage target",
       "when": [
         { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
-        { "if": "fight_odds(target) > bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: the enemies who could be in a fight with it by its middle or its end are {round(fight_odds(target) * 100)}% of your side's {side_strength(target)} ({round(fight_hours(target))} hours of fighting)." },
+        { "if": "hours_running >= 1 and fight_odds(target) > bigger_ratio", "go": "over", "poke": "{target} is now too strong for {me} to attack: the enemies who could be in a fight with it by its middle or its end are {round(fight_odds(target) * 100)}% of your side's {side_strength(target)} ({round(fight_hours(target))} hours of fighting)." },
         { "if": "not in_view(target)", "go": "search" } ] },
     "search": { "about": "searching for {target} where it was last seen", "do": "toward target",
       "when": [

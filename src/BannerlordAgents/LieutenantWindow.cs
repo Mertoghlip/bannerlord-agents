@@ -96,8 +96,8 @@ namespace BannerlordAgents
         {
             try
             {
-                // words left for the lieutenant at this load, on the first frame back on the map (0.16; a flag's check otherwise)
-                if (Lieutenant.WordsWaiting && OnMap()) Lieutenant.WordsAtLoad();
+                // the lieutenant's after-load work, on the map once its agent is set up (0.16: its talks in other saves, the words left for this load; a flag's check otherwise)
+                if (Lieutenant.AfterLoadWaiting && OnMap()) Lieutenant.AfterLoad();
                 if (_openAsked)
                 {
                     _openAsked = false;

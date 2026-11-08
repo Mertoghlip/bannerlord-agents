@@ -104,6 +104,37 @@ namespace SmokeTest
                   + chasing + ", " + (StateOf(9974) ?? "ended") + ", " + (StateOf(9975) ?? "ended") + ")");
             Runner.Reset();
 
+            // 0.17.1 (Nov 7, test A1: 19 attacks broke off in the hour they were given, Krithak's on Stein "584% of your side's 376", Krithak alone, with 12
+            // other lords sent at Stein in the same answer, and Dol Guldur's 16 at Aragorn): lords sent at one target in the same answer count together, so
+            // the weighing waits for the second hour, when every one of them holds his order
+            var j1 = Orc("ja1", "Krithak", 300, 100, 140);
+            var j2 = Orc("ja2", "Muzgash", 300, 101, 141);
+            var j3 = Orc("ja3", "Ufza", 300, 99, 139);
+            var stein = Foe("st1", "Stein", 700, 106, 140);
+            double h6 = 66250;
+            Hour(h6, j1, j2, j3, stein);
+            foreach (var kv in new[] { new KeyValuePair<int, PartyRow>(9980, j1), new KeyValuePair<int, PartyRow>(9981, j2), new KeyValuePair<int, PartyRow>(9982, j3) })
+            {
+                ToolOrder at = Order("engage", kv.Value, null, "p_st1");
+                at.Settings["caution"] = 0;
+                Runner.Start(kv.Key, at);
+            }
+            bool keptAtOnce = StateOf(9980) == "chase" && StateOf(9981) == "chase" && StateOf(9982) == "chase";
+            Hour(h6 + 1, j1, j2, j3, stein);
+            bool keptTogether = StateOf(9980) == "chase" && StateOf(9981) == "chase" && StateOf(9982) == "chase";
+            var alone = Orc("ja4", "Lugbúrz", 300, 100, 150);
+            var big = Foe("st2", "Imrahil", 1500, 106, 150);
+            Hour(h6 + 2, alone, big);
+            ToolOrder lone = Order("engage", alone, null, "p_st2");
+            lone.Settings["caution"] = 0;
+            Runner.Start(9983, lone);
+            bool loneFirstHour = StateOf(9983) == "chase";
+            Hour(h6 + 3, alone, big);
+            Check(keptAtOnce && keptTogether && loneFirstHour && (StateOf(9983) ?? "over") == "over",
+                  "lords sent at one target in the same answer count together: three of 300 attacking one of 700 keep at it (each alone would be under half his strength), "
+                  + "and a lone 300 against 1,500 breaks off in his second hour, not in the hour he is sent (" + keptAtOnce + ", " + keptTogether + ", " + loneFirstHour + ", " + (StateOf(9983) ?? "ended") + ")");
+            Runner.Reset();
+
             // the group shortcuts and marching_on, in a tool of one's own past the old limits
             ToolDef shortcuts = ToolDef.FromJson(@"{ ""name"": ""group_look"", ""at"": ""own_fort"", ""lords"": true, ""start"": ""a"", ""states"": {
                 ""a"": { ""do"": ""hold"", ""when"": [ { ""if"": ""lords_near(at, 6) == 1 and group_strength(at, 6) == 700 and group_offers(at) == 5 and marching_on(at, 60) != none and strength_of(marching_on(at, 60)) == 900"", ""go"": ""b"" } ] },

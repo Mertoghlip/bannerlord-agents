@@ -2233,3 +2233,17 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `C:\Users\karab\Projects\lieutenant\warroom\at-next-load.txt`, for the save TEST A1, written at my request: the standard defend for every lord on a guard loop (same fort, loop, partners, start and turn, and settings), the next version of the safe recruiting loop with the stop check and every lord on it moved onto it, every other order of its own onto its newest version, nothing given twice, and a short account of what it changed.
   - The agents' instructions rebuilt from the templates again (Misty Mountain Orcs, Dol Guldur, Kingdom of Arnor and Gondor, the lieutenant; backups `warroom-system.md.bak-20261107-before-0.17`).
   - War rooms and dashboard stopped for the build and started again.
+
+## Sunday, November 8
+
+### 00:04 · Install, version 0.17.1 and 0.17.2: the lieutenant's work at a load waits for its agent, and attacks sent together count together
+- **Why:** Nov 7, test A1 at 23:40 on 0.17.0:
+  - The words left for the lieutenant at that load were not sent, and its other saves' talks were not written: both looked for the lieutenant before the helper had set up the agents (`Lieutenant.Restore` runs before `Brain.Reset`), found none, and did nothing. I pasted the words myself (message #92) and asked for them not to be sent again.
+  - 19 attacks broke off in the hour they were given, among them 12 of the orcs' 13 on Stein ("584% of your side's 376": Krithak alone) and most of Dol Guldur's 16 on my army, whose lords then fell back toward their forts. The attack order's new give-up rule weighed the fight as the order started, before the other lords of the same answer held their orders, so each counted only himself.
+- **What:**
+  - 0.17.1: `Lieutenant.AfterLoad` does both on the campaign map once the lieutenant's agent is there (tried each frame, at most about ten seconds).
+  - 0.17.2: engage's `give_up_odds` and hunt's `bigger_ratio` are weighed from the order's second hour on, when every lord sent with it is counted on our side.
+- **Checks:** smoke test 525 checks, all pass, 1 new (three lords sent at one target keep at it; a lone lord against five times his strength breaks off in his second hour), which fails on 0.17.0. War room and dashboard self-tests pass; the reference check reports 837 game members, 0 missing. **Not tested in the game yet.**
+- **Outside the repository:**
+  - The lieutenant's `at-next-load.txt` set aside unsent as `at-next-load.cancelled-20261107-234312.txt`, as I asked once I had pasted it.
+  - War rooms and dashboard stopped for the builds and started again (0.17.1 at 23:59, 0.17.2 at 00:04).

@@ -136,24 +136,13 @@ namespace BannerlordAgents
                 }
             }
             if (Thread.Count > 0) Diag.Event("lieutenant", "conversation restored", new { lines = Thread.Count, shown, pending = _pending?.Chat, save = history.Save });
-            // words left for the lieutenant at this load (0.16, WordsAtLoad): sent on the first frame back on the map
-            string waiting = Agent?.Channel?.Dir;
-            _wordsPending = waiting != null && File.Exists(Path.Combine(waiting, WordsFile));
+            // the talks of the ruler's other saves and the words left for this load (0.16): both need the lieutenant, whose agent the helper sets up after
+            // this (Brain.Reset), so they wait for the first frame back on the map (AfterLoad). Nov 7: at 0.16.0 both looked for it here, found none, and did nothing.
+            _afterLoad = true;
+            _afterLoadFrames = 0;
             _wordsSave = history.Save;
-            // the talks of every other save, for the lieutenant to read when the ruler refers to one (0.16)
-            string channel = Agent?.Channel?.Dir, campaign = Bridge.CampaignId, save = history.Save;
-            if (channel != null)
-                Background.Post("lieutenant's talks in other saves", () =>
-                {
-                    try
-                    {
-                        List<LieutenantChats.Talk> talks = LieutenantChats.Write(channel, Path.Combine(Paths.Root, "data"), campaign, save);
-                        Diag.Event("lieutenant", "other saves' talks written", new { saves = talks.Count, lines = talks.Sum(t => t.Lines) });
-                    }
-                    catch (Exception e) { Diag.Error("writing the lieutenant's talks in other saves", e); }
-                });
+            _loadCampaign = Bridge.CampaignId;
         }
-
         private static bool Resolves(string kind) => kind == "approved" || kind == "declined" || kind == "carried" || kind == "dropped" || kind == "proposal";
 
         /// <summary>
@@ -164,22 +153,44 @@ namespace BannerlordAgents
         /// record and the lieutenant know they were not typed in the window. Nothing else is ever sent for me.
         /// </summary>
         public const string WordsFile = "at-next-load.txt";
-        private static bool _wordsPending;
-        private static string _wordsSave;
+        private static bool _afterLoad;
+        private static int _afterLoadFrames;
+        private static string _wordsSave, _loadCampaign;
+        /// <summary>How many frames on the map the lieutenant's after-load work waits for its agent before giving up (about ten seconds).</summary>
+        private const int AfterLoadFrames = 600;
 
-        /// <summary>Words wait to be sent at this load (a file was there when it loaded).</summary>
-        public static bool WordsWaiting => _wordsPending;
+        /// <summary>The lieutenant's after-load work waits (set at every load; a flag's check otherwise).</summary>
+        public static bool AfterLoadWaiting => _afterLoad;
 
-        /// <summary>On the first frame back on the campaign map after a load (LieutenantWindow.Frame): sends the words left for this load, once.</summary>
-        public static void WordsAtLoad()
+        /// <summary>
+        /// On the campaign map after a load (LieutenantWindow.Frame), once the lieutenant's agent is set up: its talks in the ruler's other saves are written
+        /// (on the helper's thread), and the words left for this load are sent. Tried each frame until the agent is there, at most AfterLoadFrames.
+        /// </summary>
+        public static void AfterLoad()
         {
-            if (!_wordsPending) return;
-            _wordsPending = false;
+            if (!_afterLoad) return;
+            RealmAgent ag = Agent;
+            string dir = ag?.Channel?.Dir;
+            if (dir == null || !Active)
+            {
+                if (++_afterLoadFrames < AfterLoadFrames) return;
+                _afterLoad = false;
+                Diag.Event("lieutenant", "after load: no lieutenant", new { frames = _afterLoadFrames });
+                return;
+            }
+            _afterLoad = false;
+            string campaign = _loadCampaign, save = _wordsSave;
+            Background.Post("lieutenant's talks in other saves", () =>
+            {
+                try
+                {
+                    List<LieutenantChats.Talk> talks = LieutenantChats.Write(dir, Path.Combine(Paths.Root, "data"), campaign, save);
+                    Diag.Event("lieutenant", "other saves' talks written", new { saves = talks.Count, lines = talks.Sum(t => t.Lines) });
+                }
+                catch (Exception e) { Diag.Error("writing the lieutenant's talks in other saves", e); }
+            });
             try
             {
-                RealmAgent ag = Agent;
-                string dir = ag?.Channel?.Dir;
-                if (dir == null || !Active) return;
                 string file = Path.Combine(dir, WordsFile);
                 if (!File.Exists(file)) return;
                 List<string> lines = File.ReadAllLines(file).ToList();
@@ -187,9 +198,9 @@ namespace BannerlordAgents
                 if (head.StartsWith("for save:", StringComparison.OrdinalIgnoreCase))
                 {
                     string want = head.Substring("for save:".Length).Trim();
-                    if (!string.Equals(want, _wordsSave, StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(want, save, StringComparison.OrdinalIgnoreCase))
                     {
-                        Diag.Event("lieutenant", "words at load wait for their save", new { want, loaded = _wordsSave });
+                        Diag.Event("lieutenant", "words at load wait for their save", new { want, loaded = save });
                         return;
                     }
                     lines.RemoveAt(0);
@@ -197,12 +208,11 @@ namespace BannerlordAgents
                 string text = string.Join("\n", lines).Trim();
                 File.Move(file, Path.Combine(dir, "at-next-load.sent-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", Text.Inv) + ".txt"));
                 if (text.Length == 0) return;
-                Diag.Event("lieutenant", "words at load sent", new { save = _wordsSave, chars = text.Length });
+                Diag.Event("lieutenant", "words at load sent", new { save, chars = text.Length });
                 OnPlayerSays(text);
             }
             catch (Exception e) { Diag.Error("sending the words left for the lieutenant at this load", e); }
         }
-
         /// <summary>One line of the conversation, kept for this save (and the window's own line, shown by the caller).</summary>
         private static void Keep(string kind, string text, int n = -1, JArray orders = null, string say = null, Proposal whole = null)
         {
