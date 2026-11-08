@@ -2236,7 +2236,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Sunday, November 8
 
-### 00:04 · Install, version 0.17.1 and 0.17.2: the lieutenant's work at a load waits for its agent, and attacks sent together count together
+### 00:04 · Install, version 0.17.1 and 0.17.2: the lieutenant's work at a load waits for its agent, and attacks sent together count together · commit 1b65ea5
 - **Why:** Nov 7, test A1 at 23:40 on 0.17.0:
   - The words left for the lieutenant at that load were not sent, and its other saves' talks were not written: both looked for the lieutenant before the helper had set up the agents (`Lieutenant.Restore` runs before `Brain.Reset`), found none, and did nothing. I pasted the words myself (message #92) and asked for them not to be sent again.
   - 19 attacks broke off in the hour they were given, among them 12 of the orcs' 13 on Stein ("584% of your side's 376": Krithak alone) and most of Dol Guldur's 16 on my army, whose lords then fell back toward their forts. The attack order's new give-up rule weighed the fight as the order started, before the other lords of the same answer held their orders, so each counted only himself.
