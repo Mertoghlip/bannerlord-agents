@@ -20,6 +20,7 @@ namespace SmokeTest
         {
             // the checks before this one ran on the defend of 0.15 (Fixtures): from here on, the one that ships
             Library.SwapForTest("defend", null);
+            Library.DangerHours.Default = 3;
             ToolDef def = Library.Get("defend");
             Check(def != null && def.Valid && def.States.ContainsKey("weigh") && def.States.ContainsKey("brace") && def.PlacesDefault == "at_and_villages" && def.Lords
                   && def.Settings.ContainsKey("reach_hours") && def.Settings.ContainsKey("stay_inside") && !def.Settings.ContainsKey("radius"),
@@ -85,7 +86,7 @@ namespace SmokeTest
             moves.Clear();
             Hour(h1 + 2, grishnakh, scout);
             ToolInstance g = Runner.All().FirstOrDefault(t => t.Id == 9962);
-            Check(Moved(9962, "engage", party: "p_dsc") && StateOf(9962) == "strike" && g != null && g.Memory.ContainsKey("b") && Expr.Number(g.Memory["b"]) > 1 && Expr.Number(g.Memory["efm"]) <= 81,
+            Check(Moved(9962, "engage", party: "p_dsc") && StateOf(9962) == "strike" && g != null && g.Memory.ContainsKey("b") && Expr.Number(g.Memory["b"]) > 1 && Expr.Number(g.Memory["odds"]) > 0.15 && Expr.Number(g.Memory["odds"]) < 0.25,
                   "defend weighs a weak enemy lord by the fight's own hours and strikes in the hour it is seen: state " + StateOf(9962) + ", fight hours "
                   + (g?.Memory.TryGetValue("b", out object b) == true ? b : "?"));
 
@@ -169,6 +170,7 @@ namespace SmokeTest
             Check(string.Join(",", sorted.Select(o => o.Do.Trim().ToLowerInvariant())) == "wages,recruit,defend,goto",
                   "an answer's wage orders are carried out first, so a recruit order is checked against the cap the same answer sets: " + string.Join(",", sorted.Select(o => o.Do)));
 
+            GeneralRulesTests();
             LieutenantChatsTests(root);
         }
 

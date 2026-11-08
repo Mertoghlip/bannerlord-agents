@@ -112,7 +112,7 @@ namespace BannerlordAgents
             }
             Settlement target = o.Place;
             Array.Clear(Unpaid, 0, Unpaid.Length);
-            if (target == null || target == here || SweptWithin(o.Id, target, SweepMemoryHours, now)
+            if (target == null || target == here || SweptWithin(o.Id, target, SweepMemoryHours, now) || Threatened(o, p, target)
                 || !((MayRecruitHere(p, target) && AnyOffer(p, target, limit, lines)) || GarrisonGives(p, target, floor, lines)))
                 target = FindNext(o, p, now, limit, lines);
             if (target == null) return Stopped(p, men, limit, out key);
@@ -262,9 +262,42 @@ namespace BannerlordAgents
                 places.Add(new KeyValuePair<float, Settlement>(RoadTo(p, at, s, entrance, model), s));
             }
             places.Sort((a, b) => a.Key.CompareTo(b.Key));
+            // 0.16 (idea D): a stop under threat is passed by, and one another lord of the realm on this order is already bound for is taken only when
+            // nothing else is left (the safe recruiting loop's and the guard loop's ways: no riding into danger, no emptying each other's stops)
+            Settlement claimed = null;
             foreach (var kv in places)
-                if ((MayRecruitHere(p, kv.Value) && AnyOffer(p, kv.Value, limit, lines)) || GarrisonGives(p, kv.Value, o.Setting("garrison_floor", 0), lines)) return kv.Value;
-            return null;
+            {
+                Settlement s = kv.Value;
+                if (Threatened(o, p, s)) continue;
+                if (!((MayRecruitHere(p, s) && AnyOffer(p, s, limit, lines)) || GarrisonGives(p, s, o.Setting("garrison_floor", 0), lines))) continue;
+                if (!Claimed(o, s)) return s;
+                if (claimed == null) claimed = s;
+            }
+            if (claimed != null) Diag.Count("recruit order:stop shared with another lord");
+            return claimed;
+        }
+
+        /// <summary>
+        /// A stop under threat (0.16): the enemies the realm saw this hour within 15 of its gate (Tools.Threats, from the realm's own view) are caution times
+        /// his strength or more; caution 0 never passes one by.
+        /// </summary>
+        private static bool Threatened(Orders.HandOrder o, MobileParty p, Settlement s)
+        {
+            double caution = o.Setting("caution", Tools.Library.Caution.Default);
+            if (caution <= 0 || s == null || o.Realm == null) return false;
+            Vec2 g = s.GatePosition.ToVec2();
+            double near = Tools.Threats.Around(o.Realm.StringId, g.X, g.Y);
+            if (near <= 0 || near < caution * Math.Max(1f, p.Party.EstimatedStrength)) return false;
+            Diag.Count("recruit order:stop passed by, under threat");
+            return true;
+        }
+
+        /// <summary>Another lord of the realm on this order is bound for this stop now (0.16).</summary>
+        private static bool Claimed(Orders.HandOrder o, Settlement s)
+        {
+            foreach (Orders.HandOrder x in Orders.ActiveOrders)
+                if (x != o && x.Realm == o.Realm && x.Tool == "recruit" && x.Place == s) return true;
+            return false;
         }
 
         /// <summary>The holding whose gate the game counts this party's road distances from, or null.</summary>

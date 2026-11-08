@@ -1,28 +1,28 @@
 {
   "tool": "raid",
   "kind": "tool",
-  "about": "Raids an enemy village and, if radius is above 0, then the other enemy villages around it, keeping away from armies above a set strength.",
+  "about": "Raids an enemy village and, if reach_hours is above 0, then the other enemy villages within that many hours of its own march of it, keeping away from forces above a set strength that could reach it within avoid_hours.",
   "calls_back": "a large army comes near the raiders, or there is nothing left to raid",
   "at": "enemy_village",
   "settings": {
-    "radius": [0, 0, 60, "after the first village, raid the others within this distance of it; 0 raids only the first"],
-    "avoid_ratio": [1.2, 0.2, 5, "pull back into the nearest friendly castle or town when the forces near it are this many times its strength (enemy lords, armies and bandits in view, and armies seen there in the last 6 hours)"],
-    "avoid_radius": [10, 2, 30, "how near counts for that, in map units"]
+    "reach_hours": [0, 0, 24, "after the first village, raid the others within this many hours of the lord's own march of it; 0 raids only the first"],
+    "avoid_ratio": [1.2, 0.2, 5, "pull back into the nearest friendly castle or town when the forces that could reach it within avoid_hours are this many times its strength (enemy lords, armies and bandits in view, and armies seen there in the last 6 hours)"],
+    "avoid_hours": [3, 1, 12, "how near counts for that: within this many hours of the lord's own march"]
   },
   "init": { "target": "at" },
   "start": "raid",
   "states": {
     "raid": { "about": "raiding {target}", "do": "raid target",
       "when": [
-        { "if": "threat_near(me, avoid_radius) >= strength * avoid_ratio", "go": "away", "poke": "Forces too strong came near {me}'s raid on {target} (strength {threat_near(me, avoid_radius)} against {strength}); pulling back." },
+        { "if": "threat_near(me, pace * avoid_hours) >= strength * avoid_ratio", "go": "away", "poke": "Forces too strong came near {me}'s raid on {target} (strength {threat_near(me, pace * avoid_hours)} against {strength}); pulling back." },
         { "if": "looted(target) or not hostile(target)", "go": "next" } ] },
     "next": { "about": "choosing the next village", "do": "hold",
       "when": [
-        { "if": "radius > 0 and next_village(at, radius) != none", "go": "raid", "set": { "target": "next_village(at, radius)" } },
+        { "if": "reach_hours > 0 and next_village(at, pace * reach_hours) != none", "go": "raid", "set": { "target": "next_village(at, pace * reach_hours)" } },
         { "if": "true", "go": "over", "poke": "{me} has nothing left to raid around {at}." } ] },
     "away": { "about": "pulling back from the raid on {target}", "do": "enter nearest_fort()",
       "when": [
-        { "if": "hours_in_state >= 6 and threat_near(me, avoid_radius * 1.5) < strength * avoid_ratio", "go": "raid" } ] },
+        { "if": "hours_in_state >= 6 and threat_near(me, pace * avoid_hours * 1.5) < strength * avoid_ratio", "go": "raid" } ] },
     "over": { "about": "done", "end": "free" }
   }
 }

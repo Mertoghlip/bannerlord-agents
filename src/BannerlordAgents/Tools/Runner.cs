@@ -98,7 +98,7 @@ namespace BannerlordAgents.Tools
     /// - safety: a held lord does not flee by itself (the game switches its quick reactions off), so when the enemies
     ///   within danger_radius, with the hosts they march with (counted together since 0.12.2), are caution times
     ///   stronger, it shelters in the nearest friendly castle or town and resumes when the danger has passed;
-    /// - food: with under two days of food it goes to the nearest friendly town or village to buy more, then resumes.
+    /// - food: once his food would last less than the trip to the nearest friendly town or village and a day and a half (0.16; 2 days before), it goes there to buy more, then resumes.
     /// - relief (0.13.15, before both): it rides to relieve a lord of the realm's or an ally's fighting in the field, when it can get
     ///   there before the fight ends (the battle clock) and the side there, with every held lord who can get there in time, outweighs
     ///   the enemies in the fight and every enemy lord and army in view who could join it by then; it resumes once the fight is over.
@@ -448,6 +448,8 @@ namespace BannerlordAgents.Tools
         {
             if (agent == null || agent.Tools.Count == 0 || s.Watched == null) return;
             World w = WorldFor(s);
+            // where the enemies the realm sees are (0.16): the recruit order's tour passes by stops under threat (RecruitTour, on the game's thread)
+            if (agent.Tools.Values.Any(t => t.Def.Name == "recruit" && !t.Finished)) Threats.Publish(w);
             foreach (ToolInstance t in agent.Tools.Values.ToList())
             {
                 long began = Stopwatch.GetTimestamp();
@@ -651,8 +653,11 @@ namespace BannerlordAgents.Tools
             {
                 if (w.Holding(id) != null)
                 {
-                    // a patrol keeps within the tool's own radius (defend's watch area, screen's), when it has one; else the game ranges it
-                    float r = a.Verb == "patrol" && t.Settings.TryGetValue("radius", out double rr) ? (float)rr : 0f;
+                    // a patrol keeps within the tool's own radius (defend's watch area, screen's), when it has one; else the game ranges it.
+                    // Since 0.16 a tool's reach may be in hours of the lord's own march (reach_hours): that many hours at his pace
+                    float r = 0f;
+                    if (a.Verb == "patrol" && t.Settings.TryGetValue("radius", out double rr)) r = (float)rr;
+                    else if (a.Verb == "patrol" && t.Settings.TryGetValue("reach_hours", out double rh) && w.Party(t.Order.Party) is PartyRow pr) r = (float)Math.Round(rh * w.PerHour(pr), 1);
                     return new Move { Verb = a.Verb, Place = id, R = r };
                 }
             }
@@ -1091,7 +1096,7 @@ namespace BannerlordAgents.Tools
         private static bool Safety(ToolInstance t, PartyRow me, World w, Scope scope)
         {
             double caution = t.Def.Safety && t.Settings.TryGetValue("caution", out double c) ? c : 0;
-            double radius = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
+            double radius = DangerReach(t, me, w);
             // our side, counted as the danger is (0.12.4): the lord and every lord of the realm or an ally who could join a fight where
             // he stands within join_hours, and those camped in his siege
             var with = new List<PartyRow>();
@@ -1245,6 +1250,31 @@ namespace BannerlordAgents.Tools
             return true;
         }
 
+        /// <summary>
+        /// How near counts as near for the danger rule (0.16, from the lieutenant's guard loop: what could reach him before he could get behind walls): the
+        /// distance he marches in the hours to the nearest castle or town he could shelter in, plus 2, at most danger_hours; never less than danger_radius.
+        /// Before 0.16 it was danger_radius alone (8 map units by default, about two hours' march).
+        /// </summary>
+        internal static double DangerReach(ToolInstance t, PartyRow me, World w)
+        {
+            double floor = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
+            double most = t.Settings.TryGetValue("danger_hours", out double dh) ? dh : Library.DangerHours.Default;
+            double pace = me != null ? w.PerHour(me) : double.NaN;
+            if (me == null || double.IsNaN(pace) || pace <= 0 || most <= 0) return floor;
+            SettlementRow fort = w.NearestFort(me.Id);
+            double toFort = fort != null ? w.Distance(me.Id, fort.Id) / pace : double.NaN;
+            double hours = double.IsNaN(toFort) ? most : Math.Min(most, toFort + 2);
+            return Math.Max(floor, hours * pace);
+        }
+
+        /// <summary>The days of food under which a lord rides to buy more (0.16): the trip to the nearest market and a day and a half; it was 2 days, near a market or far.</summary>
+        internal static double FoodNeed(PartyRow me, SettlementRow market, World w)
+        {
+            double pace = w.PerHour(me), d = market != null ? w.Distance(me.Id, market.Id) : double.NaN;
+            double trip = double.IsNaN(d) || double.IsNaN(pace) || pace <= 0 ? 0 : d / pace / 24;
+            return 1.5 + trip;
+        }
+
         private static bool Supply(ToolInstance t, PartyRow me, World w, Scope scope)
         {
             if (t.SupplyAt != null)
@@ -1256,9 +1286,9 @@ namespace BannerlordAgents.Tools
                 Resume(t, scope, w);
                 return false;
             }
-            if (me.FoodDays < 0 || me.FoodDays >= 2 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
+            if (me.FoodDays < 0 || me.FoodDays >= 6 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
             SettlementRow at = w.NearestSupply(me.Id);
-            if (at == null) return false;
+            if (at == null || me.FoodDays >= FoodNeed(me, at, w)) return false;
             t.SupplyAt = at.Id;
             t.AsideSince = w.Hours;
             t.Pending = new Move { Verb = "enter", Place = at.Id };
@@ -1499,6 +1529,113 @@ namespace BannerlordAgents.Tools
 
             private static object OffersAt(PartyRow r, string place) => r?.Offers != null && place != null && r.Offers.TryGetValue(place, out int n) ? (double)n : (object)null;
 
+            private bool Close(string a, string b, double r)
+            {
+                if (a == null || b == null || double.IsNaN(r)) return false;
+                double d = _w.Distance(a, b);
+                return !double.IsNaN(d) && d <= r;
+            }
+
+            /// <summary>A fight weighed (0.16, fight_hours and fight_odds): the hours to reach it, the battle's own hours, the enemy there by its middle and its end, and our side.</summary>
+            internal sealed class Fight
+            {
+                public double Reach, Hours, Mid, End, Ours, Odds;
+            }
+
+            /// <summary>
+            /// How long a battle between two strengths lasts, by the game's own pace of battle, in hours (the lieutenant's reckoning in its guard loop, test A1, Nov 6:
+            /// rounds of strikes, each side's blows growing with its numbers more slowly past 1,600, a round every 40 minutes or so, at most a day).
+            /// </summary>
+            internal static double BattleHours(double enemy, double ours)
+            {
+                if (!(enemy > 0) || !(ours > 0)) return 1;
+                double K(double x) => x < 1600 ? 20 * (400 + 3 * x) / (1200 + x) : 80 * (6400 + 3 * x) / (19200 + x);
+                return 1 + 0.67 * Math.Min(24, Math.Min(0.44 * enemy / K(ours), 0.8 * ours / K(enemy)));
+            }
+
+            /// <summary>
+            /// One weighing of a fight for every order (0.16, idea B, from the lieutenant's guard loop): for an enemy party, the march to it, the battle's
+            /// own hours, and the enemy strength there by the middle and by the end of it: the party with everyone who could join it within join_hours, and,
+            /// for the besiegers of a holding of ours or a party at the place it heads for, every enemy lord and army due there by then (5 near); bandits by
+            /// their own strength. Against our side there: the side's strength, and for a siege of ours the defenders inside who would sally out. For a holding
+            /// a camp of ours besieges, the relief that could reach the camp by the end of the battle it would bring, against our side in the siege.
+            /// </summary>
+            private Fight Weigh(string foe)
+            {
+                PartyRow me = Me;
+                if (me == null || foe == null) return null;
+                double Num(object o) { double n = Expr.Number(o); return double.IsNaN(n) ? 0 : n; }
+                SettlementRow camp = _w.Holding(foe);
+                if (camp != null)
+                {
+                    double near = _t.Settings.TryGetValue("relief_radius", out double rr) ? rr : 5;
+                    double ours0 = Num(Call("side_strength", new object[] { camp.Id }));
+                    List<World.Comer> coming = _w.ReliefComing(camp.Id, near);
+                    double first = coming.Where(c => !double.IsNaN(c.Eta)).Select(c => c.Eta).DefaultIfEmpty(double.NaN).Min();
+                    if (coming.Count == 0 || double.IsNaN(first)) return new Fight { Ours = ours0, Odds = 0, Hours = 0, Reach = double.NaN };
+                    double e0 = _w.ReliefWithin(camp.Id, first + 0.01, near);
+                    double hours = BattleHours(e0, ours0);
+                    double mid = _w.ReliefWithin(camp.Id, first + hours / 2, near), end = _w.ReliefWithin(camp.Id, first + hours, near);
+                    return new Fight { Reach = first, Hours = hours, Mid = mid, End = end, Ours = ours0, Odds = Math.Max(mid, end) / Math.Max(1, ours0) };
+                }
+                PartyRow f = _w.Party(foe);
+                if (f == null && !(_w.KnownStrength(foe) > 0)) return null;
+                double pace = _w.PerHour(me), d = _w.Distance(me.Id, foe);
+                double reach = double.IsNaN(d) || !(pace > 0) ? 0 : d / pace;
+                bool bandit = f?.Kind == "bandit";
+                // the besiegers of a holding of ours (or an ally's), else a party at the place it heads for: the enemies due there count too
+                SettlementRow sieged = f?.Besieging != null ? _w.Holding(f.Besieging) : null;
+                bool relief = sieged != null && (sieged.Faction == _w.Realm || _w.Ally(sieged.Faction));
+                string place = relief ? sieged.Id : null;
+                if (place == null && Call("toward_of", new object[] { foe }) is string to && Num(Call("distance", new object[] { foe, to })) <= 3) place = to;
+                double company = Num(Call("company", new object[] { foe }));
+                double At(double t)
+                {
+                    if (bandit) return Num(Call("strength_of", new object[] { foe }));
+                    double due = place == null ? 0 : _w.ReliefWithin(place, t, 5);
+                    return relief ? Math.Max(company, Math.Max(_w.SiegeStrength(sieged) ?? 0, due)) : Math.Max(company, due);
+                }
+                double ours = Num(Call("side_strength", new object[] { foe }));
+                if (relief) ours = Math.Max(ours, _w.ReliefStrength(sieged, World.StrengthOf(me), me.Id));
+                double e = At(reach), b = BattleHours(e, ours), m = At(reach + b / 2), last = At(reach + b);
+                return new Fight { Reach = reach, Hours = b, Mid = m, End = last, Ours = ours, Odds = Math.Max(m, last) / Math.Max(1, ours) };
+            }
+
+            /// <summary>
+            /// Just enough men (0.16, idea C, from the lieutenant's guard loop of run A: the nearest guards, then the strongest, go at a raider until together
+            /// they are twice its strength): whether this lord is needed against foe. The lords of the realm already striking it count, and so do those on the
+            /// same order at the same holding who are nearer to it (or as near and stronger, or as strong with the lower id) and free to go (riding their loop,
+            /// standing or recruiting there, not sheltering or buying food); he is needed while together they are under times the strength foe fights with.
+            /// </summary>
+            private bool Needed(string foe, double times)
+            {
+                PartyRow me = Me;
+                if (me == null || foe == null || double.IsNaN(times)) return true;
+                double mine = _w.Distance(me.Id, foe), my = World.StrengthOf(me);
+                if (double.IsNaN(mine)) return true;
+                double ahead = 0;
+                foreach (ToolInstance o in ById.Values)
+                {
+                    if (o == _t || o.Finished || !o.HasCurrent) continue;
+                    PartyRow r = _w.Party(o.Order.Party);
+                    if (r == null || r.Faction != _w.Realm || r.Attached) continue;
+                    bool striking = o.Current.Verb == "engage" && o.Current.Party == foe;
+                    bool guard = !striking && o.Order.At != null && o.Order.At == _t.Order.At && o.Def.Name == _t.Def.Name && o.Shelter == null && o.SupplyAt == null
+                                 && (o.Current.Verb == "goto" || o.Current.Verb == "hold" || o.Current.Verb == "recruit" || o.Current.Verb == "patrol");
+                    if (!striking && !guard) continue;
+                    if (guard)
+                    {
+                        double d = _w.Distance(r.Id, foe), s = World.StrengthOf(r);
+                        if (double.IsNaN(d) || d > mine + 0.01) continue;
+                        if (Math.Abs(d - mine) <= 0.01 && (s < my || (s == my && string.CompareOrdinal(r.Id, me.Id) > 0))) continue;
+                    }
+                    ahead += World.StrengthOf(r);
+                }
+                double against = Math.Max(_w.CompanyStrength(foe, JoinHours), _w.KnownStrength(foe) ?? 0);
+                return ahead < times * against;
+            }
+
+
             public object Call(string fn, object[] a)
             {
                 PartyRow me = Me;
@@ -1643,6 +1780,34 @@ namespace BannerlordAgents.Tools
                         {
                             PartyRow r = _w.Party(Id(a[0]));
                             return r != null && r.Faction == _w.Realm ? OffersAt(r, Id(a[1])) : null;
+                        }
+                    // ---------- 0.16: the lieutenant's orders' ways, made general rules (docs/TOOLS.md) ----------
+                    case "fight_hours": { Fight f = Weigh(Id(a[0])); return f == null ? null : (object)f.Hours; }
+                    case "fight_odds": { Fight f = Weigh(Id(a[0])); return f == null ? null : (object)f.Odds; }
+                    case "needed": return Needed(Id(a[0]), Expr.Number(a[1]));
+                    case "lords_near": { string x = Id(a[0]); double r = Expr.Number(a[1]); return (double)_t.Order.Lords.Count(p => _w.Party(p) != null && Close(p, x, r)); }
+                    case "group_strength":
+                        {
+                            string x = Id(a[0]);
+                            double r = Expr.Number(a[1]);
+                            double sum = me != null && Close(me.Id, x, r) ? World.StrengthOf(me) : 0;
+                            foreach (string p in _t.Order.Lords) { PartyRow lr = _w.Party(p); if (lr != null && lr.Faction == _w.Realm && Close(p, x, r)) sum += World.StrengthOf(lr); }
+                            return sum;
+                        }
+                    case "group_offers":
+                        {
+                            string h = Id(a[0]);
+                            double sum = 0;
+                            bool known = false;
+                            foreach (PartyRow r in new[] { me }.Concat(_t.Order.Lords.Select(_w.Party)))
+                                if (r != null && r.Faction == _w.Realm && OffersAt(r, h) is double n) { sum += n; known = true; }
+                            return known ? (object)sum : null;
+                        }
+                    case "marching_on":
+                        {
+                            string h = Id(a[0]);
+                            if (_w.Holding(h) == null) return null;
+                            return _w.EnemiesNear(h, Expr.Number(a[1])).Where(e => _w.TowardOf(e.Id) == h).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                         }
                 }
                 throw new InvalidOperationException("no function " + fn);

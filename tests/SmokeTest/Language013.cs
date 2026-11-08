@@ -96,10 +96,10 @@ namespace SmokeTest
                   && bad.Problems.Any(p => p.Contains("state stuck: it has no move (do), no end and no rules")),
                   "the checker names each problem's place: a kind missing in takes, \"state a, rule 2: next_due takes 3 values, given 2\", a state never reached, a move missing its hours, a dead end: " + string.Join(" | ", bad.Problems));
             var big = new JObject { ["name"] = "big", ["start"] = "s0", ["safety"] = false, ["states"] = new JObject() };
-            for (int i = 0; i < 13; i++) ((JObject)big["states"])["s" + i] = JObject.Parse("{\"do\": \"hold\", \"when\": [{\"if\": \"true\", \"go\": \"s" + ((i + 1) % 13) + "\"}]}");
+            for (int i = 0; i < 21; i++) ((JObject)big["states"])["s" + i] = JObject.Parse("{\"do\": \"hold\", \"when\": [{\"if\": \"true\", \"go\": \"s" + ((i + 1) % 21) + "\"}]}");
             ToolDef tooBig = ToolDef.FromJson(big.ToString(), "big", "orcs");
-            Check(tooBig.Problems.Any(p => p.Contains("13 states, more than the 12")) && tooBig.Problems.Any(p => p.Contains("always carries the safety")) && ToolDef.FromJson(big.ToString(), "big").Problems.Count == 0,
-                  "an agent's own tool is held to the limits (13 states of 12) and keeps the safety rule; ours are not held to them");
+            Check(tooBig.Problems.Any(p => p.Contains("21 states, more than the 20")) && tooBig.Problems.Any(p => p.Contains("always carries the safety")) && ToolDef.FromJson(big.ToString(), "big").Problems.Count == 0,
+                  "an agent's own tool is held to the limits (21 states of 20, since 0.16) and keeps the safety rule; ours are not held to them");
             Check(ToolDef.FromJson("{\"name\": \"Bad Name\", \"start\": \"a\", \"states\": {\"a\": {\"do\": \"hold\"}}}", "x", "orcs").Problems.Any(p => p.Contains("small letters, digits and underscores"))
                   && ToolDef.FromJson("{\"name\": \"raider\", \"kind\": \"army\", \"start\": \"a\", \"states\": {\"a\": {\"do\": \"hold\"}}}", "x", "orcs").Problems.Any(p => p.Contains("an army's tools are ours only")),
                   "an agent's tool's name is small letters, digits and underscores, and it is not an army's tool");

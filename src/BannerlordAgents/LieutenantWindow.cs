@@ -96,6 +96,8 @@ namespace BannerlordAgents
         {
             try
             {
+                // words left for the lieutenant at this load, on the first frame back on the map (0.16; a flag's check otherwise)
+                if (Lieutenant.WordsWaiting && OnMap()) Lieutenant.WordsAtLoad();
                 if (_openAsked)
                 {
                     _openAsked = false;

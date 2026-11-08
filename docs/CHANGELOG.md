@@ -2210,3 +2210,26 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The agents' instructions rebuilt from the templates, each keeping its own title and opening line: Misty Mountain Orcs, Dol Guldur, Kingdom of Arnor and Gondor, and the lieutenant (backups `warroom-system.md.bak-20261107-before-0.16`). Rhun and Gundabad stay as they are until the last test.
   - War rooms and dashboard stopped for the build and started again.
   - The lieutenant's own `guard_supply_loop` and `safe_recruit_loop` stay in its library as they are; it can move its guards to the standard defend and add the stop check to its recruiting loop when I ask.
+
+### 16:06 · Install, version 0.17.0: the lieutenant's ways as general rules for every order, and words for the lieutenant at my next load
+- **Why:** Nov 7, after 0.16.0: I liked all of the ideas drawn from the custom orders of both tests for the other orders, and asked for them as general rules. And I asked for my lieutenant to be told, at my next load, to bring every order in force to its final version.
+- **What** (docs/TOOLS.md, "The lieutenant's ways as general rules"):
+  - Hours, not map units: the danger rule every order carries counts what could reach a lord before he is behind walls (the hours to the nearest castle or town he could shelter in, plus 2, at most `danger_hours`, a new shared setting, default 3; never less than `danger_radius`). Raid (`reach_hours`, `avoid_hours`) and screen (`reach_hours`) reach in hours of the lord's march.
+  - One weighing of a fight in the language (`fight_hours`, `fight_odds`: the march, the battle's own hours, the enemy there by its middle and end), used by defend, hunt, engage (new `give_up_odds`), relieve (strikes isolated besiegers only) and besiege's relief bars (`relief_hours` 0, the new default, weighs by that battle).
+  - Just enough men (`needed`, defend's `enough`): the nearest guards of a holding go at an enemy until they are twice the strength it fights with; the rest keep to the loop.
+  - The recruit tour passes by stops under threat (from the realm's own sightings, `Tools.Threats`) and stops another lord of the realm is already bound for.
+  - Screen tells of each army at most once a day.
+  - Food: a lord rides to buy once his food would last less than the trip to market and a day and a half (it was under 2 days anywhere).
+  - Shortcuts for a group (`lords_near`, `group_strength`, `group_offers`, `marching_on`), and bigger limits on a tool of one's own: 20 states, 80 rules, 12 settings, 1,200 characters an expression (12, 40, 8 and 600).
+  - The standard defend uses the weighing, `needed` and the shortcuts.
+  - Words for the lieutenant at the next load (`Lieutenant.WordsAtLoad`): a file `at-next-load.txt` in its folder is sent as my words on the first frame back on the map after a load, once the carried-on orders are in force, then kept as `at-next-load.sent-<time>.txt`; a first line `for save: NAME` holds it for that save. [LIEUTENANT.md](LIEUTENANT.md).
+  - Both instruction templates name the new words, `danger_hours` and the new limits.
+- **Checks:**
+  - Smoke test 524 checks, all pass, 8 of them new (`General016.cs`). The checks written before this version run with `danger_hours` 0, since their enemies are placed by the old rule; with the new rule some of them shelter or run first, as they should.
+  - War room and dashboard self-tests pass. The helper's speed test is within budget (the 95th slowest hour of a hundred 97 ms, budget 1,000).
+  - The reference check reports 837 game members, 0 missing.
+  - **Not tested:** none of it has run in the game yet. The tour's threat and claim rules and the words at load run only on the game's side, so no check reaches them.
+- **Outside the repository:**
+  - `C:\Users\karab\Projects\lieutenant\warroom\at-next-load.txt`, for the save TEST A1, written at my request: the standard defend for every lord on a guard loop (same fort, loop, partners, start and turn, and settings), the next version of the safe recruiting loop with the stop check and every lord on it moved onto it, every other order of its own onto its newest version, nothing given twice, and a short account of what it changed.
+  - The agents' instructions rebuilt from the templates again (Misty Mountain Orcs, Dol Guldur, Kingdom of Arnor and Gondor, the lieutenant; backups `warroom-system.md.bak-20261107-before-0.17`).
+  - War rooms and dashboard stopped for the build and started again.

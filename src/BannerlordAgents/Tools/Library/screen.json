@@ -1,17 +1,17 @@
 {
   "tool": "screen",
   "kind": "tool",
-  "about": "Patrols within radius of a holding on the border, which widens what your realm can see.",
-  "calls_back": "a new enemy army comes within radius",
+  "about": "Patrols within reach_hours of its own march around a holding on the border, which widens what your realm can see, and tells you of each enemy army that comes within that reach (each at most once a day).",
+  "calls_back": "an enemy army comes within its reach of the holding (each army at most once a day)",
   "at": "any_holding",
   "settings": {
-    "radius": [25, 5, 80, "how far around the holding to watch, in map units"]
+    "reach_hours": [6, 1, 24, "how far around the holding to patrol and watch, in hours of the lord's own march"]
   },
-  "init": { "reported": "none" },
+  "init": { "told": "{}" },
   "start": "watch",
   "states": {
     "watch": { "about": "screening around {at}", "do": "patrol at",
       "when": [
-        { "if": "army_near(at, radius) != none and army_near(at, radius) != reported", "go": "watch", "set": { "reported": "army_near(at, radius)" }, "poke": "{me}'s screen near {at} sees an enemy army: {army_near(at, radius)}, strength {strength_of(army_near(at, radius))}, {distance(army_near(at, radius), at)} from {at}." } ] }
+        { "if": "army_near(at, pace * reach_hours) != none and not (told[army_near(at, pace * reach_hours)] > now)", "go": "watch", "set": { "told[army_near(at, pace * reach_hours)]": "now + 24" }, "poke": "{me}'s screen near {at} sees an enemy army: {army_near(at, pace * reach_hours)}, strength {strength_of(army_near(at, pace * reach_hours))}, {distance(army_near(at, pace * reach_hours), at)} from {at}." } ] }
   }
 }

@@ -135,6 +135,9 @@ namespace BannerlordAgents
         private const double RecruitDays = 3;
         private const double StuckHours = 6;
         private static readonly List<HandOrder> Active = new List<HandOrder>();
+
+        /// <summary>The orders held now, read only (0.16: the recruit tour passes by a stop another of the realm's lords is bound for). Game's thread.</summary>
+        internal static IReadOnlyList<HandOrder> ActiveOrders => Active;
         /// <summary>The meeting place of an army being formed by an order, for the army's notice (the game fires it before the place is set).</summary>
         internal static Settlement FormingAt;
         /// <summary>Who gave that order (agent, you, hand), for a test run's record of the army (it read the leader's order, not yet in force: 0.11.4).</summary>
@@ -157,6 +160,7 @@ namespace BannerlordAgents
             HandedBack.Clear();
             RecruitTour.Reset();
             Offers.Reset();
+            Tools.Threats.Reset();
             Supply.Reset();
             Mirror();
         }

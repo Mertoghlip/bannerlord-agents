@@ -1,8 +1,9 @@
 {
   "tool": "engage",
   "kind": "move",
-  "about": "Attacks an enemy lord or army; if it slips out of view, goes to where it was last seen. It gives up a chase that has not closed in for 8 hours (a target as fast as the lord is caught only when it stops), and its next order, if any, starts.",
+  "about": "Attacks an enemy lord or army; if it slips out of view, goes to where it was last seen. It gives up a chase that has not closed in for 8 hours (a target as fast as the lord is caught only when it stops), and an attack that would be lost: once the enemies who could be in the fight by its middle or its end (the march to it and the battle's own hours, by the game's rules) are give_up_odds times your side there. Its next order, if any, starts.",
   "target": "enemy_lord",
+  "settings": { "give_up_odds": [1.5, 0.3, 10, "break off once the enemies who could be in the fight by its middle or its end are this many times your side's strength there (10: never)"] },
   "init": { "best_gap": "9999", "best_at": "now" },
   "start": "chase",
   "states": {
@@ -10,6 +11,7 @@
       "when": [
         { "if": "gone(target)", "go": "over", "poke": "{target} is gone (beaten, captured or broken up)." },
         { "if": "not in_view(target)", "go": "search" },
+        { "if": "not in_battle and fight_odds(target) > give_up_odds", "go": "over", "poke": "{me} broke off the attack on {target}: the enemies who could be in the fight by its middle or its end are {round(fight_odds(target) * 100)}% of your side's {side_strength(target)}." },
         { "if": "not in_battle and now - best_at >= 8", "go": "over", "poke": "{me} gave up the chase of {target}: no closer in 8 hours ({distance(me, target)} away), so {target} is as fast as {me} or faster." },
         { "if": "distance(me, target) < best_gap - 1", "go": "chase", "set": { "best_gap": "distance(me, target)", "best_at": "now" } } ] },
     "search": { "about": "looking for {target} where it was last seen", "do": "toward target",

@@ -136,6 +136,10 @@ namespace BannerlordAgents
                 }
             }
             if (Thread.Count > 0) Diag.Event("lieutenant", "conversation restored", new { lines = Thread.Count, shown, pending = _pending?.Chat, save = history.Save });
+            // words left for the lieutenant at this load (0.16, WordsAtLoad): sent on the first frame back on the map
+            string waiting = Agent?.Channel?.Dir;
+            _wordsPending = waiting != null && File.Exists(Path.Combine(waiting, WordsFile));
+            _wordsSave = history.Save;
             // the talks of every other save, for the lieutenant to read when the ruler refers to one (0.16)
             string channel = Agent?.Channel?.Dir, campaign = Bridge.CampaignId, save = history.Save;
             if (channel != null)
@@ -151,6 +155,53 @@ namespace BannerlordAgents
         }
 
         private static bool Resolves(string kind) => kind == "approved" || kind == "declined" || kind == "carried" || kind == "dropped" || kind == "proposal";
+
+        /// <summary>
+        /// Words for the lieutenant at the next load (0.16, Nov 7: could you communicate with my lieutenant directly such that the active orders are
+        /// regularized to the final versions when next I load the game?): a file at-next-load.txt in its folder, written at my request, is sent as my
+        /// words on the first frame back on the campaign map after a load, once the orders carried on from the save are in force again, and is then kept
+        /// as at-next-load.sent-(time).txt. A first line "for save: NAME" holds it until that save is loaded. The words say who wrote them, so the
+        /// record and the lieutenant know they were not typed in the window. Nothing else is ever sent for me.
+        /// </summary>
+        public const string WordsFile = "at-next-load.txt";
+        private static bool _wordsPending;
+        private static string _wordsSave;
+
+        /// <summary>Words wait to be sent at this load (a file was there when it loaded).</summary>
+        public static bool WordsWaiting => _wordsPending;
+
+        /// <summary>On the first frame back on the campaign map after a load (LieutenantWindow.Frame): sends the words left for this load, once.</summary>
+        public static void WordsAtLoad()
+        {
+            if (!_wordsPending) return;
+            _wordsPending = false;
+            try
+            {
+                RealmAgent ag = Agent;
+                string dir = ag?.Channel?.Dir;
+                if (dir == null || !Active) return;
+                string file = Path.Combine(dir, WordsFile);
+                if (!File.Exists(file)) return;
+                List<string> lines = File.ReadAllLines(file).ToList();
+                string head = lines.Count > 0 ? lines[0].Trim() : "";
+                if (head.StartsWith("for save:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string want = head.Substring("for save:".Length).Trim();
+                    if (!string.Equals(want, _wordsSave, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Diag.Event("lieutenant", "words at load wait for their save", new { want, loaded = _wordsSave });
+                        return;
+                    }
+                    lines.RemoveAt(0);
+                }
+                string text = string.Join("\n", lines).Trim();
+                File.Move(file, Path.Combine(dir, "at-next-load.sent-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", Text.Inv) + ".txt"));
+                if (text.Length == 0) return;
+                Diag.Event("lieutenant", "words at load sent", new { save = _wordsSave, chars = text.Length });
+                OnPlayerSays(text);
+            }
+            catch (Exception e) { Diag.Error("sending the words left for the lieutenant at this load", e); }
+        }
 
         /// <summary>One line of the conversation, kept for this save (and the window's own line, shown by the caller).</summary>
         private static void Keep(string kind, string text, int n = -1, JArray orders = null, string say = null, Proposal whole = null)

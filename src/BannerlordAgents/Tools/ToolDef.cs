@@ -87,8 +87,11 @@ namespace BannerlordAgents.Tools
         public readonly Dictionary<string, StateDef> States = new Dictionary<string, StateDef>(StringComparer.OrdinalIgnoreCase);
         public readonly List<string> Problems = new List<string>();
 
-        /// <summary>The limits on an agent's own tool (0.13, docs/PLAN-0.13.md A5); ours are not held to them.</summary>
-        public const int MaxStates = 12, MaxRules = 40, MaxExpression = 600, MaxSettings = 8;
+        /// <summary>
+        /// The limits on an agent's own tool (0.13, docs/PLAN-0.13.md A5); ours are not held to them. Raised in 0.16 from 12 states, 40 rules, 600 characters and 8 settings:
+        /// the lieutenant's guard loop reached 12 and 40 at its seventh version and had to merge two of its endings to fit, and its run-A loop wrote out 14 lords by hand.
+        /// </summary>
+        public const int MaxStates = 20, MaxRules = 80, MaxExpression = 1200, MaxSettings = 12;
 
         /// <summary>The moves a state can make, and what each acts on: a holding, a party, a spot, a number of hours, or nothing.</summary>
         public static readonly Dictionary<string, string> Verbs = new Dictionary<string, string>
@@ -159,7 +162,9 @@ namespace BannerlordAgents.Tools
             // 0.13.20: a castle's or town's food (the supply order)
             ["food_at"] = 1, ["food_days_at"] = 1,
             // 0.16: the volunteers a stop of his order has for him, or for another lord of the realm on an order naming it
-            ["offers"] = 1, ["offers_of"] = 2
+            ["offers"] = 1, ["offers_of"] = 2,
+            // 0.16, the lieutenant's orders' ways made general rules: one weighing of a fight for every order, just enough men, and shortcuts for a group
+            ["fight_hours"] = 1, ["fight_odds"] = 1, ["needed"] = 2, ["lords_near"] = 2, ["group_strength"] = 2, ["group_offers"] = 1, ["marching_on"] = 2
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -176,7 +181,14 @@ namespace BannerlordAgents.Tools
             ["food_at"] = "food_at(h): the food in a castle or town of yours now (none for a village or another realm's)",
             ["food_days_at"] = "food_days_at(h): how many days a castle or town of yours would last a siege on its food now, at what it eats under siege (none for a village or another realm's)",
             ["offers"] = "offers(h): how many volunteers waiting at h he could take now, by the game's own rule for how far down each notable's line he may recruit (his standing with the notable, his realm, his skills); 0 where he may not recruit (an enemy's holding, a siege, a raid); counted each hour for the at and places of his order, none for any other holding. It leaves out his purse: can_recruit says whether he can pay. Above 80% of his ranks he takes only his clan's own troop lines, so he may take fewer",
-            ["offers_of"] = "offers_of(lord, h): the same for another of your lords, at a holding his own order names (none otherwise)"
+            ["offers_of"] = "offers_of(lord, h): the same for another of your lords, at a holding his own order names (none otherwise)",
+            ["fight_hours"] = "fight_hours(p): how many hours a battle between your side and p would last, by the game's own pace of battle for the two strengths (at least 1)",
+            ["fight_odds"] = "fight_odds(p): the enemy strength that could be in a fight with p by its middle and by its end (the march to it and the battle's own hours: p with every enemy who could join it within join_hours, and, for the besiegers of one of your holdings or a party at the place it heads for, every enemy lord and army due there by then), the larger of the two, over your side's strength there (with the defenders inside who would sally out, for a siege of yours); for a holding you besiege, the relief that could reach your camp by the end of the battle it would bring, over your side in the siege; 0 when nothing could be there",
+            ["needed"] = "needed(p, times): whether this lord is needed against p: true while the lords of yours already striking p, and those guarding the same holding who are nearer to p (or as near and stronger), are together under times the strength p fights with",
+            ["lords_near"] = "lords_near(x, r): how many of the order's lords are within r of x",
+            ["group_strength"] = "group_strength(x, r): the strength of the lord and the order's lords within r of x",
+            ["group_offers"] = "group_offers(h): offers(h) for the lord and each of the order's lords, added up (none when no count is known for any of them)",
+            ["marching_on"] = "marching_on(h, r): the strongest enemy lord or army within r of h that is heading for h (none when none is)"
         };
 
         private static readonly Regex NamePattern = new Regex("^[a-z][a-z0-9_]{1,31}$", RegexOptions.Compiled);
@@ -304,6 +316,7 @@ namespace BannerlordAgents.Tools
             {
                 if (!d.Settings.ContainsKey("caution")) d.Settings["caution"] = Library.Caution;
                 if (!d.Settings.ContainsKey("danger_radius")) d.Settings["danger_radius"] = Library.DangerRadius;
+                if (!d.Settings.ContainsKey("danger_hours")) d.Settings["danger_hours"] = Library.DangerHours;
                 if (!d.Settings.ContainsKey("join_hours")) d.Settings["join_hours"] = Library.JoinHours;
             }
             // taking men from the clan's own garrisons while recruiting (0.13.19), on every tool
@@ -501,7 +514,9 @@ namespace BannerlordAgents.Tools
 
         /// <summary>The safety rule every tool and move carries unless it opts out.</summary>
         public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when anything hostile comes close to the lord, so a fight may start where he is, and the enemy lords, armies and bandits close to him, with every enemy lord and army in view that could reach him within join_hours, are this many times stronger together, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against them and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
-        public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "how close counts as close for caution, in map units" };
+        public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "the least distance that counts as close for caution, in map units (danger_hours may count farther)" };
+        /// <summary>The danger counted by the hours to shelter (0.16, the lieutenant's guard loop made a general rule): Runner.DangerReach.</summary>
+        public static readonly SettingDef DangerHours = new SettingDef { Name = "danger_hours", Default = 3, Min = 0, Max = 24, About = "for caution, what could reach him before he could get behind walls: as close counts the distance he marches in the hours to the nearest castle or town of yours or an ally's, plus 2, at most this many hours, and never less than danger_radius; 0 counts danger_radius alone" };
         /// <summary>The hours window of a fight (0.12.3, chosen: "Hours window only"): who could join it, by the agent's own reckoning of how long it lasts.</summary>
         /// <summary>The relief rule (0.13.15, Runner.Relief): the longest a fight is waited on; one the battle clock sees lasting longer (or not ending in five days) counts as this.</summary>
         public const double MaxReliefHours = 24;
@@ -530,7 +545,7 @@ namespace BannerlordAgents.Tools
         public static readonly SettingDef GarrisonFloor = new SettingDef { Name = "garrison_floor", Default = 0, Min = 0, Max = 100000, About = "at a castle or town of his own clan (YOUR HOLDINGS names the clan that owns each one; his look-up file names his), while he recruits there (the recruit order's tour, or a recruit stop), he also takes healthy men from its garrison, the best first, by the recruit order's rules (all kinds until 80% of his ranks, then his clan's own troop lines, his wage cap), as long as the garrison's strength (YOUR HOLDINGS shows it) stays at or above this; the recruit order's tour also stops at such places. 0 takes none" };
 
         /// <summary>The settings every move and tool carries, described once in the library rather than with each (0.13.19).</summary>
-        public static bool Shared(string name) => name == "caution" || name == "danger_radius" || name == "join_hours" || name == "garrison_floor";
+        public static bool Shared(string name) => name == "caution" || name == "danger_radius" || name == "danger_hours" || name == "join_hours" || name == "garrison_floor";
 
         public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, at its own pace as the crow flies, counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
 
@@ -608,8 +623,9 @@ namespace BannerlordAgents.Tools
             sb.AppendLine("- An answer with no orders is a valid answer: everything stands.");
             sb.AppendLine("- **then**: an order can carry a next order, started as soon as the first one finishes, e.g. gather, then relieve. It does not start when the first one fails (an army that broke up before it formed): that lord is set free, and you are told.");
             sb.AppendLine();
-            sb.AppendLine("Every move and tool also takes caution (default " + ToolDef.Num(Caution.Default) + ") and danger_radius (default " + ToolDef.Num(DangerRadius.Default)
-                          + "): " + Caution.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");
+            sb.AppendLine("Every move and tool also takes caution (default " + ToolDef.Num(Caution.Default) + "), danger_radius (default " + ToolDef.Num(DangerRadius.Default)
+                          + ") and danger_hours (default " + ToolDef.Num(DangerHours.Default) + "): " + Caution.About + "; how close counts: " + DangerHours.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");
+            sb.AppendLine("Food: a lord holding your orders who runs low rides to the nearest market to buy more, once his food would last less than the trip there and a day and a half, and then takes up his order again.");
             sb.AppendLine("And join_hours (default " + ToolDef.Num(JoinHours.Default) + "): " + JoinHours.About + ".");
             sb.AppendLine("And garrison_floor (default " + ToolDef.Num(GarrisonFloor.Default) + "): " + GarrisonFloor.About + ".");
             sb.AppendLine("Every lord holding your orders, out of an army or leading one, also rides with all haste to relieve a lord of yours or an ally's fighting in the field (or at a siege camp, or over a raid), "

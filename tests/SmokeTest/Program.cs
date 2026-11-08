@@ -50,6 +50,9 @@ namespace SmokeTest
             ToolDef oldDefend = ToolDef.FromJson(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Fixtures", "defend-0.15.json")), "defend");
             Check(oldDefend.Valid && oldDefend.States.ContainsKey("patrol"), "the defend of 0.15 reads, for the checks written for it: " + string.Join("; ", oldDefend.Problems));
             Library.SwapForTest("defend", oldDefend);
+            // the same for the danger rule: since 0.16 it counts what could reach a lord before he could get behind walls (danger_hours); the checks written
+            // before it place their enemies by the old rule, danger_radius alone, so they run with danger_hours 0, and DangerHoursTests check the new one
+            Library.DangerHours.Default = 0;
             Diag.StartLaunch();
             Check(Diag.SessionDir != null && Diag.SessionDir.StartsWith(root), "a log folder for this launch: " + Diag.SessionDir);
             string dir = Paths.Data(campaign);
