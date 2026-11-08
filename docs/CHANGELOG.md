@@ -2211,7 +2211,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - War rooms and dashboard stopped for the build and started again.
   - The lieutenant's own `guard_supply_loop` and `safe_recruit_loop` stay in its library as they are; it can move its guards to the standard defend and add the stop check to its recruiting loop when I ask.
 
-### 16:06 · Install, version 0.17.0: the lieutenant's ways as general rules for every order, and words for the lieutenant at my next load
+### 16:06 · Install, version 0.17.0: the lieutenant's ways as general rules for every order, and words for the lieutenant at my next load · commit d0a6431
 - **Why:** Nov 7, after 0.16.0: I liked all of the ideas drawn from the custom orders of both tests for the other orders, and asked for them as general rules. And I asked for my lieutenant to be told, at my next load, to bring every order in force to its final version.
 - **What** (docs/TOOLS.md, "The lieutenant's ways as general rules"):
   - Hours, not map units: the danger rule every order carries counts what could reach a lord before he is behind walls (the hours to the nearest castle or town he could shelter in, plus 2, at most `danger_hours`, a new shared setting, default 3; never less than `danger_radius`). Raid (`reach_hours`, `avoid_hours`) and screen (`reach_hours`) reach in hours of the lord's march.
