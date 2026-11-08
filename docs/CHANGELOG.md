@@ -2248,7 +2248,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The lieutenant's `at-next-load.txt` set aside unsent as `at-next-load.cancelled-20261107-234312.txt`, as I asked once I had pasted it.
   - War rooms and dashboard stopped for the builds and started again (0.17.1 at 23:59, 0.17.2 at 00:04).
 
-### 01:20 · Install, version 0.17.3: the human player, told plainly; his battles' rule in the tools; attacks on him close in and strike together; his record
+### 01:20 · Install, version 0.17.3: the human player, told plainly; his battles' rule in the tools; attacks on him close in and strike together; his record · commit 8028416
 - **Why:** Nov 8: battle times work differently when I fight the battle. Dol Guldur's lords attacked me in force, but only a few could join, because they were not within the reinforcement radius in time; storms are the same. I asked how the mechanic works and for a proposal; then chose: tell the agents plainly which party is the human player's (reversing my Oct 20 choice not to), attacks on me close in and wait to strike together automatically, each realm's record of my battles from what it saw, and record each side's strength and troops in my battles.
 - **The game's rule** (1.4.8, read in its code): when a battle with the player begins, every lord, patrol or bandit band within 3 of it that may take a side joins (3.75 while he is in a siege), parties in an army with their leader, none from inside a settlement, another battle or a siege; a storm takes only the siege camp and those inside; the clock stands still until it ends. Battles without him run for hours and take in arrivals.
 - **What** (docs/TOOLS.md, "The human player's battles"):
