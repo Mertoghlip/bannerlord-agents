@@ -2283,3 +2283,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `PlayerBattles.Frame` (every frame, a look-up while I am in no battle): a battle I am in that was not taken yet is taken now.
 - **Checks:** smoke test 537 checks, all pass, 2 new (a defend carried on mid–food-run takes the library's version under an intervention and its food run is a step; a siege order given again keeps its state with the new numbers, partners and next order, and makes no new move). The helper's speed test is within budget; the reference check reports 837 game members, 0 missing. Installed module file 625B99D1DFF0B189. **Not tested in the game yet:** the siege kept and the battle taken as I join it run only on the game's side.
 - **Outside the repository:** nothing.
+### 21:46 · Install, version 0.17.6: the lieutenant's window shows only my words and its answers · commit PENDING
+- **Why:** Nov 8, test A1's second start: "For the next load: please remove the lieutenant's blue log of what lords are doing and why from my chat with it. I just want to see my prompts and its answers to them going forward."
+- **What:** `Lieutenant.ShowLog` (off): the call-backs and ends of its orders (blue, `Lieutenant.Heard`) and the refusals (red) no longer go into the window or the game's message log, at once or at a load (`Lieutenant.Shown`). They are still kept in the conversation (`chat.jsonl`) and told to the lieutenant with my next words. docs/LIEUTENANT.md says so.
+- **Checks:** smoke test 537 checks, all pass; the reference check reports 837 game members, 0 missing. Installed module file BBF8F30876ED32F5. **Not seen in the game yet.**
+- **Outside the repository:** nothing.

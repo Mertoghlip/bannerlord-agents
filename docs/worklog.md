@@ -30,3 +30,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Nov 8 | | Version 0.17.3: how the game picks who fights the player's battles (the ring of 3, the clock stopped, storms); the agents told plainly who the human player is; the tools follow the rule; attacks on him close in and strike together; his record of battles for each realm | |
 | Nov 8 | | Version 0.17.4: the standard defend's food steps no longer end it (11 orders ended in test A1's second start), a holding fed only up to its full stores, rest not refused at the gold floor; the orders in force fixed at the next load (Intervention) | |
 | Nov 8 | | Version 0.17.5: a siege order given again keeps the siege (Dol Guldur broke three of its own); carried food runs marked as steps; my battle taken as I join it | |
+| Nov 8 | | Version 0.17.6: the lieutenant's window shows only my words and its answers (its orders' news and refusals kept for it, not shown) | |

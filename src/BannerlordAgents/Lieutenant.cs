@@ -232,6 +232,13 @@ namespace BannerlordAgents
             Background.Post("lieutenant conversation", () => Files.Append(file, json));
         }
 
+        /// <summary>
+        /// Whether the window shows what became of its orders, the call-backs and refusals (0.17.6, Nov 8: I just want to see my prompts and its answers):
+        /// off, so the window holds the ruler's words and the lieutenant's answers. They are still kept in the conversation and told to the lieutenant
+        /// with the ruler's next words, so its answers can say what went wrong.
+        /// </summary>
+        private static readonly bool ShowLog = false;
+
         /// <summary>How a kept line looks in the window (null: kept for the record only).</summary>
         private static KeyValuePair<string, uint>? Shown(JObject l)
         {
@@ -244,8 +251,8 @@ namespace BannerlordAgents
                 case "approved": return new KeyValuePair<string, uint>(t.Length == 0 ? "You approved it." : "You approved:\n" + t, You);
                 case "declined": return new KeyValuePair<string, uint>("You declined it.", You);
                 case "aside": return new KeyValuePair<string, uint>(t, Aside);
-                case "refused": return new KeyValuePair<string, uint>("(" + t + ")", Refused);
-                case "heard": return new KeyValuePair<string, uint>(Name + ": " + t, Aside);
+                case "refused": return ShowLog ? new KeyValuePair<string, uint>("(" + t + ")", Refused) : (KeyValuePair<string, uint>?)null;
+                case "heard": return ShowLog ? new KeyValuePair<string, uint>(Name + ": " + t, Aside) : (KeyValuePair<string, uint>?)null;
                 case "letter": return new KeyValuePair<string, uint>(t, Post);
                 default: return null;
             }
@@ -542,7 +549,7 @@ namespace BannerlordAgents
         internal static void Carry(Proposal p, int chat, string realmId)
         {
             string file = "chat-" + chat + ".json";
-            void Say(string text, uint colour) => Background.ToUi.Enqueue(() => { LieutenantWindow.Add(text, colour, true); Keep(colour == Refused ? "refused" : "heard", text.Trim('(', ')'), chat); });
+            void Say(string text, uint colour) => Background.ToUi.Enqueue(() => { if (ShowLog) LieutenantWindow.Add(text, colour, true); Keep(colour == Refused ? "refused" : "heard", text.Trim('(', ')'), chat); });
             void Give(AgentChannel.AgentOrder order)
             {
                 if (GivenForTest != null) { GivenForTest(order); return; }
@@ -658,7 +665,7 @@ namespace BannerlordAgents
             foreach (string t in said)
             {
                 string text = Name + ": " + t, heard = t;
-                Background.ToUi.Enqueue(() => { LieutenantWindow.Add(text, Aside, true); Keep("heard", heard); });
+                Background.ToUi.Enqueue(() => { if (ShowLog) LieutenantWindow.Add(text, Aside, true); Keep("heard", heard); });
             }
         }
 
