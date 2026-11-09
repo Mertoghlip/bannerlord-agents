@@ -17,6 +17,8 @@ namespace BannerlordAgents.WarRoom
         public double Seconds, ApiMs, TtftMs, Cost, FirstTextMs = -1;
         public int Turns;
         public long InTokens, OutTokens, CacheRead, CacheWrite, Thinking;
+        /// <summary>Of CacheWrite, the tokens written to the one-hour cache (usage.cache_creation.ephemeral_1h_input_tokens); the rest went to the five-minute one.</summary>
+        public long CacheWrite1h;
         public List<string> Denied = new List<string>();
     }
 
@@ -98,6 +100,16 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         public static string ThinkingDisplay = "summarized";
 
+        /// <summary>
+        /// How long the prompt cache keeps what a fresh call writes (0.17.7): "5m" or "1h" (Claude Code's CLAUDE_CODE_PROMPT_CACHE_TTL, 2.1.242 or later);
+        /// empty leaves Claude Code's default, which is one hour for -p calls on the subscription. Measured on Nov 8 (204 calls): writing into the cache
+        /// was 71-74% of the cost, almost all of it each call's own report, used for under a minute; a one-hour write costs twice the input price, a
+        /// five-minute one 1.25 times. The standing prompt survives between calls as long as one comes within five minutes (a hit renews the timer).
+        /// Replayed call by call, five minutes was cheaper for every kind of call: -22% that night. The one long conversation (memory = conversation)
+        /// is left on Claude Code's default, since it is read again poke after poke. Set from warroom.txt.
+        /// </summary>
+        public static string CacheTtl = "5m";
+
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
                                      string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null)
         {
@@ -139,6 +151,7 @@ namespace BannerlordAgents.WarRoom
                 }) psi.ArgumentList.Add(a);
             }
             if (thinkingCap > 0) psi.Environment["MAX_THINKING_TOKENS"] = thinkingCap.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (sessionId == null && (CacheTtl == "5m" || CacheTtl == "1h")) psi.Environment["CLAUDE_CODE_PROMPT_CACHE_TTL"] = CacheTtl;
             var sw = Stopwatch.StartNew();
             Process p;
             try { p = Process.Start(psi); }
@@ -271,6 +284,7 @@ namespace BannerlordAgents.WarRoom
                     r.OutTokens = (long)Num(u, "output_tokens");
                     r.CacheRead = (long)Num(u, "cache_read_input_tokens");
                     r.CacheWrite = (long)Num(u, "cache_creation_input_tokens");
+                    if (u.TryGetProperty("cache_creation", out JsonElement cc)) r.CacheWrite1h = (long)Num(cc, "ephemeral_1h_input_tokens");
                     if (u.TryGetProperty("output_tokens_details", out JsonElement od)) r.Thinking = (long)Num(od, "thinking_tokens");
                 }
                 if (root.TryGetProperty("permission_denials", out JsonElement den) && den.ValueKind == JsonValueKind.Array)

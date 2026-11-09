@@ -31,3 +31,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Nov 8 | | Version 0.17.4: the standard defend's food steps no longer end it (11 orders ended in test A1's second start), a holding fed only up to its full stores, rest not refused at the gold floor; the orders in force fixed at the next load (Intervention) | |
 | Nov 8 | | Version 0.17.5: a siege order given again keeps the siege (Dol Guldur broke three of its own); carried food runs marked as steps; my battle taken as I join it | |
 | Nov 8 | | Version 0.17.6: the lieutenant's window shows only my words and its answers (its orders' news and refusals kept for it, not shown) | |
+| Nov 9 | | Where the agents' usage goes (Nov 8: 204 calls; writing into the prompt cache was 71-74% of the cost, almost all of it each call's own report); war room 0.17.7: each call's writes to the five-minute cache instead of the one-hour one, about 22% less on the same calls | |

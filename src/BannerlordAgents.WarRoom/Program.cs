@@ -148,6 +148,10 @@ namespace BannerlordAgents.WarRoom
             Console.WriteLine("Plain call: " + (plain.Ok ? "answered \"" + plain.Text?.Trim() + "\" in " + Math.Round(plain.Seconds, 1) + " s" : "FAILED: " + plain.Error));
             bool ok = r.Ok && tool.Asked == 1 && (r.Text ?? "").Contains("60") && plain.Ok;
             Console.WriteLine((ok ? "TOOL CHECK PASSED" : "TOOL CHECK FAILED") + ": asked " + tool.Asked + " time(s), " + r.Turns + " steps, " + Math.Round(r.Seconds, 1) + " s; answer: " + (r.Text ?? r.Error));
+            // 0.17.7: which cache the writes went to, as Claude Code reported them (cache_ttl asks for one)
+            foreach (var (name, c) in new[] { ("tool call", r), ("plain call", plain) })
+                Console.WriteLine("Cache, " + name + ": " + (c.CacheWrite - c.CacheWrite1h) + " tokens written for five minutes, " + c.CacheWrite1h + " for an hour, "
+                                  + c.CacheRead + " read (cache_ttl " + (Claude.CacheTtl.Length > 0 ? Claude.CacheTtl : "Claude Code's default") + ")");
             return ok ? 0 : 1;
         }
 

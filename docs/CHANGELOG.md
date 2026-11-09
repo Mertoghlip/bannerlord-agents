@@ -2288,3 +2288,17 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** `Lieutenant.ShowLog` (off): the call-backs and ends of its orders (blue, `Lieutenant.Heard`) and the refusals (red) no longer go into the window or the game's message log, at once or at a load (`Lieutenant.Shown`). They are still kept in the conversation (`chat.jsonl`) and told to the lieutenant with my next words. docs/LIEUTENANT.md says so.
 - **Checks:** smoke test 537 checks, all pass; the reference check reports 837 game members, 0 missing. Installed module file BBF8F30876ED32F5. **Not seen in the game yet.**
 - **Outside the repository:** nothing.
+
+## Monday, November 9
+
+### 12:27 · War room 0.17.7: each call's writes go to the five-minute prompt cache · commit PENDING
+- **Why:** the agents were taking far more of my usage than a long coding session. Last night's 204 calls (Nov 8, 20:17–22:32, run 20261108-2016-A) cost $60 at Claude Code's list prices, which fit every call exactly at $0.20 a million tokens read from the cache, $8 a million written to it and $20 a million written out. Writing into the cache was 71–74% of the cost, nearly all of it each call's own report written at its first step (a fast answer about 15,000 tokens, a council about 46,000, a lieutenant chat about 52,000), used for under a minute and then dropped. The standing prompt (22,000–33,000 tokens) was already read back from the cache. Claude Code writes the main conversation of a `-p` call to the one-hour cache on the subscription, at twice the input price; the five-minute cache costs 1.25 times.
+- **What:**
+  - `cache_ttl` in `warroom.txt` (5m by default; 1h, or empty for Claude Code's default), passed to each fresh call as `CLAUDE_CODE_PROMPT_CACHE_TTL` (`Claude.CacheTtl`). The one long conversation (`memory = conversation`, the comparison arm) keeps the default, since it is read again poke after poke.
+  - Each line of `calls.jsonl` has `cache_write_1h`, the part of `cache_write` that went to the one-hour cache; `WarRoom toolcheck` prints both parts.
+  - docs/WARROOM.md lists the setting.
+- **Numbers:** replayed call by call on the recorded calls (a cache hit renews its five minutes; a call that comes later than that writes the standing prompt again): Nov 8 $59.67 to $46.36 (−22%), Nov 6–7 $82.06 to $64.56 (−21%). Cheaper for every kind of call even with those rewrites: answers −25%, councils −17 to −20%, lieutenant chats −25%, stories −18 to −20%. Nothing the agents see changes.
+- **Checks:** war room self-test, all pass, 4 new (the default is written for the agent's folder, `cache_ttl` sets it, a value Claude Code would not take leaves its default, an older settings file gets the line). `WarRoom toolcheck`, two real calls on the subscription: 5,186 and 912 tokens written for five minutes, none for an hour. The game module is unchanged (0.17.6).
+- **Outside the repository:**
+  - The four agents' `warroom.txt` (Misty Mountain Orcs, Dol Guldur, the lieutenant, Kingdom of Arnor and Gondor) rewritten by the war room at its start with `cache_ttl = 5m` and `council_at_battle = on` (that one was missing from the files and already on by default); every other setting unchanged; backups `warroom.txt.bak-20261109-before-cache-ttl`.
+  - War rooms and dashboard stopped for the build and started again.

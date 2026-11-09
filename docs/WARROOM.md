@@ -88,6 +88,7 @@ powershell -ExecutionPolicy Bypass -File scripts\agents.ps1 start
 | `thinking_display` | summarized | how each call asks Claude Code for the model's thinking (0.13): summarized keeps its summary (`thinking.txt`), omitted leaves it out |
 | `council_effort`, `council_thinking_cap`, `council_timeout_seconds` | high, 12000, 420 | the council's call: room to think about the whole realm |
 | `council_at_battle` | on | an extra council as my own battle begins, beside the regular ones ([below](#the-extra-council-as-my-battle-begins-since-0151)) |
+| `cache_ttl` | 5m | how long the prompt cache keeps what each fresh call writes (0.17.7): 5m (writes at 1.25 times the input price) or 1h (twice); empty leaves Claude Code's default, one hour on the subscription. Passed as `CLAUDE_CODE_PROMPT_CACHE_TTL` (Claude Code 2.1.242 or later). Each call's own report is used for under a minute, and the standing prompt stays cached while calls come within five minutes of each other; the one long conversation (`memory = conversation`) keeps the default. Each line of `calls.jsonl` has `cache_write_1h` (the part of `cache_write` that went to the one-hour cache); `WarRoom toolcheck` prints both |
 | `claude_path` | (empty) | the newest Claude Code in VS Code's extension folder, else claude on the path |
 | `log_dir` | (empty) | where its logs go; empty is `%LOCALAPPDATA%\BannerlordAgents\logs\warroom`. A second agent's war room keeps its own (since 0.8) |
 

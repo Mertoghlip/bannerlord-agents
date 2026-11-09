@@ -255,7 +255,7 @@ namespace BannerlordAgents.WarRoom
                 kind = "answer", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), poke = number, when, urgent, model = _c.Model, effort, thinking_cap = cap,
                 ok = answer != null, problem, retried, stall_retry = stallRetry,
                 seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), api_ms = r.ApiMs, ttft_ms = r.TtftMs, turns = r.Turns,
-                tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
+                tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cache_write_1h = r.CacheWrite1h, cost_usd_list = r.Cost,
                 answer_began_ms = Math.Round(r.FirstTextMs), memory = _c.MemoryMode, context_tokens = context, story_words = storyWords, gap_lines = gapLines,
                 notes_chars = _mem.Notes.Length, notes_changed = changed, session = sessionId, campaign = _mem.Campaign,
                 orders, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null,
@@ -533,7 +533,7 @@ namespace BannerlordAgents.WarRoom
             {
                 kind = "story", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), model, effort = _c.StoryEffort, thinking_cap = _c.StoryThinkingCap,
                 ok = kept, problem, lines = fresh.Count, words = newStory != null ? Words(newStory) : 0, lessons_merged = merge && lessons != null ? lessons.Count : (int?)null,
-                seconds = Math.Round(seconds, 2), tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite,
+                seconds = Math.Round(seconds, 2), tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cache_write_1h = r.CacheWrite1h,
                 cost_usd_list = r.Cost, campaign = m.Campaign, folder
             });
             if (kept)
@@ -848,7 +848,7 @@ namespace BannerlordAgents.WarRoom
             {
                 kind = "council", extra, at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), poke = number, when = meta.Date, why, model = _c.Model, effort = _c.CouncilEffort,
                 thinking_cap = _c.CouncilThinkingCap, ok = answer != null, problem, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2), api_ms = r.ApiMs, ttft_ms = r.TtftMs, turns = r.Turns,
-                tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cost_usd_list = r.Cost,
+                tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cache_write_1h = r.CacheWrite1h, cost_usd_list = r.Cost,
                 context_tokens = r.InTokens + r.CacheRead + r.CacheWrite, story_words = storyWords, gap_lines = gapLines, briefing_chars = briefing.Length, situation_chars = situation.Length,
                 orders, dropped, council_in = councilIn, notes_changed = changed, campaign = _mem.Campaign, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null,
                 run = meta.Run, arm = meta.Arm, realm = meta.Realm, system_hash = _systemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,

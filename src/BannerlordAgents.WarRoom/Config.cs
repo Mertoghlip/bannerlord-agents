@@ -70,6 +70,8 @@ namespace BannerlordAgents.WarRoom
         /// call's raw.jsonl and thinking.txt; "omitted" leaves it out; empty asks nothing (Claude Code's own default).
         /// </summary>
         public string ThinkingDisplay = "summarized";
+        /// <summary>How long the prompt cache keeps what each fresh call writes (0.17.7, Claude.CacheTtl): "5m", "1h", or empty for Claude Code's default (one hour).</summary>
+        public string CacheTtl = "5m";
 
         /// <summary>What the folder's agent is (its agent.txt's kind, since 0.10): "realm" answers pokes; "lieutenant" answers the player's chat (LieutenantRoom).</summary>
         public string Kind = "realm";
@@ -100,7 +102,7 @@ namespace BannerlordAgents.WarRoom
                     if (e > 0 && !l.StartsWith("#") && l.Substring(0, e).Trim().Equals("kind", StringComparison.OrdinalIgnoreCase))
                         c.Kind = l.Substring(e + 1).Trim().Equals("lieutenant", StringComparison.OrdinalIgnoreCase) ? "lieutenant" : "realm";
                 }
-            if (!File.Exists(c.FilePath)) { c.Save(); return c; }
+            if (!File.Exists(c.FilePath)) { c.Save(); Claude.ThinkingDisplay = c.ThinkingDisplay; Claude.CacheTtl = c.CacheTtl; return c; }
             foreach (string raw in File.ReadAllLines(c.FilePath))
             {
                 string line = raw.Trim();
@@ -139,12 +141,14 @@ namespace BannerlordAgents.WarRoom
                     case "council_timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ct) && ct > 10) c.CouncilTimeoutSeconds = ct; break;
                     case "council_at_battle": c.CouncilAtBattle = v == "on" || v == "true" || v == "yes"; break;
                     case "thinking_display": c.ThinkingDisplay = v == "summarized" || v == "omitted" ? v : ""; break;
+                    case "cache_ttl": c.CacheTtl = v == "5m" || v == "1h" ? v : ""; break;
                 }
             }
             string text = File.ReadAllText(c.FilePath);
-            // a settings file from before memory, the council or the thinking's summary: the new keys are added
-            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =") || !text.Contains("thinking_display =")) c.Save();
+            // a settings file from before memory, the council, the thinking's summary or the cache's lifetime: the new keys are added
+            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =") || !text.Contains("thinking_display =") || !text.Contains("cache_ttl =")) c.Save();
             Claude.ThinkingDisplay = c.ThinkingDisplay;
+            Claude.CacheTtl = c.CacheTtl;
             return c;
         }
 
@@ -197,6 +201,9 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("council_at_battle = " + (CouncilAtBattle ? "on" : "off"));
             sb.AppendLine("# the model's thinking: summarized (the API's summary of it is kept with each call, for the training record), omitted, or empty (Claude Code's default)");
             sb.AppendLine("thinking_display = " + ThinkingDisplay);
+            sb.AppendLine("# how long the prompt cache keeps what each call writes: 5m (1.25 times the input price) or 1h (twice); empty: Claude Code's default (1h).");
+            sb.AppendLine("# Each call's own report is used for under a minute, so 5m costs less; the one long conversation (memory = conversation) keeps the default.");
+            sb.AppendLine("cache_ttl = " + CacheTtl);
             File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
         }
     }

@@ -527,6 +527,17 @@ namespace BannerlordAgents.WarRoom
             File.Delete(Path.Combine(dir, "warroom.txt"));
             Config d = Config.Load(dir);
             Check(d.ThinkingDisplay == "summarized" && File.ReadAllText(Path.Combine(dir, "warroom.txt")).Contains("thinking_display = summarized"), "by default the summary is asked for, and the setting is written for the agent's folder");
+            // 0.17.7: the prompt cache's lifetime for fresh calls
+            Check(d.CacheTtl == "5m" && Claude.CacheTtl == "5m" && File.ReadAllText(Path.Combine(dir, "warroom.txt")).Contains("cache_ttl = 5m"), "by default each call's writes go to the five-minute cache, and the setting is written for the agent's folder");
+            File.WriteAllText(Path.Combine(dir, "warroom.txt"), "model = claude-opus-5-5\nmemory = written\ncouncil = on\nroute_tool = on\nthinking_display = summarized\ncache_ttl = 1h\n");
+            Config h = Config.Load(dir);
+            Check(h.CacheTtl == "1h" && Claude.CacheTtl == "1h", "warroom.txt's cache_ttl sets the cache's lifetime for each call");
+            File.WriteAllText(Path.Combine(dir, "warroom.txt"), "model = claude-opus-5-5\nmemory = written\ncouncil = on\nroute_tool = on\nthinking_display = summarized\ncache_ttl = 3h\n");
+            Config bad = Config.Load(dir);
+            Check(bad.CacheTtl == "" && Claude.CacheTtl == "", "a cache_ttl Claude Code would not take leaves Claude Code's default");
+            File.WriteAllText(Path.Combine(dir, "warroom.txt"), "model = claude-opus-5-5\nmemory = written\ncouncil = on\nroute_tool = on\nthinking_display = summarized\n");
+            Config old = Config.Load(dir);
+            Check(old.CacheTtl == "5m" && Claude.CacheTtl == "5m" && File.ReadAllText(Path.Combine(dir, "warroom.txt")).Contains("cache_ttl = 5m"), "a settings file from before the setting gets it added, at five minutes");
             string folder = Path.Combine(root, "call-folder");
             Directory.CreateDirectory(folder);
             Room.KeepThinking(folder, new CallResult { ThinkingText = "Mass first." });
