@@ -393,6 +393,30 @@ namespace BannerlordAgents
                 Diag.Event("order", "kept", new { id = same.Id, source, poke = a.Poke, lord = lord.StringId, tool = def.Name });
                 return name + " already holds this very order (" + same.ToolText + "): it goes on as it was, not started again";
             }
+            // our siege order again for the place he already besieges or marches on, with new numbers, partners or next order (0.17.5, Nov 8, test A1:
+            // Dol Guldur gave its siege orders again three times in forty minutes to change them, and each new order took the lords out of the camp,
+            // ending a siege just begun): the siege goes on where it stands and takes the new order's numbers, partners and next order
+            if (Library.Get(def.Name) == def && def.Name == "besiege")
+            {
+                HandOrder running = Active.FirstOrDefault(x => x.Party == party && x.ToolId > 0 && x.Tool == "besiege" && x.Stops != null && x.Stops.Length > 0 && x.Stops[0]?.StringId == o.At);
+                if (running != null)
+                {
+                    foreach (SettingDef sd in def.Settings.Values)
+                        running.Settings[sd.Name] = o.Settings.TryGetValue(sd.Name, out double sv) ? Math.Max(sd.Min, Math.Min(sd.Max, sv)) : sd.Default;
+                    running.Signature = sig;
+                    running.HasNext = o.Then != null;
+                    running.ToolText = text;
+                    running.Poke = o.Poke;
+                    int tid = running.ToolId;
+                    o.Id = tid;
+                    a.ToolRun = tid;
+                    Background.PostFirst("siege order given again", () => Runner.GivenAgain(tid, o));
+                    Diag.Count("order:siege kept with the new order's numbers");
+                    Note(running, "given again", text, new { words, lords = o.Lords, settings = o.Settings, then = o.Then?.ToString(Newtonsoft.Json.Formatting.None) }, quiet: true);
+                    status = "applied";
+                    return text + Notes(notes) + ". He already holds a siege order for this place, so it goes on where it stands (not started over) with these numbers, partners and next order";
+                }
+            }
             string shown = StartTool(lord, party, def, o, realm, words);
             a.ToolRun = o.Id;
             status = "applied";

@@ -36,6 +36,24 @@ namespace BannerlordAgents
             Begun[me] = Take(me);
         }
 
+        /// <summary>
+        /// Every frame (SubModule.OnApplicationTick): a battle he is in that was not taken yet, such as one he joined after it began, is taken now (0.17.5:
+        /// Nov 8, his first battle of test A1's second start was Alenon's fight with Narsha, which he joined and did not play as a scene, so it was taken
+        /// only at its end, when Narsha's party was gone: no lords, troops or strength on her side). A look-up while he is in none; no allocation.
+        /// </summary>
+        public static void Frame()
+        {
+            if (Campaign.Current == null) return;
+            try
+            {
+                MapEvent me = MobileParty.MainParty?.MapEvent;
+                if (me == null || Begun.ContainsKey(me)) return;
+                if (Begun.Count > 50) Begun.Clear();
+                Begun[me] = Take(me);
+            }
+            catch (Exception e) { Diag.Swallowed("taking the sides of the human player's battle", e); }
+        }
+
         /// <summary>The battle scene with him began: the sides as he fights it, the ring's joiners in.</summary>
         public static void AsFought()
         {

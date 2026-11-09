@@ -91,6 +91,7 @@ namespace BannerlordAgents
             Background.DrainToUi();
             LieutenantWindow.Frame();
             MapExport.Frame();
+            PlayerBattles.Frame();
         }
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)

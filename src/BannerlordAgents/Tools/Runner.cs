@@ -327,9 +327,13 @@ namespace BannerlordAgents.Tools
             Move? m = MoveOf(j["pending"]) ?? MoveOf(j["current"]);
             if (m != null)
             {
-                t.Current = m.Value;
+                // marked a step as Issue marks it (0.17.5: on 0.17.4 a food run carried on from the save was given again unmarked, so it ended its
+                // defend once more: Lothuial's brace at Lasgalor, Nov 8 20:50)
+                Move mv = m.Value;
+                mv.Step = IsStep(t);
+                t.Current = mv;
                 t.HasCurrent = true;
-                MoveSink(id, m.Value);
+                MoveSink(id, mv);
             }
             Diag.Count("tool:carried on");
             Diag.Event("tool", "carried on", new { id, tool = def.Name, version = def.VersionText, author = def.Author, lord = o.Lord, party = o.Party, state = t.State, move = m?.ToString() });
@@ -465,6 +469,27 @@ namespace BannerlordAgents.Tools
             }
             AgentChannel.Receipt(a, "applied", t.Order.LordName + "'s " + t.Def.Name + " now has " + string.Join(", ", settings.Keys.Select(k => k + " " + ToolDef.Num(t.Settings[k])))
                                                + (notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : ""), hours);
+        }
+
+        /// <summary>
+        /// A siege order given again for the place the run already besieges or marches on (0.17.5, Orders.Issue): the run keeps its state and
+        /// memory and takes the new order's numbers (the tool's defaults for those left out), partners, next order and words.
+        /// </summary>
+        public static void GivenAgain(int id, ToolOrder o)
+        {
+            if (!ById.TryGetValue(id, out ToolInstance t)) { Diag.Event("tool", "given again, but it had ended", new { id, tool = o.Tool, lord = o.Lord }); return; }
+            t.Order.Settings.Clear();
+            foreach (KeyValuePair<string, double> kv in o.Settings) t.Order.Settings[kv.Key] = kv.Value;
+            foreach (SettingDef sd in t.Def.Settings.Values)
+                t.Settings[sd.Name] = o.Settings.TryGetValue(sd.Name, out double v) ? Math.Max(sd.Min, Math.Min(sd.Max, v)) : sd.Default;
+            t.Order.Lords.Clear();
+            t.Order.Lords.AddRange(o.Lords);
+            t.LordsList = null;
+            t.Order.Then = o.Then;
+            t.Order.Words = o.Words;
+            t.Order.Why = o.Why;
+            t.Order.Poke = o.Poke;
+            Diag.Event("tool", "given again", new { id, tool = t.Def.Name, lord = t.Order.Lord, state = t.State, lords = t.Order.Lords, settings = new Dictionary<string, double>(t.Settings) });
         }
 
         private static string SettingNames(ToolDef d) => string.Join(", ", d.Settings.Keys);
