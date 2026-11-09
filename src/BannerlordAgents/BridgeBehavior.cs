@@ -145,6 +145,9 @@ namespace BannerlordAgents
             // the lords whose game AI is off in the save as loaded, before any order of ours is carried on (0.13.10: after it, the sweep counted
             // the carried-on lords as caught by the save, and the past hand-backs' check raised load_frozen for 99 of them, Oct 29)
             string frozenAtLoad = Orders.FrozenAtLoad();
+            // an intervention by hand left for this load (0.17.4): which of our tools' carried runs take the library's version, before they are carried on
+            try { Intervention.AtLoad(Paths.Data(id), save); }
+            catch (Exception e) { Diag.Error("the intervention left for this load", e); }
             // the orders written down at this save carried on (0.13.5, CarryOn; after the reset, which clears the tools in force)
             try { CarryOn.AtLoad(save, loadedAt); }
             catch (Exception e) { Diag.Error("carrying on the orders written at the save", e); }

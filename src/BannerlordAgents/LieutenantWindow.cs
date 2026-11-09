@@ -98,6 +98,8 @@ namespace BannerlordAgents
             {
                 // the lieutenant's after-load work, on the map once its agent is set up (0.16: its talks in other saves, the words left for this load; a flag's check otherwise)
                 if (Lieutenant.AfterLoadWaiting && OnMap()) Lieutenant.AfterLoad();
+                // an intervention by hand left for this load (0.17.4): its orders, a second after the first frame on the map
+                if (Intervention.Waiting && OnMap()) Intervention.AfterLoad();
                 if (_openAsked)
                 {
                     _openAsked = false;

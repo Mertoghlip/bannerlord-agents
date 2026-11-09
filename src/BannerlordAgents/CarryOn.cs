@@ -165,6 +165,7 @@ namespace BannerlordAgents
         {
             Told.Clear();
             var carried = new Dictionary<string, int>(StringComparer.Ordinal);
+            var upgraded = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (KeyValuePair<JObject, JObject> kv in tools)
             {
                 string realm = (string)kv.Key["realm"];
@@ -172,7 +173,12 @@ namespace BannerlordAgents
                 string why;
                 try { why = Runner.Resume(kv.Key, kv.Value); }
                 catch (Exception e) { why = "it could not be carried on (" + e.Message + ")"; Diag.Error("taking up a tool from the save", e); }
-                if (why == null) { carried.TryGetValue(realm ?? "", out int n); carried[realm ?? ""] = n + 1; continue; }
+                if (why == null)
+                {
+                    carried.TryGetValue(realm ?? "", out int n); carried[realm ?? ""] = n + 1;
+                    if (Runner.LastResumeUpgraded) { upgraded.TryGetValue(realm ?? "", out int u); upgraded[realm ?? ""] = u + 1; }
+                    continue;
+                }
                 string what = ((string)kv.Key["order"]?["lord_name"] ?? "a lord") + "'s " + ((string)kv.Key["def"]?["name"] ?? "order");
                 if (realm != null) { if (!refused.TryGetValue(realm, out List<string> l)) refused[realm] = l = new List<string>(); l.Add(what + " (" + why + ")"); }
                 Diag.Event("tool", "not carried on", new { id, why });
@@ -183,6 +189,10 @@ namespace BannerlordAgents
                 carried.TryGetValue(realm, out int n);
                 refused.TryGetValue(realm, out List<string> no);
                 string text = n > 0 ? " The game was loaded from a save: the " + (n == 1 ? "order" : n + " orders") + " you had in force then carry on as they stood (YOUR ORDERS IN FORCE lists them)." : " The game was loaded from a save.";
+                // an intervention by hand at this load (0.17.4): the orders that took the library's newer version, in the order's own terms
+                if (upgraded.TryGetValue(realm, out int up) && up > 0)
+                    text += " " + (up == 1 ? "One of them" : up + " of them") + " (" + string.Join(", ", Runner.UpgradeAtLoad) + ") now follow" + (up == 1 ? "s" : "")
+                            + " that order's newer version from this load on: each goes on from where it stood, a run to carry food to its holding no longer ends it, and it feeds a holding only up to what its stores hold when full.";
                 if (no != null && no.Count > 0) text += " Not carried on: " + string.Join("; ", no) + ".";
                 Told[realm] = text;
             }

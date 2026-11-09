@@ -45,6 +45,9 @@ namespace BannerlordAgents
 
         public static void Reset() => Errands.Clear();
 
+        /// <summary>A tool's food run is over (0.17.4, Orders.StepDone): its next one starts afresh, market and all.</summary>
+        public static void Forget(int toolId) => Errands.Remove(toolId);
+
         private static Errand Of(Orders.HandOrder o)
         {
             if (!Errands.TryGetValue(o.ToolId, out Errand e)) Errands[o.ToolId] = e = new Errand();

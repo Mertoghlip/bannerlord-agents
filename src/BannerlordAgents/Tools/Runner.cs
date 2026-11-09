@@ -15,6 +15,11 @@ namespace BannerlordAgents.Tools
     {
         public string Verb, Place, Party;
         public float X, Y, R;
+        /// <summary>
+        /// A step of a longer tool (0.17.4): its state has rules to leave it, so a move that ends on the game's side (supply) hands back to
+        /// those rules (Runner.StepDone, which makes "arrived" true) instead of ending the tool, as it does for the supply order itself.
+        /// </summary>
+        public bool Step;
 
         public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party && Math.Abs(R - o.R) < 0.01f
                                     && ((Verb != "toward" && Verb != "post" && Verb != "shadow") || (Math.Abs(X - o.X) < 1f && Math.Abs(Y - o.Y) < 1f));
@@ -68,6 +73,8 @@ namespace BannerlordAgents.Tools
         public bool Entered, Finished;
         public Move Current, Pending;
         public bool HasCurrent, HasPending;
+        /// <summary>The move in force was a step that the game's side has finished (0.17.4, StepDone): "arrived" is true until the next move.</summary>
+        public bool MoveDone;
         /// <summary>The safety rule: where the lord shelters and from whom (Running: no refuge would hold, so it falls back outside); or where it buys food.</summary>
         public string Shelter, ShelterFrom, SupplyAt;
         /// <summary>The relief rule (0.13.15): the fight the lord rides to relieve (its battle's key) and the enemy party he strikes there.</summary>
@@ -126,6 +133,11 @@ namespace BannerlordAgents.Tools
         public static Action<string, StormRule> StormSink = StormGate.Set;
 
         public static int Count => ById.Count;
+
+        /// <summary>Our tools whose carried runs take the library's current version at this load (0.17.4, set by Intervention before the runs resume).</summary>
+        public static readonly HashSet<string> UpgradeAtLoad = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Did the last Resume give its run the library's version (UpgradeAtLoad)? Worker only (CarryOn counts them per realm).</summary>
+        public static bool LastResumeUpgraded;
 
         /// <summary>
         /// The guards on an agent's own tool (0.13, docs/PLAN-0.13.md A5; to be confirmed in testing): at most CallBacksPerDay call-backs an
@@ -254,6 +266,7 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public static string Resume(JObject j, JObject record)
         {
+            LastResumeUpgraded = false;
             int id = (int?)j?["id"] ?? 0;
             if (id <= 0 || !(j["def"] is JObject dj) || !(j["order"] is JObject oj)) return "its record is incomplete";
             string state = (string)j["state"];
@@ -263,6 +276,17 @@ namespace BannerlordAgents.Tools
             def.WrittenAt = (int?)dj["written_at"] ?? -1;
             def.OneOff = (bool?)dj["one_off"] ?? false;
             def.Hash = (string)dj["hash"];
+            // an intervention at this load (0.17.4, Intervention): a tool of ours named for it takes the library's version now, keeping its state,
+            // settings and memory (the state when the new version has it, else its first)
+            if (UpgradeAtLoad.Contains(def.Name ?? "") && def.Author == "ours" && (bool?)dj["given_with"] != true
+                && Library.Get(def.Name) is ToolDef now && now.Json != def.Json)
+            {
+                string kept = state != null && now.States.ContainsKey(state) ? state : now.Start;
+                Diag.Event("tool", "upgraded at load", new { id, tool = def.Name, lord = (string)oj["lord"], state, kept });
+                LastResumeUpgraded = true;
+                def = now;
+                state = kept;
+            }
             if (state == null || !def.States.ContainsKey(state)) return "its state (" + (state ?? "none") + ") is not one of its tool's";
             var o = new ToolOrder
             {
@@ -759,11 +783,29 @@ namespace BannerlordAgents.Tools
             if (!t.HasPending) return;
             t.HasPending = false;
             Move m = t.Pending;
-            if (t.HasCurrent && t.Current.Same(m)) return;
+            if (t.HasCurrent && t.Current.Same(m) && !t.MoveDone) return;
+            m.Step = IsStep(t);
             t.Current = m;
             t.HasCurrent = true;
+            t.MoveDone = false;
             t.MoveSince = w.Hours;
             MoveSink(t.Id, m);
+        }
+
+        /// <summary>Does the tool's state have rules to leave it (0.17.4)? Then its move is one step of the tool, not the whole of it.</summary>
+        private static bool IsStep(ToolInstance t)
+            => !t.Finished && t.State != null && t.Def.States.TryGetValue(t.State, out StateDef sd) && sd.When.Count > 0;
+
+        /// <summary>
+        /// The game's side finished a step's move (0.17.4, Orders.StepDone: a supply move within defend's feed or brace): the tool goes on,
+        /// its rules reading "arrived" as true until its next move. Ignored when the tool has moved on meanwhile.
+        /// </summary>
+        public static void StepDone(int id, string why)
+        {
+            if (!ById.TryGetValue(id, out ToolInstance t)) return;
+            if (!t.HasCurrent || t.Current.Verb != "supply") return;
+            t.MoveDone = true;
+            Diag.Event("tool", "step done", new { id, tool = t.Def.Name, lord = t.Order.Lord, state = t.State, why });
         }
 
         /// <summary>
@@ -775,6 +817,7 @@ namespace BannerlordAgents.Tools
         {
             // the state's own move: the one about to be given when a state was just entered, else the one in force
             if ((!t.HasCurrent && !t.HasPending) || me == null) return false;
+            if (t.MoveDone && !t.HasPending) return true;   // a step the game's side finished (0.17.4)
             Move m = t.HasPending ? t.Pending : t.Current;
             switch (m.Verb)
             {
@@ -1796,6 +1839,12 @@ namespace BannerlordAgents.Tools
                             SettlementRow h = H(a[0]);
                             if (h == null || h.Faction != _w.Realm || h.Food < 0) return null;
                             return h.FoodPerDay > 0 ? (object)Math.Round(h.Food / h.FoodPerDay, 1) : 999.0;
+                        }
+                    case "food_full_days_at":
+                        {
+                            SettlementRow h = H(a[0]);
+                            if (h == null || h.Faction != _w.Realm || h.Food < 0) return null;
+                            return h.FoodPerDay > 0 ? (object)Math.Round(h.FoodCap / h.FoodPerDay, 1) : 999.0;
                         }
                     case "raided": return H(a[0])?.VillageState == "BeingRaided";
                     case "looted": return H(a[0])?.VillageState == "Looted";

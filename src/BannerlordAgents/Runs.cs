@@ -256,6 +256,15 @@ namespace BannerlordAgents
             RunFiles.Write(_run);
         }
 
+        /// <summary>An intervention by hand at a load (0.17.4, Intervention): a mark against the run, with its day, so a reader knows the test was touched.</summary>
+        public static void Intervened(string text)
+        {
+            if (!Active) return;
+            double h = CampaignTime.Now.ToHours;
+            _run.Flag(Now(), h, "intervention", text + " (day " + RunRules.Day(h, _run.H0) + ")");
+            RunFiles.Write(_run);
+        }
+
         /// <summary>agents.run note (text): a line of your own in the run, with its day.</summary>
         public static string Note(string text)
         {

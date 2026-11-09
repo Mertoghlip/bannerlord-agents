@@ -28,9 +28,9 @@ namespace SmokeTest
                   + string.Join("; ", def?.Problems ?? new List<string>()));
             Check(Library.Problems().Count == 0 && def.Describe().Contains("may be left out: then the holding at, and its villages, nearest first"),
                   "the library passes its checks with it, and says the loop may be left out");
-            Check(Library.Get("recruit").IsRecruiting && !def.IsRecruiting
+            Check(Library.Get("recruit").IsRecruiting && !def.IsRecruiting && !Library.Get("rest").IsRecruiting
                   && ToolDef.FromJson("{\"name\": \"round_up\", \"takes\": {\"places\": \"friendly_holding: the round\"}, \"start\": \"go\", \"states\": {\"go\": {\"do\": \"recruit at places[0]\"}}}", "round_up", "orcs").IsRecruiting,
-                  "a recruiting order is ours or one whose first move recruits; defend, which guards and recruits on the way, is not");
+                  "a recruiting order is ours or one whose first move recruits; defend, which guards and recruits on the way, is not, nor rest, which heals too");
 
             var moves = new List<KeyValuePair<int, Move>>();
             var released = new List<int>();
@@ -171,6 +171,7 @@ namespace SmokeTest
                   "an answer's wage orders are carried out first, so a recruit order is checked against the cap the same answer sets: " + string.Join(",", sorted.Select(o => o.Do)));
 
             GeneralRulesTests();
+            DefendStepTests();
             InPersonTests();
             LieutenantChatsTests(root);
         }

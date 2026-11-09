@@ -75,6 +75,8 @@ namespace BannerlordAgents
             public Dictionary<string, double> Settings = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             /// <summary>The supply move's holding (0.13.19), while Place is the market he buys at on the way.</summary>
             public Settlement SupplyFor;
+            /// <summary>The move is a step of a longer tool (0.17.4, Runner's Move.Step): a supply move that ends hands back to the tool's rules instead of ending the order.</summary>
+            public bool Step;
             /// <summary>
             /// The holdings a tool order names (its at, then its places, 0.16): the hourly copy counts the volunteers he could take at each
             /// (Offers, the language's offers), so a loop can pass by a stop that has nothing for him.
@@ -843,6 +845,7 @@ namespace BannerlordAgents
             HandOrder o = Active.FirstOrDefault(x => x.ToolId == toolId);
             if (o == null || o.Party == null || !o.Party.IsActive) return;   // the order ended meanwhile
             o.Verb = m.Verb;
+            o.Step = m.Step;
             o.Place = m.Place != null ? Settlement.Find(m.Place) : null;
             o.Target = m.Party != null ? FindPartyById(m.Party) : null;
             o.X = m.X;
@@ -1434,6 +1437,13 @@ namespace BannerlordAgents
                 {
                     // the supply order (0.13.19): buys at a market on the way when he carries too little, then hands the food over
                     string supplyEnd = Supply.Step(o, now, out string supplyKey, out bool movedOn);
+                    if (supplyEnd != null && o.Step && o.ToolId > 0)
+                    {
+                        // a step of a longer tool (0.17.4: defend's feed and brace): the food run is over, the tool goes on by its own rules
+                        StepDone(o, supplyEnd, supplyKey, now);
+                        changed = true;
+                        continue;
+                    }
                     if (supplyEnd != null)
                     {
                         EndMove(o, supplyEnd, supplyKey, Supply.Reached(supplyKey));
@@ -1968,6 +1978,34 @@ namespace BannerlordAgents
         }
 
         /// <summary>A supply or recruit order ended here on the game's side: the news says what becomes of its next order, and the runner starts it when reached (0.14.2).</summary>
+        /// <summary>
+        /// A supply move that was one step of a longer tool is over (0.17.4). Test A1's second start, Nov 8: the standard defend's feed and brace
+        /// ended the whole order when the food was handed over or the stores were full (5 of them in the first half day), since a supply move's end
+        /// was taken for its tool's end, as it is for the supply order itself. Now the lord rides into the holding (or holds, where he no longer
+        /// may), and the tool's rules read "arrived" and go on.
+        /// </summary>
+        private static void StepDone(HandOrder o, string why, string key, double now)
+        {
+            Supply.Forget(o.ToolId);
+            Settlement h = o.SupplyFor;
+            o.Verb = "enter";
+            o.Place = h;
+            o.Target = null;
+            o.HasPoint = false;
+            o.ReissueTimes.Clear();
+            o.StuckAlarmed = o.FightAlarmed = false;
+            if (h == null || !Possible(o)) { o.Verb = "hold"; o.Place = null; }
+            o.Arrived = o.Verb == "hold" || (h != null && At(o.Party, h));
+            o.ArrivedAt = o.Arrived ? now : -1;
+            Apply(o);
+            o.BestDistance = Distance(o) ?? float.MaxValue;
+            o.LastProgressAt = now;
+            Diag.Event("order", "step done", new { id = o.Id, tool = o.Tool, lord = o.Lord?.StringId, key, why, then = Describe(o) });
+            Log.Line("order #" + o.Id + " [" + o.Source + "] " + o.Tool + ": food step over (" + why + "); " + Describe(o));
+            int tid = o.ToolId;
+            Background.PostFirst("tool step done", () => Runner.StepDone(tid, why));
+        }
+
         private static void EndMove(HandOrder o, string why, string key, bool reached)
             => End(o, !o.HasNext ? why : why + (reached ? "; its next order starts" : ", so its next order does not start"), key, reached);
 

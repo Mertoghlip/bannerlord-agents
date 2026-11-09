@@ -161,6 +161,8 @@ namespace BannerlordAgents.Tools
             ["ruler_target"] = 0,
             // 0.13.20: a castle's or town's food (the supply order)
             ["food_at"] = 1, ["food_days_at"] = 1,
+            // 0.17.4: the days its stores hold when full (a castle of 800 food eating 270 a day under siege holds 3, whatever an order asks for)
+            ["food_full_days_at"] = 1,
             // 0.16: the volunteers a stop of his order has for him, or for another lord of the realm on an order naming it
             ["offers"] = 1, ["offers_of"] = 2,
             // 0.16, the lieutenant's orders' ways made general rules: one weighing of a fight for every order, just enough men, and shortcuts for a group
@@ -180,6 +182,7 @@ namespace BannerlordAgents.Tools
             ["ruler_target"] = "ruler_target(): the enemy party your realm's ruler is attacking in person now, none when he is not",
             ["food_at"] = "food_at(h): the food in a castle or town of yours now (none for a village or another realm's)",
             ["food_days_at"] = "food_days_at(h): how many days a castle or town of yours would last a siege on its food now, at what it eats under siege (none for a village or another realm's)",
+            ["food_full_days_at"] = "food_full_days_at(h): how many days it would last a siege with its stores full, the most food can make it last: a holding at that is fed no more (none for a village or another realm's)",
             ["offers"] = "offers(h): how many volunteers waiting at h he could take now, by the game's own rule for how far down each notable's line he may recruit (his standing with the notable, his realm, his skills); 0 where he may not recruit (an enemy's holding, a siege, a raid); counted each hour for the at and places of his order, none for any other holding. It leaves out his purse: can_recruit says whether he can pay. Above 80% of his ranks he takes only his clan's own troop lines, so he may take fewer",
             ["offers_of"] = "offers_of(lord, h): the same for another of your lords, at a holding his own order names (none otherwise)",
             ["fight_hours"] = "fight_hours(p): how many hours a battle between your side and p would last, by the game's own pace of battle for the two strengths (at least 1)",
@@ -208,6 +211,8 @@ namespace BannerlordAgents.Tools
             get
             {
                 if (Start == null || !States.TryGetValue(Start, out StateDef st) || st.Do == null) return false;
+                // our rest heals the wounded too, which needs no gold (0.17.4: Nov 8, an orc lord's rest was refused at his gold floor)
+                if (Author == "ours" && Name == "rest") return false;
                 return st.Do.Verb == "tour" || st.Do.Verb == "recruit" || st.Do.Verb == "recruit_here";
             }
         }
