@@ -2302,3 +2302,16 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Outside the repository:**
   - The four agents' `warroom.txt` (Misty Mountain Orcs, Dol Guldur, the lieutenant, Kingdom of Arnor and Gondor) rewritten by the war room at its start with `cache_ttl = 5m` and `council_at_battle = on` (that one was missing from the files and already on by default); every other setting unchanged; backups `warroom.txt.bak-20261109-before-cache-ttl`.
   - War rooms and dashboard stopped for the build and started again.
+
+## Tuesday, November 10
+
+### 18:32 · The fresh-call design frozen at tag `fresh-calls-0.17.7`; test A1 stops at day 12 · commit (this entry's)
+- **Why:** a fresh call at every wake takes too much of my plan to keep testing on it. I'm moving the realm agents to one continuous conversation each, which sets its own wakes and its own strategy reviews and compacts at quiet moments. It is still being designed; nothing is built yet. The fresh-call design stays runnable, so later tests can compare the two. Test A1's second start (run 20261108-2016-A) stops at day 12 (save TEST A1, Autumn 10, 1087).
+- **What:** git tag `fresh-calls-0.17.7` on commit 38f939a: game module 0.17.6, war room 0.17.7. No code changes. To run it again: check out the tag and build, or use the builds in the backup below, and restore the agents' folders from it.
+- **Numbers (Nov 8, 20:15–22:35, Claude Code list prices):**
+  - The agents: $59.67 (Misty Mountain Orcs $24.20, Dol Guldur $28.46, the lieutenant $7.01). The orcs woke about 29 times an hour of play (22 answers, 7 councils) and Dol Guldur about 37.
+  - The Claude Code session watching and building beside them: $71.87, more than the agents (677 requests, each reading about 342,000 tokens of its own conversation from the cache).
+  - Projected for one continuous conversation per realm from the same calls: at the same number of wakes and compacting at 500,000 tokens, about the same as now (orcs $10.60 an hour against $10.76, Dol Guldur $12.50 against $12.78). Compacting at 250,000 tokens saves about 17%, half the wakes about half, a third of the wakes with smaller strategy reviews about three quarters.
+- **Outside the repository:**
+  - Backup `D:\BannerlordAgents-backup\fresh-call-architecture-20261110`: the four agents' folders as they stand (instructions, settings, memory, channels), the war room and dashboard builds, the module build 0.17.6, and this repository's CLAUDE.md and agent/CLAUDE.template.md (both kept out of git).
+  - The game watch is stopped. The war rooms and dashboard are still running.

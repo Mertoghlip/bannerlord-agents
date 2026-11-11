@@ -32,3 +32,4 @@ The proposal budgets about 90 hours over nine weeks (see [PLAN.md](PLAN.md)). Ad
 | Nov 8 | | Version 0.17.5: a siege order given again keeps the siege (Dol Guldur broke three of its own); carried food runs marked as steps; my battle taken as I join it | |
 | Nov 8 | | Version 0.17.6: the lieutenant's window shows only my words and its answers (its orders' news and refusals kept for it, not shown) | |
 | Nov 9 | | Where the agents' usage goes (Nov 8: 204 calls; writing into the prompt cache was 71-74% of the cost, almost all of it each call's own report); war room 0.17.7: each call's writes to the five-minute cache instead of the one-hour one, about 22% less on the same calls | |
+| Nov 10 | | Test A1 stopped at day 12; the fresh-call design frozen at tag fresh-calls-0.17.7 with a backup of the agents and builds; what continuous conversations would use of my plan, projected from Nov 8's calls | |

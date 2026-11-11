@@ -14,6 +14,7 @@ Started Tue Oct 6, 2026, the day the proposal went in; updated Thu Oct 8. This i
     - **C2:** an agent ruling my kingdom against the game's own AI.
   - These use the realms already playing in my campaign. The coalition waits.
 - **Next build, 0.13 (Oct 28, to review):** diplomacy, the agents writing their own tools, and the training record of both my moves and the agents': [PLAN-0.13.md](PLAN-0.13.md).
+- **Changed Nov 10:** fresh calls at every wake cost too much of my plan, so the realm agents move to one continuous conversation each, setting their own wakes and strategy reviews (being designed, not built). The fresh-call design is frozen at git tag `fresh-calls-0.17.7` for later comparison ([CHANGELOG.md](CHANGELOG.md), Nov 10). Test A1's second start stopped at day 12.
 - **Final report and talk, Tue Dec 1:** tool writing, the trained small models, what my play adds, and the full comparison for the everyday gamer.
 - **Budget:** about 90 hours. [worklog.md](worklog.md) keeps the count.
 
