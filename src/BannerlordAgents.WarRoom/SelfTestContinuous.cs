@@ -106,16 +106,15 @@ namespace BannerlordAgents.WarRoom
             talk.Restore(mark);
             Check(!talk.Sent.ContainsKey("NEW"), "what a message marked as shown is given back when it never reached the conversation");
 
-            // when a review is due
+            // when a review is due (0.18.2): only at the hour the agent set, however soon after the last
             mem.SessionId = "s1";
             talk.LastReviewHours = 1000;
-            talk.NextReviewHours = 1018;
-            Check(room.ReviewDue(1010) == null && room.ReviewDue(1018) == "the hour you set for it has come", "a review sits at the hour the agent set");
-            room.WantReview("Orc Keep is besieged by Thalion");
-            Check(room.ReviewDue(1003) == null && room.ReviewDue(1006) == "Orc Keep is besieged by Thalion", "a big event calls one, but not within the gap");
-            room.WantReview(null);
+            talk.NextReviewHours = 1001;
+            Check(room.ReviewDue(1000.5) == null && room.ReviewDue(1001) == "the hour you set for it has come", "a review sits at the hour the agent set, even an hour after the last");
             talk.NextReviewHours = double.NaN;
-            Check(room.ReviewDue(1023) == null && room.ReviewDue(1024) == "24 hours have passed since your last review", "with no hour set, one a day");
+            Check(room.ReviewDue(1024) == null && room.ReviewDue(1500) == null, "with no hour set, none sits: no daily review of its own");
+            Check(room.Review_In("{\"review_in\": 0.2}", 2000, true) == 2001 && room.Review_In("{\"review_in\": 500}", 2000, true) == 2240 && double.IsNaN(room.Review_In("{\"orders\": []}", 2000, true))
+                  && room.Review_In("{\"council_in\": 6}", 2000, false) == 2006, "review_in is kept between 1 and 240 hours; a review that sets none leaves none set; a wake's answer may set it too");
 
             // a reload: at the hour the conversation reached it carries on; an earlier save begins again
             mem.LoadId = "L1";

@@ -99,7 +99,7 @@ namespace BannerlordAgents.WarRoom
     /// <summary>
     /// Continuous agents (0.18, docs/WARROOM.md#continuous-agents-since-018): one conversation per realm instead of a fresh call per poke. The game wakes the agent only
     /// on its own watches, their check-ins, the lords they follow and the locked wakes (agent.txt: wake = self); each wake's message is the news and what bears on it,
-    /// less what the conversation already holds (Slim). Strategy reviews sit in the same conversation, at the hour the agent sets (review_in) or after a big event.
+    /// less what the conversation already holds (Slim). Strategy reviews sit in the same conversation, only at the hour the agent sets (review_in).
     /// The conversation ends only with the agent's handover, written as the player's battle begins (the clock stands still) or as the game closes, once it has
     /// grown past its size (compact_at_tokens, compact_at_close_tokens), or at any wake past compact_hard_tokens; the next wake begins a new conversation from the
     /// handover, the notes, the chronicle since and a fresh briefing. Every call of a conversation has the same system prompt, tools, model, effort and thinking cap,
@@ -108,7 +108,6 @@ namespace BannerlordAgents.WarRoom
     internal sealed partial class Room
     {
         private Talk _talk;
-        private string _reviewWanted;
         private DateTime _reviewFailedAt = DateTime.MinValue, _gameLooked = DateTime.MinValue, _spareWord = DateTime.MinValue;
         private bool _gameSeen;
 
@@ -206,18 +205,6 @@ namespace BannerlordAgents.WarRoom
                 AfterContinuous(answer, meta?.Hours ?? _pokeHours, opening);
                 File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
-            // a big event calls a strategy review (not the first look: its report is the whole realm already)
-            if (!firstLook)
-                foreach (string w in _c.CouncilAfter)
-                {
-                    if (w.StartsWith("First look", StringComparison.OrdinalIgnoreCase)) continue;
-                    int i = why.IndexOf(w, StringComparison.OrdinalIgnoreCase);
-                    if (i < 0) continue;
-                    string line = why.Substring(why.LastIndexOf('\n', i) + 1);
-                    int end = line.IndexOf('\n');
-                    _reviewWanted = (end > 0 ? line.Substring(0, end) : line).Trim().TrimStart('-', ' ');
-                    break;
-                }
             _talk.WakesByDay[day] = today + 1;
             if (_talk.WakesByDay.Count > 30) foreach (string k in _talk.WakesByDay.Keys.OrderBy(k => k.Length).ThenBy(k => k, StringComparer.Ordinal).Take(_talk.WakesByDay.Count - 30).ToList()) _talk.WakesByDay.Remove(k);
             _talk.Wakes++;
@@ -234,19 +221,24 @@ namespace BannerlordAgents.WarRoom
             return r;
         }
 
-        /// <summary>What an answer sets beyond its orders: the next strategy review's hour (review_in, or council_in), and for a conversation's first answer, that it was a review.</summary>
+        /// <summary>The range of review_in, in in-game hours: at most one review an hour, and none set further than ten days ahead.</summary>
+        internal const double ReviewInMin = 1, ReviewInMax = 240;
+
+        /// <summary>
+        /// What an answer sets beyond its orders: the next strategy review's hour (review_in, or council_in), and for a review's answer, that a review sat. Since 0.18.2 only the
+        /// agent sets when a review sits: a review that sets no next hour leaves none set (one set earlier by a wake's answer stands).
+        /// </summary>
         private void AfterContinuous(JsonObject answer, double hours, bool review)
         {
             double? next = null;
             foreach (string k in new[] { "review_in", "council_in" })
-                if (answer[k] is JsonValue v && v.TryGetValue(out double h)) { next = Math.Max(4, Math.Min(72, h)); break; }
+                if (answer[k] is JsonValue v && v.TryGetValue(out double h)) { next = Math.Max(ReviewInMin, Math.Min(ReviewInMax, h)); break; }
             if (double.IsNaN(hours)) return;
             if (review)
             {
                 _talk.LastReviewHours = hours;
                 _talk.Reviews++;
-                _talk.NextReviewHours = hours + (next ?? _c.CouncilEveryHours);
-                _reviewWanted = null;
+                _talk.NextReviewHours = next != null ? hours + next.Value : double.NaN;
             }
             else if (next != null) _talk.NextReviewHours = hours + next.Value;
         }
@@ -403,7 +395,7 @@ namespace BannerlordAgents.WarRoom
                 if (briefing.Length > 0) sb.AppendLine(briefing.Trim()).AppendLine();
                 if (situation.Length > 0) sb.AppendLine(Trim(situation, meta?.Hours ?? _pokeHours, review: false, opening: true).Trim()).AppendLine();
             }
-            sb.AppendLine("Begin with a strategy review in this answer (see \"Strategy reviews\" in your instructions): set your watches, and \"review_in\" for the next. " + (follows != null ? "The " + follows + " follows." : "Your first look follows."));
+            sb.AppendLine("Begin with a strategy review in this answer (see \"Strategy reviews\" in your instructions): set your watches, and \"review_in\" for your next review (nothing else calls one). " + (follows != null ? "The " + follows + " follows." : "Your first look follows."));
             sb.AppendLine();
             return sb.ToString();
         }
@@ -600,17 +592,14 @@ namespace BannerlordAgents.WarRoom
 
         // ---------- strategy reviews ----------
 
-        /// <summary>Why a strategy review should sit now, or null: a big event (past the gap), the hour the agent set for it, or council_every_hours since the last.</summary>
+        /// <summary>
+        /// Why a strategy review should sit now, or null: only the hour the agent set for it (0.18.2). No big event, daily default or gap between reviews calls one: the agent
+        /// alone decides when it reviews its war, and without an hour set none sits.
+        /// </summary>
         internal string ReviewDue(double nowHours)
         {
             if (!_c.Council || _talk == null || !_talk.Started || double.IsNaN(nowHours)) return null;
-            bool gapOk = double.IsNaN(_talk.LastReviewHours) || nowHours - _talk.LastReviewHours >= _c.CouncilGapHours - 1e-6;
-            if (!gapOk) return null;
-            if (_reviewWanted != null) return _reviewWanted;
-            if (!double.IsNaN(_talk.NextReviewHours) && nowHours >= _talk.NextReviewHours - 1e-6) return "the hour you set for it has come";
-            if (double.IsNaN(_talk.NextReviewHours) && (double.IsNaN(_talk.LastReviewHours) || nowHours - _talk.LastReviewHours >= _c.CouncilEveryHours - 1e-6))
-                return double.IsNaN(_talk.LastReviewHours) ? "no review has sat in this conversation yet" : Math.Round(nowHours - _talk.LastReviewHours) + " hours have passed since your last review";
-            return null;
+            return !double.IsNaN(_talk.NextReviewHours) && nowHours >= _talk.NextReviewHours - 1e-6 ? "the hour you set for it has come" : null;
         }
 
         private void ReviewIfDue()
@@ -863,7 +852,8 @@ namespace BannerlordAgents.WarRoom
 
         internal Talk TalkNow => _talk;
         internal void UseForTest(Memory m, Talk t) { _mem = m; _talk = t; }
-        internal void WantReview(string why) => _reviewWanted = why;
+        /// <summary>For the self-test: the next review's hour an answer would leave (review true: the answer is a review's).</summary>
+        internal double Review_In(string answer, double hours, bool review) { _talk.NextReviewHours = double.NaN; AfterContinuous((JsonObject)JsonNode.Parse(answer), hours, review); return _talk.NextReviewHours; }
 
         // ---------- helpers ----------
 

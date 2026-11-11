@@ -2344,3 +2344,15 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The request to write it carries the game's own list (`Room.HandoverFacts`): the orders in force, the lords with no order and the watches, so the agent writes those parts from facts rather than memory. While the game runs, a fresh briefing is asked for first. At the game's close, the list comes from the newer of the last situation report and the last wake's report. The handover's line in `calls.jsonl` gets `facts_chars`.
 - **Checks:** war room self-test passed. New checks: the list from the situation report and its briefing when they are newer, from the last wake's report when that is newer, none without an orders section, and the nine parts in order over the realm's instructions. The game module is unchanged (0.18.0), so nothing was installed into the game.
 - **Outside the repository:** `warroom-continuous.md` in `orc-war-council` and `dolguldur-war-council` replaced by the new template (old copies `warroom-continuous.md.bak-20261110-before-orders-part`). War rooms and dashboard stopped for the build and started again on 0.18.1.
+
+## Wednesday, November 11
+
+### 10:40 · War room 0.18.2: the agent alone sets when its strategy reviews sit · commit (pending)
+- **Why:** an experiment. The agent decides when it reviews its war, with no review called for it.
+- **What:**
+  - A strategy review sits only at the hour the agent set with `review_in`, now 1 to 240 in-game hours from its answer (was 4 to 72), given at a review or at any wake.
+  - Gone: the review after a big event, the daily review when no hour is set, and the 6 hours between reviews. A review that sets no next hour leaves none set. Big events still wake the agent, and it can set `"review_in": 1` to review within the hour.
+  - The first answer of each conversation is still a review.
+  - The instructions say so (`agent/warroom-continuous.template.md`: Strategy reviews, its step 7, and How you answer), as does the line that opens a conversation.
+- **Checks:** war room self-test passed. New checks: a review sits an hour after the last when set so; none sits with no hour set; `review_in` is kept between 1 and 240; a review that sets none leaves none set; a wake's answer may set it. Nothing was installed into the game (the module is unchanged, 0.18.0).
+- **Outside the repository:** `warroom-continuous.md` in `orc-war-council` and `dolguldur-war-council` replaced by the new template (old copies `warroom-continuous.md.bak-20261111-before-agent-set-reviews`). The war rooms had stopped overnight; all of them and the dashboard were started on 0.18.2.
