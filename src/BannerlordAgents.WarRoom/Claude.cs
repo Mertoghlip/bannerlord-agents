@@ -19,6 +19,11 @@ namespace BannerlordAgents.WarRoom
         public long InTokens, OutTokens, CacheRead, CacheWrite, Thinking;
         /// <summary>Of CacheWrite, the tokens written to the one-hour cache (usage.cache_creation.ephemeral_1h_input_tokens); the rest went to the five-minute one.</summary>
         public long CacheWrite1h;
+        /// <summary>
+        /// The conversation's size after the call (0.18, continuous agents): the last request's input, cache reads and writes, and its output, as its own message reported them.
+        /// The result's usage sums every request of the call, so a call with three steps would count the conversation three times. 0 when no message said.
+        /// </summary>
+        public long LastContext;
         public List<string> Denied = new List<string>();
     }
 
@@ -88,7 +93,9 @@ namespace BannerlordAgents.WarRoom
 
         /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools", and for the lieutenant's answers, which alone say "say" and "carry_out".</summary>
         internal static int RunawayLimit(string written) => written.Contains("\"say\"") || written.Contains("\"carry_out\"") ? RunawayCharsLieutenant
-                                                            : written.Contains("\"tools\"") || written.Contains("\"propose\"") ? RunawayCharsWithTools : RunawayChars;
+                                                            : written.Contains("\"tools\"") || written.Contains("\"propose\"") || written.TrimStart().StartsWith("HANDOVER", StringComparison.Ordinal)
+                                                              // a continuous agent's handover (0.18) runs to a few thousand words
+                                                              ? RunawayCharsWithTools : RunawayChars;
 
         /// <summary>
         /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on
@@ -111,7 +118,7 @@ namespace BannerlordAgents.WarRoom
         public static string CacheTtl = "5m";
 
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
-                                     string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null)
+                                     string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null, IDictionary<string, string> env = null)
         {
             var r = new CallResult();
             var psi = new ProcessStartInfo(exe)
@@ -152,6 +159,8 @@ namespace BannerlordAgents.WarRoom
             }
             if (thinkingCap > 0) psi.Environment["MAX_THINKING_TOKENS"] = thinkingCap.ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (sessionId == null && (CacheTtl == "5m" || CacheTtl == "1h")) psi.Environment["CLAUDE_CODE_PROMPT_CACHE_TTL"] = CacheTtl;
+            // a continuous agent's settings (0.18): the one-hour cache, and Claude Code's own compaction off, so only the agent's handover ever shortens its conversation
+            if (env != null) foreach (KeyValuePair<string, string> kv in env) psi.Environment[kv.Key] = kv.Value;
             var sw = Stopwatch.StartNew();
             Process p;
             try { p = Process.Start(psi); }
@@ -163,6 +172,7 @@ namespace BannerlordAgents.WarRoom
                 var events = new StringBuilder();
                 var written = new StringBuilder();
                 var thoughts = new StringBuilder();
+                long lastContext = 0;
                 string resultLine = null;
                 double firstText = -1;
                 long lastEvent = sw.ElapsedMilliseconds;
@@ -210,8 +220,13 @@ namespace BannerlordAgents.WarRoom
                             if (firstText < 0) firstText = sw.Elapsed.TotalMilliseconds;
                             if (written.Length < 200_000) written.Append(Delta(e.Data));
                         }
-                        // the thinking's summary, in each whole assistant message (0.13)
-                        else if (e.Data.Contains("\"type\":\"assistant\"") && e.Data.Contains("\"thinking\"") && thoughts.Length < 400_000) Thoughts(e.Data, thoughts);
+                        // each whole assistant message: the thinking's summary (0.13), and the conversation's size as that request saw it (0.18)
+                        else if (e.Data.Contains("\"type\":\"assistant\""))
+                        {
+                            if (e.Data.Contains("\"thinking\"") && thoughts.Length < 400_000) Thoughts(e.Data, thoughts);
+                            long size = ContextOf(e.Data);
+                            if (size > 0) lastContext = size;
+                        }
                         if (events.Length < 2_000_000 && !e.Data.Contains("\"stream_event\"")) events.AppendLine(e.Data);
                     }
                 };
@@ -261,6 +276,7 @@ namespace BannerlordAgents.WarRoom
                 {
                     r.Raw = events.ToString() + (resultLine == null && written.Length > 0 ? "\n--- the text written before it was stopped ---\n" + written : "");
                     r.ThinkingText = thoughts.ToString();
+                    r.LastContext = lastContext;
                 }
                 if (resultLine == null)
                 {
@@ -341,6 +357,18 @@ namespace BannerlordAgents.WarRoom
                 ["type"] = "control_response",
                 ["response"] = new System.Text.Json.Nodes.JsonObject { ["subtype"] = "error", ["request_id"] = id, ["error"] = "the war room does not handle " + (subtype ?? "this request") }
             }.ToJsonString());
+        }
+
+        /// <summary>A whole assistant message's usage as one number: its request's input, cache reads and writes, and its output (0 when it has none).</summary>
+        internal static long ContextOf(string line)
+        {
+            try
+            {
+                using JsonDocument d = JsonDocument.Parse(line);
+                if (!d.RootElement.TryGetProperty("message", out JsonElement m) || !m.TryGetProperty("usage", out JsonElement u)) return 0;
+                return (long)(Num(u, "input_tokens") + Num(u, "cache_read_input_tokens") + Num(u, "cache_creation_input_tokens") + Num(u, "output_tokens"));
+            }
+            catch (JsonException) { return 0; }
         }
 
         /// <summary>The thinking blocks of one whole assistant message, appended (empty ones, when the API leaves the text out, add nothing).</summary>

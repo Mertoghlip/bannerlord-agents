@@ -72,9 +72,12 @@ namespace BannerlordAgents
             public string Kind = "answer", Call, File;
             public int Poke = -1, Orders;
             public JArray ToolList, DiplomacyList, LetterList;
+            /// <summary>Its watches (0.18, Watches): kept, changed or ended.</summary>
+            public JArray WatchList;
             public int Tools => ToolList?.Count ?? 0;
             public int Diplomacy => DiplomacyList?.Count ?? 0;
             public int Letters => LetterList?.Count ?? 0;
+            public int Watches => WatchList?.Count ?? 0;
         }
 
         /// <summary>The keys of an order that are not settings; any other number in an order is taken as a setting.</summary>
@@ -319,6 +322,7 @@ namespace BannerlordAgents
                 answer.ToolList = obj["tools"] as JArray;
                 answer.DiplomacyList = obj["diplomacy"] as JArray;
                 answer.LetterList = obj["letters"] as JArray;
+                answer.WatchList = obj["watch"] as JArray ?? obj["watches"] as JArray ?? (obj["watch"] is JObject one ? new JArray(one) : null);
             }
             else if (root is JArray arr) list = arr;
             else { error = "expected an object with \"orders\""; return false; }
@@ -932,7 +936,9 @@ namespace BannerlordAgents
             if (ans?.Diplomacy > 0) TakeDiplomacy(name, poke, ans);
             // its letters to allies (0.13, B5): checked and delivered here
             if (ans?.Letters > 0) TakeLetters(name, poke, ans);
-            if (orders.Count == 0) { if (theirs == null && !(ans?.Diplomacy > 0) && !(ans?.Letters > 0)) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
+            // its watches (0.18): kept, changed or ended here, read every hour from the next
+            if (ans?.Watches > 0) TakeWatches(name, poke, ans);
+            if (orders.Count == 0) { if (theirs == null && !(ans?.Diplomacy > 0) && !(ans?.Letters > 0) && !(ans?.Watches > 0)) Line("file " + name + " (poke #" + poke + "): no orders in it; nothing changes"); return; }
             foreach (AgentChannel.AgentOrder o in orders) CheckIds(o);
             foreach (AgentChannel.AgentOrder o in orders) Attach(o, theirs);
             List<AgentChannel.AgentOrder> refused = orders.Where(o => refusedTools.ContainsKey((o.Do ?? "").Trim())).ToList();
@@ -1036,6 +1042,30 @@ namespace BannerlordAgents
                     catch (Exception e) { status = "refused"; reason = "it could not be sent (" + e.Message + ")"; Diag.Error("sending an agent's letter", e); }
                 }
                 LetterReceipt(poke, file, i, to, status, reason, Diag.Hours);
+            }
+        }
+
+        /// <summary>
+        /// An answer's watches (0.18, Watches): each checked against the realm's newest hour and kept, changed or ended, in shadow mode too (a watch moves no one, it only
+        /// wakes the agent); each answered in receipts.log, which the next poke's WHAT CHANGED carries.
+        /// </summary>
+        private void TakeWatches(string file, int poke, AgentChannel.Answer ans)
+        {
+            int i = 0;
+            foreach (JToken t in ans.WatchList)
+            {
+                i++;
+                Watches.Taken r;
+                try { r = Watches.Take(_agent.Watches, t as JObject, poke, _agent.Latest, _agent.Memory.LastSeen, Realm); }
+                catch (Exception e)
+                {
+                    Diag.Error("taking an agent's watch", e);
+                    r = new Watches.Taken { Name = (string)(t as JObject)?["name"], Status = "refused", Reason = "it could not be read (" + e.Message + ")" };
+                }
+                Diag.Count("agent:watch " + r.Status);
+                Line("poke #" + poke + ", " + file + " watch " + i + " (" + (r.Name ?? "?") + "): " + r.Status.ToUpperInvariant() + ". " + (r.Reason ?? "").TrimEnd('.') + ".");
+                Brain.WriteOrder(new { Type = "agent_watch", Realm, Poke = poke, File = file, Index = i, r.Name, r.Status, r.Reason, Hours = Diag.Hours, Mode, Run = RunTags.Id, Arm = RunTags.Arm, Watch = t });
+                Diag.Event("answer", "watch", new { realm = Realm, poke, file, index = i, name = r.Name, status = r.Status, reason = r.Reason });
             }
         }
 

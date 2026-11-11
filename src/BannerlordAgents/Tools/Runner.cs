@@ -931,6 +931,24 @@ namespace BannerlordAgents.Tools
 
         private const string SafetyNote = "(The safety and food rules are not tried here: they hold for every order, yours included.)";
 
+        // ---------- the agent's watches (0.18) ----------
+
+        private static readonly ToolDef WatchDef = new ToolDef { Name = "watch", Author = "ours" };
+
+        /// <summary>
+        /// What a watch's conditions read (0.18, Watches): the realm's newest hour as a tool's rules read it, for the lord the watch names ("me", none when it names
+        /// none), with its names as remembered values. Nothing moves and nobody is told. Worker.
+        /// </summary>
+        internal static IScope WatchScope(World w, string party, IEnumerable<KeyValuePair<string, string>> names)
+        {
+            var t = new ToolInstance { Id = 0, Order = new ToolOrder { Party = party, Realm = w.Realm, Tool = "watch", Source = "watch" }, Def = WatchDef, Started = w.Hours, StateSince = w.Hours, MoveSince = w.Hours };
+            foreach (KeyValuePair<string, string> kv in names) t.Memory[kv.Key] = kv.Value;
+            return new Scope(t, w);
+        }
+
+        /// <summary>A watch's words with its {expressions} filled in, ids as names.</summary>
+        internal static string WatchSay(string say, IScope scope, World w) => Template.Fill(say, scope, x => Show(x, w));
+
         /// <summary>A state entered in a try: its move worked out and said, with what comes out none; false when the state ends the tool.</summary>
         private static bool Entered(ToolInstance t, StateDef st, Scope scope, World w, List<string> lines)
         {

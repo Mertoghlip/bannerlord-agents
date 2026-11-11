@@ -172,6 +172,22 @@ namespace BannerlordAgents
     /// <summary>Builds views and reports on the worker, from a snapshot. No game objects here.</summary>
     internal static partial class Views
     {
+        /// <summary>
+        /// A section put into a report right after another (0.18: YOUR WATCHES after WHY YOU ARE ASKED NOW): after the blank line that ends the section named, else at the
+        /// report's end. The report's own line ends (\r\n) are kept.
+        /// </summary>
+        public static string AfterSection(string report, string heading, string section)
+        {
+            if (string.IsNullOrEmpty(section)) return report;
+            report = report ?? "";
+            int i = report.IndexOf(heading, StringComparison.Ordinal);
+            int end = i < 0 ? -1 : report.IndexOf("\r\n\r\n", i, StringComparison.Ordinal);
+            if (end < 0 && i >= 0) end = report.IndexOf("\n\n", i, StringComparison.Ordinal);
+            if (end < 0) return report.TrimEnd() + "\r\n\r\n" + section.TrimEnd() + "\r\n";
+            string gap = string.CompareOrdinal(report, end, "\r\n\r\n", 0, 4) == 0 ? "\r\n\r\n" : "\n\n";
+            return report.Substring(0, end) + gap + section.TrimEnd() + report.Substring(end);
+        }
+
         public static View Build(Snapshot s, string fid, Dictionary<string, Sighting> sees, HashSet<string> hostile, Brain.Memory mem)
         {
             var v = new View { Faction = fid, FactionName = FactionName(s, fid), Hours = s.Hours, Date = s.Date, Night = s.Night };

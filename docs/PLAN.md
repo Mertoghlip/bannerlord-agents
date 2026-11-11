@@ -14,7 +14,9 @@ Started Tue Oct 6, 2026, the day the proposal went in; updated Thu Oct 8. This i
     - **C2:** an agent ruling my kingdom against the game's own AI.
   - These use the realms already playing in my campaign. The coalition waits.
 - **Next build, 0.13 (Oct 28, to review):** diplomacy, the agents writing their own tools, and the training record of both my moves and the agents': [PLAN-0.13.md](PLAN-0.13.md).
-- **Changed Nov 10:** fresh calls at every wake cost too much of my plan, so the realm agents move to one continuous conversation each, setting their own wakes and strategy reviews (being designed, not built). The fresh-call design is frozen at git tag `fresh-calls-0.17.7` for later comparison ([CHANGELOG.md](CHANGELOG.md), Nov 10). Test A1's second start stopped at day 12.
+- **Changed Nov 10:** fresh calls at every wake cost too much of my plan, so the realm agents move to one continuous conversation each, setting their own wakes and strategy reviews. The fresh-call design is frozen at git tag `fresh-calls-0.17.7` for later comparison ([CHANGELOG.md](CHANGELOG.md), Nov 10). Test A1's second start stopped at day 12.
+  - [x] Version 0.18.0, continuous agents, built and installed (Nov 10): watches and self-wakes in the game, one conversation per realm with strategy reviews and handovers in the war room, the continuous instructions ([WARROOM.md](WARROOM.md#continuous-agents-since-018)). The orcs and Dol Guldur run on it.
+  - [ ] The next test on continuous agents: the cost per hour of play against Nov 8's, the wakes a day, the watches the agents set, and the first handovers.
 - **Final report and talk, Tue Dec 1:** tool writing, the trained small models, what my play adds, and the full comparison for the everyday gamer.
 - **Budget:** about 90 hours. [worklog.md](worklog.md) keeps the count.
 

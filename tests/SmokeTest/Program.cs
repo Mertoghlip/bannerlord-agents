@@ -244,6 +244,7 @@ namespace SmokeTest
             AlliesTests(root, agentDir);
             NewsTests(root);
             WakeTests(root);
+            WatchTests(root);
             DefendTests(root, agentDir);
 
             // whole-file writes are swapped in

@@ -69,13 +69,15 @@ namespace BannerlordAgents
                 if (tool == null) continue;   // its tool ended meanwhile, or never started
                 orders.Add(new JObject { ["hand"] = h, ["tool"] = tool, ["record"] = Outcomes.Export(id) });
             }
+            // the self-waking agents' watches (0.18), as they stood
+            JObject watches = Watches.ExportAll();
             var o = new JObject
             {
                 ["type"] = "orders_at_save", ["save"] = save, ["hours"] = hours, ["date"] = Text.When(hours), ["load"] = load,
-                ["wall"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), ["orders"] = orders, ["wages"] = new JArray(caps)
+                ["wall"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), ["orders"] = orders, ["wages"] = new JArray(caps), ["watches"] = watches
             };
             Files.Overwrite(file, o.ToString(Formatting.None));
-            Diag.Event("orders", "kept for the save", new { save, orders = orders.Count, wages = caps.Count, file });
+            Diag.Event("orders", "kept for the save", new { save, orders = orders.Count, wages = caps.Count, watches = watches.Properties().Sum(p => (p.Value as JArray)?.Count ?? 0), file });
         }
 
         // ---------- at a load ----------
@@ -90,9 +92,13 @@ namespace BannerlordAgents
             if (o == null)
             {
                 if (why != null) Log.Line("orders: " + why);
-                Background.Post("orders carried on", () => Told.Clear());
+                Background.Post("orders carried on", () => { Told.Clear(); Watches.SetPending(null); });
                 return;
             }
+            // the self-waking agents' watches (0.18): each realm's first hour takes its own up, checked again
+            var watches = new Dictionary<string, JArray>(StringComparer.Ordinal);
+            if (o["watches"] is JObject wo) foreach (JProperty p in wo.Properties()) if (p.Value is JArray wa) watches[p.Name] = wa;
+            Background.Post("watches carried on", () => Watches.SetPending(watches));
             var tools = new List<KeyValuePair<JObject, JObject>>();
             var refused = new Dictionary<string, List<string>>(StringComparer.Ordinal);
             void Refuse(string realm, string what) { if (realm == null) return; if (!refused.TryGetValue(realm, out List<string> l)) refused[realm] = l = new List<string>(); l.Add(what); }

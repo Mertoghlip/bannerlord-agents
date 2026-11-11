@@ -174,6 +174,7 @@ namespace BannerlordAgents.WarRoom
             RecordTests(root);
             NewsTests(root);
             ToolCheckTests(root);
+            ContinuousTests(root);
 
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");

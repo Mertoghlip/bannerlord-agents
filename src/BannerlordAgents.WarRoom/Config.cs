@@ -73,6 +73,23 @@ namespace BannerlordAgents.WarRoom
         /// <summary>How long the prompt cache keeps what each fresh call writes (0.17.7, Claude.CacheTtl): "5m", "1h", or empty for Claude Code's default (one hour).</summary>
         public string CacheTtl = "5m";
 
+        // ---------- continuous agents (0.18, memory = continuous; docs/WARROOM.md#continuous-agents-since-018) ----------
+
+        /// <summary>The model of a continuous conversation: the one-million-token window ("[1m]"), so a conversation can grow past half a million tokens before its handover.</summary>
+        public string ContinuousModel = "claude-opus-5-5[1m]";
+        /// <summary>One effort and one thinking cap for every call of a conversation: either changing mid-conversation makes the next call write the whole conversation into the cache again.</summary>
+        public string ContinuousEffort = "high";
+        public int ContinuousThinkingCap = 6000;
+        /// <summary>The longest a wake's call may take, in seconds (a review and a handover get council_timeout_seconds).</summary>
+        public int ContinuousTimeoutSeconds = 240;
+        /// <summary>
+        /// The handover's moments and sizes: as the player's own battle begins (the clock stands still), once the conversation holds at least compact_at_tokens; as the game
+        /// closes, at least compact_at_close_tokens; and at any wake past compact_hard_tokens, so a conversation never reaches the window's end.
+        /// </summary>
+        public long CompactAtTokens = 500_000, CompactAtCloseTokens = 500_000, CompactHardTokens = 850_000;
+        /// <summary>The wakes a day the agent is told it should keep to (told, not enforced).</summary>
+        public int WakeBudget = 12;
+
         /// <summary>What the folder's agent is (its agent.txt's kind, since 0.10): "realm" answers pokes; "lieutenant" answers the player's chat (LieutenantRoom).</summary>
         public string Kind = "realm";
         public bool IsLieutenant => Kind == "lieutenant";
@@ -87,6 +104,10 @@ namespace BannerlordAgents.WarRoom
         public string NewsTemplate => Path.Combine(AgentDir, "warroom-news.md");
         public string ChroniclerTemplate => Path.Combine(AgentDir, "chronicler-system.md");
         public bool Conversation => string.Equals(MemoryMode, "conversation", StringComparison.OrdinalIgnoreCase);
+        /// <summary>A continuous agent (0.18): one conversation per realm, waking on its own watches, with strategy reviews and handovers in it (Room.RunContinuous).</summary>
+        public bool Continuous => string.Equals(MemoryMode, "continuous", StringComparison.OrdinalIgnoreCase);
+        /// <summary>A continuous agent's instructions: each "## " section of it takes the place of the same section of warroom-system.md.</summary>
+        public string ContinuousTemplate => Path.Combine(AgentDir, "warroom-continuous.md");
 
         public static Config Load(string agentDir)
         {
@@ -125,7 +146,15 @@ namespace BannerlordAgents.WarRoom
                     case "max_lessons": if (int.TryParse(v, out int m) && m >= 0) c.MaxLessons = m; break;
                     case "lookups": c.Lookups = v == "on" || v == "true" || v == "yes"; break;
                     case "route_tool": c.RouteTool = v == "on" || v == "true" || v == "yes"; break;
-                    case "memory": if (v == "written" || v == "conversation") c.MemoryMode = v; break;
+                    case "memory": if (v == "written" || v == "conversation" || v == "continuous") c.MemoryMode = v; break;
+                    case "continuous_model": if (v.Length > 0) c.ContinuousModel = v; break;
+                    case "continuous_effort": if (v.Length > 0) c.ContinuousEffort = v; break;
+                    case "continuous_thinking_cap": if (int.TryParse(v, out int ctk) && ctk >= 0) c.ContinuousThinkingCap = ctk; break;
+                    case "continuous_timeout_seconds": if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int cts) && (cts > 10 || cts == 0)) c.ContinuousTimeoutSeconds = cts; break;
+                    case "compact_at_tokens": if (long.TryParse(v.Replace(",", "").Replace("_", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out long cat) && cat >= 50_000) c.CompactAtTokens = cat; break;
+                    case "compact_at_close_tokens": if (long.TryParse(v.Replace(",", "").Replace("_", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out long cac) && cac >= 0) c.CompactAtCloseTokens = cac; break;
+                    case "compact_hard_tokens": if (long.TryParse(v.Replace(",", "").Replace("_", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out long cht) && cht >= 100_000) c.CompactHardTokens = cht; break;
+                    case "wake_budget": if (int.TryParse(v, out int wb) && wb > 0) c.WakeBudget = wb; break;
                     case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
                     case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
                     case "story_model": c.StoryModel = v; break;
@@ -145,8 +174,8 @@ namespace BannerlordAgents.WarRoom
                 }
             }
             string text = File.ReadAllText(c.FilePath);
-            // a settings file from before memory, the council, the thinking's summary or the cache's lifetime: the new keys are added
-            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =") || !text.Contains("thinking_display =") || !text.Contains("cache_ttl =")) c.Save();
+            // a settings file from before memory, the council, the thinking's summary, the cache's lifetime or continuous agents: the new keys are added
+            if (!text.Contains("memory =") || !text.Contains("council =") || !text.Contains("route_tool =") || !text.Contains("thinking_display =") || !text.Contains("cache_ttl =") || !text.Contains("compact_at_tokens =")) c.Save();
             Claude.ThinkingDisplay = c.ThinkingDisplay;
             Claude.CacheTtl = c.CacheTtl;
             return c;
@@ -177,8 +206,21 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("lookups = " + (Lookups ? "on" : "off"));
             sb.AppendLine("# offer the agent the \"ask the way\" tool (the way an army would march, its time and its crossings) once the walking map is copied");
             sb.AppendLine("route_tool = " + (RouteTool ? "on" : "off"));
-            sb.AppendLine("# memory: written (a fresh call each poke, with the story so far, the notes and the chronicle) or conversation (one long conversation, for comparison)");
+            sb.AppendLine("# memory: written (a fresh call each poke, with the story so far, the notes and the chronicle), conversation (one long conversation, for comparison),");
+            sb.AppendLine("# or continuous (0.18: one conversation per realm that wakes on its own watches, holds its strategy reviews in it, and writes a handover before it grows too long)");
             sb.AppendLine("memory = " + MemoryMode);
+            sb.AppendLine("# continuous only: the model (\"[1m]\": the million-token window), one effort and thinking cap for every call of a conversation (changing either rewrites the cache), a wake's time limit");
+            sb.AppendLine("continuous_model = " + ContinuousModel);
+            sb.AppendLine("continuous_effort = " + ContinuousEffort);
+            sb.AppendLine("continuous_thinking_cap = " + ContinuousThinkingCap.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("continuous_timeout_seconds = " + ContinuousTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# continuous only: the handover is written as the player's battle begins once the conversation holds compact_at_tokens, as the game closes once it holds");
+            sb.AppendLine("# compact_at_close_tokens, and at any wake past compact_hard_tokens; then a new conversation starts from it");
+            sb.AppendLine("compact_at_tokens = " + CompactAtTokens.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("compact_at_close_tokens = " + CompactAtCloseTokens.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("compact_hard_tokens = " + CompactHardTokens.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# continuous only: the wakes a day the agent is told to keep to (told, not enforced); its strategy reviews follow the council settings below");
+            sb.AppendLine("wake_budget = " + WakeBudget.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("# the chronicler rewrites the story so far after this many new chronicle lines, in a quiet moment, in at most story_words words");
             sb.AppendLine("story_every = " + StoryEvery.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("story_words = " + StoryWords.ToString(CultureInfo.InvariantCulture));

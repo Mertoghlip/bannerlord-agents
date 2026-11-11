@@ -34,10 +34,12 @@ namespace BannerlordAgents
         public bool Theatre => News == "theatre";
         /// <summary>
         /// What wakes the agent (0.15; agent.txt's "wake"): "rule", the wake rule sorts each line first (WakeRules; the default for every agent folder); "all", every line wakes it,
-        /// as before. Only a realm's agent that is switched on goes by the rule.
+        /// as before; "self" (0.18, continuous agents), the agent's own watches and check-ins, the locked wakes and news of war, peace and offers wake it, and every other line
+        /// rides its next wake (WakeRules.SortSelf, Watches). Only a realm's agent that is switched on goes by a rule.
         /// </summary>
         public string Wake = "rule";
-        public bool WakeRule => Wake == "rule" && On && !IsLieutenant;
+        public bool WakeRule => (Wake == "rule" || Wake == "self") && On && !IsLieutenant;
+        public bool WakeSelf => Wake == "self" && On && !IsLieutenant;
         /// <summary>What was wrong with the folder, for the self-check (null: nothing).</summary>
         public string Problem;
 
@@ -65,7 +67,7 @@ namespace BannerlordAgents
                             case "channel": if (kv.Value.Length > 0) channel = kv.Value; break;
                             case "kind": c.Kind = kv.Value.Trim().ToLowerInvariant() == "lieutenant" ? "lieutenant" : "realm"; break;
                             case "news": c.News = NewsMode(kv.Value); break;
-                            case "wake": c.Wake = kv.Value.Trim().ToLowerInvariant() == "all" ? "all" : "rule"; break;
+                            case "wake": c.Wake = WakeMode(kv.Value); break;
                         }
             }
             catch (Exception e) { c.Problem = "agent.txt could not be read: " + e.Message; }
@@ -80,6 +82,13 @@ namespace BannerlordAgents
         {
             string m = (v ?? "").Trim().ToLowerInvariant();
             return m == "theatre" || m == "theater" ? "theatre" : m == "shadow" ? "shadow" : "full";
+        }
+
+        /// <summary>What wakes the agent as agent.txt names it: all, self, or the wake rule (anything else).</summary>
+        public static string WakeMode(string v)
+        {
+            string m = (v ?? "").Trim().ToLowerInvariant();
+            return m == "all" ? "all" : m == "self" ? "self" : "rule";
         }
 
         /// <summary>An agent described by the settings of 0.8 and before (and the smoke test): a realm and its channel folder.</summary>
@@ -136,7 +145,11 @@ namespace BannerlordAgents
                 "# the folder in this one the bridge and the war room talk through",
                 "channel = " + Path.GetFileName(ChannelDir.TrimEnd('\\', '/')),
                 "# realm (it plays a realm) or lieutenant (it serves the player's own realm through the campaign map's chat box)",
-                "kind = " + Kind
+                "kind = " + Kind,
+                "# a news wake's report: full, shadow or theatre (the news, its clock and what bears on it; the rest by asking)",
+                "news = " + News,
+                "# what wakes the agent: rule (the wake rule sorts each line of news first), all (every line wakes it) or self (its own watches and check-ins, and the locked wakes)",
+                "wake = " + Wake
             });
         }
     }
@@ -156,6 +169,8 @@ namespace BannerlordAgents
         public readonly Dictionary<int, ToolInstance> Tools = new Dictionary<int, ToolInstance>();
         /// <summary>The latest hour as this agent's realm has it.</summary>
         public Snapshot Latest;
+        /// <summary>Its own watches (0.18, Watches): what wakes it besides the locked wakes, when its folder says wake = self. Worker.</summary>
+        public readonly List<Watch> Watches = new List<Watch>();
 
         public RealmAgent(AgentConfig config)
         {

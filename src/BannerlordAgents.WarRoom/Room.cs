@@ -45,7 +45,7 @@ namespace BannerlordAgents.WarRoom
     /// never in their way. "conversation": one long conversation, resumed every poke, which starts again from the notes
     /// when it grows past conversation_limit; kept to compare the two. With no new pokes it does nothing at all.
     /// </summary>
-    internal sealed class Room
+    internal sealed partial class Room
     {
         private readonly Config _c;
         private readonly string _claude;
@@ -1211,16 +1211,18 @@ namespace BannerlordAgents.WarRoom
         private string SystemFileLocked(bool routes, bool news, bool book, bool read)
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate) : "You command a realm in Mount & Blade II: Bannerlord. Answer each poke with one JSON object of orders.";
-            if (news) template = NewsInstructions(template);
+            // a continuous agent (0.18): each section of warroom-continuous.md takes the place of the same section (wakes, watches, reviews, the handover, the questions on the book)
+            if (_c.Continuous) template = ContinuousInstructions(template);
+            else if (news) template = NewsInstructions(template);
             // never promise a tool the call does not have ("check a tool" is served beside "ask the way", 0.13)
             if (!routes)
             {
                 template = ReplaceSection(template, "## Asking the way", null);
                 template = ReplaceSection(template, "## Checking a tool", null);
             }
-            if (_c.Conversation) template = ReplaceSection(template, "## Your memory", ConversationMemory);
+            if (_c.Conversation && !_c.Continuous) template = ReplaceSection(template, "## Your memory", ConversationMemory);
             // a news wake's "## Look-ups" are its questions on the book; anyone else's, the Read tool's files
-            if (news ? !book : !read) template = ReplaceSection(template, "## Look-ups", null);
+            if (news || _c.Continuous ? !book : !read) template = ReplaceSection(template, "## Look-ups", null);
             // never promise a tool the call does not have: the model would type tool calls as text instead
             if (!read && !routes && !book) template = template.TrimEnd() + "\n\nYou have no tools in this call: answer from the message alone.\n";
             string tools = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "(the order library appears once the game has loaded a campaign)";
@@ -1252,6 +1254,55 @@ namespace BannerlordAgents.WarRoom
                 template = ReplaceSection(template, s.Key, s.Value.Trim() == "(removed)" ? null : s.Key + "\n\n" + s.Value.Trim());
             return template;
         }
+
+        /// <summary>
+        /// A continuous agent's instructions (0.18): each "## " section of warroom-continuous.md in the agent's folder takes the place of the same section of the instructions
+        /// ("(removed)": the section goes). "## Old => New" puts a section named New in Old's place. A section the instructions lack goes right after the one placed before it
+        /// in that file (at the end when none was). Without that file the instructions stay as they are, and the war room says so.
+        /// </summary>
+        internal string ContinuousInstructions(string template)
+        {
+            if (!File.Exists(_c.ContinuousTemplate))
+            {
+                if (!_continuousMissingSaid) { Say("No warroom-continuous.md in " + _c.AgentDir + ": the instructions say nothing of wakes, watches, reviews or the handover (scripts\\setup-agent.ps1 installs it)."); _continuousMissingSaid = true; }
+                return template;
+            }
+            return Overlay(template.Replace("\r", ""), File.ReadAllText(_c.ContinuousTemplate));
+        }
+
+        /// <summary>Sections of one instructions file put over another's, as ContinuousInstructions says.</summary>
+        internal static string Overlay(string template, string overlay)
+        {
+            string after = null;
+            foreach (KeyValuePair<string, string> s in NewsSections(overlay))
+            {
+                string head = s.Key, shown = s.Key;
+                int arrow = head.IndexOf("=>", StringComparison.Ordinal);
+                if (arrow > 0) { shown = "## " + head.Substring(arrow + 2).Trim(); head = head.Substring(0, arrow).Trim(); }
+                string body = s.Value.Trim();
+                string with = body == "(removed)" ? null : shown + "\n\n" + body;
+                if (HasSection(template, head)) template = ReplaceSection(template, head + "\n", with);
+                else if (with != null)
+                {
+                    int a = after == null ? -1 : SectionAt(template, after);
+                    int b = a < 0 ? -1 : template.IndexOf("\n## ", a + 3, StringComparison.Ordinal);
+                    template = b < 0 ? template.TrimEnd() + "\n\n" + with + "\n" : template.Substring(0, b + 1) + with + "\n\n" + template.Substring(b + 1);
+                }
+                if (with != null) after = shown;
+            }
+            return template;
+        }
+
+        private static bool HasSection(string text, string heading) => SectionAt(text, heading) >= 0;
+
+        /// <summary>Where a "## heading" line is, as a whole line (-1: none).</summary>
+        private static int SectionAt(string text, string heading)
+        {
+            int i = text.StartsWith(heading + "\n", StringComparison.Ordinal) ? 0 : text.IndexOf("\n" + heading + "\n", StringComparison.Ordinal);
+            return i <= 0 ? i : i + 1;
+        }
+
+        private bool _continuousMissingSaid;
 
         /// <summary>The "## " sections of the news instructions, in order, heading to body (anything before the first heading is the file's own note).</summary>
         internal static List<KeyValuePair<string, string>> NewsSections(string text)
@@ -1412,8 +1463,10 @@ namespace BannerlordAgents.WarRoom
             var file = new JsonObject { ["poke"] = number, ["orders"] = answer["orders"]?.DeepClone() ?? new JsonArray() };
             if (suffix != null) file["kind"] = suffix;
             if (call != null) file["call"] = call;
-            foreach (string k in new[] { "tools", "diplomacy", "letters" })
+            foreach (string k in new[] { "tools", "diplomacy", "letters", "watch" })
                 if (answer[k] is JsonArray list && list.Count > 0) file[k] = list.DeepClone();
+            // a continuous agent's watch written as one object (0.18): the bridge takes it as a list of one
+            if (answer["watch"] is JsonObject one) file["watch"] = new JsonArray(one.DeepClone());
             if (answer["note"] != null) file["note"] = answer["note"].DeepClone();
             else if (answer["plan"] != null) file["note"] = answer["plan"].DeepClone();
             string name = "poke-" + number + (suffix != null ? "-" + suffix + "-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) : "");

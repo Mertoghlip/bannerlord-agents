@@ -8,6 +8,7 @@
   - agent.txt: the realm it commands, its mode (off, shadow or live), who obeys it, and its channel folder;
   - warroom-system.md and chronicler-system.md: its instructions, and the chronicler's (who writes the story so far);
   - warroom-news.md: the sections of its instructions a news wake reads in their place when agent.txt says news = theatre (0.14);
+  - warroom-continuous.md: the sections a continuous agent reads in their place (0.18: wakes, watches, strategy reviews, the handover);
   - warroom.txt: its war room's settings (model, effort, thinking caps, where its logs go);
   - warroom\: the channel the bridge and the war room talk through (orders\done, lookups, the order library tools.txt);
   - memory\<campaign>\: its memory, made by the war room (docs/MEMORY.md).
@@ -42,8 +43,12 @@ param(
     [string]$Lords = '',
     # a news wake's report (0.14, docs/PLAN-news.md): full (as before), shadow (full sent, the theatre's written beside it) or theatre
     [ValidateSet('', 'full', 'shadow', 'theatre')][string]$News = '',
-    # what wakes the agent (0.15, docs/WARROOM.md): rule (the wake rule sorts each line of news first) or all (every line wakes it, as before)
-    [ValidateSet('', 'rule', 'all')][string]$Wake = '',
+    # what wakes the agent (0.15, docs/WARROOM.md): rule (the wake rule sorts each line of news first), all (every line wakes it, as before), or self (0.18: its own watches)
+    [ValidateSet('', 'rule', 'all', 'self')][string]$Wake = '',
+    # a continuous agent (0.18, docs/WARROOM.md#continuous-agents-since-018): one conversation per realm, waking on its own watches (wake = self, news = theatre,
+    # memory = continuous in warroom.txt); -FreshCalls puts the agent back on a fresh call per poke (wake = rule, memory = written)
+    [switch]$Continuous,
+    [switch]$FreshCalls,
     [string]$RealmTitle = '',
     [string]$RealmLine = '',
     [string]$SettingsFrom = 'C:\Users\karab\Projects\orc-war-council\warroom.txt',
@@ -79,6 +84,9 @@ if (-not $Realm) { Write-Host 'Name the realm: -Realm <kingdom id> (the folder h
 if (-not $Mode) { $Mode = $(if ($had['mode']) { $had['mode'] } else { 'shadow' }) }
 if (-not $Lords) { $Lords = $(if ($had['lords']) { $had['lords'] } else { 'all' }) }
 $channelName = $(if ($had['channel']) { $had['channel'] } else { 'warroom' })
+if ($Continuous -and $Kind -eq 'lieutenant') { Write-Host 'The lieutenant answers the player''s chat; it has no continuous mode.' -ForegroundColor Red; exit 1 }
+if ($Continuous) { $Wake = 'self'; $News = 'theatre' }
+if ($FreshCalls) { $Wake = 'rule' }
 if (-not $News) { $News = $(if ($had['news']) { $had['news'] } elseif ($Kind -eq 'lieutenant') { 'full' } else { 'theatre' }) }
 if (-not $Wake) { $Wake = $(if ($had['wake']) { $had['wake'] } else { 'rule' }) }
 [System.IO.File]::WriteAllLines($agentFile, [string[]]@(
@@ -94,7 +102,7 @@ if (-not $Wake) { $Wake = $(if ($had['wake']) { $had['wake'] } else { 'rule' }) 
     "kind = $Kind",
     '# a news wake''s report: full (the whole report, as before), shadow (the whole report sent, the news report written beside it) or theatre (the news, its clock and what bears on it; the rest by asking)',
     "news = $News",
-    '# what wakes the agent: rule (the wake rule sorts each line of news first: some wakes it now, some waits, some rides its next call) or all (every line wakes it)',
+    '# what wakes the agent: rule (the wake rule sorts each line of news first: some wakes it now, some waits, some rides its next call), all (every line wakes it) or self (its own watches and check-ins, and the locked wakes)',
     "wake = $Wake"), $utf8)
 Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName, news $News, wake $Wake" -ForegroundColor Green
 
@@ -106,7 +114,7 @@ New-Item -ItemType Directory -Force (Join-Path $channel 'lookups') | Out-Null
 $fresh = @()
 # a lieutenant's instructions are its own, and it has no chronicler
 if ($Kind -eq 'lieutenant') { $pairs = @(, @('lieutenant-system.template.md', 'warroom-system.md')) }
-else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'), @('warroom-news.template.md', 'warroom-news.md')) }
+else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'), @('warroom-news.template.md', 'warroom-news.md'), @('warroom-continuous.template.md', 'warroom-continuous.md')) }
 foreach ($pair in $pairs) {
     $to = Join-Path $Workspace $pair[1]
     if ((Test-Path $to) -and -not $Force) { Write-Host "Kept the folder's own $($pair[1])."; continue }
@@ -148,6 +156,21 @@ if (-not (Test-Path $wr)) {
     [System.IO.File]::WriteAllLines($wr, [string[]]$wl, $utf8)
     Write-Host "War room settings: $wr (from $SettingsFrom; logs in $logs)" -ForegroundColor Green
 } else { Write-Host "Kept the folder's own warroom.txt." }
+
+# a continuous agent, or back to fresh calls (0.18): the memory line of warroom.txt, the old file kept beside it
+if ($Continuous -or $FreshCalls) {
+    $memory = $(if ($Continuous) { 'continuous' } else { 'written' })
+    $wl = @([System.IO.File]::ReadAllLines($wr, $utf8))
+    $found = $false
+    $changed = $false
+    for ($i = 0; $i -lt $wl.Count; $i++) { if ($wl[$i] -match '^\s*memory\s*=') { if ($wl[$i] -notmatch "=\s*$memory\s*$") { $changed = $true }; $wl[$i] = "memory = $memory"; $found = $true } }
+    if (-not $found) { $wl += "memory = $memory"; $changed = $true }
+    if ($changed) {
+        Copy-Item $wr ($wr + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmm') + '-before-' + $memory) -Force
+        [System.IO.File]::WriteAllLines($wr, [string[]]$wl, $utf8)
+        Write-Host "warroom.txt: memory = $memory (the old file kept beside it). The war room adds the continuous settings at its next start." -ForegroundColor Green
+    } else { Write-Host "warroom.txt already says memory = $memory." }
+}
 
 # the order library, from the same code the bridge uses (the smoke test can write it without the game)
 $smoke = Join-Path $repo 'tests\SmokeTest\bin\Release\SmokeTest.exe'

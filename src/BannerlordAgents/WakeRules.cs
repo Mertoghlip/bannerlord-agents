@@ -138,6 +138,29 @@ namespace BannerlordAgents
             }
         }
 
+        /// <summary>News that wakes a self-waking agent at once beside the locked rules (0.18): a war or a peace of its realm's, and an offer, which is accepted by itself if left unanswered.</summary>
+        public static readonly HashSet<string> SelfAlways = new HashSet<string>(StringComparer.Ordinal) { "war", "peace", "offer" };
+
+        /// <summary>
+        /// A line for an agent that sets its own wakes (0.18, wake = self; Sort has run first): the locked rules keep their lane; its watches' lines, their check-ins,
+        /// news of war, peace and offers, and the order news of the lords its watches follow wake it; every other line rides its next wake.
+        /// </summary>
+        public static void SortSelf(Trigger t, ISet<string> followed)
+        {
+            if (t.Rule != null && List.Any(r => r.Locked && r.Name == t.Rule)) return;
+            if (t.Kind == "watch" || t.Kind == "check_in") { t.Lane = Now; t.Rule = "your_watch"; return; }
+            if (t.Kind == "first_look") { t.Lane = Now; t.Rule = "first_look"; return; }
+            if (SelfAlways.Contains(t.Kind)) { t.Lane = Now; t.Rule = "self_" + t.Kind; return; }
+            if (followed != null && t.Party != null && followed.Contains(t.Party) && (t.Kind == "tool" || t.Kind == "order_ended" || t.Kind == "order_arrived"))
+            {
+                t.Lane = Now;
+                t.Rule = "your_watch_follows";
+                return;
+            }
+            t.Lane = Digest;
+            t.Rule = "self_rides_next";
+        }
+
         private sealed class Scope : IScope
         {
             private readonly LineFacts _f;

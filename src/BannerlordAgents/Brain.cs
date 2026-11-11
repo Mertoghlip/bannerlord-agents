@@ -439,7 +439,25 @@ namespace BannerlordAgents
             Memory m = Get(v.Watched);
             Timed(ms, "sight", () => Audit.Sight(v));
             List<Trigger> digest = null;
-            List<Trigger> triggers = ag.Config.WakeRule ? TakeSorted(v, m, ag.Channel, out digest) : TakeTriggers(v, m);
+            // an agent that sets its own wakes (0.18): the watches it kept at the save taken up on its first hour, then every watch read on this hour
+            if (ag.Config.WakeSelf)
+                Timed(ms, "watches", () =>
+                {
+                    if (Watches.TakePending(ag.Realm, out Newtonsoft.Json.Linq.JArray saved))
+                    {
+                        List<string> no = Watches.Import(ag.Watches, saved, v, m.LastSeen, ag.Realm);
+                        if (ag.Watches.Count > 0 || no.Count > 0)
+                            m.Waiting.Add(new Trigger
+                            {
+                                Hours = v.Hours, Kind = "watch_carried",
+                                Text = (ag.Watches.Count > 0 ? "The watches you had at the save carry on: " + string.Join(", ", ag.Watches.Select(w => w.Name)) + "." : "")
+                                       + (no.Count > 0 ? (ag.Watches.Count > 0 ? " " : "") + "Not carried on: " + string.Join("; ", no) + "." : "")
+                            });
+                    }
+                    m.Waiting.AddRange(Watches.Hour(ag.Watches, v));
+                });
+            List<Trigger> triggers = ag.Config.WakeRule ? TakeSorted(v, m, ag.Channel, out digest, ag.Config.WakeSelf ? ag : null) : TakeTriggers(v, m);
+            if (ag.Config.WakeSelf && triggers.Count > 0) Watches.Woke(ag.Watches, v.Hours);
             View view = null;
             if (triggers.Count > 0 || ag.On || Settings.Dashboard) Timed(ms, "view", () => view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m));
             if (triggers.Count > 0) Poke(v, v.Watched, v.WatchedSees, v.HostileToWatched, m, view, triggers, ms, files, digest);
@@ -495,7 +513,8 @@ namespace BannerlordAgents
             List<string> known = Known(v, v.Watched, v.WatchedSees, m, w).ToList();
             Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", known);
             ag.Channel.OnHour(v.Hours, report);
-            ag.Channel.WriteCouncil(Facts.Council(w));
+            // a self-waking agent's review (0.18) sees its watches with the realm
+            ag.Channel.WriteCouncil(Facts.Council(w) + (ag.Config.WakeSelf ? "\r\n\r\n" + Watches.Section(ag.Watches, v) + "\r\n" : ""));
             if (ag.Config.Theatre)
             {
                 // a news wake no longer writes the look-up files (its question book replaces them, 0.14), but a council, which keeps the whole
@@ -760,7 +779,7 @@ namespace BannerlordAgents
         /// is in, or a line of the "wait" lane has waited its hours, or a full day has passed; every line of both lanes then goes as the wake's news, and the digest lane rides along
         /// (digest). No wake while the last poke is unanswered, so the report it reads is fresh, as the study walked it: one call at a time. A first look reads everything.
         /// </summary>
-        private static List<Trigger> TakeSorted(Snapshot s, Memory m, Channel ch, out List<Trigger> digest)
+        private static List<Trigger> TakeSorted(Snapshot s, Memory m, Channel ch, out List<Trigger> digest, RealmAgent self = null)
         {
             digest = null;
             var fresh = new List<Trigger>(m.Waiting);
@@ -768,9 +787,12 @@ namespace BannerlordAgents
             foreach (Notice n in m.Pending) fresh.Add(LineOf(n));
             m.Pending.Clear();
             string book = Path.Combine(Dir, "wake_" + s.Watched + ".jsonl");
+            // an agent that sets its own wakes (0.18): only the locked rules, its watches and the lords they follow wake it
+            HashSet<string> followed = self != null ? Watches.Followed(self.Watches) : null;
             foreach (Trigger t in fresh)
             {
                 WakeRules.Sort(t);
+                if (self != null) WakeRules.SortSelf(t, followed);
                 m.Held.Add(t);
                 Diag.Count("wake:" + t.Lane);
                 Files.Append(book, Json.Line(new { Type = "line", Realm = s.Watched, Run = s.Run, Arm = s.Arm, t.Hours, At = s.Hours, t.Kind, t.Sub, t.Lane, t.Rule, t.Text, t.Party, t.Place, t.Facts, t.Notice }));
@@ -896,6 +918,9 @@ namespace BannerlordAgents
             long filesBegan = Stopwatch.GetTimestamp();
             // what the agent reads: the theatre's report in theatre mode, else the whole one (shadow mode keeps the theatre's beside it)
             string sent = theatreMode && news != null ? news : report;
+            // an agent that sets its own wakes (0.18): its watches, right after why it is woken
+            RealmAgent own = Agents.Of(fid);
+            if (own != null && own.Config.WakeSelf && ch.On) sent = Views.AfterSection(sent, "WHY YOU ARE ASKED NOW", Watches.Section(own.Watches, s));
             object theatreRecord = theatre == null ? null : TheatreRecord(theatre, v, newsMode, news, report, theatreMode && news != null ? "book\\poke-" + number + ".json" : null);
             Files.Append(Path.Combine(Dir, "pokes_" + fid + ".jsonl"),
                 Json.Line(new { Type = "poke", Number = number, Faction = fid, v.FactionName, Hours = s.Hours, Date = s.Date, Run = s.Run, Arm = s.Arm, Load = s.LoadId, Triggers = triggers, Digest = digest, View = v, Report = report,

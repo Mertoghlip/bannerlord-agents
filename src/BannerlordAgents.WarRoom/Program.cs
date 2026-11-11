@@ -93,7 +93,8 @@ namespace BannerlordAgents.WarRoom
                         // the player's lieutenant (0.10) answers the player's chat, not pokes
                         if (c.IsLieutenant) return new LieutenantRoom(c).Run(cts.Token);
                         var room = new Room(c);
-                        return room.Run(cts.Token);
+                        // a continuous agent (0.18): one conversation, its own wakes, reviews and handovers in it
+                        return c.Continuous ? room.RunContinuous(cts.Token) : room.Run(cts.Token);
                     }
                 case "once":
                     {
