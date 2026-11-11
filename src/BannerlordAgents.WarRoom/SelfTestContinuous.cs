@@ -115,6 +115,32 @@ namespace BannerlordAgents.WarRoom
             Check(room.ReviewDue(1024) == null && room.ReviewDue(1500) == null, "with no hour set, none sits: no daily review of its own");
             Check(room.Review_In("{\"review_in\": 0.2}", 2000, true) == 2001 && room.Review_In("{\"review_in\": 500}", 2000, true) == 2240 && double.IsNaN(room.Review_In("{\"orders\": []}", 2000, true))
                   && room.Review_In("{\"council_in\": 6}", 2000, false) == 2006, "review_in is kept between 1 and 240 hours; a review that sets none leaves none set; a wake's answer may set it too");
+            talk.LastReviewHours = 2000;
+            room.WantReview("Orc Keep is besieged by Thalion");
+            Check(room.ReviewDue(2000.5) == "Orc Keep is besieged by Thalion", "a big event calls a review at once, even right after the last");
+            room.Review_In("{\"review_in\": 12}", 2001, true);
+            Check(room.ReviewDue(2002) == null, "and the review that sits clears it");
+
+            // a question answered from the newest hour (0.18.1): the call asks the game before each question, and answers from what it wrote
+            string oldBook = Path.Combine(dir, "warroom", "book", "poke-5.json"), newBook = Path.Combine(dir, "warroom", "book", "now.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(oldBook));
+            string Book(double hours, string date, int men) => new JsonObject
+            {
+                ["poke"] = 5, ["hours"] = hours, ["date"] = date, ["realm"] = "orcs", ["lists"] = new JsonObject(),
+                ["pages"] = new JsonObject { ["lord_bolg"] = "Bolg [lord_bolg]: " + men + " men, strength 420. As of " + date + "." }
+            }.ToJsonString();
+            File.WriteAllText(oldBook, Book(1000, "Summer 3, 1085, 10:00", 300));
+            File.WriteAllText(newBook, Book(1007, "Summer 3, 1085, 17:00", 250));
+            string freshPath = newBook;
+            var asking = new RouteTool(root, Path.Combine(dir, "logs"), "cc", "orcs", 5, "wake") { BookOnly = true, BookPath = oldBook, ChronicleDir = Path.Combine(dir, "warroom"), Notes = () => "", Refresh = () => freshPath };
+            string AskBook(string id) => (string)asking.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"look_up\",\"arguments\":{\"id\":\"" + id + "\"}}}"))?["result"]?["content"]?[0]?["text"];
+            Check(AskBook("lord_bolg").Contains("250 men") && AskBook("lord_bolg").Contains("Summer 3, 1085, 17:00"), "a question is answered from the book the game wrote afresh, not the one the call began with");
+            freshPath = null;
+            File.WriteAllText(newBook, Book(1009, "Summer 3, 1085, 19:00", 200));
+            Check(AskBook("lord_bolg").Contains("250 men"), "when the game does not answer, the last book read answers");
+            string listed = string.Join("\n", (asking.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}"))?["result"]?["tools"] as JsonArray ?? new JsonArray())
+                                                  .Select(t => (string)t?["description"] ?? ""));
+            Check(listed.Contains("as of your realm's newest hour when you ask") && !listed.Contains("as of this report"), "and the questions say their answers are of the newest hour");
 
             // a reload: at the hour the conversation reached it carries on; an earlier save begins again
             mem.LoadId = "L1";

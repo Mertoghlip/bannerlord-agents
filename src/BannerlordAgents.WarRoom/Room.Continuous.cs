@@ -99,7 +99,7 @@ namespace BannerlordAgents.WarRoom
     /// <summary>
     /// Continuous agents (0.18, docs/WARROOM.md#continuous-agents-since-018): one conversation per realm instead of a fresh call per poke. The game wakes the agent only
     /// on its own watches, their check-ins, the lords they follow and the locked wakes (agent.txt: wake = self); each wake's message is the news and what bears on it,
-    /// less what the conversation already holds (Slim). Strategy reviews sit in the same conversation, only at the hour the agent sets (review_in).
+    /// less what the conversation already holds (Slim). Strategy reviews sit in the same conversation, at the hour the agent sets (review_in), or at once after a big event.
     /// The conversation ends only with the agent's handover, written as the player's battle begins (the clock stands still) or as the game closes, once it has
     /// grown past its size (compact_at_tokens, compact_at_close_tokens), or at any wake past compact_hard_tokens; the next wake begins a new conversation from the
     /// handover, the notes, the chronicle since and a fresh briefing. Every call of a conversation has the same system prompt, tools, model, effort and thinking cap,
@@ -108,6 +108,11 @@ namespace BannerlordAgents.WarRoom
     internal sealed partial class Room
     {
         private Talk _talk;
+        /// <summary>A big event's line, when one in a wake's news calls a strategy review (council_after); cleared when a review sits.</summary>
+        private string _reviewWanted;
+        // the newest hour asked of the game before a question (FreshNow): the fresh book, and when it came
+        private string _freshPath;
+        private DateTime _freshAt = DateTime.MinValue;
         private DateTime _reviewFailedAt = DateTime.MinValue, _gameLooked = DateTime.MinValue, _spareWord = DateTime.MinValue;
         private bool _gameSeen;
 
@@ -205,6 +210,18 @@ namespace BannerlordAgents.WarRoom
                 AfterContinuous(answer, meta?.Hours ?? _pokeHours, opening);
                 File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
+            // a big event calls a strategy review at once (council_after; not the first look, whose report is the whole realm already): kept in 0.18.2's agent-set reviews
+            if (!firstLook)
+                foreach (string w in _c.CouncilAfter)
+                {
+                    if (w.StartsWith("First look", StringComparison.OrdinalIgnoreCase)) continue;
+                    int i = why.IndexOf(w, StringComparison.OrdinalIgnoreCase);
+                    if (i < 0) continue;
+                    string line = why.Substring(why.LastIndexOf('\n', i) + 1);
+                    int end = line.IndexOf('\n');
+                    _reviewWanted = (end > 0 ? line.Substring(0, end) : line).Trim().TrimStart('-', ' ');
+                    break;
+                }
             _talk.WakesByDay[day] = today + 1;
             if (_talk.WakesByDay.Count > 30) foreach (string k in _talk.WakesByDay.Keys.OrderBy(k => k.Length).ThenBy(k => k, StringComparer.Ordinal).Take(_talk.WakesByDay.Count - 30).ToList()) _talk.WakesByDay.Remove(k);
             _talk.Wakes++;
@@ -239,6 +256,7 @@ namespace BannerlordAgents.WarRoom
                 _talk.LastReviewHours = hours;
                 _talk.Reviews++;
                 _talk.NextReviewHours = next != null ? hours + next.Value : double.NaN;
+                _reviewWanted = null;
             }
             else if (next != null) _talk.NextReviewHours = hours + next.Value;
         }
@@ -327,8 +345,47 @@ namespace BannerlordAgents.WarRoom
             if (meta == null) return null;
             return new RouteTool(RouteTool.DefaultRoot(), _logDir, meta.Campaign, meta.Realm, number, call)
             {
-                ChannelDir = _c.ChannelDir, BookPath = NewestBook(meta, number), ChronicleDir = _c.ChannelDir, Notes = NotesNow, BookOnly = !_talk.Routes
+                ChannelDir = _c.ChannelDir, BookPath = NewestBook(meta, number), ChronicleDir = _c.ChannelDir, Notes = NotesNow, BookOnly = !_talk.Routes, Refresh = FreshNow
             };
+        }
+
+        /// <summary>The name the bridge looks for in the orders folder (its Channel.BookRequest), how long a question waits for the game, and how long a fresh book serves the next questions.</summary>
+        internal const string BookRequest = "book-request";
+        internal static TimeSpan FreshWait = TimeSpan.FromSeconds(8);
+        internal const double FreshReuseSeconds = 2;
+
+        /// <summary>
+        /// The game's newest hour before a question of the agent's (0.18.1): asks the game to write the question book and the view file afresh from the newest hour it has
+        /// copied (book-request in the orders folder), and waits for book\now.txt to name the request. The fresh book's path, or null when the game is not running or did not
+        /// answer in time (the call's own book and view then answer). Questions asked together within two seconds share one fresh book.
+        /// </summary>
+        internal string FreshNow()
+        {
+            if (_freshPath != null && (DateTime.Now - _freshAt).TotalSeconds < FreshReuseSeconds) return _freshPath;
+            if (!Fresh(out _) || !GameRunning()) return null;
+            string orders = Path.Combine(_c.ChannelDir, "orders"), book = Path.Combine(_c.ChannelDir, "book");
+            Directory.CreateDirectory(orders);
+            string id = BookRequest + "-" + DateTime.UtcNow.ToString("HHmmssfff", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N").Substring(0, 6);
+            string tmp = Path.Combine(_c.ChannelDir, id + ".json.part"), request = Path.Combine(orders, id + ".json");
+            File.WriteAllText(tmp, "{\"asked\":\"" + DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) + "\"}");
+            File.Move(tmp, request);
+            var wait = Stopwatch.StartNew();
+            while (wait.Elapsed < FreshWait)
+            {
+                string[] stamp = (ReadShared(Path.Combine(book, "now.txt")) ?? "").Replace("\r", "").Split('\n');
+                if (stamp.Length > 0 && stamp[0] == id)
+                {
+                    string problem = stamp.Length > 3 ? stamp[3].Trim() : "";
+                    if (problem.Length > 0) { Say("Fresh book: the game could not write it (" + problem + ")."); return null; }
+                    _freshPath = Path.Combine(book, "now.json");
+                    _freshAt = DateTime.Now;
+                    return _freshPath;
+                }
+                Thread.Sleep(50);
+            }
+            try { File.Delete(request); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            Say("Fresh book: the game did not answer within " + (int)FreshWait.TotalSeconds + " s; the question is answered from the book the call began with.");
+            return null;
         }
 
         /// <summary>The question book of this poke, else the newest one in the channel, else this poke's path (the book's questions then say none is written yet).</summary>
@@ -593,12 +650,13 @@ namespace BannerlordAgents.WarRoom
         // ---------- strategy reviews ----------
 
         /// <summary>
-        /// Why a strategy review should sit now, or null: only the hour the agent set for it (0.18.2). No big event, daily default or gap between reviews calls one: the agent
-        /// alone decides when it reviews its war, and without an hour set none sits.
+        /// Why a strategy review should sit now, or null: a big event in a wake's news (council_after), at once, or the hour the agent set for it (0.18.2). No daily default
+        /// and no gap between reviews: without an hour set and no big event, none sits.
         /// </summary>
         internal string ReviewDue(double nowHours)
         {
             if (!_c.Council || _talk == null || !_talk.Started || double.IsNaN(nowHours)) return null;
+            if (_reviewWanted != null) return _reviewWanted;
             return !double.IsNaN(_talk.NextReviewHours) && nowHours >= _talk.NextReviewHours - 1e-6 ? "the hour you set for it has come" : null;
         }
 
@@ -852,6 +910,7 @@ namespace BannerlordAgents.WarRoom
 
         internal Talk TalkNow => _talk;
         internal void UseForTest(Memory m, Talk t) { _mem = m; _talk = t; }
+        internal void WantReview(string why) => _reviewWanted = why;
         /// <summary>For the self-test: the next review's hour an answer would leave (review true: the answer is a review's).</summary>
         internal double Review_In(string answer, double hours, bool review) { _talk.NextReviewHours = double.NaN; AfterContinuous((JsonObject)JsonNode.Parse(answer), hours, review); return _talk.NextReviewHours; }
 

@@ -171,6 +171,8 @@ namespace BannerlordAgents
         public Snapshot Latest;
         /// <summary>Its own watches (0.18, Watches): what wakes it besides the locked wakes, when its folder says wake = self. Worker.</summary>
         public readonly List<Watch> Watches = new List<Watch>();
+        /// <summary>The hour of the question book last written on the war room's asking (0.18.1, Brain.FreshBook): asked again within it, the book stands. Worker.</summary>
+        public double FreshBookHours = double.NaN;
 
         public RealmAgent(AgentConfig config)
         {

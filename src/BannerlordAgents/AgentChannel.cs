@@ -745,6 +745,20 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Swallowed("tidying the question books", e); }
         }
 
+        /// <summary>The war room's request for the newest hour before a question (0.18.1), in the orders folder: book-request*.json.</summary>
+        public const string BookRequest = "book-request";
+
+        /// <summary>
+        /// The answer to a request for the newest hour (0.18.1): book\now.txt, written after the book and the view file, naming the request, the hour they are of, its date,
+        /// and what went wrong (empty when nothing did). The war room waits for its own request's name in it.
+        /// </summary>
+        public void BookStamp(string request, double hours, string problem)
+        {
+            if (!On) return;
+            string dir = Paths.Ensure(Path.Combine(Dir, "book"));
+            Files.Overwrite(Path.Combine(dir, "now.txt"), (request ?? "") + "\n" + (double.IsNaN(hours) ? "" : hours.ToString("R", Text.Inv)) + "\n" + (double.IsNaN(hours) ? "" : Text.When(hours)) + "\n" + (problem ?? "") + "\n");
+        }
+
         /// <summary>Each tool's whole definition as tools\(name).json (0.13, A1): ours and the realm's own kept tools; files no longer written are removed.</summary>
         public void WriteDefinitions()
         {
@@ -844,6 +858,16 @@ namespace BannerlordAgents
                     catch (Exception e) { Diag.Swallowed("removing the war room's request for a briefing", e); }
                     try { Brain.Briefing(_agent); }
                     catch (Exception e) { Diag.Error("writing the council's briefing", e); }
+                    continue;
+                }
+                // the war room asks for the newest hour before a question of the agent's (0.18.1): the question book and the view file written afresh
+                if (Path.GetFileName(f).StartsWith(BookRequest, StringComparison.OrdinalIgnoreCase))
+                {
+                    string request = Path.GetFileNameWithoutExtension(f);
+                    try { System.IO.File.Delete(f); }
+                    catch (Exception e) { Diag.Swallowed("removing the war room's request for a fresh book", e); }
+                    try { Brain.FreshBook(_agent, request); }
+                    catch (Exception e) { Diag.Error("writing the question book on the war room's asking", e); BookStamp(request, double.NaN, "it could not be written (" + e.Message + ")"); }
                     continue;
                 }
                 // the war room's "check a tool" asks for a try on the newest hour (0.13): answered at once (it moves the request in whole)

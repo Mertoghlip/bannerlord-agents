@@ -23,6 +23,11 @@ namespace BannerlordAgents.WarRoom
         public bool BookOnly;
         /// <summary>check_tool is not offered (a news wake: tools are written at a council only).</summary>
         public bool NoCheck;
+        /// <summary>
+        /// Asks the game for its newest hour before a question (0.18.1, a continuous agent's calls): the question book and the view file written afresh; the fresh book's path,
+        /// or null when the game did not answer (the book and view the call began with then answer).
+        /// </summary>
+        public Func<string> Refresh;
         /// <summary>The agent's notes as they stand (for list notes, and a look-up of an enemy it has a note on).</summary>
         public Func<string> Notes;
         /// <summary>Where the realm's chronicle is (the channel; a replay's scratch channel), for the chronicle question.</summary>
@@ -53,14 +58,17 @@ namespace BannerlordAgents.WarRoom
                 list.Add(Definition()); list.Add(OddsDefinition()); list.Add(RoadsDefinition()); list.Add(ChaseDefinition()); list.Add(EngageDefinition());
                 if (!NoCheck) list.Add(CheckDefinition());
             }
-            if (BookPath != null) { list.Add(LookDefinition()); list.Add(ListDefinition()); list.Add(ChronicleDefinition()); }
+            if (BookPath != null) { bool fresh = Refresh != null; list.Add(LookDefinition(fresh)); list.Add(ListDefinition(fresh)); list.Add(ChronicleDefinition(fresh)); }
             return list;
         }
 
-        public static JsonObject LookDefinition() => new JsonObject
+        /// <summary>How fresh the book's answers are, in its questions' words (0.18.1): the newest hour when the call refreshes before each question, else the report's.</summary>
+        private static string AsOf(bool fresh) => fresh ? "as of your realm's newest hour when you ask" : "as of this report";
+
+        public static JsonObject LookDefinition(bool fresh = false) => new JsonObject
         {
             ["name"] = LookName,
-            ["description"] = "One thing your realm knows, in full, as of this report: a lord of yours (men, ranks, wounded, food, speed, purse, the hours to each of your holdings, the enemies near him), "
+            ["description"] = "One thing your realm knows, in full, " + AsOf(fresh) + ": a lord of yours (men, ranks, wounded, food, speed, purse, the hours to each of your holdings, the enemies near him), "
                               + "a holding of yours or an enemy castle or town near your lands (your lords by how soon they could be there, the enemies near it, the muster there with running totals), "
                               + "an enemy lord or army (where it is or was last seen, its trail, your holdings near it, your lords who can reach it soonest, your note on it), or a captured lord of yours. "
                               + "\"captured\" lists all your captured lords.",
@@ -72,10 +80,10 @@ namespace BannerlordAgents.WarRoom
             }
         };
 
-        public static JsonObject ListDefinition() => new JsonObject
+        public static JsonObject ListDefinition(bool fresh = false) => new JsonObject
         {
             ["name"] = ListName,
-            ["description"] = "Everything of one kind your realm knows, as of this report, as the whole report would list it: lords (yours, with their armies), holdings (yours, and the enemy's near your lands), "
+            ["description"] = "Everything of one kind your realm knows, " + AsOf(fresh) + ", as the whole report would list it: lords (yours, with their armies), holdings (yours, and the enemy's near your lands), "
                               + "enemies (in view, seen earlier, and the enemy armies' trails), sieges (and battles, with their clocks), orders (yours in force), captives (your captured lords), allies (and joint plans), "
                               + "diplomacy, votes (open votes and offers), purse, realm (your realm in sum and the enemy realms), history (the last two days of your chronicle), notes (your notes on every enemy), "
                               + "or regions (your realm's regions and their holdings). Give a region's name to see only what is in it, and words to keep only the lines with them.",
@@ -92,10 +100,10 @@ namespace BannerlordAgents.WarRoom
             }
         };
 
-        public static JsonObject ChronicleDefinition() => new JsonObject
+        public static JsonObject ChronicleDefinition(bool fresh = false) => new JsonObject
         {
             ["name"] = ChronicleName,
-            ["description"] = "Your chronicle's lines about one lord, holding or realm, oldest first, up to this report's hour: what your realm learned of it (sieges, battles, raids, captures, sightings) "
+            ["description"] = "Your chronicle's lines about one lord, holding or realm, oldest first, up to " + (fresh ? "your realm's newest hour" : "this report's hour") + ": what your realm learned of it (sieges, battles, raids, captures, sightings) "
                               + "and your orders about it with what became of them. The last 40 lines, unless you give days.",
             ["inputSchema"] = new JsonObject
             {

@@ -151,6 +151,29 @@ namespace SmokeTest
             AskBriefing(ch, dir);
             Check(ReadIf(Path.Combine(dir, "council.txt")).Contains("YOUR WATCHES (1 of 12"), "a review's briefing lists the watches");
 
+            // a fresh book on the war room's asking (0.18.1): from the newest hour, whenever a question comes; once an hour at most
+            string Ask(string id)
+            {
+                string orders = Path.Combine(dir, "orders");
+                Directory.CreateDirectory(orders);
+                File.WriteAllText(Path.Combine(orders, id + ".json"), "{}");
+                AgentChannel.Scan();
+                return ReadIf(Path.Combine(dir, "book", "now.txt"));
+            }
+            string stamp1 = Ask("book-request-1");
+            string nowBook = Path.Combine(dir, "book", "now.json");
+            Check(stamp1.StartsWith("book-request-1\n" + (h0 + 3).ToString("R", Text.Inv) + "\n", StringComparison.Ordinal) && File.Exists(nowBook) && ReadIf(nowBook).Contains("\"date\":\"" + Text.When(h0 + 3) + "\"")
+                  && ReadIf(nowBook).Contains("lord_naglur") && !Directory.GetFiles(Path.Combine(dir, "orders"), "book-request*").Any(),
+                  "a request for the newest hour writes the question book from it and a stamp naming the request, and the request is taken away: " + stamp1.Replace("\n", "|"));
+            Check(File.Exists(Path.Combine(Paths.Root, "live", "smoketest", "view_orcs.json")), "and the view file the way-finding questions read");
+            DateTime built = File.GetLastWriteTimeUtc(nowBook);
+            System.Threading.Thread.Sleep(30);
+            string stamp2 = Ask("book-request-2");
+            Check(stamp2.StartsWith("book-request-2\n", StringComparison.Ordinal) && File.GetLastWriteTimeUtc(nowBook) == built, "asked again within the same hour, only the stamp is written");
+            Brain.OnHour(W(h0 + 5, thalion));
+            string stamp3 = Ask("book-request-3");
+            Check(stamp3.Contains("\n" + (h0 + 5).ToString("R", Text.Inv) + "\n") && ReadIf(nowBook).Contains("\"date\":\"" + Text.When(h0 + 5) + "\""), "a new hour, a new book: " + stamp3.Replace("\n", "|"));
+
             // carried across a save, checked again, clocks as they stood
             JArray saved = Watches.Export(Agents.Of("orcs").Watches);
             var copy = new List<Watch>();

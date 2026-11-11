@@ -527,6 +527,44 @@ namespace BannerlordAgents
             Diag.Event("agent", "briefing written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), ms = Math.Round(took, 1) });
         }
 
+        /// <summary>
+        /// The realm's question book and the view file of its way-finding questions, from its newest hour, on the war room's asking before a question of the agent's (0.18.1):
+        /// whatever the agent asks, whenever it asks, is answered from the newest hour the game has copied, not from the hour of its wake. The book is built as a wake's is
+        /// (every lord, holding and enemy, the lists by kind and region, the orders in force), fog-checked, and written as book\now.json; then the stamp book\now.txt names the
+        /// request answered. Built once an in-game hour at most: asked again within the same hour, only the stamp is written.
+        /// </summary>
+        public static void FreshBook(RealmAgent ag, string request)
+        {
+            Snapshot v = ag?.Latest;
+            if (v == null || v.Watched == null || v.WatchedSees == null)
+            {
+                ag?.Channel.BookStamp(request, double.NaN, "no hour of your realm has been copied yet");
+                return;
+            }
+            if (!(Math.Abs(ag.FreshBookHours - v.Hours) < 1e-6))
+            {
+                long began = Stopwatch.GetTimestamp();
+                Memory m = Get(v.Watched);
+                Tools.World w = Tools.Runner.WorldFor(v);
+                View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
+                var extras = new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = false, Chances = Views.ChanceLines(view, (own, foe) => MarchHours(w, own, foe)) };
+                List<Views.Area> areas = Views.Areas(view);
+                Dictionary<string, string> pages = Facts.Lookups(w, m.LastSeen, m.Trails);
+                foreach (KeyValuePair<string, string> kv in Facts.EnemyHoldings(w, view)) pages[kv.Key] = kv.Value;
+                pages.Remove("README");
+                string book = Json.Line(Views.Book(view, extras, -1, areas, pages)), bookText = Views.BookText(view, extras, areas, pages);
+                Audit.CheckReport(view, bookText, v.WatchedSees, v.InspectedByWatched, "question book on the war room's asking", Known(v, v.Watched, v.WatchedSees, m, w).ToList());
+                ag.Channel.WriteBook("now", book);
+                ag.Channel.Shows(bookText);
+                LiveMap.WriteView(v, view, v.Watched);
+                ag.FreshBookHours = v.Hours;
+                double took = Took(began);
+                Diag.Sample("helper:fresh book ms", took);
+                Diag.Event("agent", "fresh book written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), ms = Math.Round(took, 1), chars = book.Length });
+            }
+            ag.Channel.BookStamp(request, v.Hours, null);
+        }
+
         private static void Guarded(string what, Action a)
         {
             try { a(); }

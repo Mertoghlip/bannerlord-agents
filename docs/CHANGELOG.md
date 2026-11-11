@@ -2356,3 +2356,21 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The instructions say so (`agent/warroom-continuous.template.md`: Strategy reviews, its step 7, and How you answer), as does the line that opens a conversation.
 - **Checks:** war room self-test passed. New checks: a review sits an hour after the last when set so; none sits with no hour set; `review_in` is kept between 1 and 240; a review that sets none leaves none set; a wake's answer may set it. Nothing was installed into the game (the module is unchanged, 0.18.0).
 - **Outside the repository:** `warroom-continuous.md` in `orc-war-council` and `dolguldur-war-council` replaced by the new template (old copies `warroom-continuous.md.bak-20261111-before-agent-set-reviews`). The war rooms had stopped overnight; all of them and the dashboard were started on 0.18.2.
+
+### 11:25 · Version 0.18.1 (module) and war room 0.18.3: answers from the newest hour, the big-event review back, several questions at once · commit (pending)
+- **Why:** every answer the agent asks for should be up to date, whenever it asks. Until now, a question was answered from the question book written at its wake, which at a review could be hours old. Big events should still call a review at once. Several questions in one step cost the agent one step instead of many.
+- **What:**
+  - **Answers from the newest hour.** Before every question in a call, the war room asks the game (a `book-request` in the orders folder) to write the question book and the realm's view file afresh from the newest hour it has copied. It waits up to 8 s for the stamp naming its request and answers from what was written (`Brain.FreshBook`, `Channel.BookStamp`, `Room.FreshNow`, `RouteTool.Refresh`). This covers look-ups, lists and the way-finding questions; the chronicle and the notes were already read as they stand, and checking a tool already asks the game.
+  - The game builds the book at most once an in-game hour, and questions asked together within 2 s share one fresh book. With the game closed or not answering, the call's own book and view answer. The view file is now also written on asking, not only while the dashboard runs. Only continuous agents ask; the frozen fresh-call design is untouched.
+  - **The big-event review is back,** at once after a big event in a wake's news (not a first look). There is still no daily review when no hour is set and no gap between reviews.
+  - **The instructions** (`agent/warroom-continuous.template.md`):
+    - Strategy reviews again say a big event calls one.
+    - Look-ups say every answer is as of the realm's newest hour at the moment of asking, the way-finding questions too.
+    - A new line: when several answers are needed, ask all the questions at once, in one step, since each step takes time while the game runs.
+    - The questions' own descriptions now say their answers are of the newest hour.
+- **Checks:**
+  - Smoke test ALL CHECKS PASSED (576). New: a request writes the book from the newest hour with a stamp naming it and is taken away; the view file is written; asked again in the same hour only the stamp is written; a new hour gives a new book.
+  - War room self-test passed. New: a big event calls a review at once even right after the last and the review clears it; a question is answered from the freshly written book, and from the last book read when the game does not answer; the descriptions say the newest hour.
+  - Dashboard self-test passed. RefCheck: 839 references, missing 0.
+- **Installed** into the game's Modules\BannerlordAgents (v0.18.1) with the game closed.
+- **Outside the repository:** `warroom-continuous.md` in `orc-war-council` and `dolguldur-war-council` replaced by the new template (old copies `warroom-continuous.md.bak-20261111-before-fresh-answers`). War rooms and dashboard stopped for the build and started again on 0.18.3.

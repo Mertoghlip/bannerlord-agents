@@ -128,6 +128,13 @@ namespace BannerlordAgents.WarRoom
                 {
                     string name = (string)msg["params"]?["name"];
                     JsonObject args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
+                    // the newest hour before every question (0.18.1): the game writes the question book and the view file afresh, so the answer is never older than its last
+                    // copied hour, whenever the question comes; check_tool asks the game itself
+                    if (Refresh != null && name != CheckName)
+                    {
+                        string fresh = Refresh();
+                        if (fresh != null) { BookPath = fresh; _bookRead = false; }
+                    }
                     string text = name == ToolName ? Ask(args) : name == OddsName ? Safe(() => Odds(args)) : name == RoadsName ? Safe(() => RoadsIn(args))
                                   : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args))
                                   : name == CheckName && !NoCheck ? Safe(() => CheckTool(args))
