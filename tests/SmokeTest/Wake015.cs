@@ -290,7 +290,7 @@ namespace SmokeTest
             BattleWordTests(root);
         }
 
-        /// <summary>0.15.1: as the player's own battle begins, a realm agent that is on gets the word in its channel; one that is off and the lieutenant do not.</summary>
+        /// <summary>0.15.1: as the player's own battle begins, a realm agent that is on gets the word in its channel; one that is off does not. Since 0.18.2 the lieutenant does too (its handover).</summary>
         private static void BattleWordTests(string root)
         {
             string Word(string kind, string mode)
@@ -303,7 +303,8 @@ namespace SmokeTest
                 return File.Exists(f) ? File.ReadAllText(f) : null;
             }
             Check(Word("realm", "live") == "2192838.5" && Word("realm", "shadow") == "2192838.5", "a realm agent on live or shadow is told the player's battle began, with the hour");
-            Check(Word("realm", "off") == null && Word("lieutenant", "live") == null, "an agent that is off and the lieutenant are not told");
+            Check(Word("realm", "off") == null, "an agent that is off is not told");
+            Check(Word("lieutenant", "live") == "2192838.5", "the lieutenant is told the player's battle began (0.18.2: a continuous lieutenant writes its handover then)");
         }
     }
 }

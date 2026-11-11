@@ -24,6 +24,8 @@ namespace BannerlordAgents.WarRoom
         public double CostSoFar;
         public int Messages, Wakes, Reviews, Number;
         public double StartedHours = double.NaN, LastReviewHours = double.NaN, NextReviewHours = double.NaN;
+        /// <summary>The continuous lieutenant (0.18.4): the latest in-game hour its conversations reached in this save's line, kept through a handover, so an earlier save's load is known.</summary>
+        public double LastHours = double.NaN;
         public string StartedWall = "", StartedWhy = "";
         /// <summary>Why the next conversation begins (the handover that ended the last one, a reload), told at its start.</summary>
         public string NextWhy;
@@ -510,14 +512,17 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>A section as this message shows it: one line when it is exactly as the conversation last saw it (mayShort), and without the rule paragraphs it already saw.</summary>
-        private string Shown(string head, string body, double hours, bool mayShort)
+        private string Shown(string head, string body, double hours, bool mayShort) => ShownIn(_talk, head, body, hours, mayShort);
+
+        /// <summary>Shown, for any conversation (the continuous lieutenant's too, 0.18.4).</summary>
+        internal static string ShownIn(Talk talk, string head, string body, double hours, bool mayShort)
         {
             string key = Key(head);
             string hash = Hash(body.Trim());
-            if (mayShort && _talk.Sent.TryGetValue(key, out string was) && was == hash)
+            if (mayShort && talk.Sent.TryGetValue(key, out string was) && was == hash)
                 return head + ": as in your last message that showed it.";
-            _talk.Sent[key] = hash;
-            _talk.SentAt[key] = hours;
+            talk.Sent[key] = hash;
+            talk.SentAt[key] = hours;
             var sb = new StringBuilder();
             sb.Append(head);
             foreach (string line in body.Split('\n'))
@@ -528,7 +533,7 @@ namespace BannerlordAgents.WarRoom
                 if (l.Length >= 160 && !l.StartsWith("-", StringComparison.Ordinal) && !l.StartsWith(" ", StringComparison.Ordinal))
                 {
                     string h = Hash(l);
-                    if (!_talk.Static.Add(h)) continue;
+                    if (!talk.Static.Add(h)) continue;
                 }
                 sb.Append('\n').Append(l);
             }
@@ -594,11 +599,17 @@ namespace BannerlordAgents.WarRoom
         {
             string library = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt"));
             if (library == null || !_talk.Started) return null;
+            return OwnToolsChange(_talk, library);
+        }
+
+        /// <summary>OwnToolsNote, for any conversation (the continuous lieutenant's too, 0.18.4): null when its own tools are as the conversation knows them.</summary>
+        internal static string OwnToolsChange(Talk talk, string library)
+        {
             List<string> now = OwnToolNames(library);
-            if (now.SequenceEqual(_talk.OwnTools)) return null;
-            var added = now.Except(_talk.OwnTools).ToList();
-            var gone = _talk.OwnTools.Where(t => !now.Any(n => n.Split(' ')[0] == t.Split(' ')[0])).Select(t => t.Split(' ')[0]).ToList();
-            _talk.OwnTools = now;
+            if (now.SequenceEqual(talk.OwnTools)) return null;
+            var added = now.Except(talk.OwnTools).ToList();
+            var gone = talk.OwnTools.Where(t => !now.Any(n => n.Split(' ')[0] == t.Split(' ')[0])).Select(t => t.Split(' ')[0]).ToList();
+            talk.OwnTools = now;
             var sb = new StringBuilder();
             sb.AppendLine("YOUR OWN TOOLS CHANGED (your instructions keep the library as it was when this conversation began; this is what changed since)");
             int at = library.IndexOf("YOUR OWN TOOLS", StringComparison.Ordinal);

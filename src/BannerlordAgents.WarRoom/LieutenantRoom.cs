@@ -20,7 +20,7 @@ namespace BannerlordAgents.WarRoom
     /// Since 0.11.1 the conversation is the save's, kept by the bridge (chat.json's "history", the whole in conversation.txt), not
     /// this room's memory, which is still written as a log; and each message has PARTY AI CONTROLS NOW (chat.json's "party_ai").
     /// </summary>
-    internal sealed class LieutenantRoom
+    internal sealed partial class LieutenantRoom
     {
         private readonly Config _c;
         private readonly string _claude, _logDir;
@@ -42,8 +42,10 @@ namespace BannerlordAgents.WarRoom
         public int Run(CancellationToken stop)
         {
             Say("Lieutenant " + typeof(LieutenantRoom).Assembly.GetName().Version + ": answering the player's words in " + _c.ChannelDir);
-            Say("Model " + _c.Model + ", effort " + _c.Effort + ", " + (_c.ThinkingCap > 0 ? "thinking up to " + _c.ThinkingCap + " tokens" : "thinking as long as it needs") + ", "
-                + (_c.TimeoutSeconds > 0 ? "at most " + _c.TimeoutSeconds + " s a call" : "no time limit") + ", Claude Code at " + _claude);
+            if (_c.Continuous) SayContinuous();
+            else
+                Say("Model " + _c.Model + ", effort " + _c.Effort + ", " + (_c.ThinkingCap > 0 ? "thinking up to " + _c.ThinkingCap + " tokens" : "thinking as long as it needs") + ", "
+                    + (_c.TimeoutSeconds > 0 ? "at most " + _c.TimeoutSeconds + " s a call" : "no time limit") + ", Claude Code at " + _claude);
             _lastAnswered = LastAnsweredOnDisk(_c.ChannelDir);
             int said = -2;
             while (!stop.IsCancellationRequested)
@@ -57,7 +59,12 @@ namespace BannerlordAgents.WarRoom
                     _lastAnswered = n;
                     continue;
                 }
-                if (said != _lastAnswered) { Say("Waiting for the player's next words (last answered #" + _lastAnswered + ")."); said = _lastAnswered; }
+                if (_c.Continuous)
+                {
+                    try { HandoverIfDue(); }
+                    catch (Exception e) when (e is IOException || e is JsonException || e is InvalidOperationException || e is UnauthorizedAccessException) { Say("Continuous: " + e.Message + "."); }
+                }
+                if (said != _lastAnswered) { Say("Waiting for the player's next words (last answered #" + _lastAnswered + (_talk != null && _talk.Started ? "; the conversation holds " + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens" : "") + ")."); said = _lastAnswered; }
                 stop.WaitHandle.WaitOne(200);
             }
             Say("Stopped.");
@@ -67,6 +74,7 @@ namespace BannerlordAgents.WarRoom
         /// <summary>One message of the player's, answered with one call.</summary>
         public void Answer(JsonObject chat)
         {
+            if (_c.Continuous) { AnswerContinuous(chat); return; }
             DateTime began = DateTime.Now;
             int n = (int)Num(chat["number"]);
             string campaign = Str(chat["campaign"]), realm = Str(chat["realm"]), said = Str(chat["said"]) ?? "";
@@ -159,8 +167,35 @@ namespace BannerlordAgents.WarRoom
                 }
             }
             sb.AppendLine();
-            sb.AppendLine("WHAT BECAME OF ORDERS LATELY (receipts.log, newest last)");
-            if (receipts.Count == 0) sb.AppendLine("- Nothing yet.");
+            Middle(sb, chat, receipts, "WHAT BECAME OF ORDERS LATELY (receipts.log, newest last)", "- Nothing yet.");
+            sb.AppendLine("THE REALM NOW");
+            sb.AppendLine(report.Trim());
+            sb.AppendLine();
+            if (!string.IsNullOrEmpty(chronicle)) sb.AppendLine(chronicle).AppendLine();
+            if (Str(chat["party_ai"]) is string pac && pac.Trim().Length > 0)
+            {
+                sb.AppendLine("PARTY AI CONTROLS NOW");
+                sb.AppendLine(pac.Trim());
+                sb.AppendLine();
+            }
+            Words(sb, chat);
+            return sb.ToString();
+        }
+
+        /// <summary>The ruler's words: any said just before that waited for an answer, then the newest.</summary>
+        private static void Words(StringBuilder sb, JsonObject chat)
+        {
+            sb.AppendLine("YOUR RULER SAYS (message #" + (int)Num(chat["number"]) + ", " + Str(chat["date"]) + ")");
+            if (chat["earlier"] is JsonArray earlier && earlier.Count > 0)
+                foreach (JsonNode e in earlier) sb.AppendLine("(said just before) \"" + Str(e) + "\"");
+            sb.AppendLine("\"" + Str(chat["said"]) + "\"");
+        }
+
+        /// <summary>What became of the orders, the orders waiting for the clock, what the ruler did by the window's buttons, the allies' letters, and the proposal waiting.</summary>
+        private static void Middle(StringBuilder sb, JsonObject chat, List<string> receipts, string receiptsHead, string noReceipts)
+        {
+            sb.AppendLine(receiptsHead);
+            if (receipts.Count == 0) sb.AppendLine(noReceipts);
             foreach (string l in receipts) sb.AppendLine("- " + l);
             sb.AppendLine();
             WaitingForClock(sb, chat);
@@ -192,21 +227,6 @@ namespace BannerlordAgents.WarRoom
             }
             else sb.AppendLine("No proposal of yours is waiting. Orders your ruler's words below tell you to give go in \"orders\" with \"carry_out\": true; anything of your own idea goes in \"propose\" for their yes.");
             sb.AppendLine();
-            sb.AppendLine("THE REALM NOW");
-            sb.AppendLine(report.Trim());
-            sb.AppendLine();
-            if (!string.IsNullOrEmpty(chronicle)) sb.AppendLine(chronicle).AppendLine();
-            if (Str(chat["party_ai"]) is string pac && pac.Trim().Length > 0)
-            {
-                sb.AppendLine("PARTY AI CONTROLS NOW");
-                sb.AppendLine(pac.Trim());
-                sb.AppendLine();
-            }
-            sb.AppendLine("YOUR RULER SAYS (message #" + (int)Num(chat["number"]) + ", " + Str(chat["date"]) + ")");
-            if (chat["earlier"] is JsonArray earlier && earlier.Count > 0)
-                foreach (JsonNode e in earlier) sb.AppendLine("(said just before) \"" + Str(e) + "\"");
-            sb.AppendLine("\"" + Str(chat["said"]) + "\"");
-            return sb.ToString();
         }
 
         /// <summary>
@@ -386,6 +406,12 @@ namespace BannerlordAgents.WarRoom
         {
             string template = File.Exists(_c.SystemTemplate) ? File.ReadAllText(_c.SystemTemplate)
                 : "You are the lieutenant of a ruler in Mount & Blade II: Bannerlord. Answer with one JSON object: {\"say\": \"...\"}.";
+            // one conversation (0.18.4): the sections of warroom-continuous.md in the lieutenant's folder put over its instructions, as for a continuous agent
+            if (_c.Continuous)
+            {
+                if (File.Exists(_c.ContinuousTemplate)) template = Room.Overlay(template.Replace("\r", ""), File.ReadAllText(_c.ContinuousTemplate));
+                else Say("No warroom-continuous.md in " + _c.AgentDir + ": the instructions say nothing of the one conversation or the handover (scripts\\setup-agent.ps1 -Continuous installs it).");
+            }
             if (!routes) template = Cut(Cut(template, "## Asking the way"), "## Checking a tool");
             if (!_c.Lookups) template = Cut(template, "## Look-ups").TrimEnd() + "\n\nYou have no tools in this call: answer from the message alone.\n";
             string tools = Room.ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "(the order library appears once the game has loaded a campaign)";

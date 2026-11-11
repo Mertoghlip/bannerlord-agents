@@ -448,10 +448,13 @@ namespace BannerlordAgents
         /// <summary>The in-game hour and date, each reported hour, for the war room's council clock between pokes (0.15: fewer pokes must not make councils late).</summary>
         public void Clock(double hours) => Files.Overwrite(Path.Combine(Dir, "clock.txt"), hours.ToString("R", Text.Inv) + "\n" + Text.When(hours));
 
-        /// <summary>The player's own battle has begun (0.15.1): told to a realm agent's war room, which may sit an extra council. The lieutenant has no councils.</summary>
+        /// <summary>
+        /// The player's own battle has begun (0.15.1): told to a realm agent's war room, which may sit an extra council or, continuous, write its handover. Since 0.18.2
+        /// the lieutenant's war room is told too: a continuous lieutenant writes its handover there while the clock stands still.
+        /// </summary>
         public void PlayerBattle(double hours)
         {
-            if (On && !IsLieutenant) Files.Overwrite(Path.Combine(Dir, "spare.txt"), hours.ToString("R", Text.Inv));
+            if (On) Files.Overwrite(Path.Combine(Dir, "spare.txt"), hours.ToString("R", Text.Inv));
         }
 
         /// <summary>The news that did not call the agent, to ride poke n (0.15): told in WHAT CHANGED, where the council's words are read too.</summary>

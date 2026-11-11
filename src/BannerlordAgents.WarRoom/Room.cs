@@ -1345,7 +1345,7 @@ namespace BannerlordAgents.WarRoom
             return text.Substring(0, a) + (with != null ? with.TrimEnd() + "\n\n" : "") + (b >= 0 ? text.Substring(b + 1) : "");
         }
 
-        private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).Substring(0, 12);
+        internal static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).Substring(0, 12);
 
         private const string ConversationMemory =
             "## Your memory\n\n"

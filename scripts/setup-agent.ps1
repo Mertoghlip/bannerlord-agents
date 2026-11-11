@@ -84,8 +84,8 @@ if (-not $Realm) { Write-Host 'Name the realm: -Realm <kingdom id> (the folder h
 if (-not $Mode) { $Mode = $(if ($had['mode']) { $had['mode'] } else { 'shadow' }) }
 if (-not $Lords) { $Lords = $(if ($had['lords']) { $had['lords'] } else { 'all' }) }
 $channelName = $(if ($had['channel']) { $had['channel'] } else { 'warroom' })
-if ($Continuous -and $Kind -eq 'lieutenant') { Write-Host 'The lieutenant answers the player''s chat; it has no continuous mode.' -ForegroundColor Red; exit 1 }
-if ($Continuous) { $Wake = 'self'; $News = 'theatre' }
+# a continuous lieutenant (0.18.4) keeps one conversation with the player; it is never woken, so its wake and news stay as they are
+if ($Continuous -and $Kind -ne 'lieutenant') { $Wake = 'self'; $News = 'theatre' }
 if ($FreshCalls) { $Wake = 'rule' }
 if (-not $News) { $News = $(if ($had['news']) { $had['news'] } elseif ($Kind -eq 'lieutenant') { 'full' } else { 'theatre' }) }
 if (-not $Wake) { $Wake = $(if ($had['wake']) { $had['wake'] } else { 'rule' }) }
@@ -113,7 +113,7 @@ New-Item -ItemType Directory -Force (Join-Path $channel 'lookups') | Out-Null
 # the instructions: only where the folder has none (or with -Force), so the agent's own prompts are never lost
 $fresh = @()
 # a lieutenant's instructions are its own, and it has no chronicler
-if ($Kind -eq 'lieutenant') { $pairs = @(, @('lieutenant-system.template.md', 'warroom-system.md')) }
+if ($Kind -eq 'lieutenant') { $pairs = @(@('lieutenant-system.template.md', 'warroom-system.md'), @('lieutenant-continuous.template.md', 'warroom-continuous.md')) }
 else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'), @('warroom-news.template.md', 'warroom-news.md'), @('warroom-continuous.template.md', 'warroom-continuous.md')) }
 foreach ($pair in $pairs) {
     $to = Join-Path $Workspace $pair[1]
@@ -165,6 +165,14 @@ if ($Continuous -or $FreshCalls) {
     $changed = $false
     for ($i = 0; $i -lt $wl.Count; $i++) { if ($wl[$i] -match '^\s*memory\s*=') { if ($wl[$i] -notmatch "=\s*$memory\s*$") { $changed = $true }; $wl[$i] = "memory = $memory"; $found = $true } }
     if (-not $found) { $wl += "memory = $memory"; $changed = $true }
+    # a continuous lieutenant answers as it did with fresh calls: a medium effort, thinking as long as it needs, no time limit (the same for every call of a conversation)
+    if ($Continuous -and $Kind -eq 'lieutenant') {
+        foreach ($kv in @(@('continuous_effort', 'medium'), @('continuous_thinking_cap', '0'), @('continuous_timeout_seconds', '0'))) {
+            $hit = $false
+            for ($i = 0; $i -lt $wl.Count; $i++) { if ($wl[$i] -match ('^\s*' + $kv[0] + '\s*=')) { if ($wl[$i] -notmatch ('=\s*' + $kv[1] + '\s*$')) { $changed = $true }; $wl[$i] = $kv[0] + ' = ' + $kv[1]; $hit = $true } }
+            if (-not $hit) { $wl += ($kv[0] + ' = ' + $kv[1]); $changed = $true }
+        }
+    }
     if ($changed) {
         Copy-Item $wr ($wr + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmm') + '-before-' + $memory) -Force
         [System.IO.File]::WriteAllLines($wr, [string[]]$wl, $utf8)

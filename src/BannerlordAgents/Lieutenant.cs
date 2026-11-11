@@ -312,6 +312,8 @@ namespace BannerlordAgents
             {
                 Number = n, Said = text, Earlier = Unanswered.Take(Unanswered.Count - 1).ToList(), Notes = Notes.ToList(), Letters = Mail.ToList(), Hours = hours, Date = Text.When(hours),
                 Campaign = Bridge.CampaignId, Realm = realm.StringId, RealmName = Names.Faction(realm), LoadId = Bridge.LoadId, Ruler = Names.Hero(Hero.MainHero),
+                // the in-game hour of the save this load came from (0.18.2): a continuous lieutenant begins a new conversation when an earlier save is loaded
+                LoadedAt = double.IsNaN(Bridge.LoadedAt) ? (double?)null : Bridge.LoadedAt,
                 Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Tools, _pending.Diplomacy, _pending.Letters, _pending.Hours },
                 History = before.Skip(Math.Max(0, before.Count - HistoryLines)).ToList(), HistoryTotal = before.Count, Save = Bridge.History?.Save, PartyAi = pac,
                 Run = RunTags.Id, Arm = RunTags.Arm, OrdersWaiting = WaitingOrders, AnswersWaiting = WaitingAnswers
