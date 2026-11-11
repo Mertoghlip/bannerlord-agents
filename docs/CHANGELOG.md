@@ -2305,7 +2305,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Tuesday, November 10
 
-### 18:32 · The fresh-call design frozen at tag `fresh-calls-0.17.7`; test A1 stops at day 12 · commit (this entry's)
+### 18:32 · The fresh-call design frozen at tag `fresh-calls-0.17.7`; test A1 stops at day 12 · commit 605bea9
 - **Why:** a fresh call at every wake takes too much of my plan to keep testing on it. I'm moving the realm agents to one continuous conversation each, which sets its own wakes and its own strategy reviews and compacts at quiet moments. It is still being designed; nothing is built yet. The fresh-call design stays runnable, so later tests can compare the two. Test A1's second start (run 20261108-2016-A) stops at day 12 (save TEST A1, Autumn 10, 1087).
 - **What:** git tag `fresh-calls-0.17.7` on commit 38f939a: game module 0.17.6, war room 0.17.7. No code changes. To run it again: check out the tag and build, or use the builds in the backup below, and restore the agents' folders from it.
 - **Numbers (Nov 8, 20:15–22:35, Claude Code list prices):**
