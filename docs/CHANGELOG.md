@@ -2406,7 +2406,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** into the game's Modules\BannerlordAgents (v0.18.2) with the game closed. War rooms and dashboard stopped for the build and started again on 0.18.4.
 - **Outside the repository:** `C:\Users\karab\Projects\lieutenant`: `warroom-continuous.md` installed; `warroom.txt` set to `memory = continuous`, `continuous_effort = medium`, `continuous_thinking_cap = 0`, `continuous_timeout_seconds = 0` (old copy `warroom.txt.bak-20261111-1422-before-continuous`); `warroom\tools.txt` rewritten by the setup script (the game writes it again at load).
 
-### 15:55 · Version 0.18.3 (module) and war room 0.18.5: the agents command through orders, and may give gold between their clans
+### 15:55 · Version 0.18.3 (module) and war room 0.18.5: the agents command through orders, and may give gold between their clans · commit ae0e51d
 - **Why:**
   - In this morning's test Dol Guldur gave up the standing orders: 18% of its orders were standing ones (61% on Nov 8), 1 defend (39 on Nov 8). It sheltered small lords castle by castle, wake by wake, and watched its siege of Lasgalor to withdraw by hand; the withdraw landed 17 in-game hours late, after the game's own commander had begun a storm. The orcs did not change (70% standing orders). The cause was ours: the continuous instructions' example answer had lost one of its two defend orders, for a siege watched to react by hand, which Dol Guldur copied almost word for word.
   - I can move gold between my realm's clans, so the agents should be able to as well, and should see which lords are too poor to recruit and what loot each could sell.
