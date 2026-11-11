@@ -2374,3 +2374,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Dashboard self-test passed. RefCheck: 839 references, missing 0.
 - **Installed** into the game's Modules\BannerlordAgents (v0.18.1) with the game closed.
 - **Outside the repository:** `warroom-continuous.md` in `orc-war-council` and `dolguldur-war-council` replaced by the new template (old copies `warroom-continuous.md.bak-20261111-before-fresh-answers`). War rooms and dashboard stopped for the build and started again on 0.18.3.
+
+### 13:30 · The launcher's module list: War Sails unticked again
+- **Why:** the computer restarted, and the launcher ticked War Sails (the naval DLC, `NavalDLC`) again. The new test should load with the same modules as the last run.
+- **What:** `NavalDLC` set back to not selected in `LauncherData.xml`. Nothing else changed: the ticked list and its order now match the last run's command line word for word (`rgl_log_21036.txt`, Nov 8 21:52). The 13:24 start today had loaded War Sails in addition. That start closed within a minute and wrote no save; `TEST START.sav` is unchanged (Oct 22).
+- **Outside the repository:** `Documents\Mount and Blade II Bannerlord\Configs\LauncherData.xml` (OneDrive). Old copy `LauncherData.xml.bak-20261111-1330-preNavalOff`. Edited with the game closed.
