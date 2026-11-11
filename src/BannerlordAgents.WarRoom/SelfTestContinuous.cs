@@ -32,6 +32,11 @@ namespace BannerlordAgents.WarRoom
                 var missing = want.Where(h => full.IndexOf("\n" + h + "\n", StringComparison.Ordinal) < 0).ToList();
                 Check(missing.Count == 0 && !full.Contains("## The council of war") && !full.Contains("Each poke is a fresh conversation") && full.Contains("Orders you just gave, and the sections of the map that are critical for your wars that you are watching"),
                       "the continuous instructions lay over the realm's own: every section lands, the council and the fresh-call memory are gone" + (missing.Count > 0 ? ": missing " + string.Join(", ", missing) : ""));
+                string shape = full.Substring(full.IndexOf("## Your handover", StringComparison.Ordinal));
+                shape = shape.Substring(0, shape.IndexOf("\n## ", 5, StringComparison.Ordinal));
+                string[] parts = { "1. HOW WE GOT HERE", "2. WHERE THE WAR STANDS", "3. MY PLAN AND WHY", "4. ORDERS IN FORCE", "5. WATCHES IN FORCE", "6. THE HUMAN PLAYER", "7. LESSONS AND WHAT IS WORTH COPYING", "8. ALLIES AND LETTERS", "9. WHAT I WAS ABOUT TO DO" };
+                Check(parts.All(shape.Contains) && parts.Select(x => shape.IndexOf(x, StringComparison.Ordinal)).SequenceEqual(parts.Select(x => shape.IndexOf(x, StringComparison.Ordinal)).OrderBy(i => i))
+                      && shape.Contains("ON TRIAL") && !shape.Contains("STILL TESTING") && shape.Contains("game's own list"), "the handover's nine parts in order, the orders in force among them with the trials marked");
                 Check(full.IndexOf("## Strategy reviews", StringComparison.Ordinal) < full.IndexOf("## How you are asked", StringComparison.Ordinal)
                       && full.IndexOf("## Your handover", StringComparison.Ordinal) > full.IndexOf("## Your memory", StringComparison.Ordinal)
                       && full.IndexOf("## Your handover", StringComparison.Ordinal) < full.IndexOf("## How you answer", StringComparison.Ordinal), "and each new section sits beside the one it belongs with");
@@ -128,6 +133,28 @@ namespace BannerlordAgents.WarRoom
             string h = "HANDOVER, Misty Mountain Orcs, Autumn 12 (the game was closed)\n\n1. HOW WE GOT HERE\n" + string.Join(" ", Enumerable.Repeat("We held the passes.", 40));
             Check(Room.HandoverText("Here it is:\n```\n" + h + "\n```") == h && Room.HandoverText("HANDOVER: too short.") == null && Room.HandoverText("{\"orders\": []}") == null,
                   "a handover is read from the word HANDOVER on, fences dropped; too short or missing, it is not one");
+
+            // the game's own list for the handover's parts 4 and 5 (0.18.1): the newer of the last wake's report and the last situation report
+            string ch = Path.Combine(dir, "warroom");
+            File.WriteAllText(Path.Combine(ch, "report.txt"), "REPORT FOR MISTY MOUNTAIN ORCS\r\nRuler: Burzum.\r\n\r\nYOUR ORDERS IN FORCE\r\n- Naglur [lord_MM8_1]: army_guard Gor-mir.\r\n- Ulga [lord_MM2_8]: garrison Sirannon.\r\n\r\n"
+                                                              + "YOUR PURSE\r\n- gold\r\n\r\nLORDS WITH NO ORDER (1 of your 3; the game's own AI leads each until you order him)\r\n- Hrokmaw [lord_MM11_4]: 309 men.\r\n");
+            File.WriteAllText(Path.Combine(ch, "council.txt"), "COUNCIL BRIEFING FOR MISTY MOUNTAIN ORCS, Autumn 12, 1087, 14:00\r\nThe whole realm.\r\n\r\nEVERY LORD (3)\r\n- Naglur.\r\n\r\n"
+                                                               + "YOUR WATCHES (1 of 12; read every in-game hour)\r\n- north_push: wakes you if distance(elves, pass) < 25.\r\n");
+            File.SetLastWriteTimeUtc(Path.Combine(ch, "report.txt"), DateTime.UtcNow);
+            File.WriteAllText(Path.Combine(ch, "poke.txt"), "POKE #900, Autumn 11, 1087, 09:00\r\nAnswer.\r\n\r\nYOUR ORDERS IN FORCE HERE (1 of 2)\r\n- Naglur [lord_MM8_1]: army_guard Gor-mir.\r\n- Elsewhere (1; list orders for them in full): Ulga [lord_MM2_8]: garrison Sirannon [castle_MM7].\r\n");
+            File.SetLastWriteTimeUtc(Path.Combine(ch, "poke.txt"), DateTime.UtcNow.AddMinutes(-30));
+            string facts = room.HandoverFacts(false);
+            Check(facts != null && facts.StartsWith("THE GAME'S OWN LIST FOR YOUR HANDOVER (as of Autumn 12, 1087, 14:00, the last the game wrote before it closed)", StringComparison.Ordinal)
+                  && facts.Contains("YOUR ORDERS IN FORCE\n- Naglur") && facts.Contains("- Ulga [lord_MM2_8]: garrison Sirannon.") && facts.Contains("LORDS WITH NO ORDER (1 of your 3") && facts.Contains("- Hrokmaw")
+                  && facts.Contains("YOUR WATCHES (1 of 12") && !facts.Contains("YOUR PURSE") && !facts.Contains("EVERY LORD"),
+                  "the handover's list: every order, the lords with none and the watches, from the situation report and its briefing when they are the newest, dated by the briefing: " + (facts ?? "none").Replace("\n", "|"));
+            File.SetLastWriteTimeUtc(Path.Combine(ch, "poke.txt"), DateTime.UtcNow.AddMinutes(5));
+            string fromPoke = room.HandoverFacts(false);
+            Check(fromPoke != null && fromPoke.Contains("(as of Autumn 11, 1087, 09:00,") && fromPoke.Contains("YOUR ORDERS IN FORCE HERE (1 of 2)\n- Naglur") && fromPoke.Contains("Elsewhere (1; list orders for them in full): Ulga"),
+                  "or from the last wake's report when it is newer, whose orders section names every other order in a line: " + (fromPoke ?? "none").Replace("\n", "|"));
+            File.Delete(Path.Combine(ch, "report.txt"));
+            File.WriteAllText(Path.Combine(ch, "poke.txt"), "POKE #901, Autumn 11, 1087, 10:00\r\nAnswer.\r\n\r\nWHY YOU ARE ASKED NOW\r\n- x\r\n");
+            Check(room.HandoverFacts(false) == null, "with no orders section anywhere, the handover is asked for without a list");
 
             // its own tools, as the library lists them
             Check(Room.OwnToolNames("ORDERS\n- **defend** (ours)\nYOUR OWN TOOLS (your realm's library)\n- **ally_join** (yours, v1) (at: ...)\n- **circuit** (yours, v3): recruits\n").SequenceEqual(new[] { "ally_join v1", "circuit v3" }),

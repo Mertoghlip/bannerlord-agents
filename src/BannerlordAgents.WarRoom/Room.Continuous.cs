@@ -752,10 +752,13 @@ namespace BannerlordAgents.WarRoom
             string date = _clockDate ?? meta?.Date ?? "";
             int number = meta?.Number ?? Math.Max(0, _lastAnswered);
             long before = _talk.Tokens;
+            // the game's own list of the orders in force, the lords with none and the watches, for the handover's parts 4 and 5 (0.18.1): fresh when the game runs, else the last it wrote
+            string facts = HandoverFacts(GameRunning() && Fresh(out _));
             string prompt = "WRITE YOUR HANDOVER NOW: " + why.TrimEnd('.') + ". This conversation ends with it. Your next message begins a new conversation that holds only your instructions, "
                             + "this handover, your notes, your chronicle since and a fresh report of your realm, so put in it everything you will need that those do not hold. Write it as "
                             + "\"Your handover\" in your instructions says, in its parts and in your own voice, as plain text beginning with the word HANDOVER and the date (" + date + "). No JSON and no orders: "
-                            + "your orders in force and your watches carry on as they are.";
+                            + "your orders in force and your watches carry on as they are."
+                            + (facts != null ? " Write part 4 (orders in force) and part 5 (watches) from the game's own list below, adding what only you know: why each group has its order, what would end it, and which orders are on trial.\n\n" + facts : "");
             Say("Handover (" + why + "): the conversation holds " + before.ToString("N0", CultureInfo.InvariantCulture) + " tokens...");
             CallResult r = Converse(prompt, "handover", number, Math.Max(_c.CouncilTimeoutSeconds, 300), meta, out string folder, out bool stall);
             string text = r.Ok ? HandoverText(r.Text) : null;
@@ -793,11 +796,56 @@ namespace BannerlordAgents.WarRoom
                 kind = "handover", continuous = true, at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), poke = number, when = date, why, model = _c.ContinuousModel,
                 effort = _c.ContinuousEffort, thinking_cap = _c.ContinuousThinkingCap, ok = kept, retried, stall_retry = stall, seconds = Math.Round(seconds, 2), call_seconds = Math.Round(r.Seconds, 2),
                 tokens_in = r.InTokens, tokens_out = r.OutTokens, thinking = r.Thinking, cache_read = r.CacheRead, cache_write = r.CacheWrite, cache_write_1h = r.CacheWrite1h, cost_usd_list = r.Cost,
-                conversation_tokens = before, handover_words = Words(text), campaign = _mem.Campaign, folder, run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, problem = kept ? null : r.Error ?? "no handover in its answer"
+                conversation_tokens = before, handover_words = Words(text), facts_chars = facts?.Length ?? 0, campaign = _mem.Campaign, folder, run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, problem = kept ? null : r.Error ?? "no handover in its answer"
             });
             Say(kept ? "Handover written (" + Words(text) + " words, " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s); the next wake begins a new conversation from it."
                      : "Handover: NOT WRITTEN (" + (r.Error ?? "no handover in its answer") + "); the conversation carries on.");
             return kept;
+        }
+
+        /// <summary>The sections of a report the handover's list takes: every order in force (here and elsewhere), the lords with none, the watches.</summary>
+        private static readonly string[] FactSections = { "YOUR ORDERS IN FORCE", "LORDS WITH NO ORDER", "YOUR WATCHES" };
+
+        /// <summary>
+        /// The game's own list for the handover's parts 4 and 5 (0.18.1): the orders in force, the lords with none and the watches, from the newest the game wrote. When the game
+        /// runs (live), a fresh briefing is asked for first, so the situation report holds every order from its newest hour; at its close, the newer of the last situation report
+        /// and the last wake's report (whose orders section names every other order in a line). Null when neither holds them.
+        /// </summary>
+        internal string HandoverFacts(bool live)
+        {
+            if (live) RequestBriefing(out _);
+            string pokeFile = Path.Combine(_c.ChannelDir, "poke.txt"), reportFile = Path.Combine(_c.ChannelDir, "report.txt"), councilFile = Path.Combine(_c.ChannelDir, "council.txt");
+            DateTime pokeAt = File.Exists(pokeFile) ? File.GetLastWriteTimeUtc(pokeFile) : DateTime.MinValue, reportAt = File.Exists(reportFile) ? File.GetLastWriteTimeUtc(reportFile) : DateTime.MinValue;
+            if (pokeAt == DateTime.MinValue && reportAt == DateTime.MinValue) return null;
+            bool fromReport = reportAt > pokeAt;
+            string source = ReadShared(fromReport ? reportFile : pokeFile) ?? "";
+            string council = fromReport ? ReadShared(councilFile) ?? "" : "";
+            string asOf = fromReport ? DateAfter(council, "COUNCIL BRIEFING FOR") : DateAfter(source, "POKE #");
+            var parts = new List<string>();
+            var taken = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string text in new[] { source, council })
+                foreach (KeyValuePair<string, string> b in Blocks(text))
+                {
+                    if (b.Key == null) continue;
+                    string key = Key(b.Key), which = FactSections.FirstOrDefault(f => key.StartsWith(f, StringComparison.Ordinal));
+                    if (which == null || !taken.Add(which)) continue;
+                    parts.Add((b.Key + "\n" + b.Value.TrimEnd()).Trim());
+                }
+            if (!parts.Any(p => p.StartsWith("YOUR ORDERS IN FORCE", StringComparison.Ordinal))) return null;
+            return "THE GAME'S OWN LIST FOR YOUR HANDOVER (as of " + (asOf.Length > 0 ? asOf : "its last report") + (live ? "" : ", the last the game wrote before it closed")
+                   + "): your orders in force, the lords with none, and your watches. Orders you gave, or that ended, after that are in this conversation.\n\n" + string.Join("\n\n", parts) + "\n";
+        }
+
+        /// <summary>The date on a report's first line that begins so ("POKE #12, Autumn 3, 1087, 10:00"): what follows its first comma; empty when there is none.</summary>
+        private static string DateAfter(string text, string prefix)
+        {
+            foreach (string line in (text ?? "").Replace("\r", "").Split('\n'))
+            {
+                if (!line.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                int c = line.IndexOf(", ", StringComparison.Ordinal);
+                return c > 0 ? line.Substring(c + 2).Trim() : "";
+            }
+            return "";
         }
 
         /// <summary>The handover in an answer: from the word HANDOVER on, without code fences; null when there is none or it is too short to be one.</summary>
