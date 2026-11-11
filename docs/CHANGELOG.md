@@ -2347,7 +2347,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Wednesday, November 11
 
-### 10:40 · War room 0.18.2: the agent alone sets when its strategy reviews sit · commit (pending)
+### 10:40 · War room 0.18.2: the agent alone sets when its strategy reviews sit · commit 053c5ce
 - **Why:** an experiment. The agent decides when it reviews its war, with no review called for it.
 - **What:**
   - A strategy review sits only at the hour the agent set with `review_in`, now 1 to 240 in-game hours from its answer (was 4 to 72), given at a review or at any wake.
