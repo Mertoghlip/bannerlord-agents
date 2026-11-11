@@ -2387,3 +2387,8 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Version 0.18.1 rebuilt against 1.4.8 and installed again; no code changed.
 - **Checks:** Smoke test ALL CHECKS PASSED (576); war room and dashboard self-tests passed; RefCheck against 1.4.8: 839 references, missing 0. `TEST START.sav` unchanged.
 - **Installed** into the game's Modules\BannerlordAgents (v0.18.1) with the game closed. War rooms and dashboard stopped for the build and started again.
+
+### 13:51 · The launcher's module list: War Sails unticked a third time
+- **Why:** the launcher ticks War Sails (`NavalDLC`, an official optional module) whenever its version differs from the one it last recorded. The rollback changed that version again, so the 13:46 start loaded War Sails. I closed that start before the save loaded.
+- **What:** `NavalDLC` set to not selected again. The launcher now records the 1.4.8 version (v1.2.8.119303), so the choice should hold as it did from Oct 22 until today. The ticked list matches the last run's command line word for word (`rgl_log_21036.txt`). The 13:46 start ran on build 119303.
+- **Outside the repository:** `LauncherData.xml` (OneDrive). Old copy `LauncherData.xml.bak-20261111-1350-preNavalOff2`. Edited with the game closed.
