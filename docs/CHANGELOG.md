@@ -2337,7 +2337,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `orc-war-council` and `dolguldur-war-council`: `agent.txt` now says `wake = self` (old copy `agent.txt.bak-20261110-before-continuous`), `warroom.txt` says `memory = continuous` with the new continuous settings added (old copy `warroom.txt.bak-*-before-continuous`), `warroom-continuous.md` installed, and `warroom\tools.txt` written afresh (the game writes the full library at the next load).
   - The lieutenant and the kingdom agent are unchanged. All war rooms and the dashboard were stopped for the build and started again on 0.18.0.
 
-### 21:31 · War room 0.18.1: the handover lists every order in force · commit (pending)
+### 21:31 · War room 0.18.1: the handover lists every order in force · commit 334ed68
 - **Why:** the next conversation's fresh report says what each lord is doing, but not why. The handover now carries every order in force with its purpose. The old "orders I am still testing" part folds into it, so no order is written down twice.
 - **What:**
   - The handover's nine parts (`agent/warroom-continuous.template.md`): part 4 is now ORDERS IN FORCE. It covers every lord holding an order and every lord with none, grouped by front or task, each group with its order, why and what would end it, and the orders on trial marked ON TRIAL with what is expected by when and what happens if they fail. Watches move to part 5. The length limit rises from 2,500 to 3,000 words.
