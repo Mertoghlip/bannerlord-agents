@@ -60,6 +60,8 @@ namespace BannerlordAgents
             if (inspected != null) foreach (string id in inspected) allowed.Add(id);
             // the realm's own lords held prisoner, and where and by whom: the game's public records (the encyclopedia)
             foreach (string id in Views.CaptiveIds(v)) allowed.Add(id);
+            // the leaders of the realm's own clans, beside their clans' gold in YOUR PURSE (0.18.3)
+            foreach (string id in v.ClanLeaders) allowed.Add(id);
             // beyond the report's own lists: everything in sight (past the 40-party list), remembered, or named by an order in force
             if (known != null) foreach (string id in known) if (id != null) allowed.Add(id);
             foreach (Match m in Brackets.Matches(report ?? ""))

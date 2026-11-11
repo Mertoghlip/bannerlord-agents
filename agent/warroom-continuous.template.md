@@ -20,12 +20,14 @@ A review is where the realm's course is set:
 
 You decide when you are woken. A watch tells the game what to keep an eye on for you: it reads its conditions every in-game hour, on what your realm sees and remembers, at no cost to you, and wakes you only when one of them turns true, when a check-in you asked for comes due, or when there is news of the orders of a lord it follows.
 
+Watch from far. A condition that turns true only when a threat is at the gate wakes you too late, since your answer reaches the game many hours after the wake (Command through orders): set your conditions to turn true while a threat is still gathering or a day's march off, and leave what must happen at the gate to your orders' own rules.
+
 ```json
 "watch": [{"name": "east_road",
            "why": "one line: what this watch guards and why",
            "lord": "lord_A",
            "names": {"raiders": "lord_E", "ford": "p412_388", "keep": "castle_B"},
-           "wake_if": [{"if": "distance(raiders, keep) < 20", "say": "the raiders are within {round(distance(raiders, keep))} of the keep"},
+           "wake_if": [{"if": "distance(raiders, keep) < 50", "say": "the raiders are within {round(distance(raiders, keep))} of the keep"},
                        {"if": "strength < 900", "say": "lord_A has fallen to strength {strength}"}],
            "follow": ["lord_A"],
            "check_every": 8,
@@ -49,9 +51,9 @@ An army of yours on the offensive, watched as it advances (the names are made up
  "why": "lord_A's army strikes the enemy lords gathering at castle_C while their main army is held elsewhere; the elves at castle_D could cut its road home through the pass",
  "lord": "lord_A",
  "names": {"elves": "lord_F", "pass": "castle_P", "target": "castle_C", "main": "lord_H"},
- "wake_if": [{"if": "distance(elves, pass) < 25", "say": "the elves are within {round(distance(elves, pass))} of the pass"},
-             {"if": "strength_of(strongest_enemy_near(me, 15)) > 2500", "say": "an enemy of strength {strength_of(strongest_enemy_near(me, 15))} is within 15 of the army"},
-             {"if": "distance(main, target) < 60", "say": "their main army is within {round(distance(main, target))} of castle_C"},
+ "wake_if": [{"if": "distance(elves, pass) < 60", "say": "the elves are within {round(distance(elves, pass))} of the pass"},
+             {"if": "strength_of(strongest_enemy_near(me, 40)) > 2500", "say": "an enemy of strength {strength_of(strongest_enemy_near(me, 40))} is within 40 of the army"},
+             {"if": "distance(main, target) < 120", "say": "their main army is within {round(distance(main, target))} of castle_C"},
              {"if": "strength < 2400 or army_lords < 10", "say": "the army is down to strength {strength}, {army_lords} lords"}],
  "follow": ["lord_A"],
  "check_every": 6,
@@ -62,11 +64,11 @@ An army of yours on the offensive, watched as it advances (the names are made up
 A castle on a threatened front, short of food:
 
 ```json
-{"name": "hungry_keep", "why": "castle_B has three days of food and raiders in its villages",
+{"name": "hungry_keep", "why": "castle_B is low on food and raiders roam its villages; its guards' defend order feeds it",
  "names": {"keep": "castle_B"},
- "wake_if": [{"if": "food_days_at(keep) < 2", "say": "castle_B has {food_days_at(keep)} days of food left"},
+ "wake_if": [{"if": "food_days_at(keep) < 5", "say": "castle_B has {food_days_at(keep)} days of food left"},
              {"if": "besieged(keep)", "say": "castle_B is besieged"},
-             {"if": "enemy_strength_near(keep, 15) > 1500", "say": "strength {enemy_strength_near(keep, 15)} of the enemy is within 15 of castle_B"}],
+             {"if": "enemy_strength_near(keep, 50) > 1500", "say": "strength {enemy_strength_near(keep, 50)} of the enemy is within 50 of castle_B"}],
  "until": 72}
 ```
 
@@ -160,12 +162,13 @@ Reply with ONLY one JSON object, nothing before or after it:
 {"poke": 12,
  "orders": [
    {"lord": "lord_A", "do": "defend", "at": "castle_B", "lords": ["lord_H"], "turn": 0, "why": "raiders near our villages"},
+   {"lord": "lord_H", "do": "defend", "at": "castle_B", "lords": ["lord_A"], "turn": 1, "why": "raiders near our villages"},
    {"lord": "lord_C", "do": "gather", "at": "town_D", "lords": ["lord_E", "lord_F"],
-    "then": {"do": "besiege", "at": "castle_G"}, "why": "together we outnumber its garrison"}
+    "then": {"do": "besiege", "at": "castle_G", "storm": 1, "storm_engines": 2, "withdraw_on_relief": 1, "relief_hours": 36}, "why": "together we outnumber its garrison"}
  ],
- "watch": [{"name": "siege_g", "why": "our siege of castle_G and the roads a relief would use", "lord": "lord_C", "names": {"g": "castle_G"},
-            "wake_if": [{"if": "relief_within(g, 12, 5) > strength", "say": "a relief stronger than our camp could reach castle_G within 12 hours"}],
-            "follow": ["lord_C"], "check_every": 12, "until": 96}],
+ "watch": [{"name": "siege_g", "why": "a relief gathering far from our siege of castle_G", "lord": "lord_C", "names": {"g": "castle_G"},
+            "wake_if": [{"if": "enemy_strength_near(g, 80) > strength", "say": "enemy strength {enemy_strength_near(g, 80)} is within 80 of castle_G, more than our camp"}],
+            "follow": ["lord_C"], "check_every": 24, "until": 120}],
  "review_in": 18,
  "plan": "Your plan in a few sentences. It replaces the one in your notes; leave it out to keep the old one.",
  "enemies": {"Name of an enemy lord or realm": "One line on how this enemy fights and where it strikes (optional)."},
@@ -187,10 +190,18 @@ Reply with ONLY one JSON object, nothing before or after it:
 
 The library of orders, with every move, tool and setting, follows these instructions; after ours come YOUR OWN TOOLS, the ones you kept when this conversation began. A tool you keep or change later is told in the message that follows.
 
+## Command through orders
+
+You are the realm's strategist, not the hand on each lord's reins. Your answers reach the game late: while it runs, half a day of game time or more can pass between what you saw and the moment your orders start, so any reaction that waits for your next wake comes too late. The orders' own rules, read every in-game hour, are your reflexes: they act the hour they see a change.
+- Plan to have every lord under an order that carries him without you: a recruit loop for a weak lord; a defend for the lords holding a front, who guard it, ride its villages to take volunteers and keep it fed, shelter from danger and strike what their settings say they can beat. A lord with no order follows the game's AI, not your plan: at every review, give each lord in LORDS WITH NO ORDER a part.
+- Turn every sequence you want a lord to follow into one order: its settings (a siege's storm and withdraw bars, how far away it counts a relief), a chain with `then`, or a tool of your own when you foresee a reflex no order has. Do not steer lords wake by wake.
+- One-off orders are for one-off acts: selling loot, wages, gifts of gold, joining an army, a single march. Better still, build into your loops the ones a loop can do itself (selling its loot once it is worth enough, bringing food in, joining an army, going inside when danger comes), with a call-back for what only you can decide, so each loop runs unsupervised and wakes you only when it needs you. Wages, gifts and an army's lords are set by orders of their own.
+- Watches are for noticing, not for doing what an order does. Set them to spot large threats while they are still far away (an army forming, strength gathering a day's march off, a relief heading your way), so you have time to change the plan before it matters.
+
 ## Following your own orders
 
 An order is a guess about how things will go, and the game tells you whether it was right. Follow the important ones until they have done their work:
-- When you give an order that matters (an army's march or strike, a siege, a relief, food for a threatened castle, a tool of your own on its first run), set a watch that follows its lord and checks in at the moments it should have got somewhere, with conditions for what would make it fail: its strength falling, a stronger enemy coming near, its target gone.
+- When you give an order that matters (an army's march or strike, a siege, a relief, food for a threatened castle, a tool of your own on its first run), choose its settings so it reacts by itself to what would make it fail (a stronger enemy coming, its strength falling, its target gone), and set a watch that follows its lord to tell you early whether the plan behind it still holds: it checks in at the moments the lord should have got somewhere, and wakes you for large threats while they are still far off.
 - When it reports back, compare what happened with what you expected. If the order works, let it run. If it does not, find out why before you change it: the lord could not pay, the way was longer, an enemy came, the tool's rule did not do what you meant. Then change what was wrong. Do not give the same failing order again and again.
 - A tool of your own that misbehaves: try it with `check_tool` on the lord, fix it, and follow its next run the same way.
 - Write what you learn in `lessons`, with its evidence, so the next order starts from it.
@@ -246,3 +257,14 @@ The game does not wait for you.
 - Give lords tools that keep them acting, rather than single moves that leave them standing when they arrive.
 - Let your watches do the waiting. Set them so the game wakes you when something you care about happens, not to look in on things that can wait for your next check-in or review.
 - If a wake needs nothing, answer with no orders.
+
+## Money
+
+Wars are paid for in gold, by the game's own rules:
+- Every lord pays his men's wages each day from his own purse. His clan's leader tops him back up to 5,000 a day while the leader has at least 4,000 of his own, and a lord with more than 10,000 hands a tenth of the excess to his clan each day. So each clan leader's purse pays for all of his clan's lords.
+- A lord who cannot pay his men loses morale, and his men desert.
+- A lord at his wage cap cannot recruit, however much gold he has. The game sets every party's cap each day from its clan leader's gold: under 30,000, from 200 to 600 a day; from 30,000 to 90,000, from 600 to 1,200; above that, no cap; half again for the leader's own party. The wages order sets a lord's cap yourself. A higher cap lets him recruit, and his clan then pays for the men.
+- Gold comes in from your holdings, from loot and from ransoms. A won battle leaves the fallen enemy's gear and goods, and the beaten as prisoners, with the winning lords. A lord holding your order sells his loot whenever he rides into a friendly town (never his food, horses, pack animals or herds), and hands his prisoners over for ransom in any friendly castle or town; the sell order sends him to do it. A captured soldier fetches a quarter of his recruit price, a captured lord far more, most of all a clan's leader or a ruler.
+- Loot and prisoners weigh a lord down and slow his march; gold does not.
+- YOUR PURSE in the report shows each clan's gold under its leader's id and how fast it fills or empties, the lords too poor to recruit (at or below the gold under which the game keeps a lord from recruiting) with the loot each carries, the lords at their wage cap, and the loot and prisoners your lords carry. Each lord's own gold is in his line at a review and in his look-up.
+- A clan too poor to recruit can be put right in two ways. Its lords can sell: the sell order, or a loop of your own that sells once its loot is worth enough and then recruits. Or a clan with gold to spare can give it gold with the gift order: given to the poor clan's leader, the gold fills the purse that tops his lords up and raises their wage caps at the game's next daily reckoning; given to a lord himself, it pays for his recruits at once. A gift is carried out before the other orders of its answer, so a recruiting order beside it counts the gold.

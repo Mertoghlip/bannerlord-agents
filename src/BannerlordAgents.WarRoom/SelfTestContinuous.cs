@@ -28,7 +28,7 @@ namespace BannerlordAgents.WarRoom
             {
                 string full = Room.Overlay(File.ReadAllText(sys).Replace("\r", ""), File.ReadAllText(tpl));
                 string[] want = { "## Strategy reviews", "## Watches", "## How you are asked", "## Where your attention goes", "## Your memory", "## Your handover", "## How you answer",
-                                  "## Following your own orders", "## Learning from what happens", "## Look-ups", "## Allies", "## The human player", "## Time", "## Rules" };
+                                  "## Command through orders", "## Following your own orders", "## Learning from what happens", "## Look-ups", "## Allies", "## The human player", "## Time", "## Money", "## Rules" };
                 var missing = want.Where(h => full.IndexOf("\n" + h + "\n", StringComparison.Ordinal) < 0).ToList();
                 Check(missing.Count == 0 && !full.Contains("## The council of war") && !full.Contains("Each poke is a fresh conversation") && full.Contains("Orders you just gave, and the sections of the map that are critical for your wars that you are watching"),
                       "the continuous instructions lay over the realm's own: every section lands, the council and the fresh-call memory are gone" + (missing.Count > 0 ? ": missing " + string.Join(", ", missing) : ""));
@@ -40,6 +40,15 @@ namespace BannerlordAgents.WarRoom
                 Check(full.IndexOf("## Strategy reviews", StringComparison.Ordinal) < full.IndexOf("## How you are asked", StringComparison.Ordinal)
                       && full.IndexOf("## Your handover", StringComparison.Ordinal) > full.IndexOf("## Your memory", StringComparison.Ordinal)
                       && full.IndexOf("## Your handover", StringComparison.Ordinal) < full.IndexOf("## How you answer", StringComparison.Ordinal), "and each new section sits beside the one it belongs with");
+                // 0.18.5 (Nov 11): command through orders: both defend orders back in the example, the siege with its own bars, watches that look far, the gift in Money
+                string answerPart = full.Substring(full.IndexOf("## How you answer", StringComparison.Ordinal));
+                answerPart = answerPart.Substring(0, answerPart.IndexOf("\n## ", 5, StringComparison.Ordinal));
+                Check(answerPart.Contains("\"lord\": \"lord_A\", \"do\": \"defend\"") && answerPart.Contains("\"lord\": \"lord_H\", \"do\": \"defend\"") && answerPart.Contains("\"withdraw_on_relief\": 1, \"relief_hours\": 36")
+                      && !answerPart.Contains("relief_within(g, 12, 5)") && full.IndexOf("## Command through orders", StringComparison.Ordinal) > full.IndexOf("## How you answer", StringComparison.Ordinal)
+                      && full.IndexOf("## Command through orders", StringComparison.Ordinal) < full.IndexOf("## Following your own orders", StringComparison.Ordinal)
+                      && full.Contains("Your answers reach the game late") && full.Contains("Watch from far.") && full.Contains("with the gift order")
+                      && full.Split(new[] { "\n## Money\n" }, StringSplitOptions.None).Length == 2,
+                      "command through orders: the paired defends and a siege with its own bars in the example, the new section in place, watches from far, the gift in the one Money section");
             }
 
             // a wake's message less what the conversation holds

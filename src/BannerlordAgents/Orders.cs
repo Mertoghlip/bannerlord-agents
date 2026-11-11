@@ -285,6 +285,8 @@ namespace BannerlordAgents
             // the ruler's own army, formed or added to by the lieutenant (0.13.9): the order needs no lord of its own
             if (string.Equals((a.Do ?? "").Trim(), "my_army", StringComparison.OrdinalIgnoreCase)) return RulersArmy(a, realm, source, forceLive, ref status);
             if (string.IsNullOrWhiteSpace(a.Lord)) return "the order names no lord";
+            // gold from one lord's purse to another's (0.18.3): the giver may lead no party (a clan's leader in a holding still has his purse)
+            if (string.Equals((a.Do ?? "").Trim(), "gift", StringComparison.OrdinalIgnoreCase)) return GiftOrder(a, realm, forceLive, ref status);
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;
             // the two guards the vassal door always had (Oct 22): never the player, never a lord on a Party AI Controls order; the
@@ -1121,6 +1123,52 @@ namespace BannerlordAgents
             Diag.Event("order", "wages", new { lords = parties.Select(p => p.LeaderHero?.StringId).ToList(), cap, source = a.File, poke = a.Poke });
             status = "applied";
             return string.Join("; ", said);
+        }
+
+        /// <summary>
+        /// The gift order (0.18.3; Nov 11: the player can move gold between the clans of his realm, so the agents may too): gold from one lord's own purse to another
+        /// lord of the same realm. A clan's gold is its leader's purse, which tops the clan's lords up and sets their wage caps each day, so gold given to a poor clan's
+        /// leader lets its lords recruit again; given to a lord himself, it pays his recruits now. The giver keeps at least "keep" (GiftKeep when none is given) and
+        /// gives only what is above it. Never the player, on either side.
+        /// </summary>
+        private static string GiftOrder(AgentChannel.AgentOrder a, Kingdom realm, bool forceLive, ref string status)
+        {
+            Hero giver = FindHero(realm, a.Lord, out string error);
+            if (giver == null) return error;
+            string to = (a.Target ?? a.At ?? "").Trim();
+            if (to.Length == 0) return "gift needs \"target\": the lord of your realm who gets the gold (a clan's leader, to fill his clan's purse), and \"amount\"";
+            Hero getter = FindHero(realm, to, out error);
+            if (getter == null) return error;
+            if (giver == Hero.MainHero || getter == Hero.MainHero) return "the gift order never takes from or gives to " + Names.Hero(Hero.MainHero) + ", the human player";
+            if (getter == giver) return Names.Hero(giver) + " cannot give gold to himself";
+            if (!a.Settings.TryGetValue("amount", out double want) || double.IsNaN(want) || want < 1) return "gift needs \"amount\": how many denars to give";
+            double keep = a.Settings.TryGetValue("keep", out double k) && !double.IsNaN(k) ? Math.Max(0, k) : ToolDef.GiftKeep;
+            int has = giver.Gold, amount = (int)Math.Floor(Math.Min(Math.Round(want), has - keep));
+            if (amount < 1) return Names.Hero(giver) + " has " + Text.N(has) + ": keeping " + Text.N((int)keep) + ", he has nothing to give";
+            string mode = ModeOf(realm);
+            bool live = forceLive || (mode == "live" && ObeysAgent(giver));
+            bool shadow = !forceLive && mode == "shadow";
+            string Who(Hero h) => Names.Hero(h) + " [" + h.StringId + "]" + (h.Clan != null ? (h.Clan.Leader == h ? ", leader of " : ", of ") + h.Clan.Name : "");
+            string text = Who(giver) + " gives " + Text.N(amount) + " to " + Who(getter) + (amount < Math.Round(want) ? " (all he can spare, keeping " + Text.N((int)keep) + ")" : "");
+            if (shadow) { status = "checked"; return "valid: " + text + " (shadow mode: not carried out)"; }
+            if (!live) return NotYours(giver);
+            GiveGoldAction.ApplyBetweenCharacters(giver, getter, amount, true);
+            Diag.Event("order", "gift", new { giver = giver.StringId, getter = getter.StringId, amount, wanted = Math.Round(want), keep, giver_gold = giver.Gold, getter_gold = getter.Gold, source = a.File, poke = a.Poke });
+            Diag.Count("order:gift");
+            status = "applied";
+            return text + ": " + Names.Hero(getter) + " now has " + Text.N(getter.Gold) + ", " + Names.Hero(giver) + " " + Text.N(giver.Gold) + "."
+                   + (getter.Clan != null && getter.Clan.Leader == getter ? " A clan's gold is its leader's purse: the game tops his clan's lords up from it and sets their wage caps from it at its next daily reckoning." : "");
+        }
+
+        /// <summary>A lord of the realm by name or id for the gift order: one leading a party, else any living lord of its clans (a clan's leader in a holding, a prisoner).</summary>
+        private static Hero FindHero(Kingdom realm, string words, out string error)
+        {
+            Hero h = FindLord(realm, words, out error);
+            if (h != null) return h;
+            string w = (words ?? "").Trim().Trim('[', ']');
+            Hero any = Hero.Find(w) ?? realm.Clans.SelectMany(c => c.Heroes).FirstOrDefault(x => x.IsAlive && string.Equals(Names.Hero(x), w, StringComparison.OrdinalIgnoreCase));
+            if (any != null && any.IsAlive && any.MapFaction == realm) { error = null; return any; }
+            return null;
         }
 
         private static string ArmyChange(string verb, Hero lord, MobileParty lp, AgentChannel.AgentOrder a, Kingdom realm, string source, bool shadow, bool live, ref string status)

@@ -77,7 +77,10 @@ namespace BannerlordAgents.Tools
         /// <summary>"ours", "v2" for the second version of an agent's own tool, or "one-off".</summary>
         public string VersionText => Author == "ours" ? "ours" : OneOff ? "one-off" : "v" + Version;
         /// <summary>The order words that are not tools (Orders.Plain, the lieutenant's party_ai): no tool of an agent's may take them.</summary>
-        public static readonly HashSet<string> Reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "free", "release", "adjust", "add", "disband", "wages", "party_ai", "then" };
+        /// <summary>What a giver keeps at least when a gift order names no "keep" (0.18.3).</summary>
+        public const int GiftKeep = 10000;
+
+        public static readonly HashSet<string> Reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "free", "release", "adjust", "add", "disband", "wages", "gift", "party_ai", "then" };
         /// <summary>What each thing the tool takes is, in the writer's words ("takes"), shown in the library beside its kind.</summary>
         public readonly Dictionary<string, string> TakesAbout = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>The tool as written (an agent's own, kept whole in the library and the toolbook).</summary>
@@ -620,6 +623,9 @@ namespace BannerlordAgents.Tools
             sb.AppendLine("- **wages** (cap, or target \"none\" or \"game\"; lords): the most this lord's party may pay in wages a day, which decides whether he may recruit: a lord at his cap cannot, whatever his gold. "
                           + "cap: a number of denars a day; target \"none\": no cap; target \"game\": the game's own cap again, which it sets each day from the gold of his clan's leader. "
                           + "With lords, the same for those lords too. It does not pay anyone: each lord still pays his men from his own purse. Your cap stands until you change it or the campaign is loaded again.");
+            sb.AppendLine("- **gift** (target, amount; keep): gives gold from this lord's own purse to another lord of your realm (target); the giver may lead no party. "
+                          + "A clan's gold is its leader's purse, which tops the clan's lords up and sets their wage caps each day: gold given to a poor clan's leader lets its lords recruit again, and gold given to a lord himself pays for his recruits now. "
+                          + "amount: how many denars; keep: what the giver keeps at least (" + ToolDef.GiftKeep.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " when you give none), giving only what is above it. Given before the other orders of the same answer.");
             sb.AppendLine("- **sell** (above, a tool): sends a lord to cash in his loot and prisoners.");
             sb.AppendLine();
             sb.AppendLine("Changing orders:");

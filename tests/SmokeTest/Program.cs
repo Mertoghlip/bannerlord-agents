@@ -1053,12 +1053,19 @@ namespace SmokeTest
             capped.Gold = 10555; capped.Wages = 354; capped.WageCap = 359;
             var rich = Lord("p_m2", 104, 300, 700);
             rich.Gold = 8000; rich.Wages = 900; rich.WageCap = 2000; rich.CapOurs = true; rich.Loot = 3400; rich.LootPieces = 41; rich.Prisoners = 23; rich.PrisonerLords = 1; rich.Ransom = 1150;
-            Snapshot s = ToolWorld(6000, capped, rich);
+            var poor = Lord("p_m3", 106, 60, 700);
+            poor.Gold = 2100; poor.Wages = 120; poor.WageCap = 600; poor.RecruitFloor = 2650; poor.Loot = 1200; poor.LootPieces = 12;
+            Snapshot s = ToolWorld(6000, capped, rich, poor);
             s.Clans.Add(new ClanRow { Id = "clan_a", Name = "Clan A", Leader = "lord_p_m1", Gold = 10555, Daily = -1240, Ruler = true });
             string report = Views.Report(Views.Build(s, "orcs", s.WatchedSees, s.HostileToWatched, null), null);
-            Check(report.Contains("YOUR PURSE") && report.Contains("Clan A (yours) 10,555 (-1,240)") && report.Contains("At their wage cap, so they cannot recruit (1): p_m1 [lord_p_m1] wages 354 of 359")
-                  && report.Contains("Caps you set: p_m2 [lord_p_m2] 2,000 (wages 900)") && report.Contains("Carrying loot (1 lords, about 3,400 in all)") && report.Contains("about 1,150 in ransom"),
+            Check(report.Contains("YOUR PURSE") && report.Contains("Clan A (yours) [lord_p_m1] 10,555 (-1,240)") && report.Contains("At their wage cap, so they cannot recruit (1): p_m1 [lord_p_m1] wages 354 of 359")
+                  && report.Contains("Caps you set: p_m2 [lord_p_m2] 2,000 (wages 900)") && report.Contains("Carrying loot (2 lords, about 4,600 in all)") && report.Contains("about 1,150 in ransom"),
                   "the report's purse: the clans' gold and its day, who is at his wage cap, the caps set, the loot and prisoners carried");
+            Check(report.Contains("Too poor to recruit (1; the game keeps a lord from recruiting at or below his floor): p_m3 [lord_p_m3] gold 2,100 of his floor 2,650, ranks 9%, loot about 1,200")
+                  && report.Contains("(the id in brackets is the clan's leader, who holds its gold)"), "0.18.3: the purse names each clan's leader and lists the lords too poor to recruit, with their loot");
+            Check(Library.Text().Contains("**gift** (target, amount; keep)") && Library.Text().Contains("keeps at least (10,000 when you give none)") && ToolDef.Reserved.Contains("gift")
+                  && AgentChannel.WagesFirst(new List<AgentChannel.AgentOrder> { new AgentChannel.AgentOrder { Do = "recruit" }, new AgentChannel.AgentOrder { Do = "wages" }, new AgentChannel.AgentOrder { Do = "gift" } }).Select(o => o.Do).SequenceEqual(new[] { "gift", "wages", "recruit" }),
+                  "0.18.3: the gift order is in the library, its name kept from the agents' own tools, and an answer's gifts go first, then its wage caps");
             Check(Takings.Text("orcs").Contains("too few to reckon"), "with no won battle on record, what a battle brings in is not reckoned: " + Takings.Text("orcs"));
             for (int i = 0; i < 3; i++) Takings.Add(new TakingsRow { Hours = 6000 + i, Realm = "orcs", Kind = "field", EnemyFallen = 100, Loot = 2000, Pieces = 30, Prisoners = 40, Ransom = 800, Men = 300 });
             Check(Takings.Text("orcs").Contains("each 100 enemy men fallen left about 2,000 in loot and 40 prisoners, a prisoner worth about 20 in ransom"),

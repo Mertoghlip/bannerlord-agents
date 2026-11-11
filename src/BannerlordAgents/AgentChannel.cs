@@ -370,9 +370,12 @@ namespace BannerlordAgents
             return a;
         }
 
-        /// <summary>An answer's orders with its wage caps first, the rest in the order given (0.16: a recruiting order is checked against the cap the answer sets).</summary>
+        /// <summary>
+        /// An answer's orders with its gifts of gold first, then its wage caps, the rest in the order given (0.16: a recruiting order is checked against the cap the
+        /// answer sets; 0.18.3: and against the gold a gift in the same answer brings).
+        /// </summary>
         public static List<AgentOrder> WagesFirst(List<AgentOrder> orders)
-            => orders.OrderBy(o => string.Equals((o.Do ?? "").Trim(), "wages", StringComparison.OrdinalIgnoreCase) ? 0 : 1).ToList();
+            => orders.OrderBy(o => string.Equals((o.Do ?? "").Trim(), "gift", StringComparison.OrdinalIgnoreCase) ? 0 : string.Equals((o.Do ?? "").Trim(), "wages", StringComparison.OrdinalIgnoreCase) ? 1 : 2).ToList();
 
         /// <summary>An id written as a string, a number or ["id"].</summary>
         private static string Str(JToken t)

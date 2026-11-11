@@ -165,7 +165,7 @@ namespace BannerlordAgents
             return string.Join("; ", parts);
         }
 
-        /// <summary>The report's YOUR PURSE: clans' gold, who is at his wage cap, the caps set, loot and prisoners carried, the battles' takings.</summary>
+        /// <summary>The report's YOUR PURSE: clans' gold (with each clan's leader, 0.18.3), who is at his wage cap, who is too poor to recruit (0.18.3), the caps set, loot and prisoners carried, the battles' takings.</summary>
         public static List<string> Lines(Snapshot s, string fid, int most = 8)
         {
             var lines = new List<string>();
@@ -173,12 +173,19 @@ namespace BannerlordAgents
             List<ClanRow> clans = s.Clans.Where(c => c.Gold >= 0).OrderByDescending(c => c.Gold).ToList();
             if (clans.Count > 0)
                 lines.Add("Clans' gold (their leaders' purses, which top their lords up), with the game's reckoning of its change a day: "
-                          + string.Join("; ", clans.Select(c => c.Name + (c.Ruler ? " (yours)" : "") + " " + Text.N(c.Gold) + (c.Daily != int.MinValue ? " (" + (c.Daily >= 0 ? "+" : "") + Text.N(c.Daily) + ")" : ""))) + ".");
+                          + string.Join("; ", clans.Select(c => c.Name + (c.Ruler ? " (yours)" : "") + (string.IsNullOrEmpty(c.Leader) ? "" : " [" + c.Leader + "]") + " " + Text.N(c.Gold)
+                                                             + (c.Daily != int.MinValue ? " (" + (c.Daily >= 0 ? "+" : "") + Text.N(c.Daily) + ")" : ""))) + " (the id in brackets is the clan's leader, who holds its gold).");
             List<PartyRow> capped = lords.Where(AtCap).OrderBy(r => r.SizeLimit > 0 ? (double)r.Men / r.SizeLimit : 1).ToList();
             lines.Add(capped.Count == 0 ? "No lord is at his wage cap."
                       : "At their wage cap, so they cannot recruit (" + capped.Count + "): " + string.Join("; ", capped.Take(most * 2).Select(r => Name(r) + " wages " + Text.N(r.Wages) + " of " + Text.N(r.WageCap)
                                                                                                                                         + (r.CapOurs ? " (yours)" : "") + Ranks(r)))
                         + (capped.Count > most * 2 ? "; and " + (capped.Count - most * 2) + " more" : "") + ".");
+            // the lords too poor to recruit (0.18.3), with the loot each could sell: a gift of gold or a sale gets them recruiting again
+            List<PartyRow> poor = lords.Where(r => r.RecruitFloor > 0 && r.Gold <= r.RecruitFloor).OrderBy(r => r.SizeLimit > 0 ? (double)r.Men / r.SizeLimit : 1).ToList();
+            if (poor.Count > 0)
+                lines.Add("Too poor to recruit (" + poor.Count + "; the game keeps a lord from recruiting at or below his floor): " + string.Join("; ", poor.Take(most * 2).Select(r => Name(r) + " gold " + Text.N(r.Gold) + " of his floor " + Text.N(r.RecruitFloor)
+                                                                                                                + Ranks(r) + (r.LootPieces > 0 ? ", loot about " + Text.N(r.Loot) : "")))
+                          + (poor.Count > most * 2 ? "; and " + (poor.Count - most * 2) + " more" : "") + ".");
             List<PartyRow> ours = lords.Where(r => r.CapOurs).ToList();
             if (ours.Count > 0) lines.Add("Caps you set: " + string.Join("; ", ours.Select(r => Name(r) + " " + (r.WageCap < 0 ? "no cap" : Text.N(r.WageCap)) + " (wages " + Text.N(r.Wages) + ")")) + ".");
             List<PartyRow> loot = lords.Where(r => r.LootPieces > 0).OrderByDescending(r => r.Loot).ToList();

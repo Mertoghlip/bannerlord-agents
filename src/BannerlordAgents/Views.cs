@@ -32,6 +32,8 @@ namespace BannerlordAgents
         public RealmSum Sum;
         /// <summary>The watched realm only: its purse in a few lines (0.9.4, PurseView).</summary>
         public List<string> Purse = new List<string>();
+        /// <summary>The leaders of the realm's own clans (0.18.3): YOUR PURSE names each beside his clan's gold, for the gift order.</summary>
+        public List<string> ClanLeaders = new List<string>();
         /// <summary>The game's clocks the realm can see (0.7.3, Forecast): each siege and each battle, run ahead by the game's own rules.</summary>
         public List<string> Clocks = new List<string>();
         /// <summary>Each clock's place and the hour it decides things (0.14, a news wake's theatre): one per line of Clocks, in the same order.</summary>
@@ -322,6 +324,7 @@ namespace BannerlordAgents
                 foreach (CaptiveRow c in s.Captives) v.Captives.Add(Captive(s, c));
                 v.Sum = Sum(s, fid, own);
                 v.Purse = PurseView.Lines(s, fid);
+                v.ClanLeaders = s.Clans.Where(c => !string.IsNullOrEmpty(c.Leader)).Select(c => c.Leader).ToList();
             }
             // who the human player is and how his battles are fought (0.17.3): for every realm, told in plain words
             v.HumanPlayer = InPerson.Lines(s, fid);
