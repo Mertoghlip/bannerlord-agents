@@ -2379,3 +2379,11 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Why:** the computer restarted, and the launcher ticked War Sails (the naval DLC, `NavalDLC`) again. The new test should load with the same modules as the last run.
 - **What:** `NavalDLC` set back to not selected in `LauncherData.xml`. Nothing else changed: the ticked list and its order now match the last run's command line word for word (`rgl_log_21036.txt`, Nov 8 21:52). The 13:24 start today had loaded War Sails in addition. That start closed within a minute and wrote no save; `TEST START.sav` is unchanged (Oct 22).
 - **Outside the repository:** `Documents\Mount and Blade II Bannerlord\Configs\LauncherData.xml` (OneDrive). Old copy `LauncherData.xml.bak-20261111-1330-preNavalOff`. Edited with the game closed.
+
+### 13:45 · The game rolled back to 1.4.8 after a Steam update; version 0.18.1 rebuilt against it and installed again
+- **Why:** Steam updated Bannerlord to v1.5.7 this morning (11:01 to 11:12; build 125802). TAOM pins Native v1.4.8, so the game refused TAOM, Party AI Controls and Cheats for Bannerlord ("missing or conflicting dependency") at both starts today (13:24, 13:31). The update had also ticked War Sails again (the 13:30 entry). The 0.18.1 install of 11:25 had been compiled against the 1.5.7 files, since the build reads the installed game.
+- **What:**
+  - I switched the game to Steam's `v1.4.8` branch (Properties, Betas; Steam build 24573425). Done at 13:43: `Version.xml` and Native say v1.4.8. The branch also keeps Steam from updating the game again during the tests. TFAOMFixes' engine edits are made in memory for build 119303 only, and nothing of ours on disk was lost to the update.
+  - Version 0.18.1 rebuilt against 1.4.8 and installed again; no code changed.
+- **Checks:** Smoke test ALL CHECKS PASSED (576); war room and dashboard self-tests passed; RefCheck against 1.4.8: 839 references, missing 0. `TEST START.sav` unchanged.
+- **Installed** into the game's Modules\BannerlordAgents (v0.18.1) with the game closed. War rooms and dashboard stopped for the build and started again.
