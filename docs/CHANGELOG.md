@@ -2316,7 +2316,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - Backup `D:\BannerlordAgents-backup\fresh-call-architecture-20261110`: the four agents' folders as they stand (instructions, settings, memory, channels), the war room and dashboard builds, the module build 0.17.6, and this repository's CLAUDE.md and agent/CLAUDE.template.md (both kept out of git).
   - The game watch is stopped. The war rooms and dashboard are still running.
 
-### 21:05 · Version 0.18.0: continuous agents (module and war room), installed; the orcs and Dol Guldur switched to it · commit (pending)
+### 21:05 · Version 0.18.0: continuous agents (module and war room), installed; the orcs and Dol Guldur switched to it · commit 734b9cc
 - **Why:** the realm agents move from a fresh call at every wake to one conversation each, which costs far less of my plan once the agent decides itself when to wake. Each agent sets its own watches on the parts of the map that matter to its wars and on the orders it is testing. It holds its strategy reviews in the same conversation and writes its own handover before the conversation grows too long. A handover also carries a short history of the war from the agent's side.
 - **What (module 0.18.0):**
   - Watches (`Watches.cs`). An answer's `"watch"` list keeps, changes or ends watches: a lord, names for ids, up to 8 conditions in the behavior language with words to wake with, lords to follow, a check-in every N hours, and an end hour or end condition. They are read every in-game hour on the realm's own view (`Runner.WatchScope`). A condition wakes the agent when it turns true. Each watch gets a receipt.
