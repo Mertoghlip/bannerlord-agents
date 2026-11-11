@@ -2393,7 +2393,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** `NavalDLC` set to not selected again. The launcher now records the 1.4.8 version (v1.2.8.119303), so the choice should hold as it did from Oct 22 until today. The ticked list matches the last run's command line word for word (`rgl_log_21036.txt`). The 13:46 start ran on build 119303.
 - **Outside the repository:** `LauncherData.xml` (OneDrive). Old copy `LauncherData.xml.bak-20261111-1350-preNavalOff2`. Edited with the game closed.
 
-### 14:24 · Version 0.18.2 (module) and war room 0.18.4: the lieutenant keeps one continuous conversation
+### 14:24 · Version 0.18.2 (module) and war room 0.18.4: the lieutenant keeps one continuous conversation · commit 1e43aa3
 - **Why:** my lieutenant should work like the realm agents now do: one conversation instead of a fresh call per message, with the same handover rules, so it keeps its own reasoning and what it looked up between my messages.
 - **What:**
   - **One conversation** (`LieutenantRoom.Continuous.cs`, `memory = continuous` in its `warroom.txt`). The first message holds why the conversation begins, its handover of that day, the save's conversation so far, what became of its orders, the waiting proposal, the whole report, the chronicle's index, Party AI Controls and my words. Later messages hold only what is new: receipts since its last answer, buttons, letters, the waiting proposal, the report less what the conversation holds (a section as last shown in a line; the big lists whole only every 6, 12 or 24 in-game hours, else a line pointing at `report.txt`; only the chronicle's new lines; rule paragraphs once), and my words.
