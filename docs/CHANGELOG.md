@@ -2440,7 +2440,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** war room self-test ALL CHECKS PASSED.
 - **For this load:** the lieutenant's last exchange (Autumn 2, 17:00) is before the save from just before my siege, so its conversation carries on, told the game was loaded again; it sees the load at my first message after it.
 
-### 17:58 · War room 0.18.8: a load takes out what came after the last answer, and a save after a handover begins from it
+### 17:58 · War room 0.18.8: a load takes out what came after the last answer, and a save after a handover begins from it · commit 1734098
 - **Why:**
   - At 17:21 my save from before the siege (Autumn 6, 18:00) was later than the agents' last answers (16:00), so their conversations carried on. That was right, except that the two handover requests sent at my first siege, which never got an answer, stayed in them, each opening with "the human player's battle has begun": a fact of the abandoned game.
   - At 17:22 both handovers were written at the siege (orcs 2,391 words in 62 s, Dol Guldur 1,937 in 52 s, all nine parts; the 300 s allowance of 0.18.6 worked). My save after the siege would then have taken the agents back into the conversations they had just handed over, since the last checkpoint in its history was in them.
