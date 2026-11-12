@@ -2424,7 +2424,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** Smoke test ALL CHECKS PASSED; war room and dashboard self-tests passed. Not yet seen in the game: a handover written.
 - **Installed:** the war room was rebuilt and restarted at 16:53 while my battle held the clock (no game file touched); the module (v0.18.4) installed with the game closed at 17:00, war rooms and dashboard restarted. The game itself crashed on its way out at 16:53:28 (ntdll, after it had left the map), as I was closing it.
 
-### 17:12 · War room 0.18.7 and module 0.18.5: one conversation per campaign, rolled back with the save
+### 17:12 · War room 0.18.7 and module 0.18.5: one conversation per campaign, rolled back with the save · commit d92470b
 - **Why:** each campaign should have just one conversation. Loading an earlier save of the same campaign should take it back to exactly where it was before I saved, not begin a new one.
 - **What:**
   - **Checkpoints** after every answered wake, review and lieutenant message (`Talk.Checkpoint`, `checkpoints.jsonl`): the conversation's state, the message's in-game hour and date, the game session (load id) and the id of the answer's last message (`CallResult.LastUuid`).
