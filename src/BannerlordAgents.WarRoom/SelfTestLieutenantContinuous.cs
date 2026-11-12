@@ -97,6 +97,32 @@ namespace BannerlordAgents.WarRoom
             Check(after.Contains("- Dain at Erebor, 350 men.") && !after.Contains(rule) && after.Contains("RECENT HISTORY, LAST TWO DAYS (from your chronicle): nothing new since your last message.") && after.Contains("- Nothing new."),
                   "past its hours a big list is whole again, its rule paragraph not repeated; no new chronicle lines or receipts say so");
             Check(LieutenantRoom.ReportDate(Report("", "", "")) == "Summer 20, 1087, 22:00" && LieutenantRoom.ReportDate("no date") == null, "the handover's date is read from the report's first line");
+
+            // 0.18.7: the campaign's one conversation taken back with an earlier save, by the save's history the message carries (save_history, module 0.18.5)
+            string rmem = Path.Combine(dir, "memory", "rollback");
+            Directory.CreateDirectory(rmem);
+            var rroom = new LieutenantRoom(c, Path.Combine(dir, "logs-rollback"));
+            Talk rt = Talk.Load(rmem);
+            rroom.UseForTest(rt, rmem);
+            rt.SessionId = "lt1"; rt.Started = true; rt.LoadId = "L1"; rt.Tokens = 90000;
+            rt.Checkpoint("m150", 150, "Summer 2, 1087, 06:00", "L1");
+            rt.Tokens = 120000;
+            rt.Checkpoint("m190", 190, "Summer 3, 1087, 22:00", "L1");
+            rt.LastHours = 200;
+            rt.Save();
+            JsonObject Loaded(string load, double hours, double loadedAt, string history) => (JsonObject)JsonNode.Parse(
+                "{\"number\":9,\"said\":\"Report.\",\"date\":\"Summer 3, 1087, 10:00\",\"hours\":" + hours + ",\"campaign\":\"rollback\",\"realm\":\"player\",\"load_id\":\"" + load + "\",\"loaded_at\":" + loadedAt
+                + (history != null ? ",\"save_history\":{\"before\":" + history + "}" : "") + "}");
+            List<KeyValuePair<string, double>> parsed = LieutenantRoom.SaveHistory(Loaded("L2", 171, 170, "[{\"load\":\"L0\",\"until\":100},{\"load\":\"L1\",\"until\":170}]"));
+            Check(parsed != null && parsed.Count == 2 && parsed[1].Key == "L1" && parsed[1].Value == 170 && LieutenantRoom.SaveHistory(Loaded("L2", 171, 170, null)) == null,
+                  "the lieutenant reads the save's history from the message");
+            string told = rroom.EnsureTalk(rmem, Loaded("L2", 171, 170, "[{\"load\":\"L0\",\"until\":100},{\"load\":\"L1\",\"until\":170}]"), 171);
+            Check(told != null && told.StartsWith("THE GAME WAS LOADED FROM AN EARLIER SAVE", StringComparison.Ordinal) && told.Contains("Summer 2, 1087, 06:00")
+                  && rroom.TalkNow.Started && rroom.TalkNow.ForkFrom == "lt1" && rroom.TalkNow.ForkAt == "m150" && rroom.TalkNow.SessionId != "lt1" && rroom.TalkNow.Tokens == 90000
+                  && rroom.TalkNow.LastHours == 170 && rroom.TalkNow.LoadId == "L2",
+                  "an earlier save's load takes the lieutenant's conversation back to its last answer within the save's history, and tells it so");
+            Check(rroom.EnsureTalk(rmem, Loaded("L3", 260, 250, "[{\"load\":\"L2\",\"until\":250}]"), 260) != null && rroom.TalkNow.ForkAt == "m150",
+                  "a later load where the conversation left off carries it on");
         }
     }
 }
