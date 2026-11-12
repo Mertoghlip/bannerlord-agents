@@ -123,6 +123,20 @@ namespace BannerlordAgents.WarRoom
                   "an earlier save's load takes the lieutenant's conversation back to its last answer within the save's history, and tells it so");
             Check(rroom.EnsureTalk(rmem, Loaded("L3", 260, 250, "[{\"load\":\"L2\",\"until\":250}]"), 260) != null && rroom.TalkNow.ForkAt == "m150",
                   "a later load where the conversation left off carries it on");
+
+            // 0.18.8: something sent after the last checkpoint (a message never answered) is taken out at a load, even one later than the checkpoint
+            Talk st = rroom.TalkNow;
+            st.ForkFrom = st.ForkAt = null; st.SessionId = "lt2"; st.LoadId = "L3"; st.LastHours = 260;
+            st.Checkpoint("m255", 255, "Summer 11, 1087, 15:00", "L3");
+            Check(!st.SinceCheckpoint, "a checkpoint clears the mark of anything sent after the last one");
+            st.SinceCheckpoint = true;
+            st.Save();
+            string takenOut = rroom.EnsureTalk(rmem, Loaded("L4", 262, 260, "[{\"load\":\"L3\",\"until\":260}]"), 262);
+            Check(takenOut != null && takenOut.StartsWith("THE GAME WAS LOADED AGAIN", StringComparison.Ordinal) && takenOut.Contains("taken back") && rroom.TalkNow.ForkFrom == "lt2"
+                  && rroom.TalkNow.ForkAt == "m255" && !rroom.TalkNow.SinceCheckpoint,
+                  "a load where the conversation left off, with something sent after its last answer, takes that out: back to the answer");
+            string clean = rroom.EnsureTalk(rmem, Loaded("L5", 270, 265, "[{\"load\":\"L4\",\"until\":265}]"), 270);
+            Check(clean != null && !clean.Contains("taken back") && rroom.TalkNow.ForkAt == "m255", "with nothing sent after it, a later load carries the conversation on as it is");
         }
     }
 }

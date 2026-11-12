@@ -2439,3 +2439,14 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **What:** new checks: the lieutenant reads the save's history from its message; an earlier save's load takes its conversation back to its last answer within that history (state, old session resumed as a new one, told so); a later load where it left off carries it on. No code changed, so nothing was installed and the running war rooms were left alone.
 - **Checks:** war room self-test ALL CHECKS PASSED.
 - **For this load:** the lieutenant's last exchange (Autumn 2, 17:00) is before the save from just before my siege, so its conversation carries on, told the game was loaded again; it sees the load at my first message after it.
+
+### 17:58 · War room 0.18.8: a load takes out what came after the last answer, and a save after a handover begins from it
+- **Why:**
+  - At 17:21 my save from before the siege (Autumn 6, 18:00) was later than the agents' last answers (16:00), so their conversations carried on. That was right, except that the two handover requests sent at my first siege, which never got an answer, stayed in them, each opening with "the human player's battle has begun": a fact of the abandoned game.
+  - At 17:22 both handovers were written at the siege (orcs 2,391 words in 62 s, Dol Guldur 1,937 in 52 s, all nine parts; the 300 s allowance of 0.18.6 worked). My save after the siege would then have taken the agents back into the conversations they had just handed over, since the last checkpoint in its history was in them.
+- **What:**
+  - **Anything sent after the last checkpoint** (a call unanswered, a handover that never came) is marked (`Talk.SinceCheckpoint`); a load of a save from no earlier than that checkpoint takes the conversation back to it, told so, even when the save is later. With nothing sent after it, the conversation carries on as before.
+  - **A handover leaves a mark** in the checkpoints (`Talk.MarkHandover`): a save whose history last saw it begins the conversation that follows the handover, from it; a save from before it still goes back into the conversation it ended. The agents and the lieutenant alike.
+  - The two handovers written at 17:22 got their marks from the agents' own handover snapshots (Autumn 6, 18:00, the 17:19 session).
+- **Checks:** Smoke test ALL CHECKS PASSED; war room self-test passed (new: the mark of something sent after the last answer and its rollback at a later load; the handover's mark, after it the new conversation, before it the old one); dashboard self-test passed.
+- **Installed** with the game closed (module unchanged, 0.18.5); war rooms and dashboard stopped from 17:51 to 17:58 and started again on 0.18.8.

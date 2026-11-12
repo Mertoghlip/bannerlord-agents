@@ -34,6 +34,12 @@ namespace BannerlordAgents.WarRoom
         /// (--resume-session-at, --fork-session); cleared once that call reaches it.
         /// </summary>
         public string ForkFrom, ForkAt;
+        /// <summary>
+        /// Something was sent to the conversation after its last checkpoint (0.18.8): a call not yet answered, or one that never was (Nov 11: two handover requests
+        /// at my siege stalled and stayed in the conversations; my save from before the siege was later than the agents' last answers, so they carried on with them).
+        /// A load of a save from no later than then takes the conversation back to the checkpoint even when it comes after it.
+        /// </summary>
+        public bool SinceCheckpoint;
         /// <summary>Each section of a report shown in this conversation, by heading: its text's fingerprint and the in-game hour it was last shown.</summary>
         public Dictionary<string, string> Sent = new Dictionary<string, string>(StringComparer.Ordinal);
         public Dictionary<string, double> SentAt = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -84,6 +90,7 @@ namespace BannerlordAgents.WarRoom
         {
             SessionId = SystemFile = SystemHash = null;
             ForkFrom = ForkAt = null;
+            SinceCheckpoint = false;
             Started = Routes = false;
             Tokens = 0;
             CostSoFar = 0;
@@ -119,8 +126,28 @@ namespace BannerlordAgents.WarRoom
             line["cp_date"] = date ?? "";
             line["cp_load"] = string.IsNullOrEmpty(load) ? null : load;
             line["cp_written"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            line.Remove("SinceCheckpoint");
+            SinceCheckpoint = false;
             File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), CheckpointFile), line.ToJsonString() + "\n", new UTF8Encoding(false));
         }
+
+        /// <summary>
+        /// A handover was written (0.18.8): a mark in the checkpoints, so a save made after it, in its history, begins the conversation that follows the handover
+        /// (Nov 11: my save after the siege would otherwise have taken the agents back into the conversation they had just handed over).
+        /// </summary>
+        public void MarkHandover(double hours, string date, string load, string why)
+        {
+            if (Path == null || double.IsNaN(hours)) return;
+            var line = new JsonObject
+            {
+                ["cp_handover"] = true, ["cp_hours"] = hours, ["cp_date"] = date ?? "", ["cp_load"] = string.IsNullOrEmpty(load) ? null : load, ["cp_why"] = why ?? "",
+                ["cp_written"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+            };
+            File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), CheckpointFile), line.ToJsonString() + "\n", new UTF8Encoding(false));
+        }
+
+        /// <summary>The last RollBack found a handover as the save's last mark: the conversation was reset to begin from it (and RollBack said false).</summary>
+        [System.Text.Json.Serialization.JsonIgnore] public bool AfterHandover;
 
         /// <summary>
         /// A save from this in-game hour was loaded, earlier than the conversation reached: the conversation taken back to its last checkpoint within the save's
@@ -131,6 +158,7 @@ namespace BannerlordAgents.WarRoom
         public bool RollBack(List<KeyValuePair<string, double>> before, double hours, out string date)
         {
             date = "";
+            AfterHandover = false;
             if (Path == null || double.IsNaN(hours)) return false;
             string file = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), CheckpointFile);
             if (!File.Exists(file)) return false;
@@ -154,6 +182,16 @@ namespace BannerlordAgents.WarRoom
             try
             {
                 cp = (JsonObject)JsonNode.Parse(lines[at]);
+                // the save's history last saw a handover (0.18.8): its conversation is the one that begins from the handover, not the one before it
+                if (cp["cp_handover"] is JsonValue hv && hv.TryGetValue(out bool isHandover) && isHandover)
+                {
+                    date = cp["cp_date"]?.GetValue<string>() ?? "";
+                    File.WriteAllText(file, string.Join("\n", lines.Take(at + 1)) + "\n", new UTF8Encoding(false));
+                    string why = cp["cp_why"]?.GetValue<string>() ?? "your last conversation ended with your handover";
+                    Reset("your last conversation ended with the handover below (" + why + ", " + date + ")");
+                    AfterHandover = true;
+                    return false;
+                }
                 then = JsonSerializer.Deserialize<Talk>(lines[at], Options);
             }
             catch (JsonException) { return false; }
@@ -185,6 +223,7 @@ namespace BannerlordAgents.WarRoom
             OwnTools = o.OwnTools ?? new List<string>();
             WakesByDay = o.WakesByDay ?? new Dictionary<string, int>(StringComparer.Ordinal);
             ForkFrom = ForkAt = null;
+            SinceCheckpoint = false;
         }
 
         private static readonly JsonSerializerOptions Options = new JsonSerializerOptions
@@ -402,6 +441,7 @@ namespace BannerlordAgents.WarRoom
             Say((fresh ? "A new conversation" : "Conversation (" + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens)") + ": " + kind + " #" + number + "...");
             // a conversation taken back to an earlier save (0.18.7) resumes the old session just after its checkpoint, as the new session
             bool fork = !fresh && _talk.ForkFrom != null && _talk.ForkAt != null;
+            if (!fresh && !fork) { _talk.SinceCheckpoint = true; _talk.Save(); }   // 0.18.8: whatever this call leaves in the conversation is past the last checkpoint
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
                                       fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
                                       forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
@@ -746,7 +786,31 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory of campaign " + campaign + ": " + _mem.Dir + (_talk.Started ? "; its conversation holds " + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens" : "; no conversation yet") + ".");
             }
             if (meta == null || string.IsNullOrEmpty(meta.LoadId) || meta.LoadId == _mem.LoadId) return null;
+            _talk.AfterHandover = false;
             bool samePoint = _talk.Started && _talk.SessionId == _mem.SessionId && !double.IsNaN(_mem.LastHours) && !double.IsNaN(meta.LoadedAt) && meta.LoadedAt >= _mem.LastHours - 0.5;
+            // 0.18.8: something was sent after the last checkpoint (a call unanswered, a handover that never came): that is past the save too, so back to the checkpoint
+            if (samePoint && _talk.SinceCheckpoint && _talk.RollBack(meta.Before, meta.LoadedAt, out string kept))
+            {
+                _mem.LoadId = meta.LoadId;
+                _mem.SessionId = _talk.SessionId;
+                _mem.SessionStarted = true;
+                _mem.SessionTokens = _talk.Tokens;
+                _mem.Save();
+                _talk.LoadId = meta.LoadId;
+                _talk.Save();
+                Say("Memory: the game was loaded again at " + meta.LoadedAtDate + "; what the conversation was sent after its answer of " + kept + " is taken out, and it carries on from that answer.");
+                return "THE GAME WAS LOADED AGAIN at " + meta.LoadedAtDate + ". This conversation has been taken back to just after your answer of " + kept
+                       + ": anything you were sent after it did not happen in this game. Your orders in force and your watches carry on as the news says.";
+            }
+            if (_talk.AfterHandover)
+            {
+                // the last mark was a handover: the next wake begins the conversation that follows it
+                _mem.LoadId = meta.LoadId;
+                _mem.Save();
+                _talk.LoadId = meta.LoadId;
+                _talk.Save();
+                return null;
+            }
             if (samePoint)
             {
                 _mem.LoadId = meta.LoadId;
@@ -771,6 +835,14 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory: an earlier save was loaded (" + meta.LoadedAtDate + "): the conversation goes back to its answer of " + back + " (" + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens) and carries on from there.");
                 return "THE GAME WAS LOADED FROM AN EARLIER SAVE, of " + meta.LoadedAtDate + ". This conversation has been taken back to where it stood then, just after your answer of " + back
                        + ": what you saw, ordered and learned after that did not happen. Your orders in force and your watches are as they stood at that save.";
+            }
+            // the save's history last saw a handover (0.18.8): the next wake begins the conversation that follows it, from it
+            if (_talk.AfterHandover)
+            {
+                _talk.LoadId = meta.LoadId;
+                _talk.Save();
+                Say("Memory: a save from after the handover of " + back + " was loaded: the next wake begins a new conversation from it.");
+                return null;
             }
             if (had || _talk.SessionId != null)
                 _talk.Reset("the game was loaded from a save of " + meta.LoadedAtDate + ", earlier than your last conversation reached, so what it held after that day did not happen; it begins from what you knew then");
@@ -962,6 +1034,7 @@ namespace BannerlordAgents.WarRoom
                     _mem.Snapshot(hours, date, _mem.LastPoke, "handover");
                     File.WriteAllText(Path.Combine(_mem.Dir, "handover-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".md"), text + "\n", new UTF8Encoding(false));
                     File.WriteAllText(Path.Combine(folder, "handover.md"), text + "\n", new UTF8Encoding(false));
+                    _talk.MarkHandover(hours, date, _mem.LoadId, why.TrimEnd('.'));
                     _talk.Reset("your last conversation ended with the handover below (" + why.TrimEnd('.') + ", " + date + ")");
                     _mem.SessionId = null;
                     _mem.SessionStarted = false;

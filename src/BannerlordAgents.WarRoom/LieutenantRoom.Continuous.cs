@@ -260,6 +260,7 @@ namespace BannerlordAgents.WarRoom
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
             // a conversation taken back to an earlier save (0.18.7) resumes the old session just after its checkpoint, as the new session
             bool fork = !fresh && _talk.ForkFrom != null && _talk.ForkAt != null;
+            if (!fresh && !fork) { _talk.SinceCheckpoint = true; _talk.Save(); }   // 0.18.8: whatever this call leaves in the conversation is past the last checkpoint
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, _c.Lookups, _c.ContinuousTimeoutSeconds, _c.ContinuousThinkingCap,
                                       fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: routes, env: Room.ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
                                       forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
@@ -315,8 +316,26 @@ namespace BannerlordAgents.WarRoom
             }
             string loadId = Str(chat["load_id"]);
             if (string.IsNullOrEmpty(loadId) || loadId == _talk.LoadId) return null;
+            _talk.AfterHandover = false;
             double loadedAt = Hours(chat["loaded_at"]), point = !double.IsNaN(loadedAt) ? loadedAt : hours;
             bool known = !double.IsNaN(_talk.LastHours);
+            // 0.18.8: something was sent after the last checkpoint (a message unanswered, a handover that never came): that is past the save too, so back to the checkpoint
+            if (known && !double.IsNaN(point) && point >= _talk.LastHours - 0.5 && _talk.SinceCheckpoint && _talk.RollBack(SaveHistory(chat), point, out string kept))
+            {
+                _talk.LoadId = loadId;
+                _talk.LastHours = point;
+                _talk.Save();
+                Say("Memory: the game was loaded again at " + Program.When(point) + "; what the conversation was sent after its answer of " + kept + " is taken out, and it carries on from that answer.");
+                return "THE GAME WAS LOADED AGAIN at " + Program.When(point) + ". This conversation has been taken back to just after your answer of " + kept + ": anything sent after it did not happen in this game.";
+            }
+            if (_talk.AfterHandover)
+            {
+                // the last mark was a handover: the next message begins the conversation that follows it
+                _talk.LoadId = loadId;
+                _talk.LastHours = point;
+                _talk.Save();
+                return null;
+            }
             if (!known || double.IsNaN(point) || point >= _talk.LastHours - 0.5)
             {
                 _talk.LoadId = loadId;
@@ -336,6 +355,15 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory: an earlier save was loaded (" + Program.When(point) + "): the conversation goes back to its answer of " + back + " (" + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens) and carries on from there.");
                 return "THE GAME WAS LOADED FROM AN EARLIER SAVE, of " + Program.When(point) + ". This conversation has been taken back to where it stood then, just after your answer of " + back
                        + ": what was said, ordered and learned after that did not happen. Your orders in force are as they stood at that save.";
+            }
+            // the save's history last saw a handover (0.18.8): the next message begins the conversation that follows it, from it
+            if (_talk.AfterHandover)
+            {
+                _talk.LoadId = loadId;
+                _talk.LastHours = point;
+                _talk.Save();
+                Say("Memory: a save from after the handover of " + back + " was loaded: the next message begins a new conversation from it.");
+                return null;
             }
             _talk.Reset("the game was loaded from a save of " + Program.When(point) + ", earlier than your last conversation reached, so what it held after that day did not happen; you begin from what you knew then");
             _talk.LoadId = loadId;
@@ -489,6 +517,7 @@ namespace BannerlordAgents.WarRoom
             {
                 KeepHandover(_talkDir, text, hours, date);
                 File.WriteAllText(Path.Combine(folder, "handover.md"), text + "\n", new UTF8Encoding(false));
+                _talk.MarkHandover(hours, date, _talk.LoadId, why.TrimEnd('.'));
                 _talk.Reset("your last conversation ended with the handover below (" + why.TrimEnd('.') + ", " + date + ")");
             }
             double seconds = (DateTime.Now - began).TotalSeconds;

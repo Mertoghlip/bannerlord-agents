@@ -41,6 +41,22 @@ namespace BannerlordAgents.WarRoom
             var history = new List<KeyValuePair<string, double>> { new KeyValuePair<string, double>("L0", 9), new KeyValuePair<string, double>("L1", 12) };
             Check(t.RollBack(history, 12, out string inHistory) && inHistory == "Summer 1, 1087, 10:00", "within the save's history: the last answer its sessions reached by the hour it left them");
             Check(!t.RollBack(new List<KeyValuePair<string, double>> { new KeyValuePair<string, double>("L9", 50) }, 50, out _), "a save of another history has nothing of this conversation to go back to");
+            // 0.18.8: a handover's mark: a save after it begins the conversation that follows it; a save before it still goes back into the one it ended
+            string hdir = Path.Combine(root, "rollback-handover");
+            Directory.CreateDirectory(hdir);
+            Talk h = Talk.Load(hdir);
+            h.SessionId = "old"; h.Started = true; h.Tokens = 650000;
+            h.Checkpoint("w16", 16, "Autumn 6, 1087, 16:00", "A");
+            h.Checkpoint("w18", 18, "Autumn 6, 1087, 18:00", "B");
+            h.MarkHandover(18.5, "Autumn 6, 1087, 18:00", "B", "the human player's battle has begun");
+            h.Reset("your last conversation ended with the handover below");
+            var afterIt = new List<KeyValuePair<string, double>> { new KeyValuePair<string, double>("A", 18), new KeyValuePair<string, double>("B", 21) };
+            Check(!h.RollBack(afterIt, 21, out string hd) && h.AfterHandover && !h.Started && h.SessionId == null && (h.NextWhy ?? "").Contains("the handover below")
+                  && (h.NextWhy ?? "").Contains("battle has begun") && hd == "Autumn 6, 1087, 18:00",
+                  "a save made after a handover begins the conversation that follows it, from the handover, not the one it ended");
+            var beforeIt = new List<KeyValuePair<string, double>> { new KeyValuePair<string, double>("A", 18) };
+            Check(h.RollBack(beforeIt, 18, out string bd) && !h.AfterHandover && bd == "Autumn 6, 1087, 16:00" && h.ForkFrom == "old" && h.ForkAt == "w16" && h.Tokens == 650000,
+                  "a save from before the handover still goes back into the conversation it ended, to its last answer in that history");
             t.Reset("test");
             Check(t.ForkFrom == null && t.ForkAt == null && !t.Started, "a new conversation carries no taken-back session");
         }
