@@ -2451,7 +2451,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** Smoke test ALL CHECKS PASSED; war room self-test passed (new: the mark of something sent after the last answer and its rollback at a later load; the handover's mark, after it the new conversation, before it the old one); dashboard self-test passed.
 - **Installed** with the game closed (module unchanged, 0.18.5); war rooms and dashboard stopped from 17:51 to 17:58 and started again on 0.18.8.
 
-### 20:45 · War room 0.18.9: earlier conversations stay readable word for word after a handover
+### 20:45 · War room 0.18.9: earlier conversations stay readable word for word after a handover · commit 0d9f3a2
 - **Why:** I meant the handover in the spirit of Claude Code's compaction: the conversation goes on from a summary, and the model can still read the whole transcript of what came before. After a handover the agents kept their handover, notes and chronicle, but no longer what they had been told and what they had answered. They should have access to that.
 - **What:**
   - **At each handover** the ended conversation's Claude Code transcript is turned into its exchanges (each message sent, the thinking as summarized, every question with its answer, the answer) and kept in the campaign's memory folder, `past\<time>\` (`PastTalk`). The handover's mark now names its conversation (`cp_session`).
