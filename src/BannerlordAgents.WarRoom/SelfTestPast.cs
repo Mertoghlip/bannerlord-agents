@@ -41,7 +41,7 @@ namespace BannerlordAgents.WarRoom
                 File.WriteAllText(Path.Combine(folder, "sess-1.jsonl"), string.Join("\n", lines) + "\n");
                 Check(PastTalk.SessionFile("sess-1") != null && PastTalk.SessionFile("nobody") == null, "Claude Code's transcript of a conversation is found by its id");
 
-                List<PastTalk.Exchange> ex = PastTalk.Read(PastTalk.SessionFile("sess-1"));
+                var ex = PastTalk.Read(PastTalk.SessionFile("sess-1"));
                 Check(ex.Count == 3 && ex[0].Kind == "the opening of the conversation, then wake (poke #7)" && ex[0].Date == "Summer 1, 1087, 10:00" && ex[1].Kind == "strategy review"
                       && ex[2].Kind == "the request for your handover" && ex[2].Date == "Summer 2, 1087, 06:00" && ex[1].Hours == PastTalk.HoursOf("Summer 2, 1087, 06:00")
                       && PastTalk.HoursOf("Summer 2, 1087, 06:00") == (1087 * 84 + 21 + 1) * 24 + 6,

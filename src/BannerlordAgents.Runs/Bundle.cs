@@ -191,7 +191,7 @@ namespace BannerlordAgents.Runs
         /// at all; else those its loads wrote (from loads.jsonl's offset at each of the run's loads to the next load's) within the
         /// run's hours; else, for a file loads.jsonl does not know, those within its hours (a line's "hours").
         /// </summary>
-        private static List<string> Select(string path, RunData r, List<(string Load, double From, double To)> segments, List<JsonObject> loads, List<(DateTime From, DateTime To)> windows, string offsetKey)
+        internal static List<string> Select(string path, RunData r, List<(string Load, double From, double To)> segments, List<JsonObject> loads, List<(DateTime From, DateTime To)> windows, string offsetKey)
         {
             var all = Raw(path);
             if (all.Count == 0) return all;
@@ -243,7 +243,7 @@ namespace BannerlordAgents.Runs
         }
 
         /// <summary>The lines within the run's wall-clock windows (by the line's own time field), or tagged with its id.</summary>
-        private static List<string> SelectWall(string path, List<(DateTime From, DateTime To)> windows, string field, string runId = null)
+        internal static List<string> SelectWall(string path, List<(DateTime From, DateTime To)> windows, string field, string runId = null)
         {
             var all = Raw(path);
             if (runId != null && all.Any(l => l.Contains("\"run\":\"" + runId + "\""))) return all.Where(l => l.Contains("\"run\":\"" + runId + "\"")).ToList();
@@ -261,7 +261,7 @@ namespace BannerlordAgents.Runs
             return ReadShared(path).Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0).ToList();
         }
 
-        private static JsonObject Parse(string line)
+        internal static JsonObject Parse(string line)
         {
             try { return JsonNode.Parse(line) as JsonObject; }
             catch (Exception) { return null; }

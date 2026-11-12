@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using BannerlordAgents.Common;
+using Exchange = BannerlordAgents.Common.Transcript.Exchange;
 
 namespace BannerlordAgents.WarRoom
 {
@@ -19,13 +21,6 @@ namespace BannerlordAgents.WarRoom
 
         /// <summary>Where Claude Code keeps its transcripts (the self-test points it at a scratch folder); null: its own (CLAUDE_CONFIG_DIR or the user's .claude), projects\.</summary>
         public static string ProjectsRoot;
-
-        public sealed class Exchange
-        {
-            public int N;
-            public string Date = "", Kind = "", Text = "";
-            public double Hours = double.NaN;
-        }
 
         public sealed class About
         {
@@ -66,130 +61,10 @@ namespace BannerlordAgents.WarRoom
             return best;
         }
 
-        private static readonly Regex DateRx = new Regex(@"(Spring|Summer|Autumn|Winter) (\d+), (\d+), (\d\d):(\d\d)", RegexOptions.Compiled);
-        private static readonly Regex PokeRx = new Regex(@"POKE #(\d+), ((Spring|Summer|Autumn|Winter) \d+, \d+, \d\d:\d\d)", RegexOptions.Compiled);
-        private static readonly Regex ReviewRx = new Regex(@"STRATEGY REVIEW, ((Spring|Summer|Autumn|Winter) \d+, \d+, \d\d:\d\d)", RegexOptions.Compiled);
-        private static readonly Regex RulerRx = new Regex(@"YOUR RULER SAYS \(message #(\d+), ((Spring|Summer|Autumn|Winter) \d+, \d+, \d\d:\d\d)\)", RegexOptions.Compiled);
+        /// <summary>The exchanges of a transcript (the shared reader, src/Common/Transcript.cs).</summary>
+        public static List<Exchange> Read(string jsonl) => Transcript.Read(jsonl);
 
-        /// <summary>An in-game date's hour count, as the game keeps it (84 days a year, 21 a season).</summary>
-        public static double HoursOf(string date)
-        {
-            Match m = DateRx.Match(date ?? "");
-            if (!m.Success) return double.NaN;
-            int season = Array.IndexOf(new[] { "Spring", "Summer", "Autumn", "Winter" }, m.Groups[1].Value);
-            int day = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture), year = int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
-            int hour = int.Parse(m.Groups[4].Value, CultureInfo.InvariantCulture), minute = int.Parse(m.Groups[5].Value, CultureInfo.InvariantCulture);
-            return (year * 84.0 + season * 21 + day - 1) * 24 + hour + minute / 60.0;
-        }
-
-        /// <summary>What a message sent to the conversation was, and its in-game date (empty when it says none).</summary>
-        internal static string KindOf(string text, out string date)
-        {
-            date = "";
-            string t = text ?? "";
-            if (t.StartsWith("WRITE YOUR HANDOVER", StringComparison.Ordinal)) return "the request for your handover";
-            if (t.StartsWith("That is not a handover", StringComparison.Ordinal)) return "the request for your handover, again";
-            if (t.StartsWith("Your answer could not be read", StringComparison.Ordinal) || t.StartsWith("Your review's answer could not be read", StringComparison.Ordinal)) return "asked to answer again";
-            string kind = null;
-            Match p = PokeRx.Match(t), rv = ReviewRx.Match(t), ru = RulerRx.Match(t);
-            Match first = new[] { p, rv, ru }.Where(m => m.Success).OrderBy(m => m.Index).FirstOrDefault();
-            if (first == p && p.Success) { kind = "wake (poke #" + p.Groups[1].Value + ")"; date = p.Groups[2].Value; }
-            else if (first == rv && rv.Success) { kind = "strategy review"; date = rv.Groups[1].Value; }
-            else if (first == ru && ru.Success) { kind = "your ruler's message #" + ru.Groups[1].Value; date = ru.Groups[2].Value; }
-            if (t.StartsWith("A NEW CONVERSATION", StringComparison.Ordinal)) kind = "the opening of the conversation" + (kind != null ? ", then " + kind : "");
-            else if (t.StartsWith("THE GAME WAS LOADED", StringComparison.Ordinal)) kind = "the game loaded again" + (kind != null ? ", then " + kind : "");
-            if (date.Length == 0)
-            {
-                Match d = DateRx.Match(t.Length > 400 ? t.Substring(0, 400) : t);
-                if (d.Success) date = d.Value;
-            }
-            return kind ?? "a message";
-        }
-
-        /// <summary>The exchanges of a transcript, oldest first: each message sent to the conversation with all that followed it up to the next.</summary>
-        public static List<Exchange> Read(string jsonl)
-        {
-            var list = new List<Exchange>();
-            StringBuilder sb = null;
-            Exchange cur = null;
-            string lastDate = "";
-            double lastHours = double.NaN;
-            void Close()
-            {
-                if (cur == null) return;
-                cur.Text = sb.ToString().Replace("\r\n", "\n").TrimEnd() + "\n";
-                list.Add(cur);
-            }
-            foreach (string raw in File.ReadLines(jsonl))
-            {
-                if (raw.Length == 0 || raw[0] != '{') continue;
-                JsonObject d;
-                try { d = JsonNode.Parse(raw) as JsonObject; }
-                catch (JsonException) { continue; }
-                if (d == null) continue;
-                string type = Str(d["type"]);
-                if (type != "user" && type != "assistant") continue;
-                if (Bool(d["isMeta"]) || Bool(d["isSidechain"]) || Bool(d["isCompactSummary"])) continue;
-                JsonNode content = d["message"]?["content"];
-                if (type == "user")
-                {
-                    string said = TextOf(content);
-                    if (said.Length > 0)
-                    {
-                        Close();
-                        string kind = KindOf(said, out string date);
-                        if (date.Length > 0) { lastDate = date; lastHours = HoursOf(date); }
-                        cur = new Exchange { N = list.Count + 1, Date = lastDate, Hours = lastHours, Kind = kind };
-                        sb = new StringBuilder();
-                        sb.Append("=== EXCHANGE ").Append(cur.N).Append(" · ").Append(cur.Date.Length > 0 ? cur.Date : "no date").Append(" · ").Append(kind).Append(" ===\n\n");
-                        sb.Append("--- YOU WERE SENT ---\n").Append(said.TrimEnd()).Append("\n\n");
-                        continue;
-                    }
-                    if (cur == null || content is not JsonArray results) continue;
-                    foreach (JsonNode b in results)
-                    {
-                        if (b is not JsonObject r || Str(r["type"]) != "tool_result") continue;
-                        sb.Append(Bool(r["is_error"]) ? "--- ITS ANSWER (an error) ---\n" : "--- ITS ANSWER ---\n").Append(TextOf(r["content"]).TrimEnd()).Append("\n\n");
-                    }
-                    continue;
-                }
-                if (cur == null || content is not JsonArray blocks) continue;
-                foreach (JsonNode b in blocks)
-                {
-                    if (b is not JsonObject o) continue;
-                    switch (Str(o["type"]))
-                    {
-                        case "thinking":
-                            string th = Str(o["thinking"]) ?? "";
-                            if (th.Trim().Length > 0) sb.Append("--- YOUR THINKING (as summarized) ---\n").Append(th.TrimEnd()).Append("\n\n");
-                            break;
-                        case "text":
-                            string tx = Str(o["text"]) ?? "";
-                            if (tx.Trim().Length > 0) sb.Append("--- YOUR ANSWER ---\n").Append(tx.TrimEnd()).Append("\n\n");
-                            break;
-                        case "tool_use":
-                            string name = Str(o["name"]) ?? "?";
-                            int cut = name.LastIndexOf("__", StringComparison.Ordinal);
-                            if (name.StartsWith("mcp__", StringComparison.Ordinal) && cut > 0) name = name.Substring(cut + 2);
-                            sb.Append("--- YOU ASKED ").Append(name).Append(": ").Append(o["input"]?.ToJsonString() ?? "{}").Append(" ---\n\n");
-                            break;
-                    }
-                }
-            }
-            Close();
-            return list;
-        }
-
-        /// <summary>A message's words: a plain string, or its text blocks (a tool's answer, a list of text blocks) joined.</summary>
-        private static string TextOf(JsonNode content)
-        {
-            if (content is JsonValue v && v.TryGetValue(out string s)) return s;
-            if (content is not JsonArray a) return "";
-            var parts = new List<string>();
-            foreach (JsonNode b in a)
-                if (b is JsonObject o && Str(o["type"]) == "text" && Str(o["text"]) is string t && !t.StartsWith("<system-reminder>", StringComparison.Ordinal)) parts.Add(t);
-            return string.Join("\n", parts);
-        }
+        public static double HoursOf(string date) => Transcript.HoursOf(date);
 
         // ---------- the copies ----------
 

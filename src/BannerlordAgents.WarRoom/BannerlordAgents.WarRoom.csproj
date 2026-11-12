@@ -27,6 +27,8 @@
          their names; the same JSON reader the game ships (13.0.1) -->
     <Compile Include="..\BannerlordAgents\Tools\Expr.cs" Link="Tools\Expr.cs" />
     <Compile Include="..\BannerlordAgents\Tools\ToolDef.cs" Link="Tools\ToolDef.cs" />
+    <!-- Claude Code's transcripts read as the agent lived them (0.18.9), one file shared with the runs' archive -->
+    <Compile Include="..\Common\Transcript.cs" Link="Common\Transcript.cs" />
     <EmbeddedResource Include="..\BannerlordAgents\Tools\Library\*.json" LogicalName="BannerlordAgents.Tools.Library.%(Filename)%(Extension)" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>

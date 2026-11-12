@@ -52,6 +52,24 @@ Loading TEST START readies a run. It begins on the first in-game hour the clock 
 - `compare`: every run side by side, `runs\compare.md`.
 - `bundle [run] [--backup]` (0.13): the run's whole record packed for the dataset builder, `bundle.zip` in its folder ([LOGGING.md](LOGGING.md#the-training-record-since-013)); with `--backup` (as the bridge asks at a run's end, since 0.13.1), the backup follows.
 - `backup [--to <folder>]` (0.13.1): a copy of the records folder and every agent's folder in the backup's place (`backup` in `settings.txt`; [LOGGING.md](LOGGING.md#the-backup-since-0131)). It never deletes anything there.
+- `archive [run|all]` and `archive --follow` (0.14.0, Nov 11): [the archive](#the-archive).
+
+## The archive
+
+Nov 11: everything about each test and each of its sessions has to be kept in one folder, for the reports. The bundle and the backup above came only at a run's day 60, which only one run (Oct 29) ever reached, and neither held the continuous agents' conversations. Some of those records also disappear on their own: Claude Code deletes its transcripts 30 days after their last use, and the game keeps the logs of only its newest 30 launches.
+
+`Runs.exe archive` keeps a folder per run in the records folder, `archive\<run> <test>\` (the test's name from its first `TEST ...` save, less ` START`; else its arm):
+- `README.md`: the run, each session (real and in-game time, how it began, each agent's calls by kind, questions and cost, the game's log folder) and each agent (calls and cost, its conversations with their exchanges and dates, where its memory and instructions are), and anything missing.
+- `run\`: the run's own record (`run.json`, `setup.json`, `days.jsonl`, `events.jsonl`, `watch.json`, its report and bundle manifest).
+- `sessions\<n> - <load>\<agent>\`: for each load of the game in the run, each agent's calls (`calls.jsonl`, and each call's folder: prompt, Claude Code's event stream, thinking, answer, handover), the questions asked of its tools with their answers (`questions.jsonl`, from `routes.jsonl`), and its war room's log (`warroom.log`). A call goes to the session it was made in, by its time.
+- `agents\<agent>\conversations\<start> <session>\`: Claude Code's own transcript (`transcript.jsonl`), a readable copy (`conversation.txt`, the same reader as the agents' own `past` question, `src/Common/Transcript.cs`) and its exchanges by date (`exchanges.txt`), for every conversation whose time falls in the run (found in Claude Code's folder for the agent's channel).
+- `agents\<agent>\memory\`: the agent's whole campaign memory while the run is open (notes, story, snapshots, `conversation.json`, `checkpoints.jsonl`, handovers, `past\`), left as it stood once the run closes. A run archived only after it closed gets what was written during it (its snapshots, checkpoints, handovers and earlier conversations), since the campaign's memory has moved on.
+- `agents\<agent>\instructions\`: the system prompts its calls used (by the fingerprints its calls and checkpoints name, else those written during the run) and, while the run is open, its folder's settings and instructions and its order library.
+- `campaign\` and `you\`: the campaign's records in the run (pokes, chronicles, wakes, episodes, toolbook, diplomacy, allies, orders, notices, battles in person, takings, recruitment, hand-backs, loads and saves, and the orders carried at each of the run's saves), and my own record (decisions, clicks, events, hours, my talk with the lieutenant, Party AI Controls). These files hold every run of the campaign (a realm's pokes passed a gigabyte), so each is read in pieces, from where the run's first load began writing it (`loads.jsonl`'s offsets), and later passes read only what is new (`.cursors.json`). A line naming a run is kept when it names this one; one naming none, when its hour or time falls in the run.
+- `game-logs\<launch>\`: the game's own logs of each launch that loaded the run.
+- `earlier\<time>\`: an older copy of any file that changed other than by growing (a conversation taken back, a rewritten state, a source cut back at a load). The archive copies only what changed and never deletes anything.
+
+`Runs.exe archive [run]` brings one run's archive up to date by hand, `archive all` every run's. `Runs.exe archive --follow`, the archive keeper, is started and stopped with the war rooms by `scripts\agents.ps1`. It makes an archive for every run that has none when it starts, then brings the open run's archive up to date every 10 minutes while the game runs, as the game closes, and again five minutes later for the handovers written at the close. A run that stops being the open one gets a last pass. It runs at below-normal priority in efficiency mode, one pass at a time (a pass by hand waits for the keeper's), and logs each pass in `archive\archive.log`.
 
 ## Run C1 (Oct 23) and what it changed (0.11.3)
 

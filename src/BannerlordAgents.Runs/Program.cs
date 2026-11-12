@@ -14,6 +14,8 @@ namespace BannerlordAgents.Runs
     ///   report [run]    the run's numbers in full: report.md and report.json in its folder
     ///   compare         every run side by side: compare.md in the runs folder
     ///   bundle [run]    everything of the run packed for the dataset builder: bundle.zip in its folder (0.13; exit code 1 when something is missing)
+    ///   archive [run|all] everything of the run kept in one folder, by session and agent: archive\(run) (test)\ (Nov 11; exit code 1 when something is missing);
+    ///                   archive --follow keeps the open run's archive up to date while the game runs (scripts\agents.ps1 starts it with the war rooms)
     ///   marks [campaign] your old records made while an agent commanded your kingdom, marked "not yours" (0.13)
     ///   backup [--to folder] a copy of the records and every agent's folder on another drive (0.13.1): the place is "backup" in
     ///                   settings.txt; bundle (run) --backup packs the run, then makes it (the bridge asks for both at a run's end)
@@ -49,10 +51,11 @@ namespace BannerlordAgents.Runs
                         if (flags.Contains("--backup")) Backup.Run(null);
                         return code;
                     }
+                    case "archive": return flags.Contains("--follow") ? Archive.Follow() : Archive.Run(id);
                     case "marks": return Marks.Run(id);
                     case "backup": return Backup.Run(to);
                     default:
-                        Console.WriteLine("Runs.exe status|watch|report|bundle [run] [--backup] | compare | marks [campaign] | backup [--to folder]");
+                        Console.WriteLine("Runs.exe status|watch|report|bundle|archive [run] [--backup] | archive all | archive --follow | compare | marks [campaign] | backup [--to folder]");
                         return 2;
                 }
             }
