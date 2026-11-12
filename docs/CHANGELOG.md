@@ -2463,7 +2463,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed (module unchanged, 0.18.5); war rooms and dashboard stopped at 20:36 and started again on 0.18.9 at 20:38.
 
 
-### 21:05 · Runs 0.14.0: the archive, every test kept in one folder by session and agent
+### 21:05 · Runs 0.14.0: the archive, every test kept in one folder by session and agent · commit da87ad1
 - **Why:** everything about each test and each of its sessions (transcripts, calls, questions to the tools, notes and the rest) has to be kept in one folder named for the test and the session, for the reports. The bundle and the backup came only at a run's day 60, which only the Oct 29 run reached, so no November test had either. Neither held the continuous agents' conversations, and some records disappear on their own: Claude Code deletes its transcripts 30 days after their last use, and the game keeps the logs of only its newest 30 launches.
 - **What:** `Runs.exe archive` (`Archive.cs`, [RUNS.md](RUNS.md#the-archive)) keeps `archive\<run> <test>\` in the records folder:
   - `README.md`: each session (real and in-game time, how it began, each agent's calls by kind, questions and cost, the game's logs), each agent (its conversations with their exchanges and dates, memory, instructions), and anything missing;
