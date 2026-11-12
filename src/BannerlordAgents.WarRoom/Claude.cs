@@ -12,6 +12,8 @@ namespace BannerlordAgents.WarRoom
         /// <summary>With the war room's own tools: Claude Code did not answer the handshake within 30 s (the message went anyway).</summary>
         public bool HandshakeLate;
         public string Text, Raw, Error;
+        /// <summary>The id of the call's last whole assistant message (0.18.7): a conversation can later be taken back to just after it (--resume-session-at).</summary>
+        public string LastUuid;
         /// <summary>The model's thinking as the API summarized it (0.13, Claude Code's --thinking-display summarized); empty when not asked for.</summary>
         public string ThinkingText = "";
         public double Seconds, ApiMs, TtftMs, Cost, FirstTextMs = -1;
@@ -124,7 +126,7 @@ namespace BannerlordAgents.WarRoom
 
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
                                      string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null, IDictionary<string, string> env = null,
-                                     int stallSeconds = 0)
+                                     int stallSeconds = 0, string forkAt = null, string forkTo = null)
         {
             var r = new CallResult();
             var psi = new ProcessStartInfo(exe)
@@ -148,6 +150,11 @@ namespace BannerlordAgents.WarRoom
             }) psi.ArgumentList.Add(a);
             if (!string.IsNullOrWhiteSpace(ThinkingDisplay)) { psi.ArgumentList.Add("--thinking-display"); psi.ArgumentList.Add(ThinkingDisplay.Trim()); }
             if (sessionId == null) psi.ArgumentList.Add("--no-session-persistence");
+            else if (resume && forkAt != null && forkTo != null)
+            {
+                // a conversation taken back (0.18.7): the session as it stood just after message forkAt, carried on as a new session forkTo; the old one stays as it was
+                foreach (string a in new[] { "--resume", sessionId, "--resume-session-at", forkAt, "--fork-session", "--session-id", forkTo }) psi.ArgumentList.Add(a);
+            }
             else
             {
                 psi.ArgumentList.Add(resume ? "--resume" : "--session-id");
@@ -179,6 +186,7 @@ namespace BannerlordAgents.WarRoom
                 var written = new StringBuilder();
                 var thoughts = new StringBuilder();
                 long lastContext = 0;
+                string lastUuid = null;
                 string resultLine = null;
                 double firstText = -1;
                 long lastEvent = sw.ElapsedMilliseconds;
@@ -232,6 +240,8 @@ namespace BannerlordAgents.WarRoom
                             if (e.Data.Contains("\"thinking\"") && thoughts.Length < 400_000) Thoughts(e.Data, thoughts);
                             long size = ContextOf(e.Data);
                             if (size > 0) lastContext = size;
+                            string uuid = UuidOf(e.Data);
+                            if (uuid != null) lastUuid = uuid;
                         }
                         if (events.Length < 2_000_000 && !e.Data.Contains("\"stream_event\"")) events.AppendLine(e.Data);
                     }
@@ -283,6 +293,7 @@ namespace BannerlordAgents.WarRoom
                     r.Raw = events.ToString() + (resultLine == null && written.Length > 0 ? "\n--- the text written before it was stopped ---\n" + written : "");
                     r.ThinkingText = thoughts.ToString();
                     r.LastContext = lastContext;
+                    r.LastUuid = lastUuid;
                 }
                 if (resultLine == null)
                 {
@@ -366,6 +377,17 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>A whole assistant message's usage as one number: its request's input, cache reads and writes, and its output (0 when it has none).</summary>
+        /// <summary>A stream line's own message id ("uuid"), or null.</summary>
+        internal static string UuidOf(string line)
+        {
+            try
+            {
+                using JsonDocument d = JsonDocument.Parse(line);
+                return d.RootElement.TryGetProperty("uuid", out JsonElement u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
+            }
+            catch (JsonException) { return null; }
+        }
+
         internal static long ContextOf(string line)
         {
             try

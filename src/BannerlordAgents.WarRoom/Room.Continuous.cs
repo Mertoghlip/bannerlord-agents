@@ -29,6 +29,11 @@ namespace BannerlordAgents.WarRoom
         public string StartedWall = "", StartedWhy = "";
         /// <summary>Why the next conversation begins (the handover that ended the last one, a reload), told at its start.</summary>
         public string NextWhy;
+        /// <summary>
+        /// A conversation taken back to an earlier save (0.18.7): its next call resumes session ForkFrom just after message ForkAt, as the new session SessionId
+        /// (--resume-session-at, --fork-session); cleared once that call reaches it.
+        /// </summary>
+        public string ForkFrom, ForkAt;
         /// <summary>Each section of a report shown in this conversation, by heading: its text's fingerprint and the in-game hour it was last shown.</summary>
         public Dictionary<string, string> Sent = new Dictionary<string, string>(StringComparer.Ordinal);
         public Dictionary<string, double> SentAt = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -78,6 +83,7 @@ namespace BannerlordAgents.WarRoom
         public void Reset(string why)
         {
             SessionId = SystemFile = SystemHash = null;
+            ForkFrom = ForkAt = null;
             Started = Routes = false;
             Tokens = 0;
             CostSoFar = 0;
@@ -90,6 +96,95 @@ namespace BannerlordAgents.WarRoom
             OwnTools.Clear();
             NextWhy = why;
             Save();
+        }
+
+        // ---------- checkpoints: the conversation taken back to an earlier save (0.18.7) ----------
+
+        /// <summary>The checkpoints of a campaign's conversations, one line each, oldest first, beside conversation.json.</summary>
+        public const string CheckpointFile = "checkpoints.jsonl";
+
+        /// <summary>
+        /// After a message of the conversation has been answered: the conversation's state as it stands, with the in-game hour of the message and the id of the last
+        /// message of its answer, so that loading a save from that hour or later (before the next) takes the conversation back to just there. Nov 11: I want each
+        /// campaign to have just one conversation, rolled back to exactly where it was before I saved, when I load an earlier save.
+        /// </summary>
+        public void Checkpoint(string uuid, double hours, string date, string load)
+        {
+            if (Path == null || string.IsNullOrEmpty(uuid) || string.IsNullOrEmpty(SessionId) || double.IsNaN(hours)) return;
+            var line = JsonNode.Parse(JsonSerializer.Serialize(this, Options)) as JsonObject;
+            if (line == null) return;
+            line["cp_uuid"] = uuid;
+            line["cp_session"] = SessionId;
+            line["cp_hours"] = hours;
+            line["cp_date"] = date ?? "";
+            line["cp_load"] = string.IsNullOrEmpty(load) ? null : load;
+            line["cp_written"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), CheckpointFile), line.ToJsonString() + "\n", new UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// A save from this in-game hour was loaded, earlier than the conversation reached: the conversation taken back to its last checkpoint within the save's
+        /// history (the game's sessions its world lived through, each to the hour it left it, as the memory's snapshots are chosen), or, with no history, at or before the hour
+        /// (its state as it was then, and its next call resumes the session just after that answer, as a new session), the checkpoints after it dropped, since
+        /// what followed did not happen. False when there is none so early: the save is older than the campaign's first conversation.
+        /// </summary>
+        public bool RollBack(List<KeyValuePair<string, double>> before, double hours, out string date)
+        {
+            date = "";
+            if (Path == null || double.IsNaN(hours)) return false;
+            string file = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), CheckpointFile);
+            if (!File.Exists(file)) return false;
+            List<string> lines = File.ReadAllLines(file).Where(l => l.Trim().Length > 0).ToList();
+            int at = -1;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                try
+                {
+                    if (JsonNode.Parse(lines[i]) is not JsonObject o || o["cp_hours"] is not JsonValue v || !v.TryGetValue(out double h)) continue;
+                    // a checkpoint of that save's own history: made in one of its sessions, no later than the hour the save's world left it (a new run from the
+                    // same start save is another history, even at the same hour)
+                    bool ours = before != null && before.Count > 0 ? Memory.InHistory(before, o["cp_load"] is JsonValue lv && lv.TryGetValue(out string l) ? l : null, h) : h <= hours + 0.5;
+                    if (ours) at = i;
+                }
+                catch (JsonException) { }
+            }
+            if (at < 0) return false;
+            Talk then;
+            JsonObject cp;
+            try
+            {
+                cp = (JsonObject)JsonNode.Parse(lines[at]);
+                then = JsonSerializer.Deserialize<Talk>(lines[at], Options);
+            }
+            catch (JsonException) { return false; }
+            if (then == null) return false;
+            CopyFrom(then);
+            ForkFrom = cp["cp_session"]?.GetValue<string>();
+            ForkAt = cp["cp_uuid"]?.GetValue<string>();
+            date = cp["cp_date"]?.GetValue<string>() ?? "";
+            if (ForkFrom == null || ForkAt == null) return false;
+            SessionId = Guid.NewGuid().ToString();
+            Started = true;
+            NextWhy = null;
+            File.WriteAllText(file, string.Join("\n", lines.Take(at + 1)) + "\n", new UTF8Encoding(false));
+            Save();
+            return true;
+        }
+
+        /// <summary>Everything a checkpoint holds, copied in (the file this conversation is kept in stays its own).</summary>
+        private void CopyFrom(Talk o)
+        {
+            SessionId = o.SessionId; SystemFile = o.SystemFile; SystemHash = o.SystemHash; LoadId = o.LoadId;
+            Started = o.Started; Routes = o.Routes; Tokens = o.Tokens; CostSoFar = o.CostSoFar;
+            Messages = o.Messages; Wakes = o.Wakes; Reviews = o.Reviews; Number = o.Number;
+            StartedHours = o.StartedHours; LastReviewHours = o.LastReviewHours; NextReviewHours = o.NextReviewHours; LastHours = o.LastHours;
+            StartedWall = o.StartedWall ?? ""; StartedWhy = o.StartedWhy ?? ""; NextWhy = o.NextWhy;
+            Sent = o.Sent ?? new Dictionary<string, string>(StringComparer.Ordinal);
+            SentAt = o.SentAt ?? new Dictionary<string, double>(StringComparer.Ordinal);
+            Static = o.Static ?? new HashSet<string>(StringComparer.Ordinal);
+            OwnTools = o.OwnTools ?? new List<string>();
+            WakesByDay = o.WakesByDay ?? new Dictionary<string, int>(StringComparer.Ordinal);
+            ForkFrom = ForkAt = null;
         }
 
         private static readonly JsonSerializerOptions Options = new JsonSerializerOptions
@@ -117,6 +212,8 @@ namespace BannerlordAgents.WarRoom
         private DateTime _freshAt = DateTime.MinValue;
         private DateTime _reviewFailedAt = DateTime.MinValue, _gameLooked = DateTime.MinValue, _spareWord = DateTime.MinValue;
         private bool _gameSeen;
+        /// <summary>The last message id a call of this wake or review reached (0.18.7), checkpointed at its end.</summary>
+        private string _lastUuid;
 
         /// <summary>The settings every call of a continuous conversation carries: the one-hour cache, and Claude Code's own compaction off.</summary>
         internal static readonly Dictionary<string, string> ContinuousEnv = new Dictionary<string, string> { ["CLAUDE_CODE_PROMPT_CACHE_TTL"] = "1h", ["DISABLE_AUTO_COMPACT"] = "1" };
@@ -167,6 +264,7 @@ namespace BannerlordAgents.WarRoom
         internal CallResult Wake(int number, string when, string pokeText)
         {
             DateTime noticed = DateTime.Now;
+            _lastUuid = null;
             PokeMeta meta = ReadMeta(number);
             if (meta != null && !double.IsNaN(meta.Hours)) _pokeHours = meta.Hours;
             string carried = EnsureContinuous(meta);
@@ -230,6 +328,7 @@ namespace BannerlordAgents.WarRoom
             _talk.Number = number;
             _talk.Save();
             _mem.Save();
+            _talk.Checkpoint(_lastUuid, meta?.Hours ?? _pokeHours, meta?.Date ?? when, meta?.LoadId ?? _mem.LoadId);
             double seconds = (DateTime.Now - noticed).TotalSeconds;
             LogCall("answer", "wake", r, number, when, meta, folder, answer, problem, retried, retriedStall, seconds, prompt.Length, opening, why: null, changed: changed);
             if (answer != null)
@@ -301,8 +400,11 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
             Say((fresh ? "A new conversation" : "Conversation (" + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens)") + ": " + kind + " #" + number + "...");
+            // a conversation taken back to an earlier save (0.18.7) resumes the old session just after its checkpoint, as the new session
+            bool fork = !fresh && _talk.ForkFrom != null && _talk.ForkAt != null;
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
-                                      _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0);
+                                      fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
+                                      forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
             if (r.HandshakeLate) Say(kind + " #" + number + ": Claude Code took over 30 s to answer the tools' handshake; the message went anyway.");
             if (!r.Ok && (r.Stalled || r.Runaway))
             {
@@ -310,9 +412,10 @@ namespace BannerlordAgents.WarRoom
                 Say(kind + " #" + number + ": the call " + (r.Runaway ? "ran away" : "stalled") + " after " + r.Seconds.ToString("0", CultureInfo.InvariantCulture) + " s; asking again.");
                 double lost = r.Seconds;
                 retriedStall = true;
-                if (fresh) { _talk.SessionId = Guid.NewGuid().ToString(); _mem.SessionId = _talk.SessionId; }   // a conversation's first call is begun again under a new id
+                if (fresh || fork) { _talk.SessionId = Guid.NewGuid().ToString(); _mem.SessionId = _talk.SessionId; }   // a conversation's first call (or a taken-back one's) is begun again under a new id
                 r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
-                               _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0);
+                               fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
+                               forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
                 r.Seconds += lost;
             }
             File.WriteAllText(Path.Combine(folder, kind.EndsWith("retry", StringComparison.Ordinal) ? "raw-retry.jsonl" : "raw.jsonl"), r.Raw ?? "");
@@ -329,6 +432,8 @@ namespace BannerlordAgents.WarRoom
                 _talk.Started = true;
                 _mem.SessionStarted = true;
                 _talk.Messages++;
+                if (fork) { _talk.ForkFrom = _talk.ForkAt = null; _mem.SessionId = _talk.SessionId; }
+                if (r.LastUuid != null && !kind.StartsWith("handover", StringComparison.Ordinal)) _lastUuid = r.LastUuid;
                 long size = r.LastContext > 0 ? r.LastContext : r.InTokens + r.CacheRead + r.CacheWrite + r.OutTokens;
                 if (size > 0) _talk.Tokens = size;
                 _mem.SessionTokens = _talk.Tokens;
@@ -653,6 +758,20 @@ namespace BannerlordAgents.WarRoom
             }
             bool had = _talk.Started;
             EnsureMemory(meta);
+            // the campaign's one conversation, taken back to just where it stood at the save (0.18.7); a new one only when the save is older than it
+            if (_talk.RollBack(meta.Before, meta.LoadedAt, out string back))
+            {
+                _talk.LoadId = meta.LoadId;
+                _talk.Save();
+                _mem.SessionId = _talk.SessionId;
+                _mem.SessionStarted = true;
+                _mem.SessionTokens = _talk.Tokens;
+                _mem.LoadId = meta.LoadId;
+                _mem.Save();
+                Say("Memory: an earlier save was loaded (" + meta.LoadedAtDate + "): the conversation goes back to its answer of " + back + " (" + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens) and carries on from there.");
+                return "THE GAME WAS LOADED FROM AN EARLIER SAVE, of " + meta.LoadedAtDate + ". This conversation has been taken back to where it stood then, just after your answer of " + back
+                       + ": what you saw, ordered and learned after that did not happen. Your orders in force and your watches are as they stood at that save.";
+            }
             if (had || _talk.SessionId != null)
                 _talk.Reset("the game was loaded from a save of " + meta.LoadedAtDate + ", earlier than your last conversation reached, so what it held after that day did not happen; it begins from what you knew then");
             return null;
@@ -684,6 +803,7 @@ namespace BannerlordAgents.WarRoom
         internal bool Review(string why)
         {
             DateTime began = DateTime.Now;
+            _lastUuid = null;
             PokeMeta meta = ReadMeta(-1);
             if (meta == null) return false;
             int number = meta.Number;
@@ -726,6 +846,7 @@ namespace BannerlordAgents.WarRoom
             }
             _talk.Save();
             _mem.Save();
+            _talk.Checkpoint(_lastUuid, meta.Hours, meta.Date, meta.LoadId ?? _mem.LoadId);
             double seconds = (DateTime.Now - began).TotalSeconds;
             LogCall("council", "review", r, number, meta.Date, meta, folder, answer, problem, retried, stall, seconds, prompt.Length, false, why, changed, briefing.Length, situation.Length);
             int orders = answer?["orders"] is JsonArray a ? a.Count : 0;
