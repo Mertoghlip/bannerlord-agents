@@ -131,6 +131,8 @@ namespace BannerlordAgents.WarRoom
             }
             else sb.AppendLine("(No handover yet: this is your first conversation in this campaign. The conversation in this save so far, your chronicle and the report below are your memory.)");
             sb.AppendLine();
+            string past = PastTalk.OpeningLine(memDir, _talk.Past);
+            if (past != null) sb.AppendLine(past).AppendLine();
             List<string> receipts = Tail(Path.Combine(_c.ChannelDir, "receipts.log"), 12);
             if (receipts.Count > 0) _talk.Sent[ReceiptKey] = receipts[receipts.Count - 1];
             string chronicle = string.Join("\n\n", new[] { ChronicleIndex(_c.ChannelDir), OtherTalksNote(_c.ChannelDir) }.Where(x => x != null));
@@ -238,6 +240,7 @@ namespace BannerlordAgents.WarRoom
             {
                 _talk.SessionId = Guid.NewGuid().ToString();
                 _talk.Routes = routes != null;
+                _talk.PastTool = _talk.Past.Count > 0;
                 _talk.SystemFile = SystemFile(_talk.Routes);
                 _talk.SystemHash = _systemHash;
                 _talk.StartedHours = hours;
@@ -255,6 +258,13 @@ namespace BannerlordAgents.WarRoom
             // the same tools in every call: none when the conversation began without them
             if (!_talk.Routes) routes = null;
             else if (routes == null) Say("Continuous: the questions are not ready now; this call goes without them, so the conversation is written into the cache again.");
+            // 0.18.9: its earlier conversations word for word, when it began with some (on their own when the way-finding questions are not offered)
+            if (_talk.PastTool && _talkDir != null)
+            {
+                routes ??= new RouteTool(RouteTool.DefaultRoot(), _logDir, _campaign, _realm, n, "chat") { ChannelDir = _c.ChannelDir, BookOnly = true };
+                routes.PastMem = _talkDir;
+                routes.PastIds = _talk.Past;
+            }
             folder = Path.Combine(_logDir, "calls", DateTime.Now.ToString("yyyyMMdd"), DateTime.Now.ToString("HHmmss") + "-" + kind + "-" + n);
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
@@ -318,6 +328,10 @@ namespace BannerlordAgents.WarRoom
             if (string.IsNullOrEmpty(loadId) || loadId == _talk.LoadId) return null;
             _talk.AfterHandover = false;
             double loadedAt = Hours(chat["loaded_at"]), point = !double.IsNaN(loadedAt) ? loadedAt : hours;
+            // 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
+            PastTalk.Mend(memDir, Say);
+            _talk.Past = PastTalk.Visible(memDir, SaveHistory(chat), point);
+            _talk.Save();
             bool known = !double.IsNaN(_talk.LastHours);
             // 0.18.8: something was sent after the last checkpoint (a message unanswered, a handover that never came): that is past the save too, so back to the checkpoint
             if (known && !double.IsNaN(point) && point >= _talk.LastHours - 0.5 && _talk.SinceCheckpoint && _talk.RollBack(SaveHistory(chat), point, out string kept))
@@ -496,7 +510,8 @@ namespace BannerlordAgents.WarRoom
             if (pac != null && pac.Trim().Length > 0) facts.Add("PARTY AI CONTROLS NOW\n" + pac.Trim());
             string prompt = "WRITE YOUR HANDOVER NOW: " + why.TrimEnd('.') + ". This conversation ends with it. Your ruler's next message begins a new conversation that holds only your instructions, "
                             + "this handover, the latest lines of your conversation with him in this save (the whole of it is conversation.txt), what became of your orders lately and the realm's report "
-                            + "of the hour, so put in it everything you will need that those do not hold. Write it as \"Your handover\" in your instructions says, in its parts and in your own voice, "
+                            + "of the hour, so put in it everything you will need that those do not hold (this conversation stays readable word for word through the past question, but keep at hand "
+                            + "what you will need). Write it as \"Your handover\" in your instructions says, in its parts and in your own voice, "
                             + "as plain text beginning with the word HANDOVER and the date (" + date + "). No JSON and no orders: your orders in force carry on as they are."
                             + (facts.Count > 0 ? " Write the part on orders in force from the game's own list below (as of " + (date.Length > 0 ? date : "its last report") + "), adding what only you know: why each lord has his order and what would end it.\n\n" + string.Join("\n\n", facts) + "\n" : "");
             Say("Handover (" + why + "): the conversation holds " + before.ToString("N0", CultureInfo.InvariantCulture) + " tokens...");
@@ -517,7 +532,9 @@ namespace BannerlordAgents.WarRoom
             {
                 KeepHandover(_talkDir, text, hours, date);
                 File.WriteAllText(Path.Combine(folder, "handover.md"), text + "\n", new UTF8Encoding(false));
-                _talk.MarkHandover(hours, date, _talk.LoadId, why.TrimEnd('.'));
+                string ended = _talk.SessionId;
+                _talk.MarkHandover(hours, date, _talk.LoadId, why.TrimEnd('.'), ended);
+                PastTalk.KeepEnded(_talk, _talkDir, ended, hours, date, _talk.LoadId, why.TrimEnd('.'), Say);
                 _talk.Reset("your last conversation ended with the handover below (" + why.TrimEnd('.') + ", " + date + ")");
             }
             double seconds = (DateTime.Now - began).TotalSeconds;

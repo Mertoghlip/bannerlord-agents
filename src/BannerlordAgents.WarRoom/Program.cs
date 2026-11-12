@@ -115,13 +115,41 @@ namespace BannerlordAgents.WarRoom
                         return room.Answer(int.Parse(m.Groups[1].Value), m.Groups[2].Value.Trim(), text).Ok ? 0 : 1;
                     }
                 case "story": return Story(c);
+                case "past": return Past(c, args);
                 case "council": return new Room(c).CouncilNow("asked for by hand");
                 case "replay": return Arg(args, "--memory") != null ? ReplayInOrder(c, args) : Replay(c, args);
                 default:
-                    Console.WriteLine("Usage: WarRoom [run|once|story|council|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]"
+                    Console.WriteLine("Usage: WarRoom [run|once|story|council|past|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]"
                                       + " [--news --calls <the war room's calls folder> --news-template agent/warroom-news.template.md]");
                     return 1;
             }
+        }
+
+        /// <summary>
+        /// "WarRoom past [--dir agent-folder] [--campaign id] [--ask json]" (0.18.9): makes the word-for-word copy of every handover's conversation not kept yet (as the next
+        /// load would), lists the campaign's kept conversations, and with --ask prints what the past question would answer with all of them in this game's history.
+        /// </summary>
+        private static int Past(Config c, string[] args)
+        {
+            string campaign = Arg(args, "--campaign");
+            string mem = campaign != null ? Path.Combine(c.MemoryDir, campaign)
+                : Directory.Exists(c.MemoryDir) ? Directory.EnumerateDirectories(c.MemoryDir).OrderByDescending(Directory.GetLastWriteTimeUtc).FirstOrDefault() : null;
+            if (mem == null || !Directory.Exists(mem)) { Console.WriteLine("No campaign memory in " + c.MemoryDir); return 1; }
+            Console.WriteLine("Campaign memory: " + mem);
+            int made = PastTalk.Mend(mem, Console.WriteLine);
+            List<PastTalk.About> all = PastTalk.All(mem);
+            Console.WriteLine(made + " made now; " + all.Count + " kept:");
+            foreach (PastTalk.About a in all)
+                Console.WriteLine("  past\\" + a.Id + ": " + a.Exchanges + " exchanges, " + a.From + " to " + a.To + ", " + a.Chars.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
+                                  + " characters; handover of " + a.Date + " (" + a.Why + "), game session " + (a.Load ?? "?") + ", conversation " + a.Session);
+            string ask = Arg(args, "--ask");
+            if (ask != null)
+            {
+                var q = System.Text.Json.Nodes.JsonNode.Parse(ask) as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+                Console.WriteLine();
+                Console.WriteLine(PastTalk.Answer(mem, all.Select(a => a.Id).ToList(), q));
+            }
+            return 0;
         }
 
         /// <summary>

@@ -34,6 +34,12 @@ namespace BannerlordAgents.WarRoom
         public string ChronicleDir;
         /// <summary>The questions on the book asked in this call.</summary>
         public int AskedBook;
+        /// <summary>
+        /// The campaign's memory folder when the conversation offers "past" (0.18.9: its earlier conversations word for word; offered from a conversation's start or never,
+        /// so its tools stay the same), and those of the loaded save's history.
+        /// </summary>
+        public string PastMem;
+        public IList<string> PastIds;
 
         private JsonObject _book;
         private bool _bookRead;
@@ -48,6 +54,7 @@ namespace BannerlordAgents.WarRoom
                 if (!NoCheck) yield return CheckName;
             }
             if (BookPath != null) { yield return LookName; yield return ListName; yield return ChronicleName; }
+            if (PastMem != null) yield return PastTalk.ToolName;
         }
 
         private JsonArray Definitions()
@@ -59,6 +66,7 @@ namespace BannerlordAgents.WarRoom
                 if (!NoCheck) list.Add(CheckDefinition());
             }
             if (BookPath != null) { bool fresh = Refresh != null; list.Add(LookDefinition(fresh)); list.Add(ListDefinition(fresh)); list.Add(ChronicleDefinition(fresh)); }
+            if (PastMem != null) list.Add(PastTalk.Definition());
             return list;
         }
 
@@ -124,6 +132,19 @@ namespace BannerlordAgents.WarRoom
             try { _book = Room.ReadShared(BookPath ?? "") is string t ? JsonNode.Parse(t) as JsonObject : null; }
             catch (JsonException) { _book = null; }
             return _book;
+        }
+
+        /// <summary>The past question (0.18.9), from the earlier conversations of this save's history, logged with the book's questions.</summary>
+        private string PastAnswer(JsonObject args)
+        {
+            var sw = Stopwatch.StartNew();
+            string text = Safe(() => PastTalk.Answer(PastMem, PastIds, args));
+            Log(new
+            {
+                at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = PastTalk.ToolName,
+                args = args.ToJsonString(), chars = text.Length, ms = Math.Round(sw.Elapsed.TotalMilliseconds)
+            });
+            return text;
         }
 
         private string BookAnswer(string tool, JsonObject args, Func<JsonObject, string> answer)

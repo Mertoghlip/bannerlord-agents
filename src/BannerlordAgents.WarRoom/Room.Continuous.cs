@@ -40,6 +40,12 @@ namespace BannerlordAgents.WarRoom
         /// A load of a save from no later than then takes the conversation back to the checkpoint even when it comes after it.
         /// </summary>
         public bool SinceCheckpoint;
+        /// <summary>
+        /// The earlier conversations of the loaded save's history, kept word for word (0.18.9, PastTalk), by id, oldest first: set at each load and handover, never by Reset.
+        /// </summary>
+        public List<string> Past = new List<string>();
+        /// <summary>This conversation offers the past question: decided at its start (there were earlier conversations then), so its tools stay the same in every call.</summary>
+        public bool PastTool;
         /// <summary>Each section of a report shown in this conversation, by heading: its text's fingerprint and the in-game hour it was last shown.</summary>
         public Dictionary<string, string> Sent = new Dictionary<string, string>(StringComparer.Ordinal);
         public Dictionary<string, double> SentAt = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -65,6 +71,7 @@ namespace BannerlordAgents.WarRoom
             t.Static ??= new HashSet<string>(StringComparer.Ordinal);
             t.OwnTools ??= new List<string>();
             t.WakesByDay ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            t.Past ??= new List<string>();
             return t;
         }
 
@@ -91,7 +98,7 @@ namespace BannerlordAgents.WarRoom
             SessionId = SystemFile = SystemHash = null;
             ForkFrom = ForkAt = null;
             SinceCheckpoint = false;
-            Started = Routes = false;
+            Started = Routes = PastTool = false;
             Tokens = 0;
             CostSoFar = 0;
             Messages = Wakes = Reviews = 0;
@@ -135,12 +142,12 @@ namespace BannerlordAgents.WarRoom
         /// A handover was written (0.18.8): a mark in the checkpoints, so a save made after it, in its history, begins the conversation that follows the handover
         /// (Nov 11: my save after the siege would otherwise have taken the agents back into the conversation they had just handed over).
         /// </summary>
-        public void MarkHandover(double hours, string date, string load, string why)
+        public void MarkHandover(double hours, string date, string load, string why, string session = null)
         {
             if (Path == null || double.IsNaN(hours)) return;
             var line = new JsonObject
             {
-                ["cp_handover"] = true, ["cp_hours"] = hours, ["cp_date"] = date ?? "", ["cp_load"] = string.IsNullOrEmpty(load) ? null : load, ["cp_why"] = why ?? "",
+                ["cp_handover"] = true, ["cp_hours"] = hours, ["cp_date"] = date ?? "", ["cp_load"] = string.IsNullOrEmpty(load) ? null : load, ["cp_why"] = why ?? "", ["cp_session"] = session,
                 ["cp_written"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
             };
             File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), CheckpointFile), line.ToJsonString() + "\n", new UTF8Encoding(false));
@@ -213,7 +220,7 @@ namespace BannerlordAgents.WarRoom
         private void CopyFrom(Talk o)
         {
             SessionId = o.SessionId; SystemFile = o.SystemFile; SystemHash = o.SystemHash; LoadId = o.LoadId;
-            Started = o.Started; Routes = o.Routes; Tokens = o.Tokens; CostSoFar = o.CostSoFar;
+            Started = o.Started; Routes = o.Routes; PastTool = o.PastTool; Tokens = o.Tokens; CostSoFar = o.CostSoFar;
             Messages = o.Messages; Wakes = o.Wakes; Reviews = o.Reviews; Number = o.Number;
             StartedHours = o.StartedHours; LastReviewHours = o.LastReviewHours; NextReviewHours = o.NextReviewHours; LastHours = o.LastHours;
             StartedWall = o.StartedWall ?? ""; StartedWhy = o.StartedWhy ?? ""; NextWhy = o.NextWhy;
@@ -418,6 +425,7 @@ namespace BannerlordAgents.WarRoom
                 _mem.SessionStarted = false;
                 RouteTool probe = Routes(meta ?? ReadMeta(-1), number, "opening", true);
                 _talk.Routes = probe != null && !probe.BookOnly;
+                _talk.PastTool = _talk.Past.Count > 0;
                 _talk.SystemFile = SystemFile(_talk.Routes, false, true, false);
                 _talk.SystemHash = _systemHash;
                 _talk.StartedHours = meta?.Hours ?? _pokeHours;
@@ -492,7 +500,8 @@ namespace BannerlordAgents.WarRoom
             if (meta == null) return null;
             return new RouteTool(RouteTool.DefaultRoot(), _logDir, meta.Campaign, meta.Realm, number, call)
             {
-                ChannelDir = _c.ChannelDir, BookPath = NewestBook(meta, number), ChronicleDir = _c.ChannelDir, Notes = NotesNow, BookOnly = !_talk.Routes, Refresh = FreshNow
+                ChannelDir = _c.ChannelDir, BookPath = NewestBook(meta, number), ChronicleDir = _c.ChannelDir, Notes = NotesNow, BookOnly = !_talk.Routes, Refresh = FreshNow,
+                PastMem = _talk.PastTool ? _mem.Dir : null, PastIds = _talk.Past
             };
         }
 
@@ -577,6 +586,8 @@ namespace BannerlordAgents.WarRoom
             }
             else sb.AppendLine("(No handover yet: this is your realm's first conversation. Your notes and the report below are your memory.)");
             sb.AppendLine();
+            string past = PastTalk.OpeningLine(_mem.Dir, _talk.Past);
+            if (past != null) sb.AppendLine(past).AppendLine();
             sb.AppendLine("YOUR NOTES (your plan, what you know of each enemy, your lessons; change them with \"plan\", \"enemies\" and \"lessons\")");
             sb.AppendLine(notes);
             sb.AppendLine();
@@ -786,6 +797,10 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory of campaign " + campaign + ": " + _mem.Dir + (_talk.Started ? "; its conversation holds " + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens" : "; no conversation yet") + ".");
             }
             if (meta == null || string.IsNullOrEmpty(meta.LoadId) || meta.LoadId == _mem.LoadId) return null;
+            // 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
+            PastTalk.Mend(_mem.Dir, Say);
+            _talk.Past = PastTalk.Visible(_mem.Dir, meta.Before, meta.LoadedAt);
+            _talk.Save();
             _talk.AfterHandover = false;
             bool samePoint = _talk.Started && _talk.SessionId == _mem.SessionId && !double.IsNaN(_mem.LastHours) && !double.IsNaN(meta.LoadedAt) && meta.LoadedAt >= _mem.LastHours - 0.5;
             // 0.18.8: something was sent after the last checkpoint (a call unanswered, a handover that never came): that is past the save too, so back to the checkpoint
@@ -1006,7 +1021,8 @@ namespace BannerlordAgents.WarRoom
             // the game's own list of the orders in force, the lords with none and the watches, for the handover's parts 4 and 5 (0.18.1): fresh when the game runs, else the last it wrote
             string facts = HandoverFacts(GameRunning() && Fresh(out _));
             string prompt = "WRITE YOUR HANDOVER NOW: " + why.TrimEnd('.') + ". This conversation ends with it. Your next message begins a new conversation that holds only your instructions, "
-                            + "this handover, your notes, your chronicle since and a fresh report of your realm, so put in it everything you will need that those do not hold. Write it as "
+                            + "this handover, your notes, your chronicle since and a fresh report of your realm, so put in it everything you will need that those do not hold "
+                            + "(this conversation stays readable word for word through the past question, but keep at hand what you will need). Write it as "
                             + "\"Your handover\" in your instructions says, in its parts and in your own voice, as plain text beginning with the word HANDOVER and the date (" + date + "). No JSON and no orders: "
                             + "your orders in force and your watches carry on as they are."
                             + (facts != null ? " Write part 4 (orders in force) and part 5 (watches) from the game's own list below, adding what only you know: why each group has its order, what would end it, and which orders are on trial.\n\n" + facts : "");
@@ -1034,7 +1050,9 @@ namespace BannerlordAgents.WarRoom
                     _mem.Snapshot(hours, date, _mem.LastPoke, "handover");
                     File.WriteAllText(Path.Combine(_mem.Dir, "handover-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".md"), text + "\n", new UTF8Encoding(false));
                     File.WriteAllText(Path.Combine(folder, "handover.md"), text + "\n", new UTF8Encoding(false));
-                    _talk.MarkHandover(hours, date, _mem.LoadId, why.TrimEnd('.'));
+                    string ended = _talk.SessionId;
+                    _talk.MarkHandover(hours, date, _mem.LoadId, why.TrimEnd('.'), ended);
+                    PastTalk.KeepEnded(_talk, _mem.Dir, ended, hours, date, _mem.LoadId, why.TrimEnd('.'), Say);
                     _talk.Reset("your last conversation ended with the handover below (" + why.TrimEnd('.') + ", " + date + ")");
                     _mem.SessionId = null;
                     _mem.SessionStarted = false;

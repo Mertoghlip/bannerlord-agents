@@ -130,7 +130,7 @@ namespace BannerlordAgents.WarRoom
                     JsonObject args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
                     // the newest hour before every question (0.18.1): the game writes the question book and the view file afresh, so the answer is never older than its last
                     // copied hour, whenever the question comes; check_tool asks the game itself
-                    if (Refresh != null && name != CheckName)
+                    if (Refresh != null && name != CheckName && name != PastTalk.ToolName)
                     {
                         string fresh = Refresh();
                         if (fresh != null) { BookPath = fresh; _bookRead = false; }
@@ -139,6 +139,7 @@ namespace BannerlordAgents.WarRoom
                                   : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args))
                                   : name == CheckName && !NoCheck ? Safe(() => CheckTool(args))
                                   : name == LookName && BookPath != null ? LookUp(args) : name == ListName && BookPath != null ? List(args) : name == ChronicleName && BookPath != null ? Chronicle(args)
+                                  : name == PastTalk.ToolName && PastMem != null ? PastAnswer(args)
                                   : "There is no tool called " + name + " in this call.";
                     result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
                     break;
