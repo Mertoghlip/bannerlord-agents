@@ -302,7 +302,7 @@ namespace BannerlordAgents.WarRoom
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
             Say((fresh ? "A new conversation" : "Conversation (" + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens)") + ": " + kind + " #" + number + "...");
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
-                                      _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv);
+                                      _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0);
             if (r.HandshakeLate) Say(kind + " #" + number + ": Claude Code took over 30 s to answer the tools' handshake; the message went anyway.");
             if (!r.Ok && (r.Stalled || r.Runaway))
             {
@@ -312,7 +312,7 @@ namespace BannerlordAgents.WarRoom
                 retriedStall = true;
                 if (fresh) { _talk.SessionId = Guid.NewGuid().ToString(); _mem.SessionId = _talk.SessionId; }   // a conversation's first call is begun again under a new id
                 r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
-                               _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv);
+                               _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0);
                 r.Seconds += lost;
             }
             File.WriteAllText(Path.Combine(folder, kind.EndsWith("retry", StringComparison.Ordinal) ? "raw-retry.jsonl" : "raw.jsonl"), r.Raw ?? "");
@@ -818,13 +818,13 @@ namespace BannerlordAgents.WarRoom
                             + "your orders in force and your watches carry on as they are."
                             + (facts != null ? " Write part 4 (orders in force) and part 5 (watches) from the game's own list below, adding what only you know: why each group has its order, what would end it, and which orders are on trial.\n\n" + facts : "");
             Say("Handover (" + why + "): the conversation holds " + before.ToString("N0", CultureInfo.InvariantCulture) + " tokens...");
-            CallResult r = Converse(prompt, "handover", number, Math.Max(_c.CouncilTimeoutSeconds, 300), meta, out string folder, out bool stall);
+            CallResult r = Converse(prompt, "handover", number, Math.Max(_c.CouncilTimeoutSeconds, 600), meta, out string folder, out bool stall);
             string text = r.Ok ? HandoverText(r.Text) : null;
             bool retried = false;
             if (text == null && r.Ok)
             {
                 retried = true;
-                CallResult r2 = Converse("That is not a handover in the shape your instructions give. Write it again: plain text beginning with HANDOVER, every part in it.", "handover-retry", number, Math.Max(_c.CouncilTimeoutSeconds, 300), meta, out _, out _);
+                CallResult r2 = Converse("That is not a handover in the shape your instructions give. Write it again: plain text beginning with HANDOVER, every part in it.", "handover-retry", number, Math.Max(_c.CouncilTimeoutSeconds, 600), meta, out _, out _);
                 text = r2.Ok ? HandoverText(r2.Text) : null;
                 r.Seconds += r2.Seconds;
                 r.OutTokens += r2.OutTokens;

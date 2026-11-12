@@ -255,7 +255,7 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, _c.Lookups, _c.ContinuousTimeoutSeconds, _c.ContinuousThinkingCap,
-                                      _talk.SessionId, !fresh, tools: routes, env: Room.ContinuousEnv);
+                                      _talk.SessionId, !fresh, tools: routes, env: Room.ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0);
             if (!r.Ok && (r.Stalled || r.Runaway))
             {
                 File.WriteAllText(Path.Combine(folder, "raw-stalled.jsonl"), r.Raw ?? "");
@@ -263,7 +263,7 @@ namespace BannerlordAgents.WarRoom
                 double lost = r.Seconds;
                 if (fresh) _talk.SessionId = Guid.NewGuid().ToString();   // a conversation's first call is begun again under a new id
                 r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, _c.Lookups, _c.ContinuousTimeoutSeconds, _c.ContinuousThinkingCap,
-                               _talk.SessionId, !fresh, tools: routes, env: Room.ContinuousEnv);
+                               _talk.SessionId, !fresh, tools: routes, env: Room.ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0);
                 r.Seconds += lost;
             }
             File.WriteAllText(Path.Combine(folder, kind.EndsWith("retry", StringComparison.Ordinal) ? "raw-retry.jsonl" : "raw.jsonl"), r.Raw ?? "");

@@ -1156,8 +1156,9 @@ namespace BannerlordAgents
             Diag.Event("order", "gift", new { giver = giver.StringId, getter = getter.StringId, amount, wanted = Math.Round(want), keep, giver_gold = giver.Gold, getter_gold = getter.Gold, source = a.File, poke = a.Poke });
             Diag.Count("order:gift");
             status = "applied";
-            return text + ": " + Names.Hero(getter) + " now has " + Text.N(getter.Gold) + ", " + Names.Hero(giver) + " " + Text.N(giver.Gold) + "."
-                   + (getter.Clan != null && getter.Clan.Leader == getter ? " A clan's gold is its leader's purse: the game tops his clan's lords up from it and sets their wage caps from it at its next daily reckoning." : "");
+            // the receipt adds its own full stop (Nov 11: "reckoning.." in the first gifts' receipts)
+            return text + ": " + Names.Hero(getter) + " now has " + Text.N(getter.Gold) + ", " + Names.Hero(giver) + " " + Text.N(giver.Gold)
+                   + (getter.Clan != null && getter.Clan.Leader == getter ? ". A clan's gold is its leader's purse: the game tops his clan's lords up from it and sets their wage caps from it at its next daily reckoning" : "");
         }
 
         /// <summary>A lord of the realm by name or id for the gift order: one leading a party, else any living lord of its clans (a clan's leader in a holding, a prisoner).</summary>

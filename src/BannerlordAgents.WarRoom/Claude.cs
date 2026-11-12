@@ -78,6 +78,11 @@ namespace BannerlordAgents.WarRoom
 
         /// <summary>Seconds without a single event from Claude Code before a call counts as stalled and is stopped.</summary>
         public const int StallSeconds = 45;
+        /// <summary>
+        /// The silence a handover may keep (0.18.6): Claude Code sends an answer's text only whole, at its end, so a handover of 1,000 to 3,000 words is a minute or more
+        /// of silence after the thinking (Nov 11, test A2: both first handovers, at 615,326 and 592,717 tokens, were stopped at 45 s, twice each).
+        /// </summary>
+        public const int HandoverStallSeconds = 300;
 
         /// <summary>No answer is this long (the longest so far was under 6,000 characters); past it, the call is stopped.</summary>
         public const int RunawayChars = 16000;
@@ -118,7 +123,8 @@ namespace BannerlordAgents.WarRoom
         public static string CacheTtl = "5m";
 
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
-                                     string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null, IDictionary<string, string> env = null)
+                                     string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null, IDictionary<string, string> env = null,
+                                     int stallSeconds = 0)
         {
             var r = new CallResult();
             var psi = new ProcessStartInfo(exe)
@@ -254,7 +260,7 @@ namespace BannerlordAgents.WarRoom
                     if (cancel.IsCancellationRequested) { stopped = "cancelled"; break; }
                     // 0: no time limit (0.13.5, the time limit removed for the lieutenant); a call that hangs is still caught by the stall rule
                     if (timeoutSeconds > 0 && sw.Elapsed.TotalSeconds > timeoutSeconds) { stopped = "the call took over " + timeoutSeconds + " s and was stopped"; break; }
-                    if (sw.ElapsedMilliseconds - Interlocked.Read(ref lastEvent) > StallSeconds * 1000L) { stopped = "stalled: nothing came for " + StallSeconds + " s"; break; }
+                    if (sw.ElapsedMilliseconds - Interlocked.Read(ref lastEvent) > (stallSeconds > 0 ? stallSeconds : StallSeconds) * 1000L) { stopped = "stalled: nothing came for " + (stallSeconds > 0 ? stallSeconds : StallSeconds) + " s"; break; }
                     lock (events)
                     {
                         // an answer that types tool calls as text, or runs far past any answer's length, will not end well
