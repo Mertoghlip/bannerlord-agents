@@ -2418,7 +2418,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** into the game's Modules\BannerlordAgents (v0.18.3) with the game closed; war rooms and dashboard stopped for the build and started again on 0.18.5.
 - **Outside the repository:** `warroom-continuous.md` in `orc-war-council` and `dolguldur-war-council` replaced by the new template (old copies `warroom-continuous.md.bak-20261111-before-command-through-orders`). The new test from TEST START begins new conversations with these instructions.
 
-### 17:00 · War room 0.18.6 and module 0.18.4: handovers get time to be written; the gift receipt's full stop
+### 17:00 · War room 0.18.6 and module 0.18.4: handovers get time to be written; the gift receipt's full stop · commit 060f334
 - **Why:** the first real handovers (test A2, at my siege at 16:48: the orcs at 615,326 tokens, Dol Guldur at 592,717) were both stopped as stalled, twice each, and not written. Claude Code sends an answer's text only whole, at its end (no text comes while it writes, only "thinking" notes), so a handover of 1,000 to 3,000 words is a minute or more of silence, past the 45 s stall rule. The orcs' call sent nothing at all within 45 s. The conversations carried on.
 - **What:** a handover call may keep silent up to 300 s (`Claude.HandoverStallSeconds`; the agents' and the lieutenant's), and its time limit is 600 s; every other call keeps the 45 s rule. The gift order's receipt no longer ends with two full stops.
 - **Checks:** Smoke test ALL CHECKS PASSED; war room and dashboard self-tests passed. Not yet seen in the game: a handover written.
