@@ -2557,7 +2557,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed: the module (0.19.0, with the new harass definition) into the game. The war rooms were stopped for the build and started again.
 - **Outside the repository:** the instructions in the orcs', Dol Guldur's, the kingdom agent's and the lieutenant's folders (backups `.bak-20261113-before-secure-then-press`), again before any of the new conversations began.
 
-### 02:43 · Harassers stay out half a day against a gathering, the agents set it, and an advantage is pressed before new places are settled
+### 02:43 · Harassers stay out half a day against a gathering, the agents set it, and an advantage is pressed before new places are settled · commit 1ce6be9
 - **Why:** two hours was too short a wait before harassers go home; it should be at least half a day, and a setting the agents can change, told so, to keep harassers out even against an even force when the situation asks for it. And settling every new holding before pressing again would throw away the advantage after, say, a large enemy army has been destroyed and no enemy force near can match the realm's: then the agents should press on and take more places until the advantage wanes.
 - **What, the harass order:** new setting `withdraw_hours` (12; 1 to 96), the hours a gathering of `withdraw_at` times the group's strength must last before the harassers go back to their posts (while sheltering, counted from when they went in). `withdraw_at`'s words now say to raise it to keep a group out against an even force. Its about text names both settings.
 - **What, the instructions:**
