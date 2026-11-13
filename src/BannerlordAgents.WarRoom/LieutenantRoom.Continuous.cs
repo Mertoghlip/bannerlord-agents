@@ -47,6 +47,21 @@ namespace BannerlordAgents.WarRoom
                 + (_c.ContinuousTimeoutSeconds > 0 ? "at most " + _c.ContinuousTimeoutSeconds + " s a call" : "no time limit") + ", the same for every call of a conversation; Claude Code at " + _claude);
             Say("Handed over at the ruler's battle past " + _c.CompactAtTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens, at the game's close past "
                 + _c.CompactAtCloseTokens.ToString("N0", CultureInfo.InvariantCulture) + ", before any message past " + _c.CompactHardTokens.ToString("N0", CultureInfo.InvariantCulture) + ".");
+            // 0.18.10: the agent's own copies of its conversations, before the first message
+            KeptTalk.KeepEvery(_c.MemoryDir, Say);
+        }
+
+        /// <summary>
+        /// Before a message: the conversation's transcript (or the one it is to be taken back into) put back from the agent's own copy when Claude Code has deleted it; gone both
+        /// ways, the conversation cannot be carried on, so this message begins a new one from the latest handover and the notes (0.18.10, KeptTalk).
+        /// </summary>
+        private void CheckTranscript()
+        {
+            if (_talk == null || !_talk.Started || _talkDir == null) return;
+            string need = _talk.ForkFrom != null && _talk.ForkAt != null ? _talk.ForkFrom : _talk.SessionId;
+            if (KeptTalk.Ensure(_talkDir, need, _c.ChannelDir, Say) != KeptTalk.State.Missing) return;
+            Say("Continuous: conversation " + need + " has no transcript left, in Claude Code or in the agent's own copies; this message begins a new conversation from the latest handover.");
+            _talk.Reset("the record of your last conversation was lost, so this one begins from your latest handover and notes");
         }
 
         // ---------- a message ----------
@@ -65,6 +80,7 @@ namespace BannerlordAgents.WarRoom
             _campaign = campaign;
             _realm = realm;
             string carried = EnsureTalk(memDir, chat, hours);
+            CheckTranscript();
             if (_talk.Started && _talk.Tokens >= _c.CompactHardTokens) Handover("this conversation is near the end of what one conversation can hold", n);
             bool opening = !_talk.Started;
             if (opening) { _talk.Sent.Clear(); _talk.SentAt.Clear(); _talk.Static.Clear(); }
@@ -271,6 +287,7 @@ namespace BannerlordAgents.WarRoom
             // a conversation taken back to an earlier save (0.18.7) resumes the old session just after its checkpoint, as the new session
             bool fork = !fresh && _talk.ForkFrom != null && _talk.ForkAt != null;
             if (!fresh && !fork) { _talk.SinceCheckpoint = true; _talk.Save(); }   // 0.18.8: whatever this call leaves in the conversation is past the last checkpoint
+            if (!fresh && _talkDir != null) KeptTalk.Ensure(_talkDir, fork ? _talk.ForkFrom : _talk.SessionId, _c.ChannelDir, Say);   // 0.18.10: put back if Claude Code deleted it
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, _c.Lookups, _c.ContinuousTimeoutSeconds, _c.ContinuousThinkingCap,
                                       fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: routes, env: Room.ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
                                       forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
@@ -304,6 +321,7 @@ namespace BannerlordAgents.WarRoom
                 if (size > 0) _talk.Tokens = size;
             }
             _talk.Save();
+            if (_talkDir != null) KeptTalk.Keep(_talkDir, _talk.SessionId, Say);   // 0.18.10: the agent's own copy, brought up to date
             _lastCallEnded = DateTime.Now;
             return r;
         }
@@ -328,7 +346,8 @@ namespace BannerlordAgents.WarRoom
             if (string.IsNullOrEmpty(loadId) || loadId == _talk.LoadId) return null;
             _talk.AfterHandover = false;
             double loadedAt = Hours(chat["loaded_at"]), point = !double.IsNaN(loadedAt) ? loadedAt : hours;
-            // 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
+            // 0.18.10: the agent's own copies of every conversation this campaign's memory names; 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
+            KeptTalk.KeepAll(memDir, _talk, out _, Say);
             PastTalk.Mend(memDir, Say);
             _talk.Past = PastTalk.Visible(memDir, SaveHistory(chat), point);
             _talk.Save();

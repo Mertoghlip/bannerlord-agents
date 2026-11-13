@@ -380,23 +380,35 @@ namespace BannerlordAgents.Runs
         {
             if (a.Workspace == null || r.Windows.Count == 0) return;
             DateTime start = r.Windows.Min(w => w.From), end = r.Windows.Max(w => w.To);
+            // Claude Code's transcripts, and (war room 0.18.10) the agent's own copies in its memory, which outlive Claude Code's 30 days: the longer of the two for each conversation
+            var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            void Offer(string f)
+            {
+                string s = Path.GetFileNameWithoutExtension(f);
+                if (!files.TryGetValue(s, out string had) || new FileInfo(f).Length > new FileInfo(had).Length) files[s] = f;
+            }
             foreach (string proj in ProjectFolders(Path.Combine(a.Workspace, "warroom")))
-                foreach (string f in Directory.GetFiles(proj, "*.jsonl"))
-                {
-                    if (File.GetLastWriteTime(f) < start) continue;
-                    if (!Transcript.Span(f, out DateTime first, out DateTime last) || !r.Windows.Any(w => last >= w.From && first <= w.To) || first > end) continue;
-                    string session = Path.GetFileNameWithoutExtension(f);
-                    string dir = Path.Combine(p.Root, "agents", a.Name, "conversations", first.ToString("yyyyMMdd-HHmm", Inv) + " " + session);
-                    bool changed = Copy(p, f, Path.Combine(dir, "transcript.jsonl"));
-                    if (!changed && File.Exists(Path.Combine(dir, "conversation.txt"))) continue;
-                    List<Transcript.Exchange> ex = Transcript.Read(f);
-                    string head = a.Name + "'s conversation " + session + ", " + ex.Count + " exchanges, " + (ex.FirstOrDefault(e => e.Date.Length > 0)?.Date ?? "?") + " to "
-                                  + (ex.LastOrDefault(e => e.Date.Length > 0)?.Date ?? "?") + " in the game (" + first.ToString("MMM d HH:mm", Inv) + " to " + last.ToString("MMM d HH:mm", Inv) + " real time).\n"
-                                  + "Claude Code's own record of it is transcript.jsonl beside this file.\n\n";
-                    Put(p, Path.Combine(dir, "conversation.txt"), Encoding.UTF8.GetBytes(head + string.Join("\n", ex.Select(e => e.Text))), null, keep: false);
-                    Put(p, Path.Combine(dir, "exchanges.txt"), Encoding.UTF8.GetBytes(head + string.Join("\n", ex.Select(e => "#" + e.N + " · " + (e.Date.Length > 0 ? e.Date : "no date") + " · " + e.Kind + " · "
-                                                                                                                           + e.Text.Length.ToString("N0", Inv) + " characters")) + "\n"), null, keep: false);
-                }
+                foreach (string f in Directory.GetFiles(proj, "*.jsonl")) Offer(f);
+            string memory = Path.Combine(a.Workspace, "memory");
+            if (Directory.Exists(memory))
+                foreach (string kept in Directory.GetDirectories(memory).Select(d => Path.Combine(d, "transcripts")).Where(Directory.Exists))
+                    foreach (string f in Directory.GetFiles(kept, "*.jsonl")) Offer(f);
+            foreach (string f in files.Values)
+            {
+                if (File.GetLastWriteTime(f) < start) continue;
+                if (!Transcript.Span(f, out DateTime first, out DateTime last) || !r.Windows.Any(w => last >= w.From && first <= w.To) || first > end) continue;
+                string session = Path.GetFileNameWithoutExtension(f);
+                string dir = Path.Combine(p.Root, "agents", a.Name, "conversations", first.ToString("yyyyMMdd-HHmm", Inv) + " " + session);
+                bool changed = Copy(p, f, Path.Combine(dir, "transcript.jsonl"));
+                if (!changed && File.Exists(Path.Combine(dir, "conversation.txt"))) continue;
+                List<Transcript.Exchange> ex = Transcript.Read(f);
+                string head = a.Name + "'s conversation " + session + ", " + ex.Count + " exchanges, " + (ex.FirstOrDefault(e => e.Date.Length > 0)?.Date ?? "?") + " to "
+                              + (ex.LastOrDefault(e => e.Date.Length > 0)?.Date ?? "?") + " in the game (" + first.ToString("MMM d HH:mm", Inv) + " to " + last.ToString("MMM d HH:mm", Inv) + " real time).\n"
+                              + "Claude Code's own record of it is transcript.jsonl beside this file.\n\n";
+                Put(p, Path.Combine(dir, "conversation.txt"), Encoding.UTF8.GetBytes(head + string.Join("\n", ex.Select(e => e.Text))), null, keep: false);
+                Put(p, Path.Combine(dir, "exchanges.txt"), Encoding.UTF8.GetBytes(head + string.Join("\n", ex.Select(e => "#" + e.N + " · " + (e.Date.Length > 0 ? e.Date : "no date") + " · " + e.Kind + " · "
+                                                                                                                       + e.Text.Length.ToString("N0", Inv) + " characters")) + "\n"), null, keep: false);
+            }
         }
 
         private static void Instructions(Pass p, RunData r, Agent a, bool open)
@@ -433,8 +445,10 @@ namespace BannerlordAgents.Runs
             if (!Directory.Exists(src)) return;
             if (open)
             {
-                // the whole of it while the run is open: notes, story, snapshots, the conversation's state, checkpoints, handovers, earlier conversations
-                CopyDir(p, src, dst, f => !Path.GetFileName(f).Contains(".bak-", StringComparison.Ordinal));
+                // the whole of it while the run is open: notes, story, snapshots, the conversation's state, checkpoints, handovers, earlier conversations; not the agent's own
+                // copies of its transcripts (war room 0.18.10), which the conversations folder already holds
+                string own = Path.Combine(src, "transcripts") + Path.DirectorySeparatorChar;
+                CopyDir(p, src, dst, f => !Path.GetFileName(f).Contains(".bak-", StringComparison.Ordinal) && !f.StartsWith(own, StringComparison.OrdinalIgnoreCase));
                 return;
             }
             if (Directory.Exists(dst)) return;   // kept while it was open: later passes leave it as it stood

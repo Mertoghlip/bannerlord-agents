@@ -273,6 +273,8 @@ namespace BannerlordAgents.WarRoom
             Say("One conversation, handed over at the player's battle past " + _c.CompactAtTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens, at the game's close past "
                 + _c.CompactAtCloseTokens.ToString("N0", CultureInfo.InvariantCulture) + ", at any wake past " + _c.CompactHardTokens.ToString("N0", CultureInfo.InvariantCulture) + ". Ctrl+C stops it.");
             _lastAnswered = LastAnsweredOnDisk();
+            // 0.18.10: the agent's own copies of its conversations, before the first wake
+            KeptTalk.KeepEvery(_c.MemoryDir, Say);
             int waitingSaid = -2;
             while (!stop.IsCancellationRequested)
             {
@@ -314,6 +316,7 @@ namespace BannerlordAgents.WarRoom
             PokeMeta meta = ReadMeta(number);
             if (meta != null && !double.IsNaN(meta.Hours)) _pokeHours = meta.Hours;
             string carried = EnsureContinuous(meta);
+            CheckTranscript();
             if (meta != null) { _mem.Run = meta.Run; _mem.Arm = meta.Arm; }
             string why = Section(pokeText, "WHY YOU ARE ASKED NOW");
             // past the hard ceiling: the handover first, and this wake opens the next conversation
@@ -450,6 +453,7 @@ namespace BannerlordAgents.WarRoom
             // a conversation taken back to an earlier save (0.18.7) resumes the old session just after its checkpoint, as the new session
             bool fork = !fresh && _talk.ForkFrom != null && _talk.ForkAt != null;
             if (!fresh && !fork) { _talk.SinceCheckpoint = true; _talk.Save(); }   // 0.18.8: whatever this call leaves in the conversation is past the last checkpoint
+            if (!fresh) KeptTalk.Ensure(_mem.Dir, fork ? _talk.ForkFrom : _talk.SessionId, _c.ChannelDir, Say);   // 0.18.10: put back if Claude Code deleted it
             CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
                                       fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
                                       forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
@@ -487,8 +491,26 @@ namespace BannerlordAgents.WarRoom
                 _mem.SessionTokens = _talk.Tokens;
             }
             _talk.Save();
+            KeptTalk.Keep(_mem.Dir, _talk.SessionId, Say);   // 0.18.10: the agent's own copy, brought up to date
             _lastCallEnded = DateTime.Now;
             return r;
+        }
+
+        /// <summary>
+        /// Before a wake: the conversation's transcript (or the one it is to be taken back into) put back from the agent's own copy when Claude Code has deleted it; gone both
+        /// ways, the conversation cannot be carried on, so this wake begins a new one from the handover and the notes (0.18.10, KeptTalk).
+        /// </summary>
+        private void CheckTranscript()
+        {
+            if (_talk == null || _mem == null || !_talk.Started) return;
+            string need = _talk.ForkFrom != null && _talk.ForkAt != null ? _talk.ForkFrom : _talk.SessionId;
+            if (KeptTalk.Ensure(_mem.Dir, need, _c.ChannelDir, Say) != KeptTalk.State.Missing) return;
+            Say("Continuous: conversation " + need + " has no transcript left, in Claude Code or in the agent's own copies; this wake begins a new conversation from the handover and the notes.");
+            _talk.Reset("the record of your last conversation was lost, so this one begins from your handover, your notes and a fresh report");
+            _mem.SessionId = null;
+            _mem.SessionStarted = false;
+            _mem.SessionTokens = 0;
+            _mem.Save();
         }
 
         /// <summary>
@@ -797,7 +819,8 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory of campaign " + campaign + ": " + _mem.Dir + (_talk.Started ? "; its conversation holds " + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens" : "; no conversation yet") + ".");
             }
             if (meta == null || string.IsNullOrEmpty(meta.LoadId) || meta.LoadId == _mem.LoadId) return null;
-            // 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
+            // 0.18.10: the agent's own copies of every conversation this campaign's memory names; 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
+            KeptTalk.KeepAll(_mem.Dir, _talk, out _, Say);
             PastTalk.Mend(_mem.Dir, Say);
             _talk.Past = PastTalk.Visible(_mem.Dir, meta.Before, meta.LoadedAt);
             _talk.Save();
@@ -1133,6 +1156,7 @@ namespace BannerlordAgents.WarRoom
 
         internal Talk TalkNow => _talk;
         internal void UseForTest(Memory m, Talk t) { _mem = m; _talk = t; }
+        internal void CheckTranscriptForTest() => CheckTranscript();
         internal void WantReview(string why) => _reviewWanted = why;
         /// <summary>For the self-test: the next review's hour an answer would leave (review true: the answer is a review's).</summary>
         internal double Review_In(string answer, double hours, bool review) { _talk.NextReviewHours = double.NaN; AfterContinuous((JsonObject)JsonNode.Parse(answer), hours, review); return _talk.NextReviewHours; }

@@ -42,12 +42,7 @@ namespace BannerlordAgents.WarRoom
         public static string SessionFile(string session)
         {
             if (string.IsNullOrEmpty(session)) return null;
-            string root = ProjectsRoot;
-            if (root == null)
-            {
-                string config = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-                root = Path.Combine(!string.IsNullOrWhiteSpace(config) ? config.Trim() : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude"), "projects");
-            }
+            string root = Projects();
             if (!Directory.Exists(root)) return null;
             string best = null;
             DateTime bestAt = DateTime.MinValue;
@@ -59,6 +54,23 @@ namespace BannerlordAgents.WarRoom
                 if (best == null || at > bestAt) { best = f; bestAt = at; }
             }
             return best;
+        }
+
+        /// <summary>The same, or when Claude Code has it no more, the agent's own copy in the memory folder (0.18.10, KeptTalk); null when neither has it.</summary>
+        public static string SessionFile(string session, string memDir)
+        {
+            string file = SessionFile(session);
+            if (file != null || string.IsNullOrEmpty(session) || string.IsNullOrEmpty(memDir)) return file;
+            string kept = KeptTalk.KeptFile(memDir, session);
+            return File.Exists(kept) ? kept : null;
+        }
+
+        /// <summary>Claude Code's projects folder: ProjectsRoot when set (the self-test), else CLAUDE_CONFIG_DIR's or the user's .claude, projects\.</summary>
+        public static string Projects()
+        {
+            if (ProjectsRoot != null) return ProjectsRoot;
+            string config = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+            return Path.Combine(!string.IsNullOrWhiteSpace(config) ? config.Trim() : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude"), "projects");
         }
 
         /// <summary>The exchanges of a transcript (the shared reader, src/Common/Transcript.cs).</summary>
@@ -75,7 +87,7 @@ namespace BannerlordAgents.WarRoom
         public static About Keep(string memDir, string session, double hours, string date, string load, string why, out string problem)
         {
             problem = null;
-            string file = SessionFile(session);
+            string file = SessionFile(session, memDir);
             if (file == null) { problem = "the transcript of conversation " + session + " was not found"; return null; }
             List<Exchange> all;
             try { all = Read(file); }
