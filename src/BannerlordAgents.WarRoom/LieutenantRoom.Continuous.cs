@@ -507,6 +507,24 @@ namespace BannerlordAgents.WarRoom
             return true;
         }
 
+        /// <summary>
+        /// "WarRoom handover --dir (lieutenant) [--why text]" (0.19): the lieutenant writes its handover now, in the campaign of the ruler's newest words, and its conversation ends, so his
+        /// next message begins a new one from it under the instructions as they stand then. Run with the war room stopped. 0 when it was written, or there was nothing to hand over.
+        /// </summary>
+        internal int HandoverNow(string why)
+        {
+            JsonObject chat = ReadChat(_c.ChannelDir);
+            if (chat == null) { Say("Handover: no words from the ruler yet, so there is no conversation to hand over."); return 0; }
+            string campaign = Str(chat["campaign"]);
+            string memDir = Path.Combine(_c.MemoryDir, Safe(campaign ?? "unknown"));
+            if (!Directory.Exists(memDir)) { Say("Handover: no memory for campaign " + campaign + "."); return 0; }
+            _campaign = campaign;
+            _realm = Str(chat["realm"]);
+            EnsureTalk(memDir, chat, Hours(chat["hours"]));
+            if (_talk == null || !_talk.Started) { Say("Handover: no conversation under way, so the ruler's next message begins a new one anyway."); return 0; }
+            return Handover(why, _talk.Number) ? 0 : 1;
+        }
+
         /// <summary>The report's sections the handover's part on orders takes: the orders in force and every lord's doing now.</summary>
         private static readonly string[] FactSections = { "YOUR ORDERS IN FORCE", "YOUR LORDS AND ARMIES" };
 

@@ -1,6 +1,6 @@
 # Doctrine: the study behind the agent's instructions
 
-Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 19 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17, the 18th since Oct 25, the 19th since Nov 1; the 7th corrected on Oct 29), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it, since the agent's folder stays outside the repo.
+Since version 0.6 (Oct 9), the war room's agent speaks as a medieval commander and carries a short doctrine: 29 principles (14 since Oct 9, the 15th since Oct 16, the 16th and 17th since Oct 17, the 18th since Oct 25, the 19th since Nov 1; the 7th corrected on Oct 29; all 19 checked against the game's rules and 20 to 29 added on Nov 13), each grounded in medieval military writing or a campaign. This page is the study behind them, with its sources. It stays in the repository: the agent never reads it, since the agent's folder stays outside the repo.
 
 ## Why, and the rule
 
@@ -62,6 +62,8 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 **The doctrine's answer** (principle 3) is the research's working rule: the side that time works against (far from home, its allies about to leave, weaker in the long run) must seek battle, on ground it chooses. The side that time favours can refuse it. Either way, fight only with an edge, or when forced, and strike at once when the edge is yours.
 
 ## The 19 principles, and what each rests on
+
+As written before Nov 13. The sweep of that day checked every one against the game's rules and added ten more ([below](#the-game-fit-sweep-and-principles-20-to-29-nov-13)).
 
 | # | Principle (as the agent reads it, shortened) | What it rests on | What it means in this game |
 |---|---|---|---|
@@ -312,6 +314,66 @@ Three research passes on Oct 9, each reading sources online (reviews and summari
 - It is a rule for a threatened front, not for every place. The order spends a lord's time and half his gold at most, and principle 12 (hold what you can support) still decides which places are worth it.
 
 **What would show it working:** supply orders to threatened castles before sieges begin, fewer sieges won by hunger against the agent's realm, and food lines in councils' notes.
+
+## The game-fit sweep, and principles 20 to 29 (Nov 13)
+
+**Nov 12.** On day 10 of the A2 tuning game both agents were holding back: the orcs had fought no battle with a lord and begun no siege, sitting on 11.8 million gold with most lords at 15 to 50% of their ranks; Dol Guldur chased one of my lone lords with Khamûl's slow army for 11 hours, concluded that armies cannot catch lone lords, and stopped there. I asked why it would not split the army into faster groups within reach of each other, tie my lords up in battle with the fast ones and bring the strong ones in, and then asked for a sweep that keeps what applies to the game from the historical principles, throws out what does not, and writes new principles from what we know of the game: fast lords hunting with reserves to turn the tide, slow lords as bait with reserves, more initiative and unexpected moves when needed, and a defence always looking for the counter-attack.
+
+**How it was done.** Three agents worked in parallel: one checked every claim of the persona and the 19 principles against the decompiled 1.4.8 code and the TAOM 2.0.26 pack; one worked out the game's rules for joining battles, retreat, capture, pace, armies, sieges and raids, and principles built on them; one read my comments on the agents' strategy since August and my own play (my recorded decisions, battles in person, orders to my lieutenant, the test runs). Claude Code re-checked the rules the new principles lean on most in the game's code. The full review, with every verdict and the evidence, was published as the report "Doctrine Overhaul"; the working files are in the session's scratchpad (`doctrine-review\A-sweep.md`, `B-mechanics.md`, `C-player.md`).
+
+**The game rules everything below rests on** (1.4.8 unless TAOM is named):
+- A battle holds both sides: a party in a map event makes no decisions (`MobilePartyAi.TickInternal`). Field rounds every 30 minutes, storms every 60 (`DefaultCombatSimulationModel.GetSimulationTickInterval`).
+- A side may retreat from a field battle only after 8 rounds, at morale 20 or less, having lost the last 4 rounds, at 0.2 a round (`DefaultEncounterModel.GetRunAwayChanceInternal`); never from a raid, a storm, a sally or a fight at a siege camp (`GetMapEventSideRunAwayChance`). A side that retreats loses no lords (`MapEvent.CaptureDefeatedPartyMembers` returns at once).
+- Battle length (replayed from the game's rules, equal troops): lopsided fights 8 to 14 hours whatever the size; even fights about 16 hours at 100 a side, about a day at 1,000, several days at 5,000. A side a quarter to a third of its attacker holds about 6 to 8.5 hours, at half about 8 to 13; a reserve as strong as the attacker that arrives within 6 hours almost always wins, at 8 about one time in three, at 10 never.
+- The computer's quick reactions look about 9 map units out (encounter radius 3 × (2 + 1)), every 9 to 10 minutes; a target's friends count within 6, in full within 3; attack needs a local advantage of at least 1 (`DefaultMobilePartyAIModel.GetBestInitiativeBehavior`, `CalculateInitiativeScoresForEnemy`). An army leader ignores a lone party it outweighs more than 2 to 1 unless waiting for its lords; lords marching to join an army skip every enemy weaker than that army (same method). No line-of-sight test. Hunting by the hourly decision only within about half a day of the hunter's holdings (`AiEngagePartyBehavior`).
+- Pace: `4 × (200/(200+men))^0.4` with an army's men pooled on its leader (`DefaultPartySpeedCalculatingModel.CalculateBaseSpeedForParty`); loot within capacity costs at most 2% (`GetCargoEffect`), prisoners about 20% at one per man; winners are slowed 0.4 for 6 hours after a battle, a retreating side is not (`DisorganizedStateCampaignBehavior`).
+- Armies: idle counter 48 hours, cohesion −2 − ¼ per party a day, computer leaders buy cohesion back with influence, a gathering army waits up to 72 hours (`Army.cs`, `DefaultArmyManagementCalculationModel`).
+- Storms: the attackers' blows per round depend only on the defenders' number (`GetSimulationTicksForBattleRound`). Lords inside a besieged place are defenders, but the place's stores feed only its people and garrison (`DefaultSettlementFoodModel`: prosperity/40 + garrison/20); a lord inside eats what he carries, then buys from a town's market (`PartiesBuyFoodCampaignBehavior`), and a castle has none.
+- Hunger wounds, it does not kill: 25% of a field party's regulars a day, 10% of a garrison's (`DefaultPartyHealingModel.GetDailyHealingForRegulars`); no foraging; the computer gathers no army and starts no siege under 12 days of food (`AiMilitaryBehavior.GetFoodScoreForActionType`).
+- Sieges: the computer besieges only with about twice the wall-weighted defence, food under 100 halving the walls' part, and counts field enemies within about 6.7 of the gate (`DefaultTargetScoreCalculatingModel.GetTargetScoreForFaction`); TAOM makes Dol Guldur and Gundabad count themselves 1.75 times, Mordor and Isengard 2 times (`army_targeting.json`). The garrison sallies to join a relief at 1.5 times the besiegers, 2 times alone, own realm only (`SallyOutsCampaignBehavior.CheckSallyOut`). Defenders of a raided or besieged place gather about 3 off and strike at 1.2 times (1.05 for a village) (`MobilePartyAi.GetNearbyPartyDataWhileDefendingSettlement`); TAOM scores defending 1.6 times higher.
+- Raids: `(√raiders + 5)/900` of a village's health an hour, about 60 hours for 100 raiders and 25 for 1,000; a looted village gives no food, tax or recruits for 9 to 17 days (`DefaultRaidModel`, `VillageHealCampaignBehavior`).
+
+**What changed in the 19** (the full wording is in `agent/warroom-system.template.md`):
+
+| # | Verdict | The game's reason |
+|---|---|---|
+| persona "let it burn itself out" | rewritten | Nothing burns a computer host out: it sets out fed and buys back cohesion. The C2 read above named this line among those behind the agent's waiting. |
+| 1 | rewritten | No garrison surrenders: a place falls to a storm or to hunger. Lords inside a place that falls are taken. |
+| 2 | rewritten | The camp cannot run or retreat (confirmed); the sally bar and its own-realm rule stated; "raid his lands to pull the besiegers home" could not be confirmed for computer armies, replaced by taking his thin places while his army is tied; nobody leaves a storm; storms paced by the defenders. |
+| 3 | rewritten | Vegetius' "two or three hours" dropped; no fatigue, march or surprise term in the battle sums; battles long, joiners count, a retreating side keeps its lords. |
+| 4 | rewritten ("Shadow an invader") | No foraging; hosts set out fed. Shadowing and picking off lone lords kept. |
+| 5 | edited | Confirmed by the battle sums (winner's losses about 58% at 1.2:1, 22% at 2:1, 11% at 3:1); "within reach" now means within a battle's hours; strength, not men. |
+| 6 | edited | The forage example replaced by an army still gathering and relief lords arriving one by one. |
+| 7 | kept | Confirmed: a raid holds the raider, no retreat from a raid fight. |
+| 8 | rewritten ("Armies live on purpose") | "Destroyed more by starvation than battle" and "loot makes it slow" dropped; the idle rule made exact; mass costs speed; gather from the lords near, then disperse (my pattern). |
+| 9 | kept, numbers added | A looted village's 9 to 17 days; raid a castle's villages before the siege (Ouranos). |
+| 10 | edited | Lords taken are out for weeks, those who got away back in days; after the main army falls, several places at once (my pattern after run A's day 10). |
+| 11 | edited | The numbers; hunt strays with single lords, never armies. |
+| 12 | kept, addition | The computer's twice-the-defence siege rule; never rest an army idle. |
+| 13 | edited | The winners' wounded heal 5 to 15 a day; "the same day" through standing orders. |
+| 14 | kept | |
+| 15 | edited | The computer rethinks every 1 to 6 hours; the report names destinations; feints come from the human player. |
+| 16 | rewritten | "The besieger is blind" dropped (a camp sees like any party); the advice kept for the true reason: hours of warning against days of siege and half a day of answer delay. |
+| 17 | rewritten | "Let want wear him down" dropped; what wears a realm down here: lost places, burnt villages, lords in dungeons, idle armies. |
+| 18 | edited | His siege of your place is the best moment only when your army already stands within reach. |
+| 19 | kept | Wording: hunger lays men low; a hungry place draws sieges. |
+
+**The new principles and what each rests on:**
+- **20. Initiative is the default:** waiting needs a reason and an end; gold is not strength while ranks are thin. Rests on the game's armies not wearing out (above) and recruiting being bounded by ranks and wage caps, not by the clan's purse. Evidence: the orcs' A2 days; my wage caps lifted at almost every session.
+- **21. Every defence carries its counter-stroke:** keep field lords outside within hours, out of the computer's 6.7 count; strike the camp before its engines are built; meanwhile take what he left thin. Inside, only the lords the defence needs, each lengthening the wait before a storm and the storm itself, but living on his own food (my correction, Nov 13: leave in only what maximises the holdout without asking too much of the food; in the game the lords' own food and a town's market are what they draw on, not the stores). Rests on the siege-choice count, the camp's no-retreat rule and the sally bar. Evidence: run A's day 10, when my relief of a castle held by its lords destroyed Dol Guldur's main army (8,301 of 8,327 lost). Worded "hours, not days" so it does not bring back C2's waiting for a siege.
+- **22. Fix with the light, strike with the heavy:** my idea of Nov 12. Rests on the battle hold, the hold times and the 9-unit look. The reserve order carries it.
+- **23. The bait and the hidden reserve:** a lone lord takes any bait he outweighs, an army only one of half its strength or more; the reserve beyond the 6-unit count and the 9-unit look but within about three quarters of the bait's hold time. A defended place is the strongest bait (my pattern).
+- **24. March divided, fight united:** parts about 60% faster than one army (five lords of 300 at about 2.8 against one army of 1,500 at about 1.7); each part able to hold until the others arrive. The Mongol columns of 1241.
+- **25. Strike them where they cannot get away:** the no-retreat situations and the no-capture-after-retreat rule. Lincoln 1217.
+- **26. Catch them while they gather:** the marching-to-army skip and the 72-hour wait. Edward IV, 1471.
+- **27. Speed decides who can force a battle:** cut-off, not race (my Nov 1 catch of a fleeing army after it raced for a castle); lone lords shadow armies because of the army 2:1 skip.
+- **28. Draw them in pieces with a prize:** the defenders' gathering and 1.2/1.05 bars; TAOM's 1.6.
+- **29. Ring the prize before the blow:** lords sent ahead with the harass order (0.19) keep near the place in a group within reach of each other, hunt its strays, burn its villages, then screen the camp and join the storm once the army besieges it. Harfleur 1415; Ouranos on raiding a fortress's land before the siege.
+- **The human player** (in the instructions' own section, not numbered): never let fear of him alone turn down a fight the odds, judged by his record, say is won; his host is mostly called lords that scatter home after; strike them then, his places when he is elsewhere, the front he does not lead. Evidence: Dol Guldur's "I will not offer battle" and its refusal of a relief its forecast called a win (Nov 11).
+
+**Beside the principles:** a "How battles are joined" section of facts (the rules above in plain words, no advice), the instructions' "Command through orders" naming the reserve and harass orders as the reflexes that must be in place before they are needed, and the lieutenant's instructions naming both orders and the battle facts in two lines.
+
+**What would show it working:** fewer days without a battle or a siege while ranks and gold allow one; armies formed hours before a blow rather than kept idle; lords sent ahead to harass a place before an army sits down beside them; reserves posted behind a lord who starts a fight; strikes on lords marching to join an army; a defence that names its counter-stroke.
 
 ## What was left out on purpose
 

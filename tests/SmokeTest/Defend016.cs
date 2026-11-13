@@ -173,6 +173,7 @@ namespace SmokeTest
             GeneralRulesTests();
             DefendStepTests();
             InPersonTests();
+            HarassTests();
             LieutenantChatsTests(root);
         }
 

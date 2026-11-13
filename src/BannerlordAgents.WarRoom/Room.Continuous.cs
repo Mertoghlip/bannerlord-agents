@@ -909,6 +909,9 @@ namespace BannerlordAgents.WarRoom
             if (!Review(why)) _reviewFailedAt = DateTime.Now;
         }
 
+        /// <summary>How long a review waits for the game to take the answer just before it (0.19); the self-test shortens it.</summary>
+        internal static int ReviewWaitMs = 15000;
+
         /// <summary>A strategy review in the conversation (0.18): why it sits, the briefing of the whole realm from the game's newest hour, and the situation report less what the briefing and the conversation already hold.</summary>
         internal bool Review(string why)
         {
@@ -918,6 +921,10 @@ namespace BannerlordAgents.WarRoom
             if (meta == null) return false;
             int number = meta.Number;
             if (!double.IsNaN(_pokeHours) && _pokeHours > meta.Hours && _clockDate != null) { meta.Hours = _pokeHours; meta.Date = _clockDate; }
+            // 0.19: a review right after an answer waits for the game to take that answer's orders, so its briefing shows them, and is told what became of them
+            string lastFile = _lastOrdersFile, fate = null;
+            bool recent = lastFile != null && (DateTime.Now - _lastOrdersAt).TotalSeconds < 600;
+            if (recent) fate = AnswerFate(lastFile, _receiptsMark, ReviewWaitMs);
             if (!BriefingFor(false)) return false;
             string briefing = ReadShared(Path.Combine(_c.ChannelDir, "council.txt")) ?? "";
             string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
@@ -929,6 +936,13 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("Why it sits now: " + why.TrimEnd('.') + ".");
             sb.AppendLine("This is not a wake: it is your strategy review (see \"Strategy reviews\" in your instructions). Answer with one JSON object that says \"poke\": " + number + ".");
             sb.AppendLine();
+            if (recent)
+            {
+                sb.AppendLine(fate != null
+                    ? "WHAT BECAME OF YOUR LAST ANSWER, as the game answered it (the briefing below was written after this):\n" + fate
+                    : "YOUR LAST ANSWER had not reached the game when this review was written (the game may be paused); its orders are checked and carried out as the game takes them, and your next wake says what became of them. Do not give them again.");
+                sb.AppendLine();
+            }
             sb.AppendLine(briefing.Trim()).AppendLine();
             sb.Append(Trim(situation, meta.Hours, review: true, opening: false));
             string prompt = sb.ToString().Replace("\r\n", "\n");
@@ -1155,6 +1169,21 @@ namespace BannerlordAgents.WarRoom
         // ---------- for the self-test ----------
 
         internal Talk TalkNow => _talk;
+        /// <summary>
+        /// "WarRoom handover --dir (agent) [--why text]" (0.19): the agent writes its handover now, in the campaign of the newest poke, and its conversation ends, so the next wake begins a
+        /// new one from it under the instructions as they stand then (Nov 13: the doctrine was rewritten, and each agent was to carry on in a fresh conversation without losing what it
+        /// knew). Run with the war room stopped. 0 when it was written, or there was no conversation to hand over.
+        /// </summary>
+        internal int HandoverNow(string why)
+        {
+            PokeMeta meta = ReadMeta(-1);
+            if (meta == null) { Say("Handover: no poke yet, so there is no conversation to hand over."); return 0; }
+            if (!double.IsNaN(meta.Hours)) _pokeHours = meta.Hours;
+            EnsureContinuous(meta);
+            if (_talk == null || !_talk.Started) { Say("Handover: campaign " + (_mem?.Campaign ?? "?") + " has no conversation under way, so the next wake begins a new one anyway."); return 0; }
+            return Handover(why, meta) ? 0 : 1;
+        }
+
         internal void UseForTest(Memory m, Talk t) { _mem = m; _talk = t; }
         internal void CheckTranscriptForTest() => CheckTranscript();
         internal void WantReview(string why) => _reviewWanted = why;

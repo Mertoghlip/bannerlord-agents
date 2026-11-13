@@ -81,5 +81,29 @@ namespace BannerlordAgents.WarRoom
             }
             finally { PastTalk.ProjectsRoot = old; }
         }
+
+        /// <summary>
+        /// A review right after an answer (0.19): what became of that answer, as the game's receipts tell it, found by the answer's file name among the lines written after it went out;
+        /// none when the game has not answered yet.
+        /// </summary>
+        private static void ReviewFateTests(string root)
+        {
+            string agent = Path.Combine(root, "fate-agent"), channel = Path.Combine(agent, "warroom");
+            Directory.CreateDirectory(channel);
+            var c = new Config { AgentDir = agent, Channel = "warroom", MemoryMode = "continuous" };
+            var room = new Room(c, Path.Combine(root, "fate-logs"));
+            string receipts = Path.Combine(channel, "receipts.log");
+            File.WriteAllText(receipts, "20:10:00  poke #2821, poke-2821.json order 1 (lord_a garrison): APPLIED. old answer\n");
+            long mark = new FileInfo(receipts).Length;
+            Check(room.AnswerFate("poke-2822.json", mark, 300) == null, "a review whose last answer the game has not taken yet is told so, not given old receipts");
+            File.AppendAllText(receipts, "20:16:18  poke #2822, poke-2822.json order 1 (lord_d11_2 garrison): APPLIED. Mokrash garrison Caras Laerolin.\n"
+                                         + "20:16:18  poke #2822, poke-2822.json watch 2 (cl_food): ENDED. ended, as you asked.\n"
+                                         + "20:17:25  poke #2822, poke-2822-council-201724.json: RECEIVED 8 orders. The game's clock is stopped right now.\n");
+            string fate = room.AnswerFate("poke-2822.json", mark, 300);
+            Check(fate != null && fate.Contains("APPLIED. Mokrash garrison") && fate.Contains("ENDED") && !fate.Contains("council") && !fate.Contains("old answer"),
+                  "what became of the last answer: its own receipt lines, written after it went out, and no other file's");
+            string paused = room.AnswerFate("poke-2822-council-201724.json", mark, 300);
+            Check(paused != null && paused.Contains("RECEIVED 8 orders"), "an answer the game holds until its clock runs again is told as received");
+        }
     }
 }

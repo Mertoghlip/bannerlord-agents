@@ -72,7 +72,7 @@ namespace BannerlordAgents.WarRoom
             if (mode == "toolcheck") return args.Contains("--write") ? ToolWrite(Arg(args, "--model") ?? "claude-haiku-5-5") : ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5", args.Contains("--big"));
             string dir = Arg(args, "--dir");
             Config c = Config.Load(dir);
-            if ((mode == "once" || mode == "council") && LiveLock.Running(c))
+            if ((mode == "once" || mode == "council" || mode == "handover") && LiveLock.Running(c))
             {
                 Console.WriteLine("A war room is already answering the pokes of " + c.AgentDir + " (WarRoom run), so " + mode + " would answer beside it and the game "
                                   + "would carry out both sets of orders. Leave it to the running war room, or stop that one first.");
@@ -116,10 +116,17 @@ namespace BannerlordAgents.WarRoom
                     }
                 case "story": return Story(c);
                 case "past": return Past(c, args);
+                case "handover":
+                    {
+                        // 0.19: the agent writes its handover now and its conversation ends; the next wake (or the ruler's next words) begins a new one
+                        if (!c.Continuous) { Console.WriteLine(c.AgentDir + " does not keep one conversation (memory is not continuous), so there is nothing to hand over."); return 1; }
+                        string why = Arg(args, "--why") ?? "your war room was restarted with revised instructions, which your next conversation begins with";
+                        return c.IsLieutenant ? new LieutenantRoom(c).HandoverNow(why) : new Room(c).HandoverNow(why);
+                    }
                 case "council": return new Room(c).CouncilNow("asked for by hand");
                 case "replay": return Arg(args, "--memory") != null ? ReplayInOrder(c, args) : Replay(c, args);
                 default:
-                    Console.WriteLine("Usage: WarRoom [run|once|story|council|past|replay] [--dir agent-folder]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]"
+                    Console.WriteLine("Usage: WarRoom [run|once|story|council|past|handover|replay] [--dir agent-folder]; handover [--why text]; replay --pokes file.jsonl --numbers 6,10 [--memory written|conversation] [--effort e] [--model m] [--tag t]"
                                       + " [--news --calls <the war room's calls folder> --news-template agent/warroom-news.template.md]");
                     return 1;
             }

@@ -1472,8 +1472,50 @@ namespace BannerlordAgents.WarRoom
             string name = "poke-" + number + (suffix != null ? "-" + suffix + "-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) : "");
             string final = Path.Combine(dir, name + ".json");
             string temp = Path.Combine(dir, name + ".json.part");
+            // 0.19: where the game's receipts stood as this answer went out, so a review right after it can find what became of it (AnswerFate)
+            string receipts = Path.Combine(_c.ChannelDir, "receipts.log");
+            try { _receiptsMark = File.Exists(receipts) ? new FileInfo(receipts).Length : 0; } catch (IOException) { _receiptsMark = 0; }
             File.WriteAllText(temp, file.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
             File.Move(temp, final, true);
+            _lastOrdersFile = name + ".json";
+            _lastOrdersAt = DateTime.Now;
+        }
+
+        // the last answer written, when, and the receipts' length then (0.19)
+        private string _lastOrdersFile;
+        private DateTime _lastOrdersAt = DateTime.MinValue;
+        private long _receiptsMark;
+
+        /// <summary>
+        /// What became of an answer's file, as the game's receipts tell it (0.19): every receipt line naming the file, written after it went out. Waits up to waitMs for the first,
+        /// then a second and a half more for the rest of its lines (the game answers an answer's orders together); null when none came. Nov 12: Dol Guldur's strategy review read a
+        /// briefing written one second before its wake's four orders were applied, decided they had been dropped, and sent them all again.
+        /// </summary>
+        internal string AnswerFate(string file, long mark, int waitMs)
+        {
+            if (string.IsNullOrEmpty(file)) return null;
+            string path = Path.Combine(_c.ChannelDir, "receipts.log");
+            string needle = ", " + file + " ";
+            string needle2 = ", " + file + ":";
+            List<string> Lines()
+            {
+                try
+                {
+                    if (!File.Exists(path)) return new List<string>();
+                    using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    if (mark > 0 && mark <= fs.Length) fs.Position = mark;
+                    using var sr = new StreamReader(fs, new UTF8Encoding(false));
+                    return sr.ReadToEnd().Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Contains(needle) || l.Contains(needle2)).ToList();
+                }
+                catch (IOException) { return new List<string>(); }
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            List<string> got = Lines();
+            while (got.Count == 0 && sw.ElapsedMilliseconds < waitMs) { Thread.Sleep(250); got = Lines(); }
+            if (got.Count == 0) return null;
+            Thread.Sleep(1500);
+            got = Lines();
+            return string.Join("\n", got.Select(l => "- " + l.Trim()));
         }
 
         // ---------- helpers and logs ----------

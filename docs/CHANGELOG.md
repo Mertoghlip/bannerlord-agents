@@ -2492,3 +2492,45 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - `Runs.exe archive 20261111-1600-A`: the same three conversations as before, and no transcript copies in the memory folders.
 - **Outside the repository:** the copies made as the war rooms started, each in its folder's `memory\Ah2auppicLLJ\transcripts\`: the orcs 3.6 MB and Dol Guldur 3.4 MB (the conversations handed over at 17:23 on Nov 11), the lieutenant 1.7 MB (its running conversation). Each agent's older conversation from the 13:51 run is named nowhere in its memory any more; it stays in Claude Code's folder and in the archive.
 - **Installed** with the game closed (module unchanged, 0.18.5): war rooms, dashboard and archive keeper stopped at 19:20 and started again at 19:22.
+
+## Friday, November 13
+
+### 01:50 · Version 0.19.0: the doctrine checked against the game, ten new principles, the harass and reserve orders, the battle facts
+- **Why:** on day 10 of the A2 tuning game both agents were holding back. The orcs had fought no battle with a lord and begun no siege in ten days, with 11.8 million gold and most lords at 15 to 50% of their ranks. Dol Guldur chased one of my lone lords with Khamûl's slow army for 11 hours, decided armies cannot catch lone lords, and stopped there, never thinking to split its army, pin my lords with fast ones and bring the strong ones in. A review (three agents in parallel, then Claude Code's own check of the key rules in the game's code; published as the report "Doctrine Overhaul", https://claude.ai/artifact/EANdsgTA8DB9uRexJs76f7) found that several history lessons in the doctrine describe a war this game does not run (two-or-three-hour battles, armies dying of hunger, invaders burning out), which taught waiting, and that nothing taught the way the game rewards: separate fast parts closing in on a battle that holds the enemy in place. I approved its proposals, adding that lords may be left inside a besieged place to make it hold longer, as long as that does not ask too much of its food, and asked for a harass order and for its use to be part of the instructions.
+- **What, the instructions** ([DOCTRINE.md](DOCTRINE.md#the-game-fit-sweep-and-principles-20-to-29-nov-13), `agent/warroom-system.template.md`, `warroom-continuous.template.md`, `lieutenant-system.template.md`):
+  - Principles 1, 2, 3, 4, 8, 16 and 17 and the persona's "let it burn itself out" rewritten. Principles 5, 6, 10, 11, 13, 15 and 18 edited. Principles 7, 9, 12, 14 and 19 kept (9 and 12 with the game's numbers). Dropped: Vegetius' two-or-three-hour battle, "more often destroyed by starvation than battle", "loot makes it slow", and "the besieger is blind" as a reason.
+  - New principles 20 to 29:
+    - 20: initiative is the default.
+    - 21: every defence carries its counter-stroke. It includes my point, fitted to the game: a lord inside lengthens the wait before a storm and the storm itself, but lives on the food he carries and then on a town's market, not on the stores; a castle has no market.
+    - 22: fix with the light, strike with the heavy.
+    - 23: the bait and the hidden reserve.
+    - 24: march divided, fight united.
+    - 25: strike them where they cannot get away.
+    - 26: catch them while they gather.
+    - 27: speed decides who can force a battle.
+    - 28: draw them in pieces with a prize.
+    - 29: ring the prize before the blow. Lords go ahead with the harass order, then the army comes in beside them, uses their screen around its camp, and counts them in its storm.
+  - A new section of facts, "How battles are joined", gives the game's rules in plain words with no advice: a fight holds both sides; retreat and capture; how long fights last; who joins; how the game's lords choose to attack or flee; army pace, cohesion and the idle rule; storms paced by the defenders; hunger.
+  - The continuous instructions name the reserve and harass orders as reflexes to put in place before they are needed. The human player's section adds that fear of him alone never turns down a fight the odds, judged by his record, say is won, and that his called lords are struck as they scatter home.
+  - The lieutenant's instructions name both orders and the battle facts in two lines. Both templates list the 19 new language functions.
+- **What, the module** (0.19.0, [TOOLS.md](TOOLS.md), "Harass, reserve and the battle facts"; written by a Claude Code agent from my brief, reviewed before the install):
+  - **harass** (an enemy castle or town): the lord roams the place's ground between `standoff` and `radius`, as one group with every lord holding harass on the same place. Each keeps within `keep_hours` of the nearest groupmate, closing up first.
+    - It strikes isolated lords by the defend loop's weighing.
+    - It raids a village only when nothing that could come before the raid is done is above `raid_below` of its side.
+    - It shelters or falls back from strong forces, refits below `min_ranks`, and buys its own food.
+    - Once a camp of the realm or an ally besieges the place, it takes a post near the camp and strikes relief parties. It joins the camp while the camp is under `storm_margin` times what the game's assault test asks, once a storm is fought or due.
+    - It ends when the place falls.
+  - **reserve** (one of the realm's own lords): keeps `keep` from him on the side away from the nearest enemy. In the hour he fights, it rides in whatever the odds, if it can arrive with time to spare. It never rides into the human player's own battles, storms or sallies.
+  - **The battle facts** (19 functions): `in_battle_of`, `battle_hours_left`, `battle_foe_of`, `pace_of`, `joins_army`, `disorganized_of`, `retreated`, `would_attack` and `would_flee` (an approximation of the game's quick reaction), `mates`, `nearest_mate`, `mates_strength`, `could_reach`, `raid_hours`, `fall_back`, `our_siege`, `storm_need`, `storm_odds`, `storming`. On the game's thread they copy only fields: the slowdown's end, the aggressiveness, and each lord's last battle end in memory (`BattleEnds`).
+  - **For every realm's orders:** a lord camped in a siege counts only for a fight at that camp; a lord shut inside a besieged place is no threat, joiner or target; the party an order names counts on its side; a strike on a party already fighting one's lord does not count that fight's other parties as danger; and an engine fix: a decide-only state entered after a move in the same hour keeps the move.
+- **What, the war room** (0.19.0, [WARROOM.md](WARROOM.md)):
+  - A strategy review within ten minutes of an answer waits up to 15 s for the game's receipts of it, asks for its briefing only then, and opens with what became of that answer. Nov 12: Dol Guldur's review read a briefing written one second before its wake's four orders were applied and sent them all again.
+  - `WarRoom handover --dir <agent> [--why]` asks for a handover now, with the war room stopped.
+- **Checks:** Smoke test ALL CHECKS PASSED, 596 checks (17 new: harass roams, strikes, refuses a guarded raid and takes an isolated one, closes up, shelters, supports a siege, ends at the fall; reserve keeps station and rides in when outweighed, not when too late; each function). Perf WITHIN BUDGET (95th-slowest hour 88.5 ms of 1,000). RefCheck 841 references, missing 0. War room self-test ALL CHECKS PASSED, 226 checks (new: what became of the last answer, found by its file among the receipts after it went out; none when not yet taken; a paused game's "received"). Dashboard self-test 27 passed.
+- **Installed** with the game closed: module 0.19.0 into the game. War rooms, dashboard and archive keeper stopped at 01:38 for the build.
+- **Outside the repository:** the new instructions written into the orcs', Dol Guldur's and the kingdom agent's `warroom-system.md` (their realm's title and opening line kept), the orcs' and Dol Guldur's `warroom-continuous.md` and the lieutenant's `warroom-system.md`. Backups are `.bak-20261113-before-0.19`. Each channel's order list (`tools.txt`) gains the two orders when the game next loads.
+- **Fresh conversations:** with the war rooms stopped, `WarRoom handover` at 01:45 for all three. Each conversation is kept word for word in `past\` and reset, so the next wake (or my next words, for the lieutenant) opens a new conversation under the new instructions from the handover:
+  - the orcs: 2,327 words in 61 s from a conversation of 309,278 tokens, 11 exchanges kept, $2.68;
+  - Dol Guldur: 2,116 words in 57 s from 262,728 tokens, 10 exchanges, $2.30;
+  - the lieutenant: 2,027 words in 61 s from 276,034 tokens, 6 exchanges, $2.49.
+  The war rooms, dashboard and archive keeper started again on 0.19.0 afterwards.

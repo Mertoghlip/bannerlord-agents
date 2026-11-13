@@ -85,11 +85,24 @@ namespace SmokeTest
                 int a = text.IndexOf(heading, StringComparison.Ordinal), b = a < 0 ? -1 : text.IndexOf("\n## ", a + 3, StringComparison.Ordinal);
                 string section = a < 0 ? "" : b < 0 ? text.Substring(a) : text.Substring(a, b - a);
                 var missing = ToolDef.Verbs.Keys.Where(v => !section.Contains("`" + v)).Select(v => "move " + v)
-                    .Concat(ToolDef.Functions.Keys.Where(f => !section.Contains("`" + f + "(")).Select(f => "function " + f + "()"))
+                    .Concat(ToolDef.Functions.Keys.Where(f => !section.Contains("`" + f + "(") && !NotYetInInstructions.Contains(f)).Select(f => "function " + f + "()"))
                     .Concat(ToolDef.BuiltIns.Where(n => !section.Contains("`" + n + "`")).Select(n => "name " + n)).ToList();
                 Check(section.Length > 0 && missing.Count == 0, file + " lists every move, name and function of the tool language under " + heading
                       + (section.Length == 0 ? " (no such section)" : missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : ""));
+                List<string> pending = NotYetInInstructions.Where(f => !section.Contains("`" + f + "(")).ToList();
+                if (pending.Count > 0)
+                    Console.WriteLine("  NOTE: " + file + " does not list the functions added in 0.19 yet (" + string.Join(", ", pending.Select(f => f + "()"))
+                                      + "); add them under " + heading + ", then empty NotYetInInstructions in Fixes01322.cs");
             }
         }
+
+        /// <summary>
+        /// The functions added in module 0.19 (the battle facts, harass's group, raids and sieges), written while the instructions' templates were being
+        /// edited by hand elsewhere: the check above lets them be missing from the templates for now and names them in a NOTE every run, until they are listed
+        /// and this set is emptied.
+        /// </summary>
+        private static readonly HashSet<string> NotYetInInstructions = new HashSet<string>
+        {
+        };
     }
 }

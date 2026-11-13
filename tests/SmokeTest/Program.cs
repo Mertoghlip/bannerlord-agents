@@ -292,7 +292,7 @@ namespace SmokeTest
 
             List<string> problems = Library.Problems();
             Check(problems.Count == 0, "the tool library passes its own checks" + (problems.Count > 0 ? ": " + string.Join("; ", problems) : ""));
-            Check(Library.All.Count == 21, "the library holds 21 orders (8 moves, 10 tools, 3 for armies), got " + Library.All.Count);
+            Check(Library.All.Count == 23, "the library holds 23 orders (8 moves, 12 tools with harass and reserve since 0.19, 3 for armies), got " + Library.All.Count);
             Check(Library.Text().Contains("**join** (target: one of your lords)") && Library.Text().Contains("more than 1.5 times the besiegers' strength"),
                   "the library has the join order, and relieve says when the defenders inside sally out");
             var scope = new TestScope();

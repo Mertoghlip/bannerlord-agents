@@ -57,6 +57,14 @@ namespace BannerlordAgents
         /// <summary>Lords: the party's morale and its leader's Tactics skill (a battle's advantage is 1 + 0.001 a point), for battles run ahead (0.7.4); only the realm's own reach the agent.</summary>
         public float Morale = -1f;
         public int Tactics;
+        /// <summary>
+        /// Lords (0.19, the battle facts): the hour the game's slowdown after a battle ends (MobileParty.DisorganizedUntilTime while IsDisorganized; NaN when
+        /// not slowed); the hour its last battle since the load ended and whether its side retreated (BattleEnds, at MapEventEnded; NaN when none is known);
+        /// and the game's own aggressiveness (MobileParty.Aggressiveness, 0.9 + 0.1 Valor - 0.05 Mercy for a lord; -1 unknown), for the quick-reaction mirror.
+        /// </summary>
+        public double DisorganizedUntil = double.NaN, LastBattleEnd = double.NaN;
+        public bool LastRetreated;
+        public float Aggressiveness = -1f;
         /// <summary>The watched realm's own lords only: the party's size limit and the days its food lasts, and the lord's clan.</summary>
         public int SizeLimit, FoodDays = -1;
         public string Clan;

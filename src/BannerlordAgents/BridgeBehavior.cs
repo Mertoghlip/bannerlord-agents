@@ -56,6 +56,7 @@ namespace BannerlordAgents
             SallyGate.Reset();
             Vision.Reset();
             LordWatch.Reset();
+            BattleEnds.Reset();
             Names.Clear();
             Perf.ResetCapture();
             Recruitment.Reset();
@@ -502,7 +503,7 @@ namespace BannerlordAgents
         private void OnPartyDestroyed(MobileParty p, PartyBase by) => Guard("party notice", () => Notices.OnPartyDestroyed(p, by));
 
         private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); Run.OnBattleStarted(me); PlayerBattles.OnStarted(me); });
-        private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); BattleForOutcomes(me); PlayerBattles.OnEnded(me); });
+        private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); BattleForOutcomes(me); PlayerBattles.OnEnded(me); BattleEnds.OnEnded(me); });
         private void OnClanChangedKingdom(Clan clan, Kingdom from, Kingdom to, TaleWorlds.CampaignSystem.Actions.ChangeKingdomAction.ChangeKingdomActionDetail detail, bool notify)
             => Guard("clan moved", () => { Run.OnClanChangedKingdom(clan, from, to); Recorder.OnClanChangedKingdom(clan, from, to, detail); });
         private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () =>

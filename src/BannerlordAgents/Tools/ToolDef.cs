@@ -115,14 +115,14 @@ namespace BannerlordAgents.Tools
         public static readonly Dictionary<string, string> VerbWords = new Dictionary<string, string>
         {
             ["goto"] = "goes to a holding: into your or an ally's, close to anyone else's", ["enter"] = "goes into a holding of yours or an ally's and stays there",
-            ["near"] = "goes close to a holding and stands outside it", ["patrol"] = "patrols around a holding (within the tool's radius setting, when it has one)",
+            ["near"] = "goes close to a holding and stands outside it", ["patrol"] = "patrols around a holding (within the tool's radius setting, when it has one, and no nearer its gate than its standoff setting, when it has one)",
             ["defend"] = "goes to defend a holding, the game's way", ["besiege"] = "besieges an enemy castle or town", ["raid"] = "raids an enemy village",
             ["recruit"] = "goes to one town, castle or village and takes its volunteers there, by the recruit order's rules (his gold, his standing, his wage cap, his clan's troop lines past 80% of his ranks); it stays there taking new ones as they come until another move; write it \"recruit at X\" or \"recruit X\"",
             ["recruit_here"] = "takes the volunteers where he stands, the same way", ["tour"] = "the recruit order's tour: from a place onward, place by place",
             ["sell"] = "goes into a town or castle of yours or an ally's and sells his loot there (a town buys loot, a castle does not; prisoners are handed over by the game's rule); write it \"sell at X\"",
             ["supply"] = "the supply order's errand: brings food into a castle or town of yours or an ally's, buying it at the nearest market first when he carries too little; write it \"supply at X\"",
             ["engage"] = "attacks a lord, army or band", ["follow"] = "follows a party", ["toward"] = "marches to where a party is, or was last seen",
-            ["join"] = "marches to join a lord's army", ["shadow"] = "trails a party at a distance (the tool's keep setting)", ["post"] = "stands at a spot [pX_Y] or a holding's gate, watching",
+            ["join"] = "marches to join a lord's army", ["shadow"] = "trails a party at a distance (the tool's keep setting; with an away setting of 1, on the party's side away from the nearest enemy lord or army in view)", ["post"] = "stands at a spot [pX_Y] or a holding's gate, watching",
             ["wait"] = "stays where he is (inside a holding if he is in one) for that many hours; arrived turns true once they have passed; write it \"wait 6\"",
             ["leave"] = "leaves the holding he is in", ["hold"] = "stands where he is"
         };
@@ -169,7 +169,12 @@ namespace BannerlordAgents.Tools
             // 0.16: the volunteers a stop of his order has for him, or for another lord of the realm on an order naming it
             ["offers"] = 1, ["offers_of"] = 2,
             // 0.16, the lieutenant's orders' ways made general rules: one weighing of a fight for every order, just enough men, and shortcuts for a group
-            ["fight_hours"] = 1, ["fight_odds"] = 1, ["needed"] = 2, ["lords_near"] = 2, ["group_strength"] = 2, ["group_offers"] = 1, ["marching_on"] = 2
+            ["fight_hours"] = 1, ["fight_odds"] = 1, ["needed"] = 2, ["lords_near"] = 2, ["group_strength"] = 2, ["group_offers"] = 1, ["marching_on"] = 2,
+            // 0.19: the battle facts, the game's quick reaction mirrored, a group on one order at one place (harass), raids and a siege of yours
+            ["in_battle_of"] = 1, ["battle_hours_left"] = 1, ["battle_foe_of"] = 1, ["pace_of"] = 1, ["joins_army"] = 1, ["disorganized_of"] = 1, ["retreated"] = 1,
+            ["would_attack"] = 2, ["would_flee"] = 2,
+            ["mates"] = 0, ["nearest_mate"] = 2, ["mates_strength"] = 2, ["could_reach"] = 2, ["raid_hours"] = 1, ["fall_back"] = 1,
+            ["our_siege"] = 1, ["storm_need"] = 1, ["storm_odds"] = 1, ["storming"] = 1
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -194,7 +199,27 @@ namespace BannerlordAgents.Tools
             ["lords_near"] = "lords_near(x, r): how many of the order's lords are within r of x",
             ["group_strength"] = "group_strength(x, r): the strength of the lord and the order's lords within r of x",
             ["group_offers"] = "group_offers(h): offers(h) for the lord and each of the order's lords, added up (none when no count is known for any of them)",
-            ["marching_on"] = "marching_on(h, r): the strongest enemy lord or army within r of h that is heading for h (none when none is)"
+            ["marching_on"] = "marching_on(h, r): the strongest enemy lord or army within r of h that is heading for h (none when none is)",
+            // 0.19
+            ["in_battle_of"] = "in_battle_of(p): whether p (a lord or army of yours, an ally's or an enemy's) is in a fight now; none for an enemy out of view",
+            ["battle_hours_left"] = "battle_hours_left(p): about how many more hours the fight p is in should last, by the game's battle rules (once it has run two rounds, at the rates it has gone at so far), run again with the enemy lords and armies in view who could join it coming in as each would arrive, the shorter of the two (at most 120); for a raid whose defenders are down, the hours until the village is looted; 0 for a fight of the human player's, which is fought on the spot, so nobody arrives later; none when p is in no fight or out of view",
+            ["battle_foe_of"] = "battle_foe_of(p): the other side's leader in the fight p is in (its strongest lord when a village leads that side, at a raid); attack it to join the fight against it; for a storm's defenders or a sally from them, the holding itself, which no attack in the field reaches; none when p is in no fight or out of view",
+            ["pace_of"] = "pace_of(p): map units an hour over a day, night counted, of any lord or army in view (an army's, for a lord marching in one), by the game's marching rules; for an enemy out of view, its pace when last seen; none when never seen",
+            ["joins_army"] = "joins_army(p): for a lord called into an army and still marching to join it, that army's leader (none otherwise, or when you do not see that army); a lord marching to join an army passes by every enemy weaker than that army, attacking none and fleeing none",
+            ["disorganized_of"] = "disorganized_of(p): hours left of p's slowdown after a battle (the game slows every party that fought, except the side that retreated, by 0.4 of its speed sum, about a third of its pace, for 6 hours); 0 when it is not slowed; none for an enemy out of view",
+            ["retreated"] = "retreated(p): whether p's last battle ended with its side retreating (a side that retreats loses no lords and is not slowed afterwards, and there is no retreat at a raid, a siege camp, a storm or a sally); none when no battle of p's is known since the campaign was loaded, or for an enemy out of view",
+            ["would_attack"] = "would_attack(e, l): whether e would attack l now by the game's own quick reaction, as you can see them (an approximation: e looks only 9 around itself, weighs itself and its realm's lords near l, in full within 3 of l and fading to none at 6, against l and l's realm's lords near l at nine tenths, allies counting for neither; it attacks at that ratio of 1 or more, at once within 2.5, but never runs after a party on the move as fast or faster; an army skips a lone party it outweighs more than two to one unless its lords are still coming, a lord marching to join an army skips anything weaker than that army, and a lord held by your orders makes no such choice); use it to see whether a bait will be taken",
+            ["would_flee"] = "would_flee(e, l): whether e would flee from l now by the same quick reaction (an approximation: when its ratio is under 1 and it does not attack, it flees from close by at any ratio under 1, from 7.5 away under about 0.94, from 9 under about 0.4); use it to see whether a hunter will be run from",
+            ["mates"] = "mates(): the lord's group: the other lords of yours holding the same order at the same place (or on the same lord), and the lords the order names",
+            ["nearest_mate"] = "nearest_mate(x, r): the nearest to the lord of his mates within r of x (none when none is)",
+            ["mates_strength"] = "mates_strength(x, r): the strength of the lord and his mates within r of x",
+            ["could_reach"] = "could_reach(x, hours): the strength of the enemy lords and armies in view (and those seen in the last 6 hours, from where they were seen) that could march to x within that many hours at their own pace",
+            ["raid_hours"] = "raid_hours(v): about how many hours this lord would take to loot village v by the game's raid rule (each hour the raiders take the square root of their number + 5, over 900, of its health, from full health, or from what is left of it while it is being raided; an hour more for its militia first); a raid holds the raiders until it is done; none for anything but a village not looted",
+            ["fall_back"] = "fall_back(r): where the safety rule would take this lord from the forces within r of him (and those who could join them within join_hours): the first castle or town of yours or an ally's he reaches before them whose defenders, with him, would hold it, else the nearest he reaches first that takes him farther from them; none when there is none",
+            ["our_siege"] = "our_siege(h): whether h is besieged by a camp of yours or an ally's",
+            ["storm_need"] = "storm_need(h): the besiegers' strength the game's assault test asks for now at h (its defenders times the walls' worth, which weigh less after the fourth day of the siege and more while no ram or tower is built); only for a siege of yours or an ally's",
+            ["storm_odds"] = "storm_odds(h): your or your ally's camp's strength at h over storm_need(h): above 1 the game's commander may storm once the preparations are done (the likelier each hour the higher it is); 99 when no defender is left; none for no siege of yours",
+            ["storming"] = "storming(h): whether a storm of h is being fought now (a siege you can know of)"
         };
 
         private static readonly Regex NamePattern = new Regex("^[a-z][a-z0-9_]{1,31}$", RegexOptions.Compiled);
@@ -647,7 +672,8 @@ namespace BannerlordAgents.Tools
                           + "A lord on any other order rides only when your lords in the fight would not win alone (under " + ToolDef.Num(ReliefWinBar) + " times the enemy with those who could join), "
                           + "and only as many of them as it takes, nearest first, to bring your side there to " + ToolDef.Num(ReliefWinBar) + " times the enemy. "
                           + "He strikes the enemy side's leader; his order resumes once the fight is over. "
-                          + "An army goes whole. Lords marching in another's army, camped in a siege, inside a besieged castle or town, or on their way to buy food do not ride.");
+                          + "An army goes whole. Lords marching in another's army, camped in a siege, inside a besieged castle or town, or on their way to buy food do not ride. "
+                          + "A lord on reserve rides to no other fight: only to the fights of the lord he backs, by his own order, whatever the odds, and he counts on your side there.");
             return sb.ToString();
         }
     }

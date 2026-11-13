@@ -39,6 +39,9 @@ namespace BannerlordAgents.Tools
             foreach (KeyValuePair<string, Sighting> kv in _sees)
             {
                 if (!s.PartyById.TryGetValue(kv.Key, out PartyRow r) || r.Attached) continue;
+                // a lord shut inside a besieged castle or town (0.19) cannot come out but to sally against the camp: no threat in the field, no joiner of a fight
+                // there, no target (harassers posted round your camp counted the lords inside as a danger)
+                if (r.InSettlement != null && s.SettlementById.TryGetValue(r.InSettlement, out SettlementRow shut) && shut.BesiegedBy != null && IsFort(shut)) continue;
                 if (r.Kind == "lord" && _hostile.Contains(r.Faction ?? "")) _enemies.Add(r);
                 else if (r.Kind == "bandit") _bandits.Add(r);
             }
@@ -336,6 +339,10 @@ namespace BannerlordAgents.Tools
             {
                 if (r.Kind != "lord" || r.Attached || (me != null && r.Id == me.Id) || !(Own(r) || (Ally(r.Faction) && Visible(r)))) continue;
                 if (besieging != null && r.Besieging == besieging) { list.Add(r); continue; }
+                // since 0.19 a lord camped in another siege counts only for a fight at that camp (within CampReach of the place's gate): besiegers make no quick
+                // decisions and the relief rule never takes a lord from his camp, so he joins no fight in the field (harassers weighing a relief party some way off
+                // their realm's camp counted the whole camp on their side)
+                if (r.Besieging != null && !NearGate(x, y, r.Besieging, CampReach)) continue;
                 // a lord marching with him (following him, by our order or the game's escort, or joining his army) counts in the field within
                 // joinHours, and inside the very holding he is in, which he leaves with him (0.13.14, Oct 30: the logic for our orders
                 // might still be discounting the strength of nearby lords/lords following other lords). Winter 1, 12:00: Alenon (1,137),
@@ -351,13 +358,28 @@ namespace BannerlordAgents.Tools
                 if (objectives == null || objectives.Count == 0) continue;
                 // since 0.13.11 also a lord attacking the same target (Oct 29, when I was chasing Mauhur with 3,865 men: my realm's guards struck
                 // beside me weighing only themselves)
+                // since 0.19 the lord or party an order names itself counts too (the lord a reserve backs, the groupmate a harasser closes up with)
                 bool bound = (r.Besieging != null && objectives.Contains(r.Besieging))
+                             || objectives.Contains(r.Id)
                              || (r.Doing == "EngageParty" && r.TargetParty != null && objectives.Contains(r.TargetParty))
                              || ((r.Doing == "BesiegeSettlement" || r.Doing == "DefendSettlement") && r.TargetSettlement != null && objectives.Contains(r.TargetSettlement))
                              || (Runner.ForParty(r.Id) is ToolInstance ti && ((ti.Order.At != null && objectives.Contains(ti.Order.At)) || (ti.Order.Target != null && objectives.Contains(ti.Order.Target))));
                 if (bound) list.Add(r);
             }
             return list;
+        }
+
+        /// <summary>How near a besieged place's gate a fight must be for the lords camped there to be in it (0.19): a relief striking the camp stands at it.</summary>
+        public const double CampReach = 2.5;
+
+        /// <summary>Is the point within r of the holding (its gate or its centre, whichever is nearer)?</summary>
+        private bool NearGate(float x, float y, string holding, double r)
+        {
+            SettlementRow h = Holding(holding);
+            if (h == null) return false;
+            double c = Math.Sqrt((h.X - x) * (h.X - x) + (h.Y - y) * (h.Y - y));
+            double g = h.Gx != 0 || h.Gy != 0 ? Math.Sqrt((h.Gx - x) * (h.Gx - x) + (h.Gy - y) * (h.Gy - y)) : c;
+            return Math.Min(c, g) <= r;
         }
 
         /// <summary>Does r march with me (0.13.14): joining my army, escorting me in the game, or holding our order to follow me?</summary>
@@ -828,6 +850,308 @@ namespace BannerlordAgents.Tools
                 if (d <= r && d < bd) { bd = d; best = h; }
             }
             return best;
+        }
+
+        // ---------- the battle facts (0.19) ----------
+
+        /// <summary>A party the realm can see now (its own, or another in view; a lord marching in an army is seen with his army), else null.</summary>
+        private PartyRow Seen(string id)
+        {
+            PartyRow r = Party(id);
+            return r != null && (Visible(r) || Visible(Lead(r))) ? r : null;
+        }
+
+        /// <summary>Is the party (or the army it marches in) in a fight now? Null when the realm cannot see it.</summary>
+        public bool? InBattleOf(string id)
+        {
+            PartyRow r = Seen(id);
+            if (r == null) return null;
+            return r.InBattle || (Lead(r)?.InBattle ?? false);
+        }
+
+        /// <summary>The battle (the hourly copy's) a party seen now is in, itself or with the army it marches in; null when none.</summary>
+        public BattleRow BattleOf(string id)
+        {
+            PartyRow r = Seen(id);
+            if (r == null || S.Battles == null || InBattleOf(id) != true) return null;
+            PartyRow lead = Lead(r);
+            foreach (BattleRow b in S.Battles)
+                if (SideIn(b, r.Id) != null || (lead != null && SideIn(b, lead.Id) != null)) return b;
+            return null;
+        }
+
+        /// <summary>A party's side in a battle: true the attackers, false the defenders, null when it is not in it.</summary>
+        public static bool? SideIn(BattleRow b, string id)
+            => id == null || b == null ? (bool?)null : b.Attackers.Parties.Contains(id) ? true : b.Defenders.Parties.Contains(id) ? false : (bool?)null;
+
+        /// <summary>
+        /// The other side's leader in the fight a party seen now is in: its leading party, else its strongest lord, else its strongest party (a village leads a
+        /// raid's defenders, and lords who strike the raiders join them), else the holding; for a storm's defenders or a sally from them, the holding itself;
+        /// null when the party is in no fight.
+        /// </summary>
+        public string BattleFoeOf(string id)
+        {
+            BattleRow b = BattleOf(id);
+            if (b == null) return null;
+            PartyRow r = Party(id), lead = Lead(r);
+            bool? att = SideIn(b, r.Id) ?? SideIn(b, lead?.Id);
+            if (att == null) return null;
+            BattleSideRow other = att.Value ? b.Defenders : b.Attackers;
+            // behind walls (a storm's defenders, a sally from them): the holding itself, which no field attack reaches
+            if (other.SettlementLed && (b.Kind == "siege" || b.Kind == "sally")) return b.Settlement ?? other.Leader;
+            List<PartyRow> rows = other.Parties.Select(Party).Where(p => p != null).ToList();
+            if (other.Leader != null && rows.Any(p => p.Id == other.Leader)) return other.Leader;
+            PartyRow best = rows.Where(p => p.Kind == "lord").OrderByDescending(p => p.Strength).FirstOrDefault() ?? rows.OrderByDescending(p => p.Strength).FirstOrDefault();
+            return best?.Id ?? b.Settlement ?? other.Leader;
+        }
+
+        /// <summary>Map units an hour over a day, night counted, by the game's marching rules: a party seen now (its army's, in one), else an enemy as last seen; null when never seen.</summary>
+        public double? PaceOf(string id)
+        {
+            PartyRow r = Party(id), lead = Lead(r);
+            if (r != null && (Visible(r) || Visible(lead))) return PerHour(lead ?? r);
+            ViewParty v = null;
+            if ((lead != null && _lastSeen.TryGetValue(lead.Id, out v)) || (id != null && _lastSeen.TryGetValue(id, out v)))
+                return v.March != null ? Common.GamePace.DayAverage(v.March) : (double?)null;
+            return null;
+        }
+
+        /// <summary>For a lord seen now marching to join an army (called into it, not yet with it), that army's leader when the realm sees him too; else null.</summary>
+        public string JoinsArmy(string id)
+        {
+            PartyRow r = Seen(id);
+            if (r == null) return null;
+            PartyRow head = Lead(Views.JoiningHead(S, r));
+            return head != null && head.ArmyLeader == head.Id && Visible(head) ? head.Id : null;
+        }
+
+        /// <summary>Hours left of a party's slowdown after a battle (0 when it is not slowed); null when the realm cannot see it.</summary>
+        public double? DisorganizedOf(string id)
+        {
+            PartyRow r = Seen(id);
+            if (r == null) return null;
+            PartyRow x = r.Attached ? Lead(r) ?? r : r;
+            return double.IsNaN(x.DisorganizedUntil) ? 0 : Math.Max(0, Math.Round(x.DisorganizedUntil - Hours, 2));
+        }
+
+        /// <summary>Did the last battle of a party seen now (since the campaign was loaded) end with its side retreating? Null when no battle of its is known.</summary>
+        public bool? Retreated(string id)
+        {
+            PartyRow r = Seen(id);
+            if (r == null || double.IsNaN(r.LastBattleEnd)) return null;
+            return r.LastRetreated;
+        }
+
+        /// <summary>
+        /// The strength that could reach a place within so many hours (0.19, harass's raids): every enemy lord and army in view that could march there in that time at
+        /// its own pace, as the crow flies (Joiners), and those seen in the last RecentHours, from where they were seen at their pace then, less the hours since.
+        /// Bandits are left out: they do not come to a lord's fight.
+        /// </summary>
+        public double ReachWithin(string place, double hours)
+        {
+            if (double.IsNaN(hours) || !Where(place, out float px, out float py)) return 0;
+            var counted = new HashSet<string>();
+            double sum = 0;
+            foreach (PartyRow e in Joiners(px, py, hours))
+                if (counted.Add(e.Id)) sum += StrengthOf(e);
+            foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
+            {
+                ViewParty v = kv.Value;
+                if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                PartyRow now = Party(kv.Key);
+                if (now != null && now.Attached) continue;
+                double per = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
+                double d = Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py));
+                if (d / Math.Max(0.3, per) - (Hours - v.SeenHours) <= hours) sum += v.Strength;
+            }
+            return sum;
+        }
+
+        /// <summary>Is a holding besieged by a camp of the realm's or an ally's (the siege's realm is public: the game announces it)?</summary>
+        public bool OurSiege(SettlementRow h) => Besieged(h) && h.BesiegedBy != null && (h.BesiegedBy == Realm || Ally(h.BesiegedBy));
+
+        /// <summary>
+        /// The besiegers' strength the game's assault test asks for now (BesiegerCamp.StartingAssaultOnBesiegedSettlementIsLogical, 1.4.8): the defenders it counts
+        /// times the place's advantage to the power 0.8, falling 0.02 an hour after the 4th day, a quarter higher each without a ram or a tower built. Only for a
+        /// siege of the realm's or an ally's (its camp's numbers are known); null otherwise.
+        /// </summary>
+        public double? StormNeed(string place)
+        {
+            SettlementRow h = Holding(place);
+            SiegeRow g = OurSiege(h) ? Siege(place) : null;
+            if (g == null) return null;
+            if (g.Defenders <= 0) return 0;
+            bool ram = g.Engines.Any(e => e.Progress >= 1f && (e.Type == "ram" || e.Type == "improved_ram")), tower = g.Engines.Any(e => e.Progress >= 1f && e.Type == "siege_tower_level1");
+            double hours = Hours - g.StartHours;
+            double power = (0.8 - (hours > 96 ? (hours - 96) * 0.02 : 0)) * (ram ? 1 : 1.25) * (tower ? 1 : 1.25);
+            return g.Defenders * Math.Pow(Math.Max(1e-3, g.Advantage), power);
+        }
+
+        /// <summary>The camp's strength (as the assault test counts it) over StormNeed: above 1 the game's commander may storm once the preparations are done; 99 when no defender is left.</summary>
+        public double? StormOdds(string place)
+        {
+            double? need = StormNeed(place);
+            if (need == null) return null;
+            SiegeRow g = Siege(place);
+            return need.Value <= 0 ? 99 : g.Attackers / need.Value;
+        }
+
+        /// <summary>Is a storm of the place being fought now (a siege the realm can know of)?</summary>
+        public bool Storming(string place) => Siege(place)?.Storming == true;
+
+        // ---------- the game's quick reaction, mirrored (0.19: would_attack, would_flee) ----------
+
+        /// <summary>What the mirror found: the local advantage, the attack and flight scores (each acts above 1), and why it did not look at all.</summary>
+        internal sealed class Initiative
+        {
+            public double Advantage = double.NaN, Attack, Avoid, Distance = double.NaN;
+            public string Skip;
+        }
+
+        /// <summary>Are two factions at war, as far as the realm knows (its own wars, an ally's or another realm's from the diplomacy copy; bandits with everyone)?</summary>
+        private bool AtWar(PartyRow a, PartyRow b)
+        {
+            if (a == null || b == null || a.Faction == null || b.Faction == null || a.Faction == b.Faction) return false;
+            if (a.Kind == "bandit" || b.Kind == "bandit") return true;
+            if (a.Faction == Realm) return HostileFaction(b.Faction);
+            if (b.Faction == Realm) return HostileFaction(a.Faction);
+            return (S.Factions.TryGetValue(a.Faction, out FactionRow fa) && fa.AtWar.Contains(b.Faction)) || (S.Factions.TryGetValue(b.Faction, out FactionRow fb) && fb.AtWar.Contains(a.Faction));
+        }
+
+        private static double Aggr(PartyRow r) => r == null ? 0 : r.Aggressiveness >= 0 ? r.Aggressiveness : r.Kind == "lord" || r.Kind == "bandit" ? 0.9 : 0;
+        private static double Dist(PartyRow a, PartyRow b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+        /// <summary>On the move (the game's IsMoving, as the copy has it): out of a fight, a siege and a holding, not holding still, and short of where it walks to when that is known.</summary>
+        private static bool Moving(PartyRow r) => !r.InBattle && r.Besieging == null && r.InSettlement == null && r.Doing != "Hold"
+                                                  && ((r.Tx == 0 && r.Ty == 0) || Math.Abs(r.Tx - r.X) + Math.Abs(r.Ty - r.Y) > 0.25f);
+
+        /// <summary>
+        /// The game's quick reaction of a party (e) toward another (l), as the realm can see them (DefaultMobilePartyAIModel.GetBestInitiativeBehavior and
+        /// CalculateInitiativeScoresForEnemy, 1.4.8; TAOM leaves them as they are). Its local advantage: e's strength and that of its own realm's lords near l, against
+        /// l's and its own realm's lords near l times 0.9; a lord counts in full within 3 of l, fading to nothing at 3 to 6 (the window narrows as e comes closer),
+        /// and only within 9 of e; allies of either count for neither. Attack when the advantage is at least 1 and 1.06 x min(3, (1 + a) / 2) x the chase factor x
+        /// aggressiveness is above 1: the chase factor is 100 within 2.5, 0 against a party on the move as fast or faster, else 18 hours over the hours to close
+        /// the initiative distance when that is less; aggressiveness at least 1 against a party in a fight, x1.2 when its own realm fights there. Flight, when the
+        /// attack is under 1 and the advantage under 1: 0.94 x (4 - distance / 2.52, or / 2.16 against a party fighting, besieging or chased) x min(3, 1 / a).
+        /// An army's leader skips a lone lord it outweighs 2 to 1 unless its lords are still coming; a lord marching to join an army skips anything weaker than that
+        /// army. Left out (the documented approximation): the patrol bonus, a third party attacking e, the village-raid bonus, port and sea cases, troop power in
+        /// place of the game's strength sums, and the choice between several targets (each is weighed alone). Null when either is not seen.
+        /// </summary>
+        public Initiative QuickReaction(string deciderId, string targetId)
+        {
+            PartyRow e = Seen(deciderId), l = Seen(targetId);
+            if (e == null || l == null || e.Id == l.Id) return null;
+            var q = new Initiative();
+            if (e.Attached) { q.Skip = "it marches inside an army, whose leader decides"; return q; }
+            if (e.InBattle) { q.Skip = "it is in a fight"; return q; }
+            if (e.Besieging != null) { q.Skip = "it is besieging, and besiegers make no quick decisions"; return q; }
+            if (Own(e) && Runner.ForParty(e.Id) != null) { q.Skip = "your order holds him: the game's quick decisions are off for him"; return q; }
+            if (e.InSettlement != null && Holding(e.InSettlement) is SettlementRow inside && Besieged(inside)) { q.Skip = "it is inside a besieged holding"; return q; }
+            if (l.Attached) l = Lead(l) ?? l;
+            if (!AtWar(e, l)) { q.Skip = "they are not at war"; return q; }
+            // a target in a field battle is weighed through its side's leader (the game looks only at the leaders of a battle in the open)
+            BattleRow lb = l.InBattle ? BattleOf(l.Id) : null;
+            if (lb != null && lb.Settlement == null)
+            {
+                bool? side = SideIn(lb, l.Id);
+                string leader = side == true ? lb.Attackers.Leader : side == false ? lb.Defenders.Leader : null;
+                if (leader != null && leader != l.Id && Party(leader) is PartyRow lr) l = lr;
+            }
+            double d = Dist(e, l);
+            q.Distance = d;
+            if (d >= 9) { q.Skip = "it looks only 9 around itself"; return q; }
+            // a lord marching to join an army passes by anything weaker than that army
+            if (e.ArmyLeader != null && e.ArmyLeader != e.Id && Party(e.ArmyLeader) is PartyRow head && StrengthOf(l) < StrengthOf(head))
+            {
+                q.Skip = "it marches to join an army stronger than its target, and such a lord passes by anything weaker than that army";
+                return q;
+            }
+            const double R = 3, Look = 9, Far = 6;
+            double window = Math.Min(2, 1 + Math.Max(0, (d - 1) / ((R - 1) * 2)));
+            double ours = StrengthOf(e) + 0.01, theirs = 0.01, theirsNear = 0, maxAggr = Aggr(e);
+            SettlementRow lIn = Holding(l.InSettlement);
+            if (l.Besieging != null) theirs += SiegeStrength(Holding(l.Besieging)) ?? StrengthOf(l);
+            else if (lIn == null || !Besieged(lIn)) theirs += StrengthOf(l);
+            foreach (PartyRow p in S.Parties)
+            {
+                if (p.Id == e.Id || p.Id == l.Id || p.Attached || (p.Kind != "lord" && p.Kind != "bandit") || !Visible(p)) continue;
+                if (p.InBattle && (lb == null || SideIn(lb, p.Id) == null)) continue;   // in another fight
+                if (p.InSettlement != null && Holding(p.InSettlement) is SettlementRow pin && Besieged(pin)) continue;
+                if (p.Faction == e.Faction && p.Besieging != null) continue;
+                if (p.Besieging != null && Holding(p.Besieging)?.Besieger != p.Id) continue;   // a camp counts through its leader
+                if (Dist(p, e) > Look) continue;
+                double toL = Dist(p, l);
+                if (toL > Far) continue;
+                bool aimsAtL = p.TargetParty == l.Id || (lb != null && SideIn(lb, p.Id) != null);
+                bool full = (e.ArmyLeader != null && p.ArmyLeader == e.ArmyLeader) || (l.ArmyLeader != null && p.ArmyLeader == l.ArmyLeader)
+                            || (l.Besieging != null && p.Besieging == l.Besieging) || ((d > R || toL > R) && aimsAtL);
+                if (!full && toL >= R * window) continue;
+                double b = full || toL < R ? 1 : 1 - (toL - R) / (R * (window - 1));
+                b = Math.Max(0, Math.Min(1, b));
+                double s = StrengthOf(p);
+                if (p.Faction == l.Faction && (Aggr(p) > 0.01 || aimsAtL)) theirsNear += s * b;
+                if (p.Faction == e.Faction && (Aggr(p) > 0.01 || (p.InSettlement != null && p.InSettlement == l.InSettlement)))
+                {
+                    ours += s * b;
+                    maxAggr = Math.Max(maxAggr, Aggr(p));
+                }
+            }
+            theirs += theirsNear * 0.9;
+            double a = ours / theirs;
+            q.Advantage = a;
+            double toward = Math.Max(0.05, Math.Min(3, 0.5 * (1 + a)));
+            double away = a < 1 ? Math.Max(0.05, Math.Min(3, 1 / a)) : 0.05;
+            bool chasesIt = (e.Doing == "EngageParty" || e.Doing == "GoAroundParty") && e.TargetParty == l.Id;
+            if (e.Morale != 0 && toward > away)
+            {
+                double reach = InitiativeReach(e, l, chasesIt);
+                double chase = 1;
+                bool armies = e.ArmyLeader == e.Id && l.ArmyLeader == l.Id;
+                if (d < 2.5 || (armies && reach * 2 > d)) chase = 100;
+                else if (Moving(l))
+                {
+                    double gap = Speed(e) - Speed(l);
+                    if (gap > 0.01) { double hrs = reach / gap; if (hrs < 18) chase = 18 / hrs; }
+                    else chase = 0;
+                }
+                if (Aggr(e) < 0.01) maxAggr = Aggr(e);
+                bool sally = lb != null && lb.Kind == "sally";
+                double aggr = l.InBattle && maxAggr > 0.1 ? Math.Max(1 + (sally ? 0.3 : 0), maxAggr) : maxAggr;
+                double defend = e.Doing == "DefendSettlement" && e.TargetSettlement != null && (l.Besieging == e.TargetSettlement || (lb != null && lb.Settlement == e.TargetSettlement)) ? 1.1 : 1;
+                bool ownThere = lb != null && SideIn(lb, l.Id) is bool ls && (ls ? lb.Defenders : lb.Attackers).Parties.Any(id => Party(id)?.Faction == e.Faction);
+                q.Attack = 1.06 * defend * toward * chase * aggr * (ownThere ? 1.2 : 1);
+            }
+            if (lIn != null && !l.InBattle) q.Attack = 0;   // a party inside a holding cannot be attacked
+            if (q.Attack < 1 && l.Morale != 0 && (Aggr(l) > 0.01))
+            {
+                double close = 3.6 * (lIn != null ? 0.4 : 0.7);
+                if (l.InBattle || l.Besieging != null || chasesIt) close = 3.6 * 0.6;
+                double near = d < close * 4 ? 4 - d / close : 1;
+                q.Avoid = 0.9433963 * near * away;
+            }
+            bool waiting = e.ArmyLeader == e.Id && S.Parties.Any(p => p.ArmyLeader == e.Id && p.Id != e.Id && !p.Attached);
+            bool withParties = S.Parties.Any(p => p.Attached && p.ArmyLeader == l.Id);
+            if (a > 2 && e.ArmyLeader == e.Id && !withParties && !waiting && !(e.Doing == "GoAroundParty" && e.TargetParty == l.Id))
+            {
+                q.Attack = q.Avoid = 0;
+                q.Skip = "an army on the march passes by a lone party it outweighs more than two to one";
+            }
+            return q;
+        }
+
+        /// <summary>The game's initiative distance for an attack (GetInitiativeDistanceForAttack): 3.6, x3.5 for a patrolling lord, smaller when the target is faster, larger against an army; 5.4 against a party fighting, besieging or chased.</summary>
+        private static double InitiativeReach(PartyRow e, PartyRow l, bool chasesIt)
+        {
+            if (l.InBattle || l.Besieging != null || chasesIt) return 3.6 * 1.5;
+            double k = Aggr(l) < 0.1 ? 0.7 : e.Doing == "PatrolAroundPoint" ? 3.5 : 1;
+            double fe = e.FinalSpeed > 0.05f ? e.FinalSpeed : Speed(e), fl = l.FinalSpeed > 0.05f ? l.FinalSpeed : Speed(l);
+            if (fe < fl * 1.1)
+            {
+                double b = Math.Max(0.5, (fe + 0.1) / (fl + 0.1)) / 1.1;
+                k *= Math.Max(0.8, b) * Math.Max(0.8, b);
+            }
+            double reach = 3.6 * k;
+            if (l.ArmyLeader == l.Id && l.ArmyParties > 1) reach *= Math.Pow(l.ArmyParties, 0.33);
+            return reach;
         }
 
         /// <summary>A name for an id, as the agent reads it.</summary>

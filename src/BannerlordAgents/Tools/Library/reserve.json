@@ -1,0 +1,38 @@
+{
+  "tool": "reserve",
+  "kind": "tool",
+  "about": "Keeps the lord in reserve for another lord of yours (target), to strike the enemy who attacks him. He stays about keep map units from that lord (with away 1, on his side away from the nearest enemy lord or army in view: behind him), beyond the 9 or so around itself that an enemy lord looks at when it decides to attack or to flee, and beyond the 6 in which it counts the strength beside its target. In the hour that lord is in a fight (in the field, at a siege camp or over a raid; not a storm or a sally behind walls), he rides in with all haste and attacks the other side's leader, whatever the odds (unlike the rule that sends lords to a fight only when your side would win there), as long as he can get there with time to spare (a fifth of the hours the fight should still last by the game's battle rules, at least an hour); a battle the human player fights himself is fought on the spot, so nobody gets there in time. Once the fight is over he goes back to his station. He rides to no other lord's fight. At his station the safety rule every order carries holds for him, with the lord he backs counted on his side; once he rides in, the parties in that fight are not a danger he turns from, only forces outside it. It ends when the lord he backs is taken, dies or loses his party.",
+  "calls_back": "he rides in to that lord's fight, or cannot get there before it ends; the fight is over and he goes back to his station; the lord he backs is gone",
+  "target": "own_lord",
+  "takes": {
+    "target": "own_lord: the lord he backs"
+  },
+  "settings": {
+    "keep": [10, 3, 30, "how far from the lord he backs he keeps, in map units (an enemy lord looks about 9 around itself when it decides to attack or flee, and counts the strength within 6 of its target)"],
+    "away": [1, 0, 1, "1: he keeps to that lord's side away from the nearest enemy lord or army in view; 0: to whichever side he comes from"]
+  },
+  "init": { "foe": "none", "told": "0" },
+  "start": "station",
+  "states": {
+    "station": { "about": "in reserve about {keep} from {target}", "do": "shadow target",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target}, whom {me} backed as a reserve, is gone (taken, dead or his party broken up), so the reserve order is over." },
+        { "if": "in_battle_of(target) and battle_foe_of(target) != none and in_view(battle_foe_of(target)) and battle_hours_left(target) - hours_to(target) >= max(1, battle_hours_left(target) * 0.2)",
+          "go": "ride", "set": { "foe": "battle_foe_of(target)", "told": "0" },
+          "poke": "{target} is fighting {foe}: {me} rides in from his reserve station with all haste (about {round(hours_to(target))} hours away; the fight should last about {round(battle_hours_left(target))} more) and attacks {foe}'s side, whatever the odds." },
+        { "if": "in_battle_of(target) and told == 0 and not in_view(battle_foe_of(target))", "go": "station", "set": { "told": "1" },
+          "poke": "{target} is in a fight {me} cannot ride into (behind the walls of a storm or a sally, or against an enemy out of his view: {battle_foe_of(target)}); he keeps his station." },
+        { "if": "in_battle_of(target) and told == 0", "go": "station", "set": { "told": "1" },
+          "poke": "{target} is fighting, but {me} cannot get there in time: about {round(hours_to(target))} hours away, and the fight should last about {round(battle_hours_left(target))} more (a battle the human player fights himself is fought on the spot, so nobody gets there in time). He keeps his station." },
+        { "if": "not in_battle_of(target) and told > 0", "go": "station", "set": { "told": "0" } } ] },
+    "ride": { "about": "riding in to {target}'s fight against {foe}", "do": "engage foe",
+      "when": [
+        { "if": "gone(target)", "go": "over", "poke": "{target}, whom {me} backed as a reserve, is gone (taken, dead or his party broken up), so the reserve order is over." },
+        { "if": "not in_battle and not in_battle_of(target)", "go": "station", "poke": "{target}'s fight is over; {me} goes back to his reserve station about {keep} from him." },
+        { "if": "not in_battle and battle_foe_of(target) != none and battle_foe_of(target) != foe and in_view(battle_foe_of(target))", "go": "turn", "set": { "foe": "battle_foe_of(target)" } },
+        { "if": "not in_battle and (gone(foe) or not in_view(foe))", "go": "station" } ] },
+    "turn": { "about": "riding in to {target}'s fight against {foe}",
+      "when": [ { "if": "true", "go": "ride" } ] },
+    "over": { "about": "done", "end": "free" }
+  }
+}

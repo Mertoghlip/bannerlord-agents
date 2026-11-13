@@ -15,17 +15,19 @@ namespace BannerlordAgents.Tools
     {
         public string Verb, Place, Party;
         public float X, Y, R;
+        /// <summary>For a patrol kept within R (0.19, harass's stand-off): the least distance from the holding's gate it keeps; 0 leaves it at a quarter of R.</summary>
+        public float R0;
         /// <summary>
         /// A step of a longer tool (0.17.4): its state has rules to leave it, so a move that ends on the game's side (supply) hands back to
         /// those rules (Runner.StepDone, which makes "arrived" true) instead of ending the tool, as it does for the supply order itself.
         /// </summary>
         public bool Step;
 
-        public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party && Math.Abs(R - o.R) < 0.01f
+        public bool Same(Move o) => Verb == o.Verb && Place == o.Place && Party == o.Party && Math.Abs(R - o.R) < 0.01f && Math.Abs(R0 - o.R0) < 0.01f
                                     && ((Verb != "toward" && Verb != "post" && Verb != "shadow") || (Math.Abs(X - o.X) < 1f && Math.Abs(Y - o.Y) < 1f));
 
         public override string ToString() => Verb + (Place != null ? " " + Place : "") + (Party != null ? " " + Party : "") + (Verb == "toward" || Verb == "post" || Verb == "shadow" ? " (" + X + ", " + Y + ")" : "")
-                                             + (R > 0 ? " within " + R : "");
+                                             + (R > 0 ? " within " + R : "") + (R0 > 0 ? " from " + R0 : "");
     }
 
     /// <summary>A tool order as the game's thread checked it: ids only, so the worker can run it.</summary>
@@ -344,12 +346,12 @@ namespace BannerlordAgents.Tools
         private static JToken Num(double d) => double.IsNaN(d) || double.IsInfinity(d) ? JValue.CreateNull() : new JValue(d);
         private static double Dbl(JToken t) => t is JValue v && v.Type != JTokenType.Null ? (double)v : double.NaN;
 
-        private static JObject MoveJson(Move m) => new JObject { ["verb"] = m.Verb, ["place"] = m.Place, ["party"] = m.Party, ["x"] = m.X, ["y"] = m.Y, ["r"] = m.R };
+        private static JObject MoveJson(Move m) => new JObject { ["verb"] = m.Verb, ["place"] = m.Place, ["party"] = m.Party, ["x"] = m.X, ["y"] = m.Y, ["r"] = m.R, ["r0"] = m.R0 };
 
         private static Move? MoveOf(JToken t)
         {
             if (!(t is JObject o) || (string)o["verb"] == null) return null;
-            return new Move { Verb = (string)o["verb"], Place = (string)o["place"], Party = (string)o["party"], X = (float?)o["x"] ?? 0, Y = (float?)o["y"] ?? 0, R = (float?)o["r"] ?? 0 };
+            return new Move { Verb = (string)o["verb"], Place = (string)o["place"], Party = (string)o["party"], X = (float?)o["x"] ?? 0, Y = (float?)o["y"] ?? 0, R = (float?)o["r"] ?? 0, R0 = (float?)o["r0"] ?? 0 };
         }
 
         /// <summary>A remembered value as JSON (none, yes/no, a number, words, a list, a table) and back: a table is the only JSON object.</summary>
@@ -635,8 +637,9 @@ namespace BannerlordAgents.Tools
             t.Entered = true;
             StateDef st = t.Def.States[t.State];
             if (st.End != null) { Finish(t, st.End, w); return; }
-            // a state with no move only decides (0.13): the lord keeps the move he has (a tool's first state holds him)
-            if (st.Do == null && t.HasCurrent) return;
+            // a state with no move only decides (0.13): the lord keeps the move he has (a tool's first state holds him); since 0.19 also the move a state entered
+            // earlier in the same hour has just set, not yet given (harass's first hour: roam set the patrol, round decided, and the patrol became a hold)
+            if (st.Do == null && (t.HasCurrent || t.HasPending)) return;
             t.Pending = Resolve(t, st.Do, scope, w);
             t.HasPending = true;
         }
@@ -710,10 +713,12 @@ namespace BannerlordAgents.Tools
                 {
                     // a patrol keeps within the tool's own radius (defend's watch area, screen's), when it has one; else the game ranges it.
                     // Since 0.16 a tool's reach may be in hours of the lord's own march (reach_hours): that many hours at his pace
-                    float r = 0f;
+                    float r = 0f, r0 = 0f;
                     if (a.Verb == "patrol" && t.Settings.TryGetValue("radius", out double rr)) r = (float)rr;
                     else if (a.Verb == "patrol" && t.Settings.TryGetValue("reach_hours", out double rh) && w.Party(t.Order.Party) is PartyRow pr) r = (float)Math.Round(rh * w.PerHour(pr), 1);
-                    return new Move { Verb = a.Verb, Place = id, R = r };
+                    // 0.19: and no nearer its gate than the tool's standoff, when it has one (harass keeps off the walls)
+                    if (a.Verb == "patrol" && r > 0 && t.Settings.TryGetValue("standoff", out double so)) r0 = (float)Math.Min(so, r * 0.9);
+                    return new Move { Verb = a.Verb, Place = id, R = r, R0 = r0 };
                 }
             }
             else if (kind == "spot")
@@ -757,6 +762,20 @@ namespace BannerlordAgents.Tools
             double keep = !double.IsNaN(keepAt) ? keepAt : t.Settings.TryGetValue("keep", out double k) ? k : 8;
             double dx = me.X - tx, dy = me.Y - ty, d = Math.Sqrt(dx * dx + dy * dy);
             if (d < 0.01) { dx = 1; dy = 0; d = 1; }
+            // 0.19 (the reserve order): with the tool's away setting on, the station is on the side of the party away from the nearest enemy lord or army in view
+            // near it (behind it), not on the shadower's own side; within 2 of that spot he stays where he is
+            if (double.IsNaN(keepAt) && t.Settings.TryGetValue("away", out double aw) && aw > 0)
+            {
+                PartyRow foe = w.EnemiesNear(tid, 3 * keep + 15).FirstOrDefault(e => e.Id != tid && w.Lead(e)?.Id != tid);
+                if (foe != null)
+                {
+                    double ux = tx - foe.X, uy = ty - foe.Y, ul = Math.Sqrt(ux * ux + uy * uy);
+                    if (ul < 0.01) { ux = dx; uy = dy; ul = d; }
+                    double sx = tx + ux / ul * keep, sy = ty + uy / ul * keep;
+                    if (Math.Sqrt((me.X - sx) * (me.X - sx) + (me.Y - sy) * (me.Y - sy)) <= 2) return new Move { Verb = "shadow", Party = tid, X = me.X, Y = me.Y, R = (float)keep };
+                    return new Move { Verb = "shadow", Party = tid, X = (float)sx, Y = (float)sy, R = (float)keep };
+                }
+            }
             double at;
             if (d > keep + 2) at = keep;
             else if (d < keep - 2) at = keep + 3;
@@ -946,6 +965,9 @@ namespace BannerlordAgents.Tools
             return new Scope(t, w);
         }
 
+        /// <summary>A tool run's names and functions on a world, as its rules read them (the smoke test reads the group functions through it); null for no such run.</summary>
+        internal static IScope ScopeOf(int id, World w) => ById.TryGetValue(id, out ToolInstance t) ? new Scope(t, w) : null;
+
         /// <summary>A watch's words with its {expressions} filled in, ids as names.</summary>
         internal static string WatchSay(string say, IScope scope, World w) => Template.Fill(say, scope, x => Show(x, w));
 
@@ -1046,6 +1068,15 @@ namespace BannerlordAgents.Tools
                 // each party in a fight is counted by itself (an army's lords fight in it party by party); outside it, a lord with his army
                 var p = new ReliefPlan { Battle = b, Friend = friend, Enemy = enemy, EndsIn = endsIn, Joiners = joiners.Count,
                                          Ours = ourRows.Sum(r => r.Strength), Theirs = theirRows.Sum(r => r.Strength) + joiners.Sum(World.StrengthOf) };
+                // a reserve whose lord fights here rides in by his own rule whatever the odds (0.19): his strength is ours there when he can get there in time
+                foreach (ToolInstance x in held)
+                {
+                    if (!IsReserve(x) || x.Order.Target == null) continue;
+                    PartyRow backed = w.Party(x.Order.Target), rr = w.Party(x.Order.Party);
+                    if (backed == null || !(inIt.Contains(backed.Id) || inIt.Contains(w.Lead(backed)?.Id ?? ""))) continue;
+                    if (rr == null || inIt.Contains(rr.Id) || !CanRide(x, rr, w, true) || w.HoursTo(rr, b.X, b.Y) > endsIn - Library.ReliefSpare(endsIn)) continue;
+                    p.Ours += World.StrengthOf(rr);
+                }
                 // who can get there in time with time to spare
                 var can = new List<Tuple<ToolInstance, PartyRow, double>>();
                 foreach (ToolInstance x in held)
@@ -1087,10 +1118,43 @@ namespace BannerlordAgents.Tools
         /// A fight's hours left by its clock, at most Library.MaxReliefHours (also when it would not end within the clock's five days): as
         /// measured once it has run two rounds, else by the rules at middling morale; joiners (side, men, the hour each arrives) run in.
         /// </summary>
-        private static double EndsIn(BattleRow b, World w, bool ownAttackers, List<Tuple<bool, int, double>> joiners)
+        private static double EndsIn(BattleRow b, World w, bool ownAttackers, List<Tuple<bool, int, double>> joiners) => Clock(b, w, ownAttackers, joiners, Library.MaxReliefHours);
+
+        /// <summary>The battle clock's hours left, at most cap (also when it would not end within its five days); own: whose morale the realm sees (null: neither side's).</summary>
+        private static double Clock(BattleRow b, World w, bool? own, List<Tuple<bool, int, double>> joiners, double cap)
         {
-            Forecast.BattleClock c = Forecast.Measured(b, w.Hours, ownAttackers, joiners) ?? Forecast.Battle(b, w.Hours, joiners, 50f, 50f);
-            return double.IsNaN(c.EndsAt) ? Library.MaxReliefHours : Math.Min(Library.MaxReliefHours, c.EndsAt - w.Hours);
+            Forecast.BattleClock c = Forecast.Measured(b, w.Hours, own, joiners) ?? Forecast.Battle(b, w.Hours, joiners, 50f, 50f);
+            return double.IsNaN(c.EndsAt) ? cap : Math.Min(cap, c.EndsAt - w.Hours);
+        }
+
+        /// <summary>The longest battle_hours_left says: the battle clock's own horizon, five days.</summary>
+        public const double MostHoursLeft = 120;
+
+        /// <summary>
+        /// The hours a fight should still last (0.19, the language's battle_hours_left), by the relief rule's clock: as measured once it has run two rounds, else by
+        /// the game's battle rules at middling morale; run again with the enemies of the realm in view (and bands of the enemy's own kind) who could join it within
+        /// those hours coming in as each would arrive, the shorter used; at most MostHoursLeft. A raid whose defenders are down: the hours until the village is
+        /// looted. A fight of the human player's: 0, since it is fought on the spot with the clock standing still, and nobody arrives later.
+        /// </summary>
+        internal static double HoursLeft(BattleRow b, World w)
+        {
+            if (b == null) return double.NaN;
+            if (w.S.PlayerParty != null && (b.Attackers.Parties.Contains(w.S.PlayerParty) || b.Defenders.Parties.Contains(w.S.PlayerParty))) return 0;
+            if (b.Kind == "raid" && b.Defenders.Healthy <= 0 && w.Holding(b.Settlement) is SettlementRow village)
+            {
+                double loot = Forecast.RaidHoursLeft(village, w.Hours, b.Attackers.Healthy, out _, out _);
+                return double.IsNaN(loot) ? double.NaN : Math.Min(MostHoursLeft, loot);
+            }
+            bool Friendly(BattleSideRow side) => side.Faction != null && (side.Faction == w.Realm || w.Ally(side.Faction));
+            bool att = Friendly(b.Attackers), def = Friendly(b.Defenders);
+            bool? own = att == def ? (bool?)null : att;
+            double alone = Clock(b, w, own, null, MostHoursLeft);
+            if (own == null || alone < 0.5) return alone;
+            BattleSideRow theirs = own.Value ? b.Defenders : b.Attackers;
+            if (!w.HostileFaction(theirs.Faction)) return alone;
+            var inIt = new HashSet<string>(b.Attackers.Parties.Concat(b.Defenders.Parties));
+            List<PartyRow> joiners = w.Joiners(b.X, b.Y, alone).Concat(w.BandsOf(theirs.Faction, b.X, b.Y, alone)).Where(e => !inIt.Contains(e.Id)).ToList();
+            return joiners.Count == 0 ? alone : Math.Min(alone, Clock(b, w, own, joiners.Select(e => Tuple.Create(!own.Value, World.MenOf(e), w.Hours + w.HoursTo(e, b.X, b.Y))).ToList(), MostHoursLeft));
         }
 
         /// <summary>
@@ -1111,11 +1175,32 @@ namespace BannerlordAgents.Tools
         /// an army moves whole, never broken up), not in a fight already, not camped in a siege (leaving it would lift his part of it), not
         /// inside a besieged castle or town (he cannot leave), and not on his way to buy food with under two days of it.
         /// </summary>
-        private static bool CanRide(ToolInstance t, PartyRow me, World w)
+        private static bool CanRide(ToolInstance t, PartyRow me, World w, bool reserveToo = false)
         {
             if (me == null || me.Kind != "lord" || me.Attached || me.InBattle || me.Besieging != null || t.SupplyAt != null || t.Finished) return false;
+            // a reserve (0.19) rides only to the fights of the lord he backs, by his own rule, never to others: he keeps his station for that lord
+            if (!reserveToo && IsReserve(t)) return false;
             SettlementRow inside = w.Holding(me.InSettlement);
             return !(inside != null && World.IsFort(inside) && w.Besieged(inside));
+        }
+
+        /// <summary>Our reserve order (0.19): a lord standing off another of his realm, who rides in the hour that lord fights.</summary>
+        internal static bool IsReserve(ToolInstance t) => t?.Def != null && t.Def.Author == "ours" && string.Equals(t.Def.Name, "reserve", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The fight an order's lord rides into this hour, whose parties are part of the fight it chose rather than a danger to flee (0.19): the fight of the party
+        /// its move attacks, when a lord of the realm or an ally's is on the other side of it; and for a reserve, the fight of the lord he backs.
+        /// </summary>
+        private static BattleRow RidesInto(ToolInstance t, World w)
+        {
+            if (t.HasCurrent && t.Current.Verb == "engage" && w.BattleOf(t.Current.Party) is BattleRow b)
+            {
+                bool? side = World.SideIn(b, t.Current.Party) ?? World.SideIn(b, w.Lead(w.Party(t.Current.Party))?.Id);
+                BattleSideRow other = side == true ? b.Defenders : side == false ? b.Attackers : null;
+                if (other != null && other.Faction != null && (other.Faction == w.Realm || w.Ally(other.Faction))) return b;
+            }
+            if (IsReserve(t) && t.Order.Target != null) return w.BattleOf(t.Order.Target);
+            return null;
         }
 
         /// <summary>
@@ -1315,8 +1400,12 @@ namespace BannerlordAgents.Tools
             // ... and so are the lords marching with the army it shadows (0.12.2, the danger counted with hosts), unless they chase it
             string shadowed = shadowing ? w.HeadOf(w.Party(t.Current.Party))?.Id : null;
             bool Chasing(PartyRow e) => e.Doing == "EngageParty" && e.TargetParty == me.Id;
+            // riding into a fight beside a lord of ours (0.19): every party in it is part of the fight the order chose (a reserve's lord's fight, a strike on a party
+            // already fighting ours), as the camp is when it strikes a siege camp
+            BattleRow ride = RidesInto(t, w);
             bool Spared(PartyRow e) => (spare.Contains(e.Id) && !(shadowing && Chasing(e))) || (siege != null && e.Besieging == siege)
-                                       || (shadowed != null && w.HeadOf(e)?.Id == shadowed && !Chasing(e));
+                                       || (shadowed != null && w.HeadOf(e)?.Id == shadowed && !Chasing(e))
+                                       || (ride != null && (World.SideIn(ride, e.Id) != null || World.SideIn(ride, w.Lead(e)?.Id) != null));
             // the danger counted as a group (0.12.2): everything in view within reach of the lord and the hosts those lords march
             // with, together (World.DangerAround); the strongest of them stands for where it is and how fast it comes
             Danger Find(double within)
@@ -1340,7 +1429,8 @@ namespace BannerlordAgents.Tools
             if (t.Shelter != null)
             {
                 Danger still = caution > 0 ? Find(radius * 1.5) : null;
-                if (still == null && w.Hours - t.AsideSince >= 2)
+                // a reserve whose lord is fighting comes out at once when nothing but that fight is near (0.19): he has a fight to ride to
+                if (still == null && (w.Hours - t.AsideSince >= 2 || (IsReserve(t) && ride != null)))
                 {
                     string was = t.Shelter;
                     t.Shelter = t.ShelterFrom = null;
@@ -1841,7 +1931,7 @@ namespace BannerlordAgents.Tools
                     if (r == null || r.Faction != _w.Realm || r.Attached) continue;
                     bool striking = o.Current.Verb == "engage" && o.Current.Party == foe;
                     bool guard = !striking && o.Order.At != null && o.Order.At == _t.Order.At && o.Def.Name == _t.Def.Name && o.Shelter == null && o.SupplyAt == null
-                                 && (o.Current.Verb == "goto" || o.Current.Verb == "hold" || o.Current.Verb == "recruit" || o.Current.Verb == "patrol");
+                                 && (o.Current.Verb == "goto" || o.Current.Verb == "hold" || o.Current.Verb == "recruit" || o.Current.Verb == "patrol" || o.Current.Verb == "shadow");
                     if (!striking && !guard) continue;
                     if (guard)
                     {
@@ -2035,8 +2125,91 @@ namespace BannerlordAgents.Tools
                             if (_w.Holding(h) == null) return null;
                             return _w.EnemiesNear(h, Expr.Number(a[1])).Where(e => _w.TowardOf(e.Id) == h).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
                         }
+                    // ---------- 0.19: the battle facts, the game's quick reaction mirrored, a group on one order at one place, raids, a siege of yours ----------
+                    case "in_battle_of": { bool? b = _w.InBattleOf(Id(a[0])); return b.HasValue ? (object)b.Value : null; }
+                    case "battle_hours_left":
+                        {
+                            BattleRow b = _w.BattleOf(Id(a[0]));
+                            double h = b == null ? double.NaN : HoursLeft(b, _w);
+                            return double.IsNaN(h) ? null : (object)Math.Round(h, 1);
+                        }
+                    case "battle_foe_of": return _w.BattleFoeOf(Id(a[0]));
+                    case "pace_of": { double? p = _w.PaceOf(Id(a[0])); return p.HasValue && !double.IsNaN(p.Value) ? (object)Math.Round(p.Value, 2) : null; }
+                    case "joins_army": return _w.JoinsArmy(Id(a[0]));
+                    case "disorganized_of": { double? d = _w.DisorganizedOf(Id(a[0])); return d.HasValue ? (object)d.Value : null; }
+                    case "retreated": { bool? r = _w.Retreated(Id(a[0])); return r.HasValue ? (object)r.Value : null; }
+                    case "would_attack": { World.Initiative q = _w.QuickReaction(Id(a[0]), Id(a[1])); return q == null ? null : (object)(q.Attack > 1); }
+                    case "would_flee": { World.Initiative q = _w.QuickReaction(Id(a[0]), Id(a[1])); return q == null ? null : (object)(q.Avoid > 1 && q.Attack <= 1); }
+                    case "mates": return Mates().Select(r => (object)r.Id).ToList();
+                    case "nearest_mate":
+                        {
+                            string x = Id(a[0]);
+                            double r = Expr.Number(a[1]);
+                            if (me == null) return null;
+                            return Mates().Where(m => Close(m.Id, x, r)).OrderBy(m => Far(_w.Distance(me.Id, m.Id))).FirstOrDefault()?.Id;
+                        }
+                    case "mates_strength":
+                        {
+                            string x = Id(a[0]);
+                            double r = Expr.Number(a[1]);
+                            double sum = me != null && Close(me.Id, x, r) ? World.StrengthOf(me) : 0;
+                            foreach (PartyRow m in Mates()) if (Close(m.Id, x, r)) sum += World.StrengthOf(m);
+                            return sum;
+                        }
+                    case "could_reach": return _w.ReachWithin(Id(a[0]), Expr.Number(a[1]));
+                    case "raid_hours":
+                        {
+                            // the game's raid (DefaultRaidModel.CalculateHitDamage): (the square root of the raiders + 5) / 900 of the village's health an hour, from full
+                            // health (a village's health is seen only while it is raided), and an hour for its militia first; TAOM's peoples' gifts left out
+                            SettlementRow v = H(a[0]);
+                            if (v == null || v.Kind != "village" || v.VillageState == "Looted" || me == null) return null;
+                            double health = v.VillageState == "BeingRaided" ? Math.Max(0, v.HitPoints) : 1;
+                            double rate = (Math.Sqrt(Math.Max(0, World.MenOf(me))) + 5) / 900.0;
+                            return Math.Round(health / rate + 1, 1);
+                        }
+                    case "our_siege": return _w.OurSiege(H(a[0]));
+                    case "storm_need": { double? n = _w.StormNeed(Id(a[0])); return n.HasValue ? (object)Math.Round(n.Value) : null; }
+                    case "storm_odds": { double? o = _w.StormOdds(Id(a[0])); return o.HasValue ? (object)Math.Round(o.Value, 3) : null; }
+                    case "storming": return _w.Storming(Id(a[0]));
+                    case "fall_back":
+                        {
+                            // where the safety rule would take him from the forces within r of him (and those who could join them within join_hours): the first castle or town of
+                            // yours or an ally's he reaches before them whose defenders, with him, would hold it, else the nearest he reaches first that takes him farther from them
+                            double r = Expr.Number(a[0]);
+                            if (me == null || double.IsNaN(r)) return null;
+                            List<PartyRow> g = _w.DangerAround(me.Id, r, JoinHours, e => false);
+                            if (g.Count == 0) return _w.ChooseRefuge(me.Id, null, World.HoldRadius, null, out _, out _)?.Id;
+                            PartyRow lead = g.OrderByDescending(World.StrengthOf).First();
+                            return _w.ChooseRefuge(me.Id, null, World.HoldRadius, lead, out _, out _, g.Sum(World.StrengthOf), new HashSet<string>(g.Select(x => x.Id)))?.Id;
+                        }
                 }
                 throw new InvalidOperationException("no function " + fn);
+            }
+
+            /// <summary>
+            /// The lord's group (0.19, the language's mates): the other lords of the realm holding the same order at the same place (its at, else its target), and
+            /// the lords the order names; each once, never the lord himself, only those with a party now.
+            /// </summary>
+            private List<PartyRow> Mates()
+            {
+                var list = new List<PartyRow>();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                if (Me != null) seen.Add(Me.Id);
+                void Add(string party)
+                {
+                    PartyRow r = _w.Party(party);
+                    if (r != null && r.Faction == _w.Realm && seen.Add(r.Id)) list.Add(r);
+                }
+                string at = _t.Order.At, target = _t.Order.Target;
+                if (at != null || target != null)
+                    foreach (ToolInstance o in ById.Values)
+                    {
+                        if (o == _t || o.Finished || o.Def == null || !string.Equals(o.Def.Name, _t.Def?.Name, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (at != null ? o.Order.At != at : o.Order.Target != target) continue;
+                        Add(o.Order.Party);
+                    }
+                foreach (string p in _t.Order.Lords) Add(p);
+                return list;
             }
 
             /// <summary>Two values the same (ids without regard to case), as the language's == has it.</summary>

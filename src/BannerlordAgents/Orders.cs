@@ -48,6 +48,8 @@ namespace BannerlordAgents
             public float X, Y;
             /// <summary>A patrol's reach from its holding (the tool's radius); 0 leaves the patrol to the game, which ranges half a day's march out.</summary>
             public float Radius;
+            /// <summary>A patrol's least distance from its holding's gate (0.19, a tool's standoff); 0 keeps it at a quarter of Radius.</summary>
+            public float Radius0;
             public bool HasPoint;
             /// <summary>A tool order: its runner instance and its name (0 and null for a plain vassal order).</summary>
             public int ToolId;
@@ -877,6 +879,7 @@ namespace BannerlordAgents
             o.X = m.X;
             o.Y = m.Y;
             o.Radius = m.R;
+            o.Radius0 = m.R0;
             o.HasPoint = false;
             o.Arrived = false;
             o.ArrivedAt = -1;
@@ -1942,7 +1945,10 @@ namespace BannerlordAgents
         /// </summary>
         private static void NextPatrolPoint(HandOrder o, MobileParty.NavigationType nav)
         {
-            CampaignVec2 pt = NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, o.Radius * 0.75f, o.Radius * 0.25f);
+            // between a quarter and three quarters of its radius from the gate, or (0.19) between its standoff and its radius
+            CampaignVec2 pt = o.Radius0 > 0f
+                ? NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, o.Radius, Math.Min(o.Radius0, o.Radius * 0.9f))
+                : NavigationHelper.FindReachablePointAroundPosition(o.Place.GatePosition, nav, o.Radius * 0.75f, o.Radius * 0.25f);
             o.X = pt.X;
             o.Y = pt.Y;
             o.HasPoint = true;
