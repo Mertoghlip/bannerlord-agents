@@ -2541,7 +2541,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** Smoke test ALL CHECKS PASSED (596; it reads the templates' language section).
 - **Outside the repository:** installed into the orcs', Dol Guldur's and the kingdom agent's `warroom-system.md` and the orcs' and Dol Guldur's `warroom-continuous.md` (backups `.bak-20261113-before-standing-harass`), before any of the new conversations began. The war room reads its instructions afresh when a conversation starts, so nothing was restarted. The game was closed.
 
-### 02:31 · Secure the fronts, then press them: harassers go out from secured places and come back by themselves when the enemy gathers
+### 02:31 · Secure the fronts, then press them: harassers go out from secured places and come back by themselves when the enemy gathers · commit bedc5f9
 - **Why:** I want the flow to be: fronts settled with defence first; then, once their own places are secure or the enemy's positioning is known and opportunities spotted, harassing groups sent from those places to push the front; and when enemy strength starts to concentrate against the harassers, they return to their defensive posts at the realm's fronts. I also asked whether other principles should change with it.
 - **What, the harass order:**
   - It now takes `places`, his post: the first of them is the castle or town of his own he was sent from (left out: the nearest).
