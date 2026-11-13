@@ -1,13 +1,15 @@
 {
   "tool": "harass",
   "kind": "tool",
-  "about": "Harasses an enemy castle or town ahead of your attack, and screens your siege of it. The lord rides there and roams its ground, standoff to radius from its walls, as one group with every lord of yours holding a harass order on the same place and the lords named in lords: in the area each keeps within keep_hours of his own march of the nearest of them, closing up before anything else when farther, so they can ride to one another's fights. He strikes an enemy lord or army in his area (within reach_hours of his march and half again radius from the walls) when the enemies who could be in the fight by its middle and by its end (the march to it and the fight's own hours, worked out each time from both sides' strength) are at most strike_below of your side there; of the group only as many go as it takes, the nearest first, until together they are enough times the strength it fights with; he keeps weighing as he chases, and breaks off a chase that leads far from the place or has not closed in for 6 hours. With raids 1 he raids a village of the place, or another enemy village in his area, only when the enemy lords and armies who could reach it before the raid would be done (his march there and the raid's own hours by the game's rule) are at most raid_below of your side there: a raid holds the raiders until the village is looted, so he gives it up only before it begins. He shelters from the forces that could reach him before he could get behind walls once they are shelter_at times your side by him: in the first castle or town of yours or an ally's he reaches before them that would hold with him inside, else he falls back toward the nearest one that takes him farther from them and stays outside; he comes back once they have passed. Below min_ranks of his party's size limit he rides to the nearest town of yours to recruit, then back. He buys his own food when he runs low. When a camp of yours or an ally's besieges the place, he takes a post about keep from the camp, strikes the lords coming to relieve the place or gathering near it by the same weighing, and joins the camp while its strength is under storm_margin times what the game's assault test asks of it, once a storm is being fought or the camp's preparations will be done by the time he gets there; in the camp he stays until the siege ends (leaving would lift his part of it), unless he is left there alone. Count the group in your siege's reckonings: the relief your camp can face and the storm. If the siege lifts, he goes back to harassing. It ends when the place falls to you (then his next order starts) or is no longer an enemy's.",
-  "calls_back": "he is in position around the place; he goes at an enemy, breaks off or gives up a chase; a raid begins, ends, or is given up before it begins; your siege of the place begins (he takes his post) or ends without its fall; he joins your camp for the storm, or leaves it when the others have gone; he shelters or falls back from a strong force, and comes back; he rides off to recruit, and back; the place falls to you or is no longer an enemy's",
+  "about": "Harasses an enemy castle or town ahead of your attack, and screens your siege of it. The lord rides there and roams its ground, standoff to radius from its walls, as one group with every lord of yours holding a harass order on the same place and the lords named in lords: in the area each keeps within keep_hours of his own march of the nearest of them, closing up before anything else when farther, so they can ride to one another's fights. He strikes an enemy lord or army in his area (within reach_hours of his march and half again radius from the walls) when the enemies who could be in the fight by its middle and by its end (the march to it and the fight's own hours, worked out each time from both sides' strength) are at most strike_below of your side there; of the group only as many go as it takes, the nearest first, until together they are enough times the strength it fights with; he keeps weighing as he chases, and breaks off a chase that leads far from the place or has not closed in for 6 hours. With raids 1 he raids a village of the place, or another enemy village in his area, only when the enemy lords and armies who could reach it before the raid would be done (his march there and the raid's own hours by the game's rule) are at most raid_below of your side there: a raid holds the raiders until the village is looted, so he gives it up only before it begins. He shelters from the forces that could reach him before he could get behind walls once they are shelter_at times your side by him: in the first castle or town of yours or an ally's he reaches before them that would hold with him inside, else he falls back toward the nearest one that takes him farther from them and stays outside; he comes back once they have passed. When the enemy lords and armies that could reach the place within reach_hours grow to withdraw_at times the strength of his group there, and stay so for two hours (three while he shelters), he goes back to his post (the first of places, the castle or town of yours he was sent from; left out, the nearest) and his harassing ends there: give him his defence back with then (for example a defend of that post), or he holds inside it. Below min_ranks of his party's size limit he rides to the nearest town of yours to recruit, then back. He buys his own food when he runs low. When a camp of yours or an ally's besieges the place, he takes a post about keep from the camp, strikes the lords coming to relieve the place or gathering near it by the same weighing, and joins the camp while its strength is under storm_margin times what the game's assault test asks of it, once a storm is being fought or the camp's preparations will be done by the time he gets there; in the camp he stays until the siege ends (leaving would lift his part of it), unless he is left there alone. Count the group in your siege's reckonings: the relief your camp can face and the storm. If the siege lifts, he goes back to harassing. It ends when the place falls to you (then his next order starts) or is no longer an enemy's.",
+  "calls_back": "he is in position around the place; he goes at an enemy, breaks off or gives up a chase; a raid begins, ends, or is given up before it begins; your siege of the place begins (he takes his post) or ends without its fall; he joins your camp for the storm, or leaves it when the others have gone; he shelters or falls back from a strong force, and comes back; enemy strength gathers against his group and he goes back to his post, and is back there; he rides off to recruit, and back; the place falls to you or is no longer an enemy's",
   "at": "enemy_fort",
   "lords": true,
+  "places": "own_fort",
   "takes": {
     "at": "enemy_fort: the castle or town harassed",
-    "lords": "other lords of yours who belong to his group, beside those holding a harass order on the same place"
+    "lords": "other lords of yours who belong to his group, beside those holding a harass order on the same place",
+    "places": "own_fort: his post, the castle or town of yours he was sent from and goes back to when enemy strength gathers against his group (left out: the nearest castle or town of yours or an ally's); only the first counts"
   },
   "settings": {
     "radius": [12, 4, 40, "how far from the place's walls his area reaches, in map units: he roams within it, strikes enemies within half again as far, and raids villages within it"],
@@ -19,6 +21,7 @@
     "raids": [1, 0, 1, "1: raids isolated villages in his area; 0: never raids"],
     "raid_below": [0.5, 0.1, 2, "raid a village only when the enemy lords and armies who could reach it before the raid would be done are at most this share of your side there"],
     "shelter_at": [1.2, 0.3, 5, "shelter or fall back when the forces that could reach him before he could get behind walls are this many times your side's strength by him"],
+    "withdraw_at": [1, 0, 5, "go back to his post (and his next order, given with then) once the enemy lords and armies that could reach the place within reach_hours are this many times the strength of his group there; 0 never"],
     "min_ranks": [0.4, 0, 1, "below this share of his party's size limit he rides to the nearest town of yours to recruit, then comes back; 0 never"],
     "keep": [5, 2, 15, "during a siege of yours there, how far from the camp he takes his post, in map units"],
     "storm_margin": [1.5, 0, 5, "join your camp there while its strength is under this many times what the game's assault test asks of it, once a storm is being fought or its preparations will be done by the time he gets there; 0 never joins"]
@@ -26,7 +29,7 @@
   "init": {
     "foe": "none", "odds": "0", "b": "0", "t0": "0", "strk": "0", "hs": "reach_hours", "tally_at": "-100", "weigh_at": "0", "chase_gap": "0", "best_at": "0",
     "passed": "{}", "spurned": "{}", "tried": "{}", "vil": "none", "haven": "none", "town": "none", "mate": "none", "camp": "none",
-    "told": "0", "sieged": "0", "refit_after": "0"
+    "told": "0", "sieged": "0", "refit_after": "0", "home": "none", "gath": "0"
   },
   "start": "roam",
   "states": {
@@ -45,6 +48,10 @@
         { "if": "threat_near(me, pace * hs) >= side_strength(me) * shelter_at and (fall_back(pace * hs) != none or nearest_fort() != none)", "go": "fallback",
           "set": { "haven": "pick(fall_back(pace * hs) != none, fall_back(pace * hs), nearest_fort())" },
           "poke": "Strength {threat_near(me, pace * hs)} could reach {me} near {at} within {round(hs)} hours, against your side's {side_strength(me)}, and no castle or town he could reach first would hold with him inside: he falls back toward {haven} and stays outside." },
+        { "if": "gath > 0 and now >= gath + 2 and withdraw_at > 0 and could_reach(at, reach_hours) >= (mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)) * withdraw_at", "go": "withdraw", "set": { "home": "pick(count(places) > 0, first(places), nearest_fort())" },
+          "poke": "Enemy strength {round(could_reach(at, reach_hours))} could reach {at} within {reach_hours} hours, against {round((mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)))} of {me}'s harassing group there: he goes back to his post at {home}." },
+        { "if": "gath == 0 and withdraw_at > 0 and could_reach(at, reach_hours) >= (mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)) * withdraw_at", "go": "round", "set": { "gath": "now" } },
+        { "if": "gath > 0 and not (withdraw_at > 0 and could_reach(at, reach_hours) >= (mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)) * withdraw_at)", "go": "round", "set": { "gath": "0" } },
         { "if": "min_ranks > 0 and ranks < min_ranks and now >= refit_after and can_recruit and (nearest_town_of_realm() != none or nearest_fort() != none)", "go": "refit",
           "set": { "town": "pick(nearest_town_of_realm() != none, nearest_town_of_realm(), nearest_fort())" },
           "poke": "{me} is down to {round(ranks * 100)}% of his ranks; he rides to {town} to recruit, and then back to harass {at}." },
@@ -109,6 +116,8 @@
       "when": [
         { "if": "ours(at)", "go": "done", "poke": "{at} has fallen to your realm, so {me}'s harassing of it is done." },
         { "if": "not hostile(at)", "go": "done", "poke": "{at} is no longer an enemy holding, so {me} stops harassing it." },
+        { "if": "hours_in_state >= 3 and withdraw_at > 0 and could_reach(at, reach_hours) >= (mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)) * withdraw_at", "go": "withdraw", "set": { "home": "pick(count(places) > 0, first(places), nearest_fort())" },
+          "poke": "Enemy strength {round(could_reach(at, reach_hours))} could reach {at} within {reach_hours} hours, against {round((mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)))} of {me}'s harassing group there: he goes back to his post at {home}." },
         { "if": "hours_in_state >= 3 and threat_near(me, pace * hs) < side_strength(me) * shelter_at * 0.8", "go": "back",
           "poke": "{me} comes out of {haven}: the danger near him has passed. Back to harassing {at}." },
         { "if": "now >= tally_at + 1", "go": "shelter", "set": { "hs": "pick(nearest_fort() != none, min(hours_to(nearest_fort()) + 2, reach_hours), reach_hours)", "tally_at": "now" } } ] },
@@ -116,6 +125,8 @@
       "when": [
         { "if": "ours(at)", "go": "done", "poke": "{at} has fallen to your realm, so {me}'s harassing of it is done." },
         { "if": "not hostile(at)", "go": "done", "poke": "{at} is no longer an enemy holding, so {me} stops harassing it." },
+        { "if": "hours_in_state >= 3 and withdraw_at > 0 and could_reach(at, reach_hours) >= (mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)) * withdraw_at", "go": "withdraw", "set": { "home": "pick(count(places) > 0, first(places), nearest_fort())" },
+          "poke": "Enemy strength {round(could_reach(at, reach_hours))} could reach {at} within {reach_hours} hours, against {round((mates_strength(at, radius * 2) + pick(within(at, radius * 2), 0, strength)))} of {me}'s harassing group there: he goes back to his post at {home}." },
         { "if": "hours_in_state >= 3 and threat_near(me, pace * hs) < side_strength(me) * shelter_at * 0.8", "go": "back",
           "poke": "{me} turns back toward {at}: the danger near him has passed." },
         { "if": "now >= tally_at + 1", "go": "fallback", "set": { "hs": "pick(nearest_fort() != none, min(hours_to(nearest_fort()) + 2, reach_hours), reach_hours)", "tally_at": "now" } } ] },
@@ -152,6 +163,11 @@
           "poke": "Your siege of {at} was lifted before {me} reached the camp; he goes back to harassing its ground." },
         { "if": "besieging and not in_battle and not storming(at) and hours_in_state >= 2 and siege_strength(at) <= strength + 1", "go": "roam", "set": { "sieged": "0" },
           "poke": "{me} was left alone in the camp at {at}: the rest of your lords lifted the siege, so he leaves it rather than hold it alone, and goes back to harassing its ground." } ] },
+    "withdraw": { "about": "going back to his post at {home}: the enemy gathers near {at} in more strength than his harassing group", "do": "goto home",
+      "when": [
+        { "if": "(inside(home) or arrived) and hours_in_state >= 1", "go": "posted", "poke": "{me} is back at his post at {home}." },
+        { "if": "hours_in_state >= 48", "go": "posted" } ] },
+    "posted": { "about": "back at his post at {home}", "end": "hold" },
     "done": { "about": "done", "end": "free" }
   }
 }

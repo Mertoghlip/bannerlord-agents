@@ -139,6 +139,38 @@ namespace SmokeTest
                   + "and falls back toward it, staying outside, when it would not hold (3,000) (" + shelters + ", " + StateOf(9995) + ", " + fallsBack + ", " + StateOf(9996) + ")");
             Runner.Reset();
 
+            // back to his post (0.19, Nov 13: harassers go back to their defensive posts once enemy strength gathers against them): strength near the place that matches
+            // his group's but is no sudden danger to him sends him home to the post he was sent from, where his harassing ends (his next order, else he holds there)
+            var muzgash = Orc("hw1", "Radbug", 300, 160, 94);
+            var gather1 = Man("hw2", "Beregond", 340, 178, 104);
+            double h4b = 70450;
+            Hour(h4b, null, muzgash, gather1);
+            ToolOrder home = Harass(muzgash, caution: 0);
+            home.Places.Add("castle_two");
+            Runner.Start(9980, home);
+            Hour(h4b + 1, null, muzgash, gather1);
+            bool notAtOnce = StateOf(9980) != "withdraw" && Expr.Number(Mem(9980, "gath")) > 0;
+            Hour(h4b + 2, null, muzgash, gather1);
+            Hour(h4b + 3, null, muzgash, gather1);
+            bool goesHome = StateOf(9980) == "withdraw" && Moved(9980, "goto", "castle_two") && (Mem(9980, "home") as string) == "castle_two";
+            muzgash.X = 140; muzgash.Y = 100; muzgash.InSettlement = "castle_two";
+            Hour(h4b + 4, null, muzgash, gather1);
+            bool posted = StateOf(9980) == "posted" && Moved(9980, "hold");
+            Runner.Reset();
+            var golfimbul = Orc("hw3", "Snaga", 300, 160, 94);
+            var gather2 = Man("hw4", "Beregond", 200, 178, 104);
+            Hour(h4b + 10, null, golfimbul, gather2);
+            Runner.Start(9981, Harass(golfimbul, caution: 0));
+            Hour(h4b + 11, null, golfimbul, gather2);
+            Hour(h4b + 12, null, golfimbul, gather2);
+            Hour(h4b + 13, null, golfimbul, gather2);
+            bool stays = StateOf(9981) != "withdraw" && !Moved(9981, "goto", "castle_two");
+            Check(notAtOnce && goesHome && posted && stays,
+                  "harass goes back to its post (castle_two, the first of places) once the enemy that could reach the place within reach_hours has matched its group for two hours (340 against 300, "
+                  + "no sudden danger to him), not at the first sight of it, and its harassing ends there; a weaker gathering (200) does not send it home ("
+                  + notAtOnce + ", " + goesHome + ", " + posted + ", " + stays + ", " + StateOf(9980) + ", " + StateOf(9981) + ")");
+            Runner.Reset();
+
             // a siege of your realm's at the place: a post about keep from the camp; a relief struck by the weighing, the camp left out of a fight it is not in; the camp
             // joined for the storm when it is short of the game's assault test, not when it is far past it; the order ends when the place falls
             var camp = Orc("gb1", "Bolg", 1000, 170, 103);
