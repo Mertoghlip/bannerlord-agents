@@ -2477,7 +2477,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 
 ## Thursday, November 12
 
-### 19:30 · War room 0.18.10 and Runs 0.14.1: the agents keep their own copy of their conversations
+### 19:30 · War room 0.18.10 and Runs 0.14.1: the agents keep their own copy of their conversations · commit c7fab6e
 - **Why:** Claude Code keeps a conversation only in its own folder, and each time it starts, in any project, it deletes every transcript left untouched for 30 days. A conversation whose transcript is gone cannot be carried on (Claude Code answers "No conversation found") or taken back to a checkpoint. A player who stops playing for a while and comes back should find their agents carrying on where they left off.
 - **What:**
   - **After every call** the war room appends what the call added to its own copy, `memory\<campaign>\transcripts\<session>.jsonl` (`KeptTalk`). The transcript only grows; a copy that is not its beginning is set aside as `.earlier`.
