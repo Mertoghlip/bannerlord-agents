@@ -174,7 +174,9 @@ namespace BannerlordAgents.Tools
             ["in_battle_of"] = 1, ["battle_hours_left"] = 1, ["battle_foe_of"] = 1, ["pace_of"] = 1, ["joins_army"] = 1, ["disorganized_of"] = 1, ["retreated"] = 1,
             ["would_attack"] = 2, ["would_flee"] = 2,
             ["mates"] = 0, ["nearest_mate"] = 2, ["mates_strength"] = 2, ["could_reach"] = 2, ["raid_hours"] = 1, ["fall_back"] = 1,
-            ["our_siege"] = 1, ["storm_need"] = 1, ["storm_odds"] = 1, ["storming"] = 1
+            ["our_siege"] = 1, ["storm_need"] = 1, ["storm_odds"] = 1, ["storming"] = 1,
+            // 0.19.1, the storm guard: a storm run ahead, alone and with the relief that could reach the camp before it ends
+            ["storm_hours"] = 1, ["storm_relief"] = 1, ["storm_clear"] = 2
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -219,7 +221,10 @@ namespace BannerlordAgents.Tools
             ["our_siege"] = "our_siege(h): whether h is besieged by a camp of yours or an ally's",
             ["storm_need"] = "storm_need(h): the besiegers' strength the game's assault test asks for now at h (its defenders times the walls' worth, which weigh less after the fourth day of the siege and more while no ram or tower is built); only for a siege of yours or an ally's",
             ["storm_odds"] = "storm_odds(h): your or your ally's camp's strength at h over storm_need(h): above 1 the game's commander may storm once the preparations are done (the likelier each hour the higher it is); 99 when no defender is left; none for no siege of yours",
-            ["storming"] = "storming(h): whether a storm of h is being fought now (a siege you can know of)"
+            ["storming"] = "storming(h): whether a storm of h is being fought now (a siege you can know of)",
+            ["storm_hours"] = "storm_hours(h): about how many hours a storm of h begun now would last by the game's battle rules (a storm is paced by the defenders' number; 120 when it would not end within five days); only for a siege of yours or an ally's",
+            ["storm_relief"] = "storm_relief(h): the strength of the enemy lords and armies that could reach your camp at h before a storm begun now would end, each counted at its own pace and never slower than speed 2.8, the average speed of the game's mid- to high-strength lord parties (a force out of view, known from where it was last seen in the last hours, or a slow army, is never taken for slower than that); only for a siege of yours or an ally's",
+            ["storm_clear"] = "storm_clear(h, keep): whether a storm of h begun now is clear: no relief could reach your camp before it ends, or, with every lord and army of that relief joining the defenders as each arrives, the besiegers would still win keeping at least keep (a share, 0 to 1) of their men; false when that relief would turn the storm; only for a siege of yours or an ally's"
         };
 
         private static readonly Regex NamePattern = new Regex("^[a-z][a-z0-9_]{1,31}$", RegexOptions.Compiled);

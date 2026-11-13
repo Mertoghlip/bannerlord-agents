@@ -20,12 +20,15 @@ namespace BannerlordAgents
         public float Ratio;
         /// <summary>A relief bar was met: storm as soon as the camp may (its preparations done).</summary>
         public bool Now;
+        /// <summary>The storm guard (0.19.1): a relief that could reach the camp before a storm begun now would end would turn it, so the storm is held; why, in words.</summary>
+        public bool Hold;
+        public string HoldWhy;
 
-        public bool Same(StormRule o) => o != null && o.Mode == Mode && o.Engines == Engines && Math.Abs(o.Ratio - Ratio) < 1e-4f && o.Now == Now;
+        public bool Same(StormRule o) => o != null && o.Mode == Mode && o.Engines == Engines && Math.Abs(o.Ratio - Ratio) < 1e-4f && o.Now == Now && o.Hold == Hold && o.HoldWhy == HoldWhy;
 
         public override string ToString() => Now ? "storm as soon as the camp may (a relief bar was met)"
             : Mode == 1 ? "storm once ready" + (Engines > 0 ? ", " + Engines + (Engines == 1 ? " engine" : " engines") + " built" : "") + (Ratio > 0 ? ", the besiegers " + Ratio.ToString("0.#", Text.Inv) + " times the defenders" : "")
-            : Mode == 2 ? "do not storm" : "the game's own commander decides";
+            : Mode == 2 ? "do not storm" : "the game's own commander decides" + (Hold ? "; held by the storm guard" : "");
     }
 
     /// <summary>
@@ -45,7 +48,7 @@ namespace BannerlordAgents
         public static void Set(string party, StormRule r)
         {
             if (party == null) { Rules.Clear(); Last.Clear(); return; }
-            if (r == null || (r.Mode == 0 && !r.Now)) { Rules.TryRemove(party, out _); Last.TryRemove(party, out _); return; }
+            if (r == null || (r.Mode == 0 && !r.Now && !r.Hold)) { Rules.TryRemove(party, out _); Last.TryRemove(party, out _); return; }
             if (Rules.TryGetValue(party, out StormRule old) && old.Same(r)) return;
             Rules[party] = r;
             Diag.Event("storm", "rule", new { party, rule = r.ToString() });
@@ -64,6 +67,7 @@ namespace BannerlordAgents
             bool storm;
             string why;
             if (r.Now) { storm = true; why = "a relief bar was met"; }
+            else if (r.Hold) { storm = false; why = "the storm guard holds it: " + (r.HoldWhy ?? "a relief could turn it"); }
             else if (r.Mode == 2) { storm = false; why = "your rule: do not storm"; }
             else if (r.Mode != 1) return null;
             else

@@ -121,6 +121,13 @@ namespace BannerlordAgents.Common
         /// Average map units an hour over a whole day on one kind of ground (night's 4 hours slower): for long ways where only
         /// the length is known (the game's road table), on open ground unless told otherwise.
         /// </summary>
+        /// <summary>A bare speed's map units an hour over a day, night counted at the night's slowdown (0.19.1: the storm guard's floor for a force's pace).</summary>
+        public static float DayAverageOfSpeed(float speed)
+        {
+            int nightHours = HoursInDay - (SunSet - SunRise);
+            return PerHour(speed * ((HoursInDay - nightHours) + (1f + NightFactor) * nightHours) / HoursInDay);
+        }
+
         public static float DayAverage(Pace p, int terrain = Plain)
         {
             if (p == null || p.Base <= 0) return 0f;

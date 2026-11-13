@@ -999,6 +999,98 @@ namespace BannerlordAgents.Tools
         /// <summary>Is a storm of the place being fought now (a siege the realm can know of)?</summary>
         public bool Storming(string place) => Siege(place)?.Storming == true;
 
+        // ---------- the storm guard (0.19.1) ----------
+
+        /// <summary>
+        /// The slowest the storm guard takes any force that could relieve a siege to march (0.19.1, Nov 13): the game's speed 2.8, the mean speed of the game's mid- to
+        /// high-strength lord parties (strength from the median, about 400, to the 95th percentile, about 2,500), measured over 313 hourly copies of this campaign (115,640
+        /// sightings of lord parties marching on their own: strength under 300 averaged 3.5, 300 to 600 3.0, 600 to 1,500 2.7, 1,500 to 2,500 2.45). A force seen marching
+        /// slower, or known only from where it was last seen, is never counted slower than that.
+        /// </summary>
+        public const float ReliefFloorSpeed = 2.8f;
+
+        /// <summary>A storm begun now at a siege of the realm's or an ally's, run ahead by the game's battle rules: alone, and with the relief that could reach the camp before it ends.</summary>
+        internal sealed class StormCheckResult
+        {
+            /// <summary>Hours a storm begun now would last, alone (120 when it would not end within five days).</summary>
+            public double Hours;
+            /// <summary>The enemy lords and armies that could reach the camp within those hours, each at its own pace and never slower than ReliefFloorSpeed: their strength and number.</summary>
+            public double ReliefStrength;
+            public int ReliefCount;
+            /// <summary>With that relief joining the defenders as each arrives: whether the besiegers would still win, and the share of their men left then.</summary>
+            public bool Won;
+            public double LeftShare;
+            /// <summary>Clear to storm: no relief could come in time, or with it the storm is still won keeping at least keep of the besiegers' men.</summary>
+            public bool Clear(double keep) => ReliefCount == 0 || (Won && LeftShare >= keep - 1e-9);
+        }
+
+        private readonly Dictionary<string, StormCheckResult> _stormChecks = new Dictionary<string, StormCheckResult>(StringComparer.Ordinal);
+
+        /// <summary>The storm guard's reckoning for a siege of the realm's or an ally's at the place (once an hour, kept for the hour); null for no such siege.</summary>
+        public StormCheckResult StormCheck(string place)
+        {
+            if (place == null) return null;
+            if (_stormChecks.TryGetValue(place, out StormCheckResult kept)) return kept;
+            StormCheckResult res = StormCheckNow(place);
+            _stormChecks[place] = res;
+            return res;
+        }
+
+        private StormCheckResult StormCheckNow(string place)
+        {
+            SettlementRow h = Holding(place);
+            SiegeRow g = OurSiege(h) ? Siege(place) : null;
+            if (g == null || g.AttackerMen <= 0) return null;
+            var res = new StormCheckResult { Won = true, LeftShare = 1 };
+            if (g.DefenderMen <= 0) return res;
+            bool town = h.Kind == "town";
+            PartyRow lead = Party(g.Besieger);
+            float tactics = lead != null ? lead.Tactics * 0.001f : 0f;
+            Common.BattleSide Att() => new Common.BattleSide { Men = g.AttackerMen, Power = g.Attackers / Math.Max(1, g.AttackerMen), Advantage = 0.9f + tactics, Morale = g.AttackerMorale };
+            Common.BattleSide Def() => new Common.BattleSide { Men = g.DefenderMen, Power = g.Defenders / Math.Max(1, g.DefenderMen), Advantage = 1f, Morale = 50, Walls = true };
+            Common.BattleOutcome alone = Common.GameBattle.ByUnseenMorale("siege", town, g.Advantage, Att(), Def(), false)[1];
+            res.Hours = double.IsNaN(alone.Hours) ? 24 * 5 : alone.Hours;
+            res.Won = alone.Winner == "attackers";
+            res.LeftShare = res.Won ? alone.AttackersLeft / (double)Math.Max(1, g.AttackerMen) : 0;
+            if (!Where(place, out float px, out float py)) return res;
+            // the relief: every enemy lord and army in view, and those seen in the last hours from where they were seen, that could reach the camp before the storm would end,
+            // each at its own pace but never slower than the floor; lords inside the place are its defenders already, lords shut in another siege cannot come
+            double floor = Common.GamePace.DayAverageOfSpeed(ReliefFloorSpeed);
+            var relief = new List<Common.BattleJoiner>();
+            var counted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (PartyRow e in _enemies)
+            {
+                if (e.InSettlement == place || !counted.Add(e.Id)) continue;
+                double d = Math.Sqrt((e.X - px) * (e.X - px) + (e.Y - py) * (e.Y - py));
+                double t = d / Math.Max(Math.Max(0.3, PerHour(e)), floor);
+                if (t > res.Hours) continue;
+                int men = Math.Max(1, MenOf(e));
+                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = t, Power = (float)(StrengthOf(e) / men) });
+                res.ReliefStrength += StrengthOf(e);
+            }
+            foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
+            {
+                ViewParty v = kv.Value;
+                if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                PartyRow now = Party(kv.Key);
+                if (now != null && now.Attached) continue;
+                double per = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
+                double d = Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py));
+                double t = Math.Max(0, d / Math.Max(Math.Max(0.3, per), floor) - (Hours - v.SeenHours));
+                if (t > res.Hours) continue;
+                counted.Add(kv.Key);
+                int men = Math.Max(1, v.ArmyMen > 0 ? v.ArmyMen : v.Men);
+                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = t, Power = v.Strength / men });
+                res.ReliefStrength += v.Strength;
+            }
+            res.ReliefCount = relief.Count;
+            if (relief.Count == 0) return res;
+            Common.BattleOutcome with = Common.GameBattle.ByUnseenMorale("siege", town, g.Advantage, Att(), Def(), false, relief)[1];
+            res.Won = with.Winner == "attackers";
+            res.LeftShare = res.Won ? with.AttackersLeft / (double)Math.Max(1, g.AttackerMen) : 0;
+            return res;
+        }
+
         // ---------- the game's quick reaction, mirrored (0.19: would_attack, would_flee) ----------
 
         /// <summary>What the mirror found: the local advantage, the attack and flight scores (each acts above 1), and why it did not look at all.</summary>

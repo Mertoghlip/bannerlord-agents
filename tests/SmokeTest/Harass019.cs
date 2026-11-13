@@ -243,6 +243,7 @@ namespace SmokeTest
 
             ReserveTests(moves, released);
             BattleFactsTests();
+            StormGuardTests();
             Runner.MoveSink = keptMove;
             Runner.ReleaseSink = keptRelease;
         }
@@ -313,6 +314,95 @@ namespace SmokeTest
         }
 
         /// <summary>The battle facts: in a fight, its hours left and the foe; pace; marching to join an army; the slowdown and the retreat; the game's quick reaction mirrored; raids; could_reach; fall_back.</summary>
+        /// <summary>
+        /// The storm guard (0.19.1, Nov 13: storm only when no force that could reach the camp before the storm ends would turn it): a storm run ahead alone and with the relief
+        /// that could come in its hours, each force at its own pace and never slower than speed 2.8; the besiege order's storm rule held while it would turn the storm.
+        /// </summary>
+        private static void StormGuardTests()
+        {
+            PartyRow Orc(string id, float strength, int men, float x, float y) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = id, Faction = "orcs", Kind = "lord", Men = men, SizeLimit = 1200, Strength = strength, Speed = 3, FoodDays = 10, X = x, Y = y, Doing = "Hold", Spottable = true, Gold = 5000
+            };
+            PartyRow Man(string id, float strength, int men, float x, float y, float speed) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = id, Faction = "player_k", Kind = "lord", Men = men, Strength = strength, Speed = speed, X = x, Y = y, Doing = "Hold", Spottable = true
+            };
+            var camp = Orc("sg1", 1500, 1000, 170, 103);
+            camp.Besieging = "castle_men";
+            camp.Doing = "BesiegeSettlement";
+            camp.TargetSettlement = "castle_men";
+            Snapshot Sieged(double h, params PartyRow[] more)
+            {
+                Snapshot s = ToolWorld(h, new[] { camp }.Concat(more).ToArray());
+                SettlementRow fornost = s.SettlementById["castle_men"];
+                fornost.BesiegedBy = "orcs";
+                fornost.Besieger = "p_sg1";
+                s.Sieges.Add(new SiegeRow { Settlement = "castle_men", Besieger = "p_sg1", BesiegerFaction = "orcs", StartHours = h - 30, Prep = 1f, PrepRate = 0.02f, WallLevel = 1, Advantage = 2f,
+                                            Defenders = 300, DefenderMen = 200, Attackers = 1500, AttackerMen = 1000, AttackerMorale = 60f });
+                return s;
+            }
+            World W(Snapshot s) => new World(s, "orcs", s.WatchedSees, new Dictionary<string, ViewParty>());
+            object F(World w, string fn, params object[] a) => Runner.WatchScope(w, "p_sg1", new KeyValuePair<string, string>[0]).Call(fn, a);
+            double h = 72000;
+
+            World alone = W(Sieged(h));
+            double hours = Expr.Number(F(alone, "storm_hours", "castle_men"));
+            bool aloneClear = Expr.Truthy(F(alone, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(alone, "storm_relief", "castle_men")) == 0;
+            // a strong army close by: it would come in the storm's hours and turn it
+            World near = W(Sieged(h, Man("sr1", 3000, 1500, 178, 103, 4)));
+            bool nearHeld = F(near, "storm_clear", "castle_men", 0.25) is bool c1 && !c1 && Expr.Number(F(near, "storm_relief", "castle_men")) == 3000;
+            // the same army too far to come before the storm would end
+            double far = hours * BannerlordAgents.Common.GamePace.DayAverageOfSpeed(4f) * 1.5 + 20;
+            World away = W(Sieged(h, Man("sr2", 3000, 1500, (float)(170 + far), 103, 4)));
+            bool farClear = Expr.Truthy(F(away, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(away, "storm_relief", "castle_men")) == 0;
+            // a slow army (speed 1) that at its own pace would come too late, but is never counted slower than speed 2.8: counted
+            double between = hours * (BannerlordAgents.Common.GamePace.DayAverageOfSpeed(BannerlordAgents.Tools.World.ReliefFloorSpeed) + 1f * BannerlordAgents.Common.GamePace.UnitsPerSpeedHour) / 2;
+            var slow = Man("sr3", 3000, 1500, (float)(170 + between), 103, 1);
+            World floor = W(Sieged(h, slow));
+            bool slowOwnLate = between / floor.PerHour(slow) > hours;
+            bool slowCounted = Expr.Number(F(floor, "storm_relief", "castle_men")) == 3000 && F(floor, "storm_clear", "castle_men", 0.25) is bool c2 && !c2;
+            Check(hours > 1 && aloneClear && nearHeld && farClear && slowOwnLate && slowCounted,
+                  "the storm guard: a storm of Fornost run ahead lasts about " + ToolDef.Num(Math.Round(hours, 1)) + " hours; with no relief it is clear; a 3,000 army 8 away would come in time and turn it; "
+                  + "the same army out of reach leaves it clear; a slow army (speed 1) that would come too late at its own pace is counted at speed 2.8 and holds it ("
+                  + aloneClear + ", " + nearHeld + ", " + farClear + ", " + slowOwnLate + ", " + slowCounted + ")");
+
+            // the besiege order's storm rule: held while that relief could turn the storm, free once it cannot; storm_guard 0 never holds
+            var rules = new List<KeyValuePair<string, StormRule>>();
+            Action<string, StormRule> keptSink = Runner.StormSink;
+            Runner.StormSink = (party, r) => rules.Add(new KeyValuePair<string, StormRule>(party, r));
+            Runner.Reset();
+            try
+            {
+                StormRule Last() => rules.LastOrDefault(kv => kv.Key == "p_sg1").Value;
+                void Hour(double at, params PartyRow[] more) { Diag.Hours = at; Brain.OnHour(Sieged(at, more)); }
+                var o = new ToolOrder { Tool = "besiege", Lord = camp.Leader, LordName = camp.Name, Party = camp.Id, At = "castle_men", Realm = "orcs" };
+                o.Settings["storm"] = 1;
+                o.Settings["storm_engines"] = 0;
+                Hour(h + 100);
+                Runner.Start(9970, o);
+                Hour(h + 101, Man("sr4", 3000, 1500, 178, 103, 4));
+                Hour(h + 102, Man("sr4", 3000, 1500, 178, 103, 4));
+                StormRule held = Last();
+                Hour(h + 103);
+                StormRule free = Last();
+                Runner.Reset();
+                rules.Clear();
+                var o2 = new ToolOrder { Tool = "besiege", Lord = camp.Leader, LordName = camp.Name, Party = camp.Id, At = "castle_men", Realm = "orcs" };
+                o2.Settings["storm"] = 1;
+                o2.Settings["storm_guard"] = 0;
+                Hour(h + 200);
+                Runner.Start(9971, o2);
+                Hour(h + 201, Man("sr5", 3000, 1500, 178, 103, 4));
+                Hour(h + 202, Man("sr5", 3000, 1500, 178, 103, 4));
+                StormRule off = Last();
+                Check(held != null && held.Hold && (held.HoldWhy ?? "").Contains("could reach the camp") && free != null && !free.Hold && off != null && !off.Hold,
+                      "the besiege order holds its storm while a relief could turn it, frees it once none could, and never holds with storm_guard 0 ("
+                      + (held?.ToString() ?? "none") + " / " + (held?.HoldWhy ?? "") + "; " + (free?.Hold.ToString() ?? "none") + "; " + (off?.Hold.ToString() ?? "none") + ")");
+            }
+            finally { Runner.StormSink = keptSink; Runner.Reset(); }
+        }
+
         private static void BattleFactsTests()
         {
             PartyRow Orc(string id, float strength, int men, float x, float y) => new PartyRow

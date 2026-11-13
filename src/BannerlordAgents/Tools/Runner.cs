@@ -570,7 +570,7 @@ namespace BannerlordAgents.Tools
                 if (!t.Finished && t.Shelter == null && t.SupplyAt == null && t.ReliefOf == null) CloseIn(t, me, w, scope);
             }
             Issue(t, w);
-            if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t));
+            if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t, w));
         }
 
         /// <summary>
@@ -584,12 +584,27 @@ namespace BannerlordAgents.Tools
             return t != null && t.Settings.ContainsKey("storm") ? StormRuleOf(t) : null;
         }
 
-        private static StormRule StormRuleOf(ToolInstance t)
+        private static StormRule StormRuleOf(ToolInstance t, World w = null)
         {
             if (t.Finished || t.Shelter != null || t.State == null || !t.Def.States.TryGetValue(t.State, out StateDef st) || st.Do?.Verb != "besiege") return null;
             double Num(string k) => t.Settings.TryGetValue(k, out double v) ? v : 0;
             bool now = t.Memory.TryGetValue("storm_now", out object sn) && Expr.Truthy(sn) && Expr.Number(sn) > 0;
-            return new StormRule { Mode = (int)Math.Round(Num("storm")), Engines = (int)Math.Round(Num("storm_engines")), Ratio = (float)Num("storm_ratio"), Now = now };
+            var rule = new StormRule { Mode = (int)Math.Round(Num("storm")), Engines = (int)Math.Round(Num("storm_engines")), Ratio = (float)Num("storm_ratio"), Now = now };
+            // the storm guard (0.19.1, Nov 13: storm only when no force that could reach the camp before the storm ends would turn it): with storm 0 or 1, not over a relief bar
+            // the agent set to storm at once, the storm is held while a storm begun now, with that relief joining the defenders as each arrives, would be lost or keep fewer
+            // than storm_guard of the besiegers' men
+            double guard = Num("storm_guard");
+            if (guard > 0 && !now && rule.Mode != 2 && w != null && t.Order.At != null)
+            {
+                World.StormCheckResult c = w.StormCheck(t.Order.At);
+                if (c != null && !c.Clear(guard))
+                {
+                    rule.Hold = true;
+                    rule.HoldWhy = "enemy strength " + Math.Round(c.ReliefStrength) + " (" + c.ReliefCount + (c.ReliefCount == 1 ? " lord or army" : " lords and armies") + ") could reach the camp within the "
+                                   + Math.Round(c.Hours) + " hours a storm would last, and would " + (c.Won ? "leave the besiegers " + Math.Round(c.LeftShare * 100) + "% of their men" : "turn it");
+                }
+            }
+            return rule;
         }
 
         private static void Rules(ToolInstance t, Scope scope, World w)
@@ -2171,6 +2186,9 @@ namespace BannerlordAgents.Tools
                     case "storm_need": { double? n = _w.StormNeed(Id(a[0])); return n.HasValue ? (object)Math.Round(n.Value) : null; }
                     case "storm_odds": { double? o = _w.StormOdds(Id(a[0])); return o.HasValue ? (object)Math.Round(o.Value, 3) : null; }
                     case "storming": return _w.Storming(Id(a[0]));
+                    case "storm_hours": { World.StormCheckResult c = _w.StormCheck(Id(a[0])); return c != null ? (object)Math.Round(c.Hours, 1) : null; }
+                    case "storm_relief": { World.StormCheckResult c = _w.StormCheck(Id(a[0])); return c != null ? (object)Math.Round(c.ReliefStrength) : null; }
+                    case "storm_clear": { World.StormCheckResult c = _w.StormCheck(Id(a[0])); double keep = Expr.Number(a[1]); return c != null ? (object)c.Clear(double.IsNaN(keep) ? 0 : keep) : null; }
                     case "fall_back":
                         {
                             // where the safety rule would take him from the forces within r of him (and those who could join them within join_hours): the first castle or town of
