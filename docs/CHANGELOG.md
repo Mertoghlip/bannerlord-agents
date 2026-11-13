@@ -2535,7 +2535,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - the lieutenant: 2,027 words in 61 s from 276,034 tokens, 6 exchanges, $2.49.
   The war rooms, dashboard and archive keeper started again on 0.19.0 afterwards.
 
-### 02:08 · Principle 29 widened: harassers press the fronts all the time, armies come in at the gaps
+### 02:08 · Principle 29 widened: harassers press the fronts all the time, armies come in at the gaps · commit 72334b5
 - **Why:** I want the harass order used continuously against the enemy's weaker places at the fronts, even when no army follows, to advance and posture; the armies come in when the harassers create a gap. As first written (01:50), principle 29 sent harassers only ahead of a planned siege.
 - **What:** principle 29 is now "Press your fronts with harassers": groups hold harass on the enemy's weaker places along the fronts as a standing posture (thinly held, short of food, far from his armies). They wear his lords and places down between battles. When they open a gap (a garrison thinned by hunger, a relief beaten, lords taken, his army drawn away), an army comes in at once and they screen its camp and join the storm. When the place falls they go on to the next with `then`, and they fall back from stronger forces and return. The continuous instructions' "Command through orders" says the same, and "Where your attention goes" now lists "a gap your harassers have opened" among the chances to strike. [DOCTRINE.md](DOCTRINE.md#the-game-fit-sweep-and-principles-20-to-29-nov-13) gives the game rules it rests on.
 - **Checks:** Smoke test ALL CHECKS PASSED (596; it reads the templates' language section).
