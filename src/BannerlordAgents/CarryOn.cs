@@ -55,11 +55,18 @@ namespace BannerlordAgents
             List<JObject> held = Orders.KeepForSave();
             List<JObject> caps = Wages.KeepForSave();
             string file = FileFor(Paths.Data(Bridge.CampaignId), save), load = Bridge.LoadId;
+            // the lieutenant's orders agreed to and not yet given (0.19.2): not in force, so not in the save; the ruler is told now, the lieutenant at a load of it
+            int waiting = Lieutenant.WaitingOrders, answers = Lieutenant.WaitingAnswers;
+            if (waiting > 0)
+            {
+                try { Lieutenant.SavedWhileWaiting(save, waiting, answers); }
+                catch (Exception e) { Diag.Error("telling the ruler his lieutenant's orders are not in the save", e); }
+            }
             // the urgent lane, as each hour's tool steps are: the tools are written as they stood at the hour the save was made in
-            Background.PostFirst("orders kept for the save", () => Write(file, save, hours, load, held, caps));
+            Background.PostFirst("orders kept for the save", () => Write(file, save, hours, load, held, caps, waiting, answers));
         }
 
-        private static void Write(string file, string save, double hours, string load, List<JObject> held, List<JObject> caps)
+        private static void Write(string file, string save, double hours, string load, List<JObject> held, List<JObject> caps, int lieutenantWaiting = 0, int lieutenantAnswers = 0)
         {
             var orders = new JArray();
             foreach (JObject h in held)
@@ -76,8 +83,9 @@ namespace BannerlordAgents
                 ["type"] = "orders_at_save", ["save"] = save, ["hours"] = hours, ["date"] = Text.When(hours), ["load"] = load,
                 ["wall"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), ["orders"] = orders, ["wages"] = new JArray(caps), ["watches"] = watches
             };
+            if (lieutenantWaiting > 0) o["lieutenant_waiting"] = new JObject { ["orders"] = lieutenantWaiting, ["answers"] = lieutenantAnswers };
             Files.Overwrite(file, o.ToString(Formatting.None));
-            Diag.Event("orders", "kept for the save", new { save, orders = orders.Count, wages = caps.Count, watches = watches.Properties().Sum(p => (p.Value as JArray)?.Count ?? 0), file });
+            Diag.Event("orders", "kept for the save", new { save, orders = orders.Count, wages = caps.Count, watches = watches.Properties().Sum(p => (p.Value as JArray)?.Count ?? 0), lieutenant_waiting = lieutenantWaiting, file });
         }
 
         // ---------- at a load ----------
@@ -127,6 +135,14 @@ namespace BannerlordAgents
                 AgentConfig serving = p == null ? null : Bridge.Configs.FirstOrDefault(c => c.Realm == p.MapFaction?.StringId);
                 string reason = serving == null || serving.Mode != "live" ? "no agent in command" : Wages.Resume(w);
                 if (reason == null) caps++;
+            }
+            // the lieutenant's orders that had not started when the save was made (0.19.2): not in it, so said in the window and told to the lieutenant
+            int lost = (int?)o["lieutenant_waiting"]?["orders"] ?? 0;
+            if (lost > 0)
+            {
+                Log.Line("orders: " + lost + " of the lieutenant's orders had not started when " + save + " was made, so it does not hold them");
+                try { Lieutenant.NotInSave(save, lost, (int?)o["lieutenant_waiting"]?["answers"] ?? 1); }
+                catch (Exception e) { Diag.Error("telling of the lieutenant's orders the save does not hold", e); }
             }
             Log.Line("orders: " + tools.Count + " carried on from " + save + " (" + Text.When((double?)o["hours"] ?? loadedAt) + "), " + refused.Values.Sum(l => l.Count) + " not, " + caps + " wage caps");
             Diag.Event("orders", "carried on", new { save, orders = tools.Count, not_carried = refused.Values.Sum(l => l.Count), wage_caps = caps });

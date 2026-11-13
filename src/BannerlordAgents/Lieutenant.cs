@@ -92,6 +92,8 @@ namespace BannerlordAgents
         public static void Reset()
         {
             ForgetWaiting();
+            _lostAtLoad = _lostAnswersAtLoad = 0;
+            _lostSave = null;
             _pending = null;
             _next = -1;
             Thinking = false;
@@ -318,8 +320,11 @@ namespace BannerlordAgents
                 SaveHistory = Brain.History?.ForAgent(),
                 Pending = _pending == null ? null : new { _pending.Chat, _pending.Say, _pending.Orders, _pending.Tools, _pending.Diplomacy, _pending.Letters, _pending.Hours },
                 History = before.Skip(Math.Max(0, before.Count - HistoryLines)).ToList(), HistoryTotal = before.Count, Save = Bridge.History?.Save, PartyAi = pac,
-                Run = RunTags.Id, Arm = RunTags.Arm, OrdersWaiting = WaitingOrders, AnswersWaiting = WaitingAnswers
+                Run = RunTags.Id, Arm = RunTags.Arm, OrdersWaiting = WaitingOrders, AnswersWaiting = WaitingAnswers,
+                // the orders the loaded save did not hold (0.19.2), told once
+                NotInSave = _lostAtLoad > 0 ? new { Save = _lostSave, Orders = _lostAtLoad, Answers = _lostAnswersAtLoad } : null
             };
+            _lostAtLoad = 0;
             Notes.Clear();
             Mail.Clear();
             Thinking = true;
@@ -355,7 +360,7 @@ namespace BannerlordAgents
             Keep("approved", p.List, p.Chat);
             Recorder.OnLieutenantAnswered(p.Chat, true, p.List);
             Notes.Add("The ruler approved your proposal of message #" + p.Chat + " with the button, and its orders were given.");
-            if (ag != null) { string realm = ag.Realm; NoteCarried(p.Orders?.Count ?? 0); Background.ToMain.Enqueue(() => Carry(p, p.Chat, realm)); }
+            if (ag != null) { string realm = ag.Realm; NoteCarried(p.Chat, p.Orders?.Count ?? 0); Background.ToMain.Enqueue(() => Carry(p, p.Chat, realm)); }
             LieutenantWindow.Refresh();
             Diag.Event("lieutenant", "approved", new { chat = p.Chat, orders = p.Orders?.Count, tools = p.Tools?.Count, diplomacy = p.Diplomacy?.Count, letters = p.Letters?.Count });
         }
@@ -422,7 +427,7 @@ namespace BannerlordAgents
             if (gate == "carry" || gate == "carry+propose")
             {
                 Proposal agreed = Make(n, say, orders ?? new JArray(), now, tools, diplomacy, letters);
-                NoteCarried(agreed.Orders?.Count ?? 0);
+                NoteCarried(n, agreed.Orders?.Count ?? 0);
                 Background.ToMain.Enqueue(() => Carry(agreed, n, realmId));
                 Keep("carried", agreed.List, n);
                 Recorder.OnLieutenantAgreed(n, agreed.List);
@@ -522,30 +527,77 @@ namespace BannerlordAgents
         /// What the player agreed to (game's thread): its orders through the door every agent's go through; its tools into your realm's library,
         /// its diplomatic acts through the agents' own diplomacy, its letters to your allies' agents (0.13). Each refusal is said in the window.
         /// </summary>
-        // the orders given since the game's clock last moved (0.15.2): they wait for its next tick. Nov 6, test A1, the game paused from the load: the report kept saying no orders
-        // were in force, so the lieutenant took them for lost and wrote all 80 again in every answer, 3.5 to 6.6 minutes each. Told the game was paused, it took 33 s.
-        private static long _carriedAtTick = -1;
-        private static int _waitingOrders, _waitingAnswers;
+        // the orders agreed to and not yet given, by answer (0.15.2, counted to the last order since 0.19.2). The game gives them a few at a time and only while its clock
+        // runs. Nov 6, test A1, the game paused from the load: the report kept saying no orders were in force, so the lieutenant took them for lost and wrote all 80 again in
+        // every answer, 3.5 to 6.6 minutes each; told the game was paused, it took 33 s. Until 0.19.2 the count was of the orders agreed to since the clock last moved, so a
+        // few ticks forgot them all: Nov 13, chat-119's 85 orders were read at 12:08:13, the clock ran for about a second (gold, wage caps, Górli's army broken up) and
+        // stopped, the lieutenant was told nothing waited, the ruler saved at 12:14:45, and the other 78 started at 12:16:29, after the save, which held none of them.
+        private static readonly object WaitLock = new object();
+        private static readonly Dictionary<int, int> Waiting = new Dictionary<int, int>();
 
         internal static void ForgetWaiting()
         {
-            _carriedAtTick = -1;
-            _waitingOrders = _waitingAnswers = 0;
+            lock (WaitLock) Waiting.Clear();
         }
 
-        internal static void NoteCarried(int orders)
+        /// <summary>Orders of answer chat agreed to (UI thread): they wait until each is given.</summary>
+        internal static void NoteCarried(int chat, int orders)
         {
-            if (Watchdog.CampaignTicks != _carriedAtTick)
+            if (orders <= 0) return;
+            lock (WaitLock)
             {
-                _carriedAtTick = Watchdog.CampaignTicks;
-                _waitingOrders = _waitingAnswers = 0;
+                Waiting.TryGetValue(chat, out int n);
+                Waiting[chat] = n + orders;
             }
-            _waitingOrders += orders;
-            _waitingAnswers++;
         }
 
-        internal static int WaitingOrders => Watchdog.CampaignTicks == _carriedAtTick ? _waitingOrders : 0;
-        internal static int WaitingAnswers => Watchdog.CampaignTicks == _carriedAtTick ? _waitingAnswers : 0;
+        /// <summary>n orders of answer chat given or refused (game's thread or the helper's): no longer waiting.</summary>
+        internal static void Started(int chat, int n = 1)
+        {
+            if (n <= 0) return;
+            lock (WaitLock)
+            {
+                if (!Waiting.TryGetValue(chat, out int left)) return;
+                if (left - n > 0) Waiting[chat] = left - n;
+                else Waiting.Remove(chat);
+            }
+        }
+
+        internal static int WaitingOrders { get { lock (WaitLock) return Waiting.Values.Sum(); } }
+        internal static int WaitingAnswers { get { lock (WaitLock) return Waiting.Count; } }
+
+        // what a save left out (0.19.2): the orders still waiting when the save loaded was made, told once to the lieutenant with the ruler's next words
+        private static int _lostAtLoad, _lostAnswersAtLoad;
+        private static string _lostSave;
+
+        /// <summary>
+        /// Game's thread, after a save was written while orders of the lieutenant's still waited: the save does not hold them (only orders in force are written
+        /// down for it), so a load of it would find them gone. The ruler is told at once, in the window and the game's message log, to let the clock run and save again.
+        /// </summary>
+        internal static void SavedWhileWaiting(string save, int orders, int answers)
+        {
+            if (orders <= 0) return;
+            string text = "(" + orders + " of your lieutenant's orders " + (orders == 1 ? "has" : "have") + " not started yet: the game gives orders a few at a time, and only while its clock runs. "
+                          + "The save " + save + " does not hold " + (orders == 1 ? "it" : "them") + ". Let the clock run until your lieutenant's orders are carried out, then save again.)";
+            LieutenantWindow.Add(text, Refused, true);
+            Diag.Alarm("save_lieutenant_waiting", "The save " + save + " was made while " + orders + " of the lieutenant's orders (from " + answers + " answer" + (answers == 1 ? "" : "s")
+                                                  + ") had not started, so it does not hold them: a load of it finds them gone. The player was told to let the clock run and save again.");
+        }
+
+        /// <summary>
+        /// Game's thread, at a load (CarryOn.AtLoad, after Restore): the save was made while orders of the lieutenant's still waited, so they are not in force. The ruler
+        /// sees it in the window, and the lieutenant is told with his next words.
+        /// </summary>
+        internal static void NotInSave(string save, int orders, int answers)
+        {
+            if (orders <= 0) return;
+            _lostAtLoad = orders;
+            _lostAnswersAtLoad = Math.Max(1, answers);
+            _lostSave = save;
+            LieutenantWindow.Add("(When the save " + save + " was made, " + orders + " of your lieutenant's orders had not started yet, so they are not in force now. "
+                                 + "Your lieutenant is told with your next words; ask it to give them again if you still want them.)", Refused, true);
+            Diag.Event("lieutenant", "orders not in the save", new { save, orders, answers });
+        }
 
         /// <summary>For the smoke test: takes an order in place of the game.</summary>
         internal static Action<AgentChannel.AgentOrder> GivenForTest;
@@ -611,7 +663,9 @@ namespace BannerlordAgents
                 // then its diplomatic acts and the orders that waited for its tools (0.13.13), to the game's thread
                 foreach (DiploAct act in acts)
                     Background.ToMain.Enqueue(() => Diplomacy.FromAgent(act, (status, reason) => Say((status == "refused" ? "(Refused: " : "(") + act + ": " + reason + ")", status == "refused" ? Refused : Aside)));
-                GiveAfterTools(orders, written, refused, ag?.Channel, o => Background.ToMain.Enqueue(() => Give(o)), s => Say(s, Refused));
+                // each order no longer waits once given, or refused with its tool (0.19.2)
+                int given = GiveAfterTools(orders, written, refused, ag?.Channel, o => Background.ToMain.Enqueue(() => { try { Give(o); } finally { Started(chat); } }), s => Say(s, Refused));
+                Started(chat, orders.Count - given);
                 int l = 0;
                 foreach (JToken letter in letters ?? new JArray())
                 {

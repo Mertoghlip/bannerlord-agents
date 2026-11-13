@@ -108,18 +108,39 @@ namespace SmokeTest
             while (Background.ToUi.TryDequeue(out _)) { }
             Files.FlushAll();
             Check(landed.SequenceEqual(new[] { "lord_bolg", "lord_azog" }), "an answer with no tools lands after an earlier answer with tools, not ahead of it: " + string.Join(", ", landed));
-            // and how many orders wait for the clock
+            // and how many orders wait for the clock: each until it is given, however the clock moved meanwhile (0.19.2; until then a tick forgot them all)
             Lieutenant.ForgetWaiting();
             long ticks = Watchdog.CampaignTicks;
-            Lieutenant.NoteCarried(73);
-            Lieutenant.NoteCarried(79);
+            Lieutenant.NoteCarried(801, 73);
+            Lieutenant.NoteCarried(802, 79);
             bool counted = Lieutenant.WaitingOrders == 152 && Lieutenant.WaitingAnswers == 2;
             Watchdog.CampaignTicks = ticks + 1;
-            bool moved = Lieutenant.WaitingOrders == 0 && Lieutenant.WaitingAnswers == 0;
-            Lieutenant.NoteCarried(4);
-            bool fresh = Lieutenant.WaitingOrders == 4 && Lieutenant.WaitingAnswers == 1;
+            bool stillCounted = Lieutenant.WaitingOrders == 152 && Lieutenant.WaitingAnswers == 2;
+            Lieutenant.Started(801, 7);
+            bool some = Lieutenant.WaitingOrders == 145 && Lieutenant.WaitingAnswers == 2;
+            Lieutenant.Started(801, 66);
+            Lieutenant.Started(999, 5);   // an answer not counted changes nothing
+            bool oneLeft = Lieutenant.WaitingOrders == 79 && Lieutenant.WaitingAnswers == 1;
             Lieutenant.ForgetWaiting();
-            Check(counted && moved && fresh && Lieutenant.WaitingOrders == 0, "the orders given since the clock last moved are counted, and the count starts again once it moves or at a load");
+            Check(counted && stillCounted && some && oneLeft && Lieutenant.WaitingOrders == 0 && Lieutenant.WaitingAnswers == 0,
+                  "the lieutenant's orders agreed to wait until each is given, whether or not the clock moved meanwhile, and the count starts again at a load");
+            // an answer carried out: its orders stop waiting as each is given, and one refused with its tool stops waiting too
+            while (Background.ToMain.TryDequeue(out _)) { }
+            var landed2 = new List<string>();
+            Lieutenant.GivenForTest = o => landed2.Add(o.Lord);
+            Lieutenant.NoteCarried(903, 3);
+            Lieutenant.Carry(new Lieutenant.Proposal { Chat = 903, Tools = new JArray(Tool("broken_sweep", false, "{\"start\": \"nowhere\", \"states\": {\"a\": {\"do\": \"fly at\"}}}")),
+                                                       Orders = new JArray(JObject.Parse("{\"lord\": \"lord_azog\", \"do\": \"defend\", \"at\": \"castle_orc\"}"),
+                                                                           JObject.Parse("{\"lord\": \"lord_bolg\", \"do\": \"defend\", \"at\": \"castle_orc\"}"),
+                                                                           JObject.Parse("{\"lord\": \"lord_bolg\", \"do\": \"broken_sweep\", \"at\": \"castle_orc\"}")) }, 903, "orcs");
+            bool waitedWhileQueued = Lieutenant.WaitingOrders == 3;
+            for (int w = 0; w < 500 && Lieutenant.WaitingOrders > 0; w++) { Background.DrainToMain(1); Thread.Sleep(10); }
+            Lieutenant.GivenForTest = null;
+            while (Background.ToUi.TryDequeue(out _)) { }
+            Files.FlushAll();
+            Check(waitedWhileQueued && landed2.Count == 2 && Lieutenant.WaitingOrders == 0 && Lieutenant.WaitingAnswers == 0,
+                  "an answer's orders stop waiting one by one as the game gives them, and one refused with its tool stops waiting too: given " + landed2.Count + ", still waiting " + Lieutenant.WaitingOrders);
+            Lieutenant.ForgetWaiting();
 
             // a change: v2 kept while an order on v1 runs on with v1; the same definition again changes nothing
             ToolDef v1 = OwnLibrary.Find("orcs", "circuit");

@@ -332,6 +332,12 @@ namespace BannerlordAgents.WarRoom
                   && oneWaiting.Contains("1 order of your last answer has not started")
                   && !noneWaiting.Contains("ORDERS WAITING FOR THE CLOCK") && !m.Contains("ORDERS WAITING FOR THE CLOCK"),
                   "the lieutenant is told how many of its orders wait for the clock, and only when some do");
+            // 0.19.2 (Nov 13: TEST START NEW was saved while 78 of chat-119's orders waited for the clock): told once that the loaded save did not hold them
+            string lostAtLoad = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":9,\"said\":\"go on\",\"not_in_save\":{\"save\":\"TEST START NEW\",\"orders\":78,\"answers\":1}}"), history, "REPORT", new List<string>());
+            string nullLost = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":9,\"said\":\"go on\",\"not_in_save\":null}"), history, "REPORT", new List<string>());
+            Check(lostAtLoad.Contains("ORDERS THE SAVE DID NOT HOLD") && lostAtLoad.Contains("the save TEST START NEW") && lostAtLoad.Contains("78 of your orders had not started")
+                  && waiting.Contains("A save made before they start does not hold them") && !nullLost.Contains("ORDERS THE SAVE DID NOT HOLD") && !m.Contains("ORDERS THE SAVE DID NOT HOLD"),
+                  "the lieutenant is told when the loaded save did not hold orders of its that had not started, and warned that a save before they start loses them");
             // 0.11.3: raw line breaks typed inside a JSON string (the orcs' chronicler did it) are read, not thrown away
             string broken = "{\"story\": \"First part.\n\nSecond part.\", \"lessons\": [\"one\"]}";
             JsonObject fixedStory = JsonNode.Parse(Room.EscapeBreaks(broken)) as JsonObject;

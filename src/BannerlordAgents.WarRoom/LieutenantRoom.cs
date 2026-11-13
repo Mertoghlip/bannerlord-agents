@@ -133,12 +133,23 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         private static void WaitingForClock(StringBuilder sb, JsonObject chat)
         {
+            // what the loaded save did not hold (0.19.2): orders still waiting when it was made
+            if (chat["not_in_save"] is JsonObject lost && Num(lost["orders"]) > 0)
+            {
+                int n = (int)Num(lost["orders"]);
+                sb.AppendLine("ORDERS THE SAVE DID NOT HOLD");
+                sb.AppendLine("This game was loaded from the save " + (Str(lost["save"]) ?? "") + ". When it was made, " + n + " of your orders had not started yet (the game gives orders only while its clock runs), "
+                              + "so the save does not hold " + (n == 1 ? "it" : "them") + " and " + (n == 1 ? "it is" : "they are") + " not in force now, whatever this conversation says was given. "
+                              + "Look at what your ruler asked for and at the orders in force in the report, and give again what he still wants.");
+                sb.AppendLine();
+            }
             int orders = chat["orders_waiting"] != null ? (int)Num(chat["orders_waiting"]) : 0, answers = chat["answers_waiting"] != null ? (int)Num(chat["answers_waiting"]) : 0;
             if (orders <= 0) return;
             string which = orders + " order" + (orders == 1 ? "" : "s") + " of your last " + (answers > 1 ? answers + " answers" : "answer") + (orders == 1 ? " has" : " have");
             sb.AppendLine("ORDERS WAITING FOR THE CLOCK");
-            sb.AppendLine("The game's clock has not moved since you gave them, so " + which + " not started, and any tools written in those answers are not kept yet. That is why they are not in force, in the receipts or among your tools. Nothing is wrong with them. "
-                          + "When the clock runs they start in the order you gave them, a later order for a lord replacing an earlier one. Do not give them again: give only what your ruler wants changed.");
+            sb.AppendLine("The game gives orders a few at a time, and only while its clock runs; it stopped before reaching them, so " + which + " not started, and any tools written in those answers may not be kept yet. That is why they are not in force, in the receipts or among your tools. Nothing is wrong with them. "
+                          + "When the clock runs they start in the order you gave them, a later order for a lord replacing an earlier one. Do not give them again: give only what your ruler wants changed. "
+                          + "A save made before they start does not hold them: if your ruler means to save, tell him to let the clock run until they are carried out.");
             sb.AppendLine();
         }
 
