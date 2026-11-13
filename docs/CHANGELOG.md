@@ -2568,7 +2568,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed: the module into the game. The war rooms were stopped for the build and started again.
 - **Outside the repository:** the instructions in the orcs', Dol Guldur's, the kingdom agent's and the lieutenant's folders (backups `.bak-20261113-before-press-advantage`), still before any of the new conversations began.
 
-### 12:54 · Module 0.19.1: the storm guard, with a relief floor of speed 2.8 measured in the game
+### 12:54 · Module 0.19.1: the storm guard, with a relief floor of speed 2.8 measured in the game · commit 3a93b0e
 - **Why:** I want a camp to storm only if no force that could tip the balance can reach it before the storm ends. Until now besiege stormed by its own bars, or by the game's commander, and neither asked about a relief. Its withdraw bar is not weighed during a storm, since nobody leaves a battle once in it, so a camp could begin a storm that a relief then walked into. For the slowest pace to grant a relief I proposed 2.0; I asked for the real figure, the average speed of mid- to high-strength lord parties in the game, with the instructions saying it outright.
 - **The floor:** speed 2.8, the mean of lord parties marching on their own with strength from the median (about 400) to the 95th percentile (about 2,500). It was measured over the 313 hourly copies of this campaign in the perf snapshots: 115,640 sightings outside armies, fights and holdings. By strength: under 300, 3.5; 300 to 600, 3.0; 600 to 1,500, 2.7; 1,500 to 2,500, 2.45; above that, 1.8. My 2.0 was about the slowest tenth.
 - **What** ([TOOLS.md](TOOLS.md), "The storm guard"):
