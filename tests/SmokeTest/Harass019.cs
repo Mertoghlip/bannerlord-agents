@@ -148,27 +148,42 @@ namespace SmokeTest
             ToolOrder home = Harass(muzgash, caution: 0);
             home.Places.Add("castle_two");
             Runner.Start(9980, home);
-            Hour(h4b + 1, null, muzgash, gather1);
-            bool notAtOnce = StateOf(9980) != "withdraw" && Expr.Number(Mem(9980, "gath")) > 0;
-            Hour(h4b + 2, null, muzgash, gather1);
-            Hour(h4b + 3, null, muzgash, gather1);
+            for (int k = 1; k <= 6; k++) Hour(h4b + k, null, muzgash, gather1);
+            bool notYetHome = StateOf(9980) != "withdraw" && Expr.Number(Mem(9980, "gath")) > 0;
+            for (int k = 7; k <= 14; k++) Hour(h4b + k, null, muzgash, gather1);
             bool goesHome = StateOf(9980) == "withdraw" && Moved(9980, "goto", "castle_two") && (Mem(9980, "home") as string) == "castle_two";
             muzgash.X = 140; muzgash.Y = 100; muzgash.InSettlement = "castle_two";
-            Hour(h4b + 4, null, muzgash, gather1);
+            Hour(h4b + 15, null, muzgash, gather1);
             bool posted = StateOf(9980) == "posted" && Moved(9980, "hold");
             Runner.Reset();
             var golfimbul = Orc("hw3", "Snaga", 300, 160, 94);
             var gather2 = Man("hw4", "Beregond", 200, 178, 104);
-            Hour(h4b + 10, null, golfimbul, gather2);
+            Hour(h4b + 20, null, golfimbul, gather2);
             Runner.Start(9981, Harass(golfimbul, caution: 0));
-            Hour(h4b + 11, null, golfimbul, gather2);
-            Hour(h4b + 12, null, golfimbul, gather2);
-            Hour(h4b + 13, null, golfimbul, gather2);
+            for (int k = 21; k <= 36; k++) Hour(h4b + k, null, golfimbul, gather2);
             bool stays = StateOf(9981) != "withdraw" && !Moved(9981, "goto", "castle_two");
-            Check(notAtOnce && goesHome && posted && stays,
-                  "harass goes back to its post (castle_two, the first of places) once the enemy that could reach the place within reach_hours has matched its group for two hours (340 against 300, "
-                  + "no sudden danger to him), not at the first sight of it, and its harassing ends there; a weaker gathering (200) does not send it home ("
-                  + notAtOnce + ", " + goesHome + ", " + posted + ", " + stays + ", " + StateOf(9980) + ", " + StateOf(9981) + ")");
+            // the two settings are the agent's: a shorter wait sends him home sooner; a higher bar keeps him out against the same even force
+            Runner.Reset();
+            var lugbur = Orc("hw5", "Lugbur", 300, 160, 94);
+            var gather3 = Man("hw6", "Beregond", 340, 178, 104);
+            Hour(h4b + 40, null, lugbur, gather3);
+            ToolOrder quick = Harass(lugbur, caution: 0);
+            quick.Settings["withdraw_hours"] = 3;
+            Runner.Start(9982, quick);
+            for (int k = 41; k <= 45; k++) Hour(h4b + k, null, lugbur, gather3);
+            bool sooner = StateOf(9982) == "withdraw";
+            Runner.Reset();
+            var bolg2 = Orc("hw7", "Bolg", 300, 160, 94);
+            Hour(h4b + 50, null, bolg2, gather3);
+            ToolOrder hold = Harass(bolg2, caution: 0);
+            hold.Settings["withdraw_at"] = 1.5;
+            Runner.Start(9983, hold);
+            for (int k = 51; k <= 66; k++) Hour(h4b + k, null, bolg2, gather3);
+            bool holdsOut = StateOf(9983) != "withdraw" && !Moved(9983, "goto", "castle_two");
+            Check(notYetHome && goesHome && posted && stays && sooner && holdsOut,
+                  "harass goes back to its post (castle_two, the first of places) once the enemy that could reach the place within reach_hours has matched its group for half a day (340 against 300, "
+                  + "no sudden danger to him), not within six hours, and its harassing ends there; a weaker gathering (200) does not send it home; withdraw_hours 3 sends it home within the hours, "
+                  + "and withdraw_at 1.5 keeps it out against the same even force (" + notYetHome + ", " + goesHome + ", " + posted + ", " + stays + ", " + sooner + ", " + holdsOut + ")");
             Runner.Reset();
 
             // a siege of your realm's at the place: a post about keep from the camp; a relief struck by the weighing, the camp left out of a fight it is not in; the camp
