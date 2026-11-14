@@ -737,7 +737,9 @@ namespace BannerlordAgents
                 if (h.Food < 0 || h.FoodPerDay <= 0 || h.BesiegedBy != null) continue;
                 // stores too full to take another day's food (0.13.21: Caras Galadhon, 800 of 800, eating 284 a day, was warned): nothing to bring
                 if (h.FoodCap - h.Food < h.FoodPerDay) continue;
-                double days = h.Food / h.FoodPerDay;
+                // with the food its own lords inside carry, which a siege draws on once its store runs out (0.19.5)
+                SiegeFoodRules.OwnLordsInside(s, s.Watched, h.Id, out float lordsFood, out float lordsEat);
+                double days = SiegeFoodRules.Days(h.Food, h.FoodPerDay, lordsFood, lordsEat);
                 if (days >= LowFoodDays)
                 {
                     m.HungerTold.Remove(h.Id);

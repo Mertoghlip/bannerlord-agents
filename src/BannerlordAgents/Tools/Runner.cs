@@ -1986,7 +1986,9 @@ namespace BannerlordAgents.Tools
                         {
                             SettlementRow h = H(a[0]);
                             if (h == null || h.Faction != _w.Realm || h.Food < 0) return null;
-                            return h.FoodPerDay > 0 ? (object)Math.Round(h.Food / h.FoodPerDay, 1) : 999.0;
+                            // with the food its own lords inside carry, which a siege draws on once its store runs out (0.19.5)
+                            SiegeFoodRules.OwnLordsInside(_w.S, _w.Realm, h.Id, out float lordsFood, out float lordsEat);
+                            return h.FoodPerDay > 0 ? (object)Math.Round(Math.Min(999.0, SiegeFoodRules.Days(h.Food, h.FoodPerDay, lordsFood, lordsEat)), 1) : 999.0;
                         }
                     case "food_full_days_at":
                         {

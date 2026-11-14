@@ -50,7 +50,9 @@ namespace BannerlordAgents
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried, _siegeFoodTried;
+        /// <summary>The siege food rule (0.19.5, SiegeFood): a besieged place's day draws on its lords' food once its own store would run out.</summary>
+        public static bool SiegeFoodInstalled;
         /// <summary>The agents' diplomacy (0.13): the ruler's choice in a vote, and a vote's announcement held for an agent's say.</summary>
         public static bool DiplomacyInstalled;
         /// <summary>The record's hooks (0.13): the party screen's Done, your votes in the realm's council, the offer windows shown to you.</summary>
@@ -97,6 +99,17 @@ namespace BannerlordAgents
                 {
                     Parts["diplomacy"] = "the agents' diplomacy could not attach (" + e.GetType().Name + ": " + e.Message + ")";
                     Diag.Swallowed("the diplomacy hooks", e);
+                }
+            }
+            // the siege food rule (0.19.5): it changes the game, so apart from the others; settings.txt's siege_food switches its work off
+            if (!_siegeFoodTried)
+            {
+                _siegeFoodTried = true;
+                try { InstallSiegeFood(); }
+                catch (Exception e)
+                {
+                    Parts["siege food"] = "the siege food rule could not attach (" + e.GetType().Name + ": " + e.Message + "), so the game's own food rule holds";
+                    Diag.Swallowed("the siege food hook", e);
                 }
             }
             // the chat box's hooks only once a lieutenant is in the agents' settings, apart from the others
@@ -229,6 +242,19 @@ namespace BannerlordAgents
             Log.Line("game hooks: " + Status);
             Diag.Event("hooks", "attached", new { witness = WitnessInstalled, reasons = ReasonsInstalled, keep_held = KeepHeldInstalled, pac_entry = PacEntryInstalled, storm_rule = StormInstalled, sally_rule = SallyInstalled,
                                                  loot_only = LootSaleInstalled, prisoner_sales = PrisonerSaleInstalled, takings = TakingsInstalled, status = Status });
+        }
+
+        /// <summary>The siege food rule (0.19.5): a prefix on the town's day (Town.DailyTick, internal).</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void InstallSiegeFood()
+        {
+            var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
+            MethodInfo target = typeof(Town).GetMethod("DailyTick", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, Type.EmptyTypes, null);
+            if (target == null) { Parts["siege food"] = "the siege food rule: the town's day was not found, so the game's own food rule holds"; return; }
+            h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(SiegeFoodPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+            SiegeFoodInstalled = Ours(target);
+            Parts["siege food"] = "the siege food rule " + (SiegeFoodInstalled ? "attached" : "did not attach") + Others(target) + (Settings.SiegeFood ? "" : " (switched off in settings.txt)");
+            Log.Line("game hooks: " + Status);
         }
 
         /// <summary>The lieutenant's key (ChatHook): the game's chat box's look at its keys, where Enter opens the lieutenant's window instead.</summary>

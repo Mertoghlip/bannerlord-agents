@@ -207,6 +207,8 @@ namespace BannerlordAgents
         public bool PlayerInside;
         /// <summary>The place's food, its change a day, its store's limit; the garrison's regulars and wounded; starving now.</summary>
         public float Food, FoodChange;
+        /// <summary>The food the lords inside carry and what they eat a day (0.19.5): the place draws on it once its own store would run out (SiegeFood).</summary>
+        public float LordsFood, LordsEat;
         public int FoodCap, GarrisonRegulars, GarrisonWounded;
         public bool Starving;
         /// <summary>The besieging army's cohesion and its change a day (-1 when the camp's leader leads no army).</summary>

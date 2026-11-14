@@ -583,6 +583,8 @@ namespace BannerlordAgents
                     g.FoodChange = (float)Math.Round(s.Town.FoodChange, 2);
                     g.FoodCap = s.Town.FoodStocksUpperLimit();
                     g.Starving = s.Town.FoodStocks <= 0;
+                    // the lords' food inside, which the place draws on once its own runs out (0.19.5)
+                    if (Settings.SiegeFood) { SiegeFood.Inside(s, out float lordsFood, out float lordsEat); g.LordsFood = lordsFood; g.LordsEat = lordsEat; }
                     Army army = camp.LeaderParty?.Army;
                     if (army != null) { g.Cohesion = (float)Math.Round(army.Cohesion, 2); g.CohesionPerDay = (float)Math.Round(army.DailyCohesionChange, 2); }
                     g.Storming = s.Party?.MapEvent != null && s.Party.MapEvent.IsSiegeAssault;

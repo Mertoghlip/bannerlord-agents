@@ -243,8 +243,9 @@ namespace BannerlordAgents
             double formula = Advantage(g.WallLevel, g.WallsDown, built);
             double perk = formula > 0 && g.Advantage > 0 ? g.Advantage / formula : 1.0;
             double prep = g.Prep, defenders = g.Defenders, attackers = g.Attackers;
-            if (g.Food > 0 && g.FoodChange < 0) c.FoodOutAt = now + 24.0 * g.Food / -g.FoodChange;
-            else if (g.Food <= 0) c.FoodOutAt = now;
+            // its store, then the food of the lords inside, which it draws on once its own runs out (0.19.5, SiegeFood)
+            if (g.FoodChange < 0 && g.Food + g.LordsFood > 0) c.FoodOutAt = now + 24.0 * SiegeFoodRules.Days(g.Food, -g.FoodChange, g.LordsFood, g.LordsEat);
+            else if (g.Food <= 0 && g.LordsFood <= 0) c.FoodOutAt = now;
             int regulars = g.GarrisonRegulars;
             if (!double.IsNaN(c.FoodOutAt) && regulars > 0) c.GarrisonGoneAt = c.FoodOutAt + 24.0 * 10 * Math.Max(0, regulars - g.GarrisonWounded) / Math.Max(1, regulars);
             if (g.Cohesion >= 0 && g.CohesionPerDay < 0) c.CohesionOutAt = now + 24.0 * Math.Max(0, g.Cohesion - 0.1f) / -g.CohesionPerDay;

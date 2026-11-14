@@ -245,6 +245,7 @@ namespace SmokeTest
             BattleFactsTests();
             StormGuardTests();
             BordersTests();
+            SiegeFoodTests();
             Runner.MoveSink = keptMove;
             Runner.ReleaseSink = keptRelease;
         }

@@ -88,6 +88,8 @@ namespace BannerlordAgents
         public static bool Dashboard = true;
         /// <summary>The lieutenant (0.10): the game's clock stops while the player types to it in the campaign map's chat box, and runs again when the box closes.</summary>
         public static bool LieutenantPause = true;
+        /// <summary>The siege food rule (0.19.5, SiegeFood): a besieged castle or town about to run out of food draws on the food its lords inside carry.</summary>
+        public static bool SiegeFood = true;
         /// <summary>How many loads of a campaign keep their hourly pictures (for rewinding on the dashboard).</summary>
         public static int KeepLoads = 12;
         /// <summary>
@@ -168,6 +170,7 @@ namespace BannerlordAgents
                         case "freeze_probe": FreezeProbe = On(value, FreezeProbe); break;
                         case "dashboard": Dashboard = On(value, Dashboard); break;
                         case "lieutenant_pause": LieutenantPause = On(value, LieutenantPause); break;
+                        case "siege_food": SiegeFood = On(value, SiegeFood); break;
                         case "keep_loads":
                             if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int kl) && kl >= 1) KeepLoads = kl;
                             else Unknown.Add(line);
@@ -193,7 +196,7 @@ namespace BannerlordAgents
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
-                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause",
+                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause", "siege_food",
                                              "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom", "backup", "war_room" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
@@ -233,6 +236,8 @@ namespace BannerlordAgents
                 sb.AppendLine("keep_loads = " + KeepLoads.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("# the lieutenant (docs/LIEUTENANT.md): the game's clock stops while you type to it in the campaign map's chat box");
                 sb.AppendLine("lieutenant_pause = " + (LieutenantPause ? "on" : "off"));
+                sb.AppendLine("# a besieged castle or town about to run out of food draws on the food its lords inside carry (the game's own rule: off)");
+                sb.AppendLine("siege_food = " + (SiegeFood ? "on" : "off"));
                 sb.AppendLine("# the helper's speed test (docs/LOGGING.md): hourly copies of the world each launch saves for SmokeTest --perf, from this many in-game hours into a load (0 hours: none)");
                 sb.AppendLine("perf_record_hours = " + PerfRecordHours.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("perf_record_after = " + PerfRecordAfter.ToString(CultureInfo.InvariantCulture));

@@ -157,6 +157,8 @@ namespace BannerlordAgents
         public float GarrisonStrength = -1, Food = -1, FoodCap, FoodPerDay;
         /// <summary>The realm's own castles and towns only (0.13.21): the clan that owns it, and the food its supply orders are bringing.</summary>
         public string Clan, FoodComing;
+        /// <summary>The realm's own castles and towns only (0.19.5): the food its own lords inside carry and what they eat a day, which a siege draws on once the place's own runs out.</summary>
+        public float LordsFood, LordsEat;
     }
 
     /// <summary>The sections a poke adds before the report: what changed since the agent's last answer, its orders in force, ready-made facts.</summary>
@@ -258,6 +260,7 @@ namespace BannerlordAgents
                     vh.FoodPerDay = h.FoodPerDay;
                     vh.Clan = h.OwnerClanName;
                     vh.FoodComing = FoodComing(s, fid, h);
+                    SiegeFoodRules.OwnLordsInside(s, fid, h.Id, out vh.LordsFood, out vh.LordsEat);
                 }
                 // the enemy in view that could reach it soonest: by road where the game's table knows the way
                 float ThreatRoad(ViewParty x) => s.PartyById.TryGetValue(x.Id, out PartyRow xr) ? Roads.To(s, xr, h) : float.NaN;
@@ -734,6 +737,8 @@ namespace BannerlordAgents
                                          + "and once it is out a tenth of the garrison falls to hunger each day. The supply order brings it food. "
                                          + "Lords sheltering inside never eat a holding's food: each lord's men eat what he carries. A town's market sells them food every hour while it has any, "
                                          + "besieged or not; a castle has no market, so lords shut in a castle live on what they brought. "
+                                         + "While a castle or town is besieged, once its own store would run out it takes what it lacks each day from the food its lords inside carry "
+                                         + "(they go on eating their own meanwhile), so a lord who comes in well fed makes it last longer; when that is gone too, garrison and lords go hungry together. "
                                          + "The clan named with each one owns it: a lord's garrison_floor takes men only from his own clan's (his look-up file names his clan).";
 
         internal const string ClocksNote = "The game's rules: a siege camp builds its preparations, then one engine at a time; it may storm only once the preparations are done and an "
@@ -761,6 +766,8 @@ namespace BannerlordAgents
             if (h.Food >= 0)
                 line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap)
                             + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : "")
+                            + (h.FoodPerDay > 0 && h.LordsFood > 0 && SiegeFoodRules.Days(h.Food, h.FoodPerDay, h.LordsFood, h.LordsEat) > h.Food / h.FoodPerDay + 0.05
+                               ? ", about " + Text.N((int)Math.Floor(SiegeFoodRules.Days(h.Food, h.FoodPerDay, h.LordsFood, h.LordsEat))) + " with the " + Text.N((int)h.LordsFood) + " food your lords inside carry" : "")
                             + (h.FoodComing != null ? "; food coming: " + h.FoodComing : ""));
             if (h.WallLevel > 0)
                 line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
