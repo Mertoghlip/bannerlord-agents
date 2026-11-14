@@ -45,6 +45,8 @@ namespace BannerlordAgents
         public List<string> Open = new List<string>();
         /// <summary>Its allies, whether their rulers read letters, their last letters, and the joint plans between them (0.13, Allies).</summary>
         public List<string> Allied = new List<string>();
+        /// <summary>The watched realm only (0.19.3, Views.Fronts): its castles and towns grouped into fronts, its strength at each beside what can reach it, and the realms bordering each.</summary>
+        public List<string> Fronts = new List<string>();
     }
 
     /// <summary>
@@ -325,6 +327,8 @@ namespace BannerlordAgents
                 v.Sum = Sum(s, fid, own);
                 v.Purse = PurseView.Lines(s, fid);
                 v.ClanLeaders = s.Clans.Where(c => !string.IsNullOrEmpty(c.Leader)).Select(c => c.Leader).ToList();
+                // its strength front by front beside what can reach each (0.19.3)
+                v.Fronts = Fronts(s, fid, v, hostile);
             }
             // who the human player is and how his battles are fought (0.17.3): for every realm, told in plain words
             v.HumanPlayer = InPerson.Lines(s, fid);
@@ -633,6 +637,13 @@ namespace BannerlordAgents
             if (v.Holdings.Any(h => h.WallLevel > 0)) sb.AppendLine(WallsNote);
             if (v.Holdings.Any(h => h.Food >= 0)) sb.AppendLine(FoodNote);
             foreach (ViewHolding h in v.Holdings) sb.AppendLine(HoldingLine(h));
+
+            if (v.Fronts.Count > 0)
+            {
+                sb.AppendLine().AppendLine("YOUR FRONTS (" + v.Fronts.Count(l => l.Contains("]. Your lords: ")) + ")");
+                sb.AppendLine(FrontsNote);
+                foreach (string l in v.Fronts) sb.AppendLine("- " + l);
+            }
 
             HumanPlayerSection(sb, v);
             if (v.EnemyRealms.Count > 0)

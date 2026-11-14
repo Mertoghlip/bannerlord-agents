@@ -287,7 +287,7 @@ namespace BannerlordAgents
             // the ruler's own army, formed or added to by the lieutenant (0.13.9): the order needs no lord of its own
             if (string.Equals((a.Do ?? "").Trim(), "my_army", StringComparison.OrdinalIgnoreCase)) return RulersArmy(a, realm, source, forceLive, ref status);
             if (string.IsNullOrWhiteSpace(a.Lord)) return "the order names no lord";
-            // gold from one lord's purse to another's (0.18.3): the giver may lead no party (a clan's leader in a holding still has his purse)
+            // gold from one lord's purse to another's (0.18.3): the giver need not lead a party (a clan's leader in a holding still has his purse)
             if (string.Equals((a.Do ?? "").Trim(), "gift", StringComparison.OrdinalIgnoreCase)) return GiftOrder(a, realm, forceLive, ref status);
             Hero lord = FindLord(realm, a.Lord, out string error);
             if (lord == null) return error;

@@ -244,6 +244,7 @@ namespace SmokeTest
             ReserveTests(moves, released);
             BattleFactsTests();
             StormGuardTests();
+            FrontsTests();
             Runner.MoveSink = keptMove;
             Runner.ReleaseSink = keptRelease;
         }
