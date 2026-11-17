@@ -32,18 +32,18 @@ namespace SmokeTest
             bool prepHolds = SiegeDrill.Attacker(v0, rule, false, false, 0, out roll).Kind == SiegeDrill.Kind.Hold;
             SiegeDrill.SideView v1 = Camp();
             SiegeDrill.Act a1 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
-            v1.Melee[0] = Built(SiegeDrill.Tower);
-            SiegeDrill.Act a2 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
             v1.Melee[1] = Built(SiegeDrill.Tower);
+            SiegeDrill.Act a2 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
+            v1.Melee[2] = Built(SiegeDrill.Tower);
             SiegeDrill.Act a3 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
-            v1.Melee[2] = Built(SiegeDrill.Ram);
+            v1.Melee[0] = Built(SiegeDrill.Ram);
             SiegeDrill.Act a4 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
             v1.Ranged[0] = Half(SiegeDrill.Trebuchet);
             SiegeDrill.Act a5 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
             v1.Ranged[0] = Built(SiegeDrill.Trebuchet);
             SiegeDrill.Act a6 = SiegeDrill.Attacker(v1, rule, false, false, 0, out roll);
-            bool order = a1.Kind == SiegeDrill.Kind.Build && a1.Type == SiegeDrill.Tower && !a1.Ranged && a1.Slot == 0
-                         && a2.Type == SiegeDrill.Tower && a2.Slot == 1 && a3.Type == SiegeDrill.Ram && a3.Slot == 2
+            bool order = a1.Kind == SiegeDrill.Kind.Build && a1.Type == SiegeDrill.Tower && !a1.Ranged && a1.Slot == 1
+                         && a2.Type == SiegeDrill.Tower && a2.Slot == 2 && a3.Type == SiegeDrill.Ram && a3.Slot == 0
                          && a4.Kind == SiegeDrill.Kind.Build && a4.Type == SiegeDrill.Trebuchet && a4.Ranged && a4.Slot == 0
                          && a5.Kind == SiegeDrill.Kind.Hold && a6.Kind == SiegeDrill.Kind.ToReserve && a6.Slot == 0;
             Check(prepHolds && order, "the siege drill builds both towers, then the ram, then a trebuchet, holds while one is half built, and sends a finished trebuchet to reserve while massing ("
@@ -51,13 +51,13 @@ namespace SmokeTest
 
             // massing to four, then rolling out together; a fallen trebuchet rebuilt in its spot
             SiegeDrill.SideView m = Camp();
-            m.Melee[0] = Built(SiegeDrill.Tower); m.Melee[1] = Built(SiegeDrill.Tower); m.Melee[2] = Built(SiegeDrill.Ram);
+            m.Melee[0] = Built(SiegeDrill.Ram); m.Melee[1] = Built(SiegeDrill.Tower); m.Melee[2] = Built(SiegeDrill.Tower);
             for (int i = 0; i < 3; i++) { m.Reserve.Add(SiegeDrill.Trebuchet); m.ReserveBuilt.Add(true); }
             SiegeDrill.Act three = SiegeDrill.Attacker(m, rule, false, false, 0, out bool roll3);
             m.Reserve.Add(SiegeDrill.Trebuchet); m.ReserveBuilt.Add(true);
             SiegeDrill.Act four = SiegeDrill.Attacker(m, rule, false, false, 0, out bool roll4);
             SiegeDrill.SideView o = Camp();
-            o.Melee[0] = Built(SiegeDrill.Tower); o.Melee[1] = Built(SiegeDrill.Tower); o.Melee[2] = Built(SiegeDrill.Ram);
+            o.Melee[0] = Built(SiegeDrill.Ram); o.Melee[1] = Built(SiegeDrill.Tower); o.Melee[2] = Built(SiegeDrill.Tower);
             o.Ranged[0] = Built(SiegeDrill.Trebuchet); o.Ranged[1] = Built(SiegeDrill.Trebuchet); o.Ranged[3] = Built(SiegeDrill.Trebuchet);
             SiegeDrill.Act rebuild = SiegeDrill.Attacker(o, rule, false, true, 2, out roll);
             o.Ranged[2] = Built(SiegeDrill.Trebuchet);
@@ -73,22 +73,41 @@ namespace SmokeTest
 
             // rams and towers only; the trap of a half-built engine back from reserve; fewer trebuchets wanted
             SiegeDrill.SideView r = Camp();
-            r.Melee[0] = Built(SiegeDrill.Tower); r.Melee[1] = Built(SiegeDrill.Tower); r.Melee[2] = Built(SiegeDrill.Ram);
+            r.Melee[0] = Built(SiegeDrill.Ram); r.Melee[1] = Built(SiegeDrill.Tower); r.Melee[2] = Built(SiegeDrill.Tower);
             bool rams = SiegeDrill.Attacker(r, new DrillRule { Mode = 2 }, false, false, 0, out roll).Kind == SiegeDrill.Kind.Hold;
             SiegeDrill.SideView trap = Camp();
             trap.Ranged[1] = new SiegeDrill.Slot { Type = SiegeDrill.Trebuchet, Built = false, Redeploying = true };
             SiegeDrill.Act scrap = SiegeDrill.Attacker(trap, rule, false, false, 0, out roll);
             SiegeDrill.SideView two = Camp();
-            two.Melee[0] = Built(SiegeDrill.Tower); two.Melee[1] = Built(SiegeDrill.Tower); two.Melee[2] = Built(SiegeDrill.Ram);
+            two.Melee[0] = Built(SiegeDrill.Ram); two.Melee[1] = Built(SiegeDrill.Tower); two.Melee[2] = Built(SiegeDrill.Tower);
             two.Reserve.Add(SiegeDrill.Trebuchet); two.ReserveBuilt.Add(true); two.Reserve.Add(SiegeDrill.Trebuchet); two.ReserveBuilt.Add(true);
             bool fewer = SiegeDrill.Attacker(two, new DrillRule { Trebuchets = 2 }, false, false, 0, out bool rollTwo).Kind == SiegeDrill.Kind.Deploy && rollTwo;
             Check(rams && scrap.Kind == SiegeDrill.Kind.Scrap && scrap.Slot == 1 && scrap.Ranged && fewer,
                   "rams and towers only builds no throwing engine; a half-built engine caught as redeploying is scrapped (the game would never finish it); two trebuchets roll out when two are wanted ("
                   + rams + "; " + scrap + "; " + fewer + ")");
 
+            // a camp laid out by 0.20.0 (towers in the first two spots, the ram in the third: the map draws a ram only in the first spot, and broke on Nov 16)
+            // is put right: the tower in the ram's spot to reserve, then the ram, then each back to its own spot; a half-built ram there is scrapped
+            SiegeDrill.SideView bad = Camp();
+            bad.Melee[0] = Built(SiegeDrill.Tower); bad.Melee[1] = Built(SiegeDrill.Tower); bad.Melee[2] = Built(SiegeDrill.Ram);
+            SiegeDrill.Act fix1 = SiegeDrill.Attacker(bad, rule, false, false, 0, out roll);
+            bad.Melee[0] = default(SiegeDrill.Slot); bad.Reserve.Add(SiegeDrill.Tower); bad.ReserveBuilt.Add(true);
+            SiegeDrill.Act fix2 = SiegeDrill.Attacker(bad, rule, false, false, 0, out roll);
+            bad.Melee[2] = default(SiegeDrill.Slot); bad.Reserve.Add(SiegeDrill.Ram); bad.ReserveBuilt.Add(true);
+            SiegeDrill.Act fix3 = SiegeDrill.Attacker(bad, rule, false, false, 0, out roll);
+            bad.Melee[2] = new SiegeDrill.Slot { Type = SiegeDrill.Tower, Built = true, Redeploying = true }; bad.Reserve.RemoveAt(0); bad.ReserveBuilt.RemoveAt(0);
+            SiegeDrill.Act fix4 = SiegeDrill.Attacker(bad, rule, false, false, 0, out roll);
+            SiegeDrill.SideView half = Camp(); half.Melee[2] = Half(SiegeDrill.Ram);
+            SiegeDrill.Act fix5 = SiegeDrill.Attacker(half, rule, false, false, 0, out roll);
+            bool repaired = fix1.Kind == SiegeDrill.Kind.ToReserve && fix1.Slot == 0 && fix1.Type == SiegeDrill.Tower && fix2.Kind == SiegeDrill.Kind.ToReserve && fix2.Slot == 2 && fix2.Type == SiegeDrill.Ram
+                            && fix3.Kind == SiegeDrill.Kind.Deploy && fix3.Type == SiegeDrill.Tower && fix3.Slot == 2 && fix4.Kind == SiegeDrill.Kind.Deploy && fix4.Type == SiegeDrill.Ram && fix4.Slot == 0
+                            && fix5.Kind == SiegeDrill.Kind.Scrap && fix5.Slot == 2;
+            Check(repaired, "each kind keeps its own spots, as the map draws them (the ram first, the towers after): a camp laid out otherwise is put right through the reserve, a half-built ram out of place scrapped ("
+                            + fix1 + "; " + fix2 + "; " + fix3 + "; " + fix4 + "; " + fix5 + ")");
+
             // against the player in person: no swap while his engines shoot; then one trebuchet at a time to reserve, a fire onager in its spot, until four
             SiegeDrill.SideView f = Camp();
-            f.Melee[0] = Built(SiegeDrill.Tower); f.Melee[1] = Built(SiegeDrill.Tower); f.Melee[2] = Built(SiegeDrill.Ram);
+            f.Melee[0] = Built(SiegeDrill.Ram); f.Melee[1] = Built(SiegeDrill.Tower); f.Melee[2] = Built(SiegeDrill.Tower);
             for (int i = 0; i < 4; i++) f.Ranged[i] = Built(SiegeDrill.Trebuchet);
             SiegeDrill.Act shooting = SiegeDrill.Attacker(f, rule, true, true, 2, out roll);
             SiegeDrill.Act giveUp = SiegeDrill.Attacker(f, rule, true, true, 0, out roll);
@@ -154,9 +173,9 @@ namespace SmokeTest
             // the words
             SiegeRow massing = Torech("drill");
             massing.Prep = 1;
-            massing.Engines.Add(new EngineRow { Type = SiegeDrill.Tower, Progress = 1, Hitpoints = 5000, Slot = 0 });
+            massing.Engines.Add(new EngineRow { Type = SiegeDrill.Ram, Progress = 1, Hitpoints = 5000, Slot = 0 });
             massing.Engines.Add(new EngineRow { Type = SiegeDrill.Tower, Progress = 1, Hitpoints = 5000, Slot = 1 });
-            massing.Engines.Add(new EngineRow { Type = SiegeDrill.Ram, Progress = 1, Hitpoints = 5000, Slot = 2 });
+            massing.Engines.Add(new EngineRow { Type = SiegeDrill.Tower, Progress = 1, Hitpoints = 5000, Slot = 2 });
             massing.Engines.Add(new EngineRow { Type = SiegeDrill.Trebuchet, Progress = 1, Hitpoints = 3200, Reserve = true, Ranged = true, Redeploy = 0 });
             massing.Engines.Add(new EngineRow { Type = SiegeDrill.Trebuchet, Progress = 0.5f, Hitpoints = 3200, Slot = 0, Ranged = true });
             massing.DefEngines.Add(new EngineRow { Type = "fire_catapult", Progress = 1, Hitpoints = 1200, Slot = 1, Ranged = true });

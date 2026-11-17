@@ -137,6 +137,27 @@ namespace BannerlordAgents
             return false;
         }
 
+        /// <summary>The ram's spot among a camp's rams and towers (the towers take the others), as the game's own strategies leave them and the map draws them.</summary>
+        public const int RamSpot = 0;
+
+        private static bool IsRam(string type) => type == Ram || type == "improved_ram";
+
+        /// <summary>A ram outside its spot, or a tower in the ram's: a finished one to reserve (it comes back to its own spot), a half-built one scrapped.</summary>
+        private static bool WrongSpot(SideView v, out Act a)
+        {
+            a = Act.Hold;
+            for (int j = 0; j < v.Melee.Length; j++)
+            {
+                Slot s = v.Melee[j];
+                if (s.Empty) continue;
+                bool wrong = (IsRam(s.Type) && j != RamSpot) || (s.Type == Tower && j == RamSpot);
+                if (!wrong) continue;
+                a = s.Built ? ToReserve(s.Type, false, j) : Scrap(s.Type, false, j);
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>Has the camp rolled its trebuchets out, as far as what it has shows (after a load, when nothing is remembered)?</summary>
         public static bool LooksRolledOut(SideView v, bool wallsTouched)
         {
@@ -153,17 +174,31 @@ namespace BannerlordAgents
         {
             rollNow = false;
             r = r ?? DrillRule.Default;
+            // each kind in its own spots: the game keeps a camp's ram in its first spot and its towers in the next two, and the map draws them only there
+            // (SettlementVisual.AddSiegeIconComponents: a ram in any other spot breaks the drawing, Nov 16). One put elsewhere (by 0.20.0, which filled
+            // the spots in building order) goes to reserve, to come back to its own spot; one half built there is scrapped
+            if (WrongSpot(v, out Act fix)) return fix;
             if (Busy(v, out Act busy)) return busy;
             if (!v.PrepDone) return Act.Hold;
             // every siege tower, then the ram
-            int towers = 0, rams = 0;
-            foreach (Slot s in v.Melee) { if (s.Type == Tower) towers++; else if (s.Type == Ram || s.Type == "improved_ram") rams++; }
-            int freeMelee = FreeSlot(v.Melee);
-            if (freeMelee >= 0 && (towers < Towers || rams < 1))
+            int towers = 0;
+            for (int j = 1; j < v.Melee.Length; j++) if (v.Melee[j].Type == Tower) towers++;
+            bool ram = v.Melee.Length > RamSpot && IsRam(v.Melee[RamSpot].Type);
+            if (towers < Towers)
             {
-                string want = towers < Towers ? Tower : Ram;
-                int ri = ReserveIndex(v, want);
-                return ri >= 0 ? Deploy(want, false, ri, freeMelee) : Build(want, false, freeMelee);
+                int spot = -1;
+                for (int j = 1; j < v.Melee.Length; j++) if (v.Melee[j].Empty) { spot = j; break; }
+                if (spot >= 0)
+                {
+                    int ri = ReserveIndex(v, Tower);
+                    return ri >= 0 ? Deploy(Tower, false, ri, spot) : Build(Tower, false, spot);
+                }
+            }
+            if (!ram && v.Melee.Length > RamSpot && v.Melee[RamSpot].Empty)
+            {
+                int ri = ReserveIndex(v, Ram);
+                if (ri < 0) ri = ReserveIndex(v, "improved_ram");
+                return ri >= 0 ? Deploy(v.Reserve[ri], false, ri, RamSpot) : Build(Ram, false, RamSpot);
             }
             if (r.Mode == 2) return Act.Hold;
             int n = Math.Max(1, Math.Min(4, r.Trebuchets));
