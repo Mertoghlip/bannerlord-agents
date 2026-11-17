@@ -2640,3 +2640,11 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed (17:47): module 0.19.6. The war rooms, dashboard and archive keeper were stopped for the build and started again.
 - **Outside the repository:** `settings.txt`: `run_save = Test Start DG-G Merge` (was TEST START NEW; backup `settings.txt.bak-20261116-before-merge-test`). Loading TEST START NEW to set the test up then readies no run (it is not one of the open run's saves), and the merged save, once made, readies the new run and closes the open one (20261113-1739-A, 27 days) unfinished.
 - **The setup, in the game:** load TEST START NEW and keep the clock stopped; `agents.annex gundabad dolguldur` to see it, then `agents.annex gundabad dolguldur go`; save as Test Start DG-G Merge and close the game. Then the agents' checkpoints from that setup session are set aside so each opens a new conversation at the merged save.
+
+### 18:45 · The merged test's start save made, the agents readied for it
+- **In the game (18:42):** TEST START NEW loaded, `agents.annex gundabad dolguldur` previewed, then carried out: 11 clans of Gundabad (its own and its hired) now serve Dol Guldur, and Gundabad is no more. Saved as TEST START DGG MERGE (Summer 21, 1087, 06:00; the game takes the hyphen out of a save's name and writes it in capitals). Its orders file holds the 148 orders in force (mine 73, Dol Guldur 46, the orcs 29), none of the lieutenant's waiting. TEST START NEW itself had been saved over at 17:46 on Nov 13 at Summer 21, 06:00, so that is the start.
+- **Outside the repository:**
+  - `settings.txt`: `run_save = TEST START DGG MERGE` (the save's name as the game wrote it; backup `settings.txt.bak-20261116-merge-name`).
+  - The orcs' and Dol Guldur's `memory\Ah2auppicLLJ\checkpoints.jsonl`: their checkpoints of the 17:39 session (Nov 13) up to the save's hour set aside (2 and 1 lines, in `checkpoints.set-aside-20261116-merge.jsonl`; backups `.bak-20261116-merge`), so each opens a new conversation at the merged save, seeing Dol Guldur with Gundabad's lords. Their later checkpoints stay, so TEST A2 still carries the old run's conversations on.
+  - The lieutenant's memory is untouched, as I want: at the merged save it goes back to its own answer of that session before the save, its conversation with me carrying on.
+
