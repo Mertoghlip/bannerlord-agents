@@ -377,6 +377,13 @@ As written before Nov 13. The sweep of that day checked every one against the ga
 
 **What would show it working:** fewer days without a battle or a siege while ranks and gold allow one; armies formed hours before a blow rather than kept idle; lords sent ahead to harass a place before an army sits down beside them; reserves posted behind a lord who starts a fight; strikes on lords marching to join an army; a defence that names its counter-stroke.
 
+## Principle 30 firmed (Nov 16): strong lords leave the heartland
+
+In the merged test (Gundabad folded into Dol Guldur), Dol Guldur kept 20 of Gundabad's lords, about 12,300 strength, on guard groups around its northern castles (Erebor, Irongap, Westoft, Flogalith and three more), every one of which its own report listed as facing no enemy, while it judged its western 14,000 too few to relieve Imnagath or strike Torech Emel against my 23,000 there; Felegoth is one to two days' march from those castles. Its reasons, from its answers: the Gundabad lords had stood free under the game's AI when they came under its orders, and it put each on a guard loop near where he stood; the northern castles were short of food; and about eight of them were weak (ranks 15 to 30%), rebuilding as principle 30 asks. About ten were at 60 to 85% of their ranks. I want the written rule firmer.
+- Principle 30 now says: keep only your weaker lords in your heartland, those rebuilding their ranks (a lord's look-up gives his ranks), on loops that recruit, strike bandits and raiders and sell the loot, until his ranks are back above about half; then send him to a front facing an enemy. A lord above about half belongs on such a front, not on guard in the heartland, unless an enemy threatens it there. A heartland castle short of food is fed by a supply run, and the lord who brings the food goes on to a front afterwards (its `then`); hunger is no reason to keep a guard group there. Lords who come under the realm's orders where they stand (newly joined clans, lords taken back from the game's AI) are placed by this rule.
+- The council's step "give every lord a part in it" says the same in brief (both templates).
+- The game rules it rests on: the look-up's ranks (the party's men over its limit, the game's own size limit), and supply's then (an order carries a next order, started as the first finishes).
+
 ## What was left out on purpose
 
 - **This war's plan, as I described it:** mass one great army, beat Aragorn's host, take the places that hold the most captured orc lords to free them, rebuild, then counter-attack with everyone.
