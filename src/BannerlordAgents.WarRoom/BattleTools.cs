@@ -164,7 +164,7 @@ namespace BannerlordAgents.WarRoom
                 lines.Add("- Run ahead: " + Outcome(o, runs, "you", "they", "your", "their", mine.Men, enemy.Men) + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat.");
                 if (o.Winner == "attackers") lines.Add(TakingsLine(view, enemy.Men - o.DefendersLeft));
             }
-            // 0.17.3: a battle of the human player's is fought on the spot, and he wins far above these odds
+            // 0.17.3: a battle of the human player's is fought on the spot; 0.19.3: he is worth about a quarter more than his strength (the bar, his record moves it)
             if (human) lines.Add(HumanNote);
             Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, ours = oursQ, theirs = theirsQ, place = atQ, lines });
             return string.Join("\n", lines);
@@ -228,7 +228,7 @@ namespace BannerlordAgents.WarRoom
         internal static bool InPerson(JsonObject o) => o?["in_person"] is JsonValue v && v.TryGetValue(out bool b) && b;
 
         /// <summary>The note a battle forecast adds when the human player fights in it (0.17.3).</summary>
-        internal const string HumanNote = "- The human player fights this one in person (his party, or an army he leads, is on a side): it is fought on the spot, so only the lords and bands within 3 of it when it begins, and the armies of its leaders, take part (3.75 while he is in a siege; a storm he leads or defends: the siege camp and those inside), and nobody else arrives. A human commander wins far above the odds these rules give: weigh his record (lookups/the_human_player.txt).";
+        internal const string HumanNote = "- The human player fights this one in person (his party, or an army he leads, is on a side): it is fought on the spot, so only the lords and bands within 3 of it when it begins, and the armies of its leaders, take part (3.75 while he is in a siege; a storm he leads or defends: the siege camp and those inside), and nobody else arrives. These rules do not count him: he is worth about a quarter more than his side's strength (at even strength he wins; with yours a quarter above his it could go either way; above that you will probably win), and his record (lookups/the_human_player.txt) moves that bar.";
 
         /// <summary>An answer, or what went wrong in words (never an exception into the call).</summary>
         private static string Safe(Func<string> answer)

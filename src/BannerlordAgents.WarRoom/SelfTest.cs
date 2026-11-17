@@ -279,7 +279,7 @@ namespace BannerlordAgents.WarRoom
             string o3 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"theirs\":[\"lord_sc\"]}");
             Check(o3 != null && o3.Contains("you win") && o3.Contains("What a win would bring in, by your realm's 4 won battles on record: about 30 of theirs fall, leaving about 600 in loot and 12 prisoners worth about 240 in ransom"),
                   "a field battle won says what the win would bring in, by the realm's own battles: " + o3?.Replace("\n", " | "));
-            // 0.17.3: a battle of the human player's is fought on the spot, and he wins far above the rules' odds
+            // 0.17.3: a battle of the human player's is fought on the spot, and he is worth more than the rules' odds give (0.19.3: about a quarter more)
             Check(o1 != null && o1.Contains("The human player fights this one in person") && o1.Contains("lookups/the_human_player.txt") && o3 != null && !o3.Contains("human player"),
                   "the battle odds say when the human player fights in a battle, and only then: " + o1?.Replace("\n", " | "));
             // 0.11.6: the run's end says what each side has left of what it brought, the loser too

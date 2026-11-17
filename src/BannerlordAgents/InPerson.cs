@@ -116,7 +116,8 @@ namespace BannerlordAgents
                 return lines;
             }
             lines.Add(who + ", of " + Views.FactionName(s, p.Faction) + ", is commanded in person by a human player. " + Rule(false)
-                      + " Lords of yours sent at him close in and wait about 6 from him, then strike together. A human commander wins battles far above the odds the battle forecasts give: judge him by his record.");
+                      + " Lords of yours sent at him close in and wait about 6 from him, then strike together. In a battle he fights in person he is worth about a quarter more than his strength:"
+                      + " at even strength he wins, with yours a quarter above his it could go either way, and above that you will probably win; his record moves that bar.");
             lines.Add(Summary(For(fid), p.Name ?? "He") + " Every one, and what your realm saw him do: " + "lookups/" + LookupName + ".txt" + ".");
             return lines;
         }
