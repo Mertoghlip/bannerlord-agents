@@ -210,3 +210,8 @@ Oct 29: ready for the test with me playing as Aragorn (Arnor & Gondor). The firs
 - **The orders in force** (new): written down at every save (`data\<campaign>\orders\<save>.json`) and carried on at its load, each tool in the state it was in, its lord checked as at any order's start; each agent's first look says how many carried on and which could not, and why. The agents' wage caps too. Before 0.13.5 every load cleared them, and the lords went to the game's own AI until the agent ordered them again.
 - **The war rooms:** they keep running while the game is closed; after a restart of the laptop the game starts any that is missing at the load (`war_room` in settings.txt).
 - **Not carried on:** a vote or offer held for an agent (as built in 0.13: the game's own decision is in the save, our hold of it is not; what the game does with it after a load is not yet seen), and anything said or ordered after the last save.
+
+## Folding one realm into another (since 0.19.6)
+
+`agents.annex <realm> <into> [go]` (`Annex.cs`) sets a test up with two realms as one: without `go` it lists each clan it would move (own and hired, with leader, lords, parties, strength, gold, fiefs) and both realms' totals; with `go` it breaks up the first realm's armies, takes its hired clans into the second realm's pay, moves its own clans (the ruling clan last) with their lords, fiefs and gold, and ends the emptied realm, all by the game's own actions (`DisbandArmyAction`, `ChangeKingdomAction`, `DestroyKingdomAction`). It never touches the player's realm. Run it on the start save with the clock stopped, then save under the run's new `run_save` name. First used Nov 16 for "Test Start DG-G Merge" (Gundabad into Dol Guldur, from TEST START NEW).
+

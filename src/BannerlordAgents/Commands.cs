@@ -38,6 +38,7 @@ namespace BannerlordAgents
             "  agents.run [check|note <text>|stop]  the test run (docs/RUNS.md): where it stands; who commands what now; a note of yours; end it early\n" +
             "  agents.run playerless [go] [name]  for a run an agent plays without you: shows the wanderer it would make you; go does it (gold, food, your lords released)\n" +
             "  agents.health                    alarms so far and the state right now (the logs' own view)\n" +
+            "  agents.annex <realm> <into> [go]  fold one realm's clans, lords and lands into another (a test's setup; without go it only shows what it would move)\n" +
             "  agents.view                      the watched realm's report as of now (and the file it is in)\n" +
             "  agents.pokes [n]                 the watched realm's last pokes\n" +
             "  agents.chronicle [n]             the last lines of the watched realm's chronicle, its memory of the war\n" +
@@ -313,6 +314,10 @@ namespace BannerlordAgents
 
         [CommandLineFunctionality.CommandLineArgumentFunction("rebalance", "agents")]
         public static string Rebalance(List<string> args) => Cmd("rebalance", args, () => TestSetup.Rebalance(args));
+
+        /// <summary>One realm folded into another (0.19.6, Annex): agents.annex gundabad dolguldur shows it, go carries it out.</summary>
+        [CommandLineFunctionality.CommandLineArgumentFunction("annex", "agents")]
+        public static string AnnexRealm(List<string> args) => Cmd("annex", args, () => Annex.Run(args));
 
         [CommandLineFunctionality.CommandLineArgumentFunction("agent", "agents")]
         public static string Agent(List<string> args) => Cmd("agent", args, () =>
