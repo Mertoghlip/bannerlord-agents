@@ -508,7 +508,11 @@ namespace BannerlordAgents
 
         // ---------- sieges and battles (0.7.3, Forecast) ----------
 
-        private static readonly SiegeEngineType[] Buildable = { DefaultSiegeEngineTypes.Ram, DefaultSiegeEngineTypes.SiegeTower, DefaultSiegeEngineTypes.Ballista, DefaultSiegeEngineTypes.Onager, DefaultSiegeEngineTypes.Trebuchet };
+        private static readonly SiegeEngineType[] Buildable = { DefaultSiegeEngineTypes.Ram, DefaultSiegeEngineTypes.SiegeTower, DefaultSiegeEngineTypes.Ballista, DefaultSiegeEngineTypes.Onager, DefaultSiegeEngineTypes.Trebuchet,
+                                                                   DefaultSiegeEngineTypes.FireOnager, DefaultSiegeEngineTypes.FireBallista };
+        // the defenders' throwing engines, and the besiegers', whose numbers the siege clock runs (0.20.0)
+        private static readonly SiegeEngineType[] DefenderKinds = { DefaultSiegeEngineTypes.Catapult, DefaultSiegeEngineTypes.FireCatapult, DefaultSiegeEngineTypes.Ballista, DefaultSiegeEngineTypes.FireBallista };
+        private static readonly SiegeEngineType[] AttackerRanged = { DefaultSiegeEngineTypes.Trebuchet, DefaultSiegeEngineTypes.Onager, DefaultSiegeEngineTypes.FireOnager, DefaultSiegeEngineTypes.Ballista, DefaultSiegeEngineTypes.FireBallista };
 
         /// <summary>
         /// Every siege on the map as the game runs it: the camp's preparations and engines, each engine type's building rate by
@@ -538,10 +542,7 @@ namespace BannerlordAgents
                     {
                         g.Prep = (float)Math.Round(engines.SiegePreparations?.Progress ?? 0f, 4);
                         g.PrepRate = sm.GetConstructionProgressPerHour(DefaultSiegeEngineTypes.Preparations, ev, camp);
-                        foreach (SiegeEvent.SiegeEngineConstructionProgress e in engines.DeployedMeleeSiegeEngines.Concat(engines.DeployedRangedSiegeEngines))
-                            if (e?.SiegeEngine != null) g.Engines.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints) });
-                        foreach (SiegeEvent.SiegeEngineConstructionProgress e in engines.ReservedSiegeEngines)
-                            if (e?.SiegeEngine != null) g.Engines.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints), Reserve = true });
+                        CopyEngines(engines, g.Engines);
                     }
                     foreach (SiegeEngineType t in Buildable) g.Rates[t.StringId] = (float)Math.Round(sm.GetConstructionProgressPerHour(t, ev, camp), 5);
                     MBReadOnlyList<float> walls = s.SettlementWallSectionHitPointsRatioList;
@@ -588,10 +589,62 @@ namespace BannerlordAgents
                     Army army = camp.LeaderParty?.Army;
                     if (army != null) { g.Cohesion = (float)Math.Round(army.Cohesion, 2); g.CohesionPerDay = (float)Math.Round(army.DailyCohesionChange, 2); }
                     g.Storming = s.Party?.MapEvent != null && s.Party.MapEvent.IsSiegeAssault;
+                    // 0.20.0: the wall stretches, the defenders' engines, every throwing engine's numbers, and how the camp chooses its engines (SiegeDrill)
+                    if (walls != null) foreach (float w in walls) g.WallSections.Add((float)Math.Round(w, 4));
+                    g.WallSectionHp = (float)Math.Round(s.MaxHitPointsOfOneWallSection);
+                    try
+                    {
+                        CopyEngines(s.SiegeEngines, g.DefEngines);
+                        g.DefStrategy = s.SiegeStrategy?.StringId;
+                        foreach (SiegeEngineType t in DefenderKinds) g.DefRates[t.StringId] = (float)Math.Round(sm.GetConstructionProgressPerHour(t, ev, s), 5);
+                        foreach (SiegeEngineType t in AttackerRanged) g.Stats["a:" + t.StringId] = EngineStats(sm, ev, s, t, BattleSideEnum.Attacker);
+                        foreach (SiegeEngineType t in DefenderKinds) g.Stats["d:" + t.StringId] = EngineStats(sm, ev, s, t, BattleSideEnum.Defender);
+                    }
+                    catch (Exception e) { Diag.Swallowed("copying a siege's engines", e); }
+                    MobileParty lead = camp.LeaderParty;
+                    DrillRule rule = SiegeDrill.For(lead?.StringId);
+                    g.Drill = !Settings.SiegeDrill || !GameHooks.DrillInstalled ? "off" : lead == MobileParty.MainParty || camp.SiegeStrategy == DefaultSiegeStrategies.Custom ? "player"
+                              : rule.Mode == 0 ? "game" : rule.Mode == 2 ? "rams" : "drill";
+                    g.DrillTrebuchets = rule.Trebuchets;
+                    g.DrillFire = rule.Fire;
+                    g.RolledOut = SiegeDrillGame.IsRolledOut(ev);
+                    g.PlayerCamp = SiegeDrillGame.PlayerBesieges(ev);
                     snap.Sieges.Add(g);
                 }
                 catch (Exception e) { Diag.Swallowed("copying a siege's clock", e); }
             }
+        }
+
+        /// <summary>A side's engines: in their spots (with the spot) and in reserve.</summary>
+        private static void CopyEngines(SiegeEvent.SiegeEnginesContainer engines, List<EngineRow> into)
+        {
+            if (engines == null) return;
+            for (int i = 0; i < engines.DeployedMeleeSiegeEngines.Length; i++)
+            {
+                SiegeEvent.SiegeEngineConstructionProgress e = engines.DeployedMeleeSiegeEngines[i];
+                if (e?.SiegeEngine != null) into.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints), Slot = i, Redeploy = (float)Math.Round(e.RedeploymentProgress, 3) });
+            }
+            for (int i = 0; i < engines.DeployedRangedSiegeEngines.Length; i++)
+            {
+                SiegeEvent.SiegeEngineConstructionProgress e = engines.DeployedRangedSiegeEngines[i];
+                if (e?.SiegeEngine != null) into.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints), Slot = i, Ranged = true, Redeploy = (float)Math.Round(e.RedeploymentProgress, 3) });
+            }
+            foreach (SiegeEvent.SiegeEngineConstructionProgress e in engines.ReservedSiegeEngines)
+                if (e?.SiegeEngine != null) into.Add(new EngineRow { Type = e.SiegeEngine.StringId, Progress = (float)Math.Round(e.Progress, 4), Hitpoints = (float)Math.Round(e.Hitpoints), Reserve = true, Ranged = e.SiegeEngine.IsRanged, Redeploy = 0f });
+        }
+
+        /// <summary>One throwing engine's numbers by the model in force (perks counted): damage to a wall and to an engine, chances to hit each, hit points, minutes between shots.</summary>
+        private static float[] EngineStats(SiegeEventModel sm, SiegeEvent ev, Settlement s, SiegeEngineType t, BattleSideEnum side)
+        {
+            return new[]
+            {
+                (float)Math.Round(sm.GetSiegeEngineDamage(ev, side, t, SiegeBombardTargets.Wall), 1),
+                (float)Math.Round(sm.GetSiegeEngineDamage(ev, side, t, SiegeBombardTargets.RangedEngines), 1),
+                (float)Math.Round(sm.GetSiegeEngineHitChance(t, side, SiegeBombardTargets.Wall, s.Town), 3),
+                (float)Math.Round(sm.GetSiegeEngineHitChance(t, side, SiegeBombardTargets.RangedEngines, s.Town), 3),
+                (float)Math.Round(sm.GetSiegeEngineHitPoints(ev, t, side), 1),
+                sm.GetRangedSiegeEngineReloadTime(ev, side, t)
+            };
         }
 
         /// <summary>

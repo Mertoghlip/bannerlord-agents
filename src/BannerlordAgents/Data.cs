@@ -215,6 +215,24 @@ namespace BannerlordAgents
         public float Cohesion = -1f, CohesionPerDay;
         /// <summary>A storm is being fought now.</summary>
         public bool Storming;
+        /// <summary>Each wall stretch's standing share (two in every castle and town), and one stretch's hit points (0.20.0).</summary>
+        public List<float> WallSections = new List<float>();
+        public float WallSectionHp;
+        /// <summary>The defenders' engines, their strategy (the game's own, or the player's when he leads them), and their building rates by the model in force (0.20.0).</summary>
+        public List<EngineRow> DefEngines = new List<EngineRow>();
+        public string DefStrategy;
+        public Dictionary<string, float> DefRates = new Dictionary<string, float>();
+        /// <summary>
+        /// Each throwing engine's numbers by the model in force, keyed "a:trebuchet" (the besiegers') or "d:catapult" (the defenders'): damage to a
+        /// wall, damage to an engine, chance to hit a wall, chance to hit an engine, hit points, minutes between shots (0.20.0).
+        /// </summary>
+        public Dictionary<string, float[]> Stats = new Dictionary<string, float[]>();
+        /// <summary>How the camp chooses its engines: "drill", "rams", "game" (the game's own strategy), "player" (the player leads it), "off" (the drill switched off); its trebuchets to mass, fire onagers against the player, and whether its trebuchets have rolled out.</summary>
+        public string Drill;
+        public int DrillTrebuchets = 4;
+        public bool DrillFire = true, RolledOut;
+        /// <summary>The player is in the camp (leading it, or in the army that does): the defenders face his own storm.</summary>
+        public bool PlayerCamp;
     }
 
     internal sealed class EngineRow
@@ -222,6 +240,10 @@ namespace BannerlordAgents
         public string Type;
         public float Progress, Hitpoints;
         public bool Reserve;
+        /// <summary>Its spot (0 to 3 for throwing engines, 0 to 2 for rams and towers; -1 in reserve), whether it is a throwing engine, and how far it is back in place after leaving the reserve (1: in place; it takes 2 hours) (0.20.0).</summary>
+        public int Slot = -1;
+        public bool Ranged;
+        public float Redeploy = 1f;
     }
 
     /// <summary>

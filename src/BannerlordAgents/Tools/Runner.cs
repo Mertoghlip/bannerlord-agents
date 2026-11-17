@@ -133,6 +133,8 @@ namespace BannerlordAgents.Tools
         public static Action<ToolOrder, JObject> NextSink = (o, then) => Background.ToMain.Enqueue(() => Orders.MoveThen(o.Lord, o.Realm, o.Source, o.Poke, then));
         /// <summary>The storm rules for the game's storm hook (StormGate is safe to write from the worker); a null party clears them all.</summary>
         public static Action<string, StormRule> StormSink = StormGate.Set;
+        /// <summary>The engine rules for the siege drill (0.20.0, SiegeDrill, safe to write from the worker); a null party clears them all.</summary>
+        public static Action<string, DrillRule> DrillSink = SiegeDrill.Set;
 
         public static int Count => ById.Count;
 
@@ -156,6 +158,7 @@ namespace BannerlordAgents.Tools
             NamesSeen.Clear();
             CloseTold.Clear();
             StormSink(null, null);
+            DrillSink(null, null);
         }
 
         /// <summary>The names of the parties tools act on, kept for the call-back once a party is gone and the world no longer knows it.</summary>
@@ -188,6 +191,7 @@ namespace BannerlordAgents.Tools
                 ById.Remove(old.Id);
                 old.Owner?.Tools.Remove(old.Id);
                 StormSink(old.Order.Party, null);
+                DrillSink(old.Order.Party, null);
                 Diag.Event("tool", "replaced", new { id = old.Id, by = id, lord = o.Lord, tool = old.Def.Name });
                 Outcomes.End(old.Id, "replaced", "replaced by a new order", RowOf(old), Diag.Hours);
             }
@@ -398,6 +402,7 @@ namespace BannerlordAgents.Tools
             ById.Remove(id);
             t.Owner?.Tools.Remove(id);
             StormSink(t.Order.Party, null);
+            DrillSink(t.Order.Party, null);
             Diag.Count("tool:ended");
             Diag.Event("tool", "ended", new { id, tool = t.Def.Name, lord = t.Order.Lord, why, state = t.State, steps = t.Steps, hours = Math.Round(Diag.Hours - t.Started, 1) });
             Outcomes.End(id, HowOf(why), why, RowOf(t), Diag.Hours);
@@ -571,6 +576,23 @@ namespace BannerlordAgents.Tools
             }
             Issue(t, w);
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t, w));
+            if (t.Settings.ContainsKey("engines")) DrillSink(t.Order.Party, DrillRuleOf(t));
+        }
+
+        /// <summary>
+        /// A besieging tool's engine rule this hour (0.20.0): only while it besieges, from its engines settings (engines 1 the siege drill, 0 the game's
+        /// own strategy, 2 rams and towers only; trebuchets to mass; fire onagers against the player). Null otherwise, which clears it.
+        /// </summary>
+        private static DrillRule DrillRuleOf(ToolInstance t)
+        {
+            if (t.Finished || t.Shelter != null || t.State == null || !t.Def.States.TryGetValue(t.State, out StateDef st) || st.Do?.Verb != "besiege") return null;
+            double Num(string k, double dflt) => t.Settings.TryGetValue(k, out double v) ? v : dflt;
+            return new DrillRule
+            {
+                Mode = (int)Math.Round(Num("engines", 1)),
+                Trebuchets = Math.Max(1, Math.Min(4, (int)Math.Round(Num("trebuchets", 4)))),
+                Fire = Num("fire", 1) > 0.5
+            };
         }
 
         /// <summary>
@@ -803,6 +825,7 @@ namespace BannerlordAgents.Tools
         {
             t.Finished = true;
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, null);
+            if (t.Settings.ContainsKey("engines")) DrillSink(t.Order.Party, null);
             // the tool run's outcome is taken here, where the tool itself ends, not later when the lord's hold ends (0.13)
             Outcomes.End(t.Id, end == "fail" ? "failed" : end == "stop" ? "stopped" : t.Order.Then != null && end != "stop" ? "done, next order" : end == "hold" ? "done, holds" : "done",
                          "the tool reached its end (" + end + ")", w.Party(t.Order.Party), w.Hours);
@@ -2187,6 +2210,9 @@ namespace BannerlordAgents.Tools
                     case "our_siege": return _w.OurSiege(H(a[0]));
                     case "storm_need": { double? n = _w.StormNeed(Id(a[0])); return n.HasValue ? (object)Math.Round(n.Value) : null; }
                     case "storm_odds": { double? o = _w.StormOdds(Id(a[0])); return o.HasValue ? (object)Math.Round(o.Value, 3) : null; }
+                    case "walls_left": { double? wl = _w.WallsLeft(Id(a[0])); return wl.HasValue ? (object)Math.Round(wl.Value, 3) : null; }
+                    case "walls_down_in": return Nan(_w.WallsDownIn(Id(a[0])));
+                    case "enemy_engines": { int? n = _w.EnemyEngines(Id(a[0])); return n.HasValue ? (object)(double)n.Value : null; }
                     case "storming": return _w.Storming(Id(a[0]));
                     case "storm_hours": { World.StormCheckResult c = _w.StormCheck(Id(a[0])); return c != null ? (object)Math.Round(c.Hours, 1) : null; }
                     case "storm_relief": { World.StormCheckResult c = _w.StormCheck(Id(a[0])); return c != null ? (object)Math.Round(c.ReliefStrength) : null; }

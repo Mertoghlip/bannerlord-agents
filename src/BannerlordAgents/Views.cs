@@ -410,6 +410,12 @@ namespace BannerlordAgents
                 // a siege seen only by its camp: what is inside the walls (the defenders, the food, so when a storm comes) is not seen (0.11.3)
                 bool known = ours || theirs || inspected;
                 string stormNow = g.Storming || !known ? null : Forecast.StormNow(s, g, theirs, joiners);
+                // 0.20.0: and one begun once both wall stretches are down, when the clock sees them fall (the walls then count a quarter)
+                if (stormNow != null && !g.WallsDown && !double.IsNaN(c.WallsDownAt) && !double.IsNaN(c.AdvDown) && c.WallsDownAt > s.Hours + 0.5)
+                {
+                    string later = Forecast.StormNow(s, g, theirs, null, c.AdvDown, "One begun once the walls are down (about " + Text.When(c.WallsDownAt) + "), at today's strengths,");
+                    if (later != null) stormNow += " " + later;
+                }
                 lines.Add(h.Name + " [" + h.Id + "] (" + h.Kind + ", " + FactionName(s, h.Faction) + "), besieged by " + PartyName(g.Besieger) + LordTag(g.Besieger)
                           + " (" + FactionName(s, g.BesiegerFaction) + ") since " + Text.When(g.StartHours) + " (" + Math.Round(s.Hours - g.StartHours) + " hours)"
                           + (g.Storming ? "; a storm is being fought now (below)" : "") + ": " + Forecast.SiegeText(s, g, c, ours, stormNow, known));

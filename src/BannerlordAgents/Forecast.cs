@@ -198,9 +198,18 @@ namespace BannerlordAgents
             /// <summary>The agent's storm rule the clock followed (null: the game's own commander), and the hour it would storm by that rule (NaN: not within 10 days).</summary>
             public StormRule Rule;
             public double RuleStormAt = double.NaN;
+            /// <summary>
+            /// The engines and walls run ahead (0.20.0, SiegeRun): how the camp chooses its engines ("drill", "rams", "game", "player", "off"); against the player
+            /// in person; when its massed trebuchets roll out, when the defenders' engines are first all silenced, when both wall stretches are down (and the
+            /// walls' worth then), when four fire onagers stand.
+            /// </summary>
+            public string Mode;
+            public bool FireCase;
+            public double RolledOutAt = double.NaN, SilencedAt = double.NaN, WallsDownAt = double.NaN, SwapDoneAt = double.NaN;
+            public double AdvDown = double.NaN;
         }
 
-        private static bool Counts(string type) => type == "ram" || type == "improved_ram" || type == "siege_tower_level1" || type == "ballista" || type == "onager" || type == "trebuchet"
+        public static bool CountsAsBuilt(string type) => type == "ram" || type == "improved_ram" || type == "siege_tower_level1" || type == "ballista" || type == "onager" || type == "trebuchet"
                                                     || type == "fire_ballista" || type == "fire_onager" || type == "fire_trebuchet";
 
         /// <summary>The walls' worth by the game's formula (GetSettlementAdvantage) for these built engines, before perks.</summary>
@@ -221,6 +230,8 @@ namespace BannerlordAgents
         }
 
         /// <summary>
+        /// (0.20.0: run by SiegeRun, with both sides' throwing engines and the wall stretches run ahead too, and the camp's engines chosen by the
+        /// siege drill or the game's own strategy, whichever the game's hook applies.)
         /// The siege's clock, run ahead from this hour: the camp builds its preparations, then its strategy's engines one at a
         /// time at the rates the model in force gives; once ready, the camp's leader rolls the game's storm test about 3 times
         /// an hour (the chance grows with the besiegers' edge over the defenders times the walls' worth to a power that starts
@@ -228,98 +239,7 @@ namespace BannerlordAgents
         /// of its men each day once the food is gone (militia do not eat; nobody surrenders). The besiegers' strength is held
         /// as it is now, and no relief is counted.
         /// </summary>
-        public static SiegeClock Siege(SiegeRow g, double now, StormRule rule = null)
-        {
-            var c = new SiegeClock { Now = now, Rule = rule != null && (rule.Mode != 0 || rule.Now) ? rule : null };
-            if (g == null) return c;
-            string[] order = g.Strategy != null && BuildOrder.TryGetValue(g.Strategy, out string[] o) ? o : BuildOrder["siege_strategy_prepare_assault"];
-            var built = g.Engines.Where(e => e.Progress >= 1f).Select(e => e.Type).ToList();
-            var building = g.Engines.Where(e => e.Progress < 1f && !e.Reserve).ToList();
-            // the order still to come: the strategy's list less what the camp holds already
-            var have = g.Engines.Select(e => e.Type).ToList();
-            var todo = new List<string>();
-            foreach (string t in order) { if (have.Contains(t)) have.Remove(t); else todo.Add(t); }
-            // the perks' share of the walls' worth: the game's number now over the formula's for the same engines
-            double formula = Advantage(g.WallLevel, g.WallsDown, built);
-            double perk = formula > 0 && g.Advantage > 0 ? g.Advantage / formula : 1.0;
-            double prep = g.Prep, defenders = g.Defenders, attackers = g.Attackers;
-            // its store, then the food of the lords inside, which it draws on once its own runs out (0.19.5, SiegeFood)
-            if (g.FoodChange < 0 && g.Food + g.LordsFood > 0) c.FoodOutAt = now + 24.0 * SiegeFoodRules.Days(g.Food, -g.FoodChange, g.LordsFood, g.LordsEat);
-            else if (g.Food <= 0 && g.LordsFood <= 0) c.FoodOutAt = now;
-            int regulars = g.GarrisonRegulars;
-            if (!double.IsNaN(c.FoodOutAt) && regulars > 0) c.GarrisonGoneAt = c.FoodOutAt + 24.0 * 10 * Math.Max(0, regulars - g.GarrisonWounded) / Math.Max(1, regulars);
-            if (g.Cohesion >= 0 && g.CohesionPerDay < 0) c.CohesionOutAt = now + 24.0 * Math.Max(0, g.Cohesion - 0.1f) / -g.CohesionPerDay;
-            double current = building.Count > 0 ? building[0].Progress : 0;
-            string currentType = building.Count > 0 ? building[0].Type : null;
-            double survive = 1.0;
-            c.NeverByStrength = true;
-            for (double t = now; t < now + SiegeHorizon; t += Step)
-            {
-                // building
-                if (prep < 1)
-                {
-                    prep += g.PrepRate * Step;
-                    if (prep >= 1) { c.PrepDoneAt = t + Step; prep = 1; }
-                }
-                else
-                {
-                    if (currentType == null && todo.Count > 0) { currentType = todo[0]; todo.RemoveAt(0); current = 0; }
-                    if (currentType != null)
-                    {
-                        float rate = g.Rates.TryGetValue(currentType, out float r) ? r : 0f;
-                        current += rate * Step;
-                        if (current >= 1) { built.Add(currentType); c.Engines.Add(new KeyValuePair<string, double>(currentType, t + Step)); currentType = null; current = 0; }
-                    }
-                }
-                if (prep < 1) continue;
-                // the storm test
-                double hoursOfSiege = t - g.StartHours;
-                bool ram = built.Contains("ram") || built.Contains("improved_ram"), tower = built.Contains("siege_tower_level1");
-                double e = (0.8 - (hoursOfSiege > 96 ? (hoursOfSiege - 96) * 0.02 : 0)) * (ram ? 1 : 1.25) * (tower ? 1 : 1.25);
-                double adv = Advantage(g.WallLevel, g.WallsDown, built) * perk;
-                double d = defenders;
-                if (!double.IsNaN(c.GarrisonGoneAt) && t > c.FoodOutAt && g.GarrisonPower > 0)
-                {
-                    // the garrison's part of the defence falls as its men lie wounded with hunger, down to none by GarrisonGoneAt
-                    double frac = Math.Min(1.0, (t - c.FoodOutAt) / Math.Max(1, c.GarrisonGoneAt - c.FoodOutAt));
-                    d = Math.Max(0, defenders - g.GarrisonPower * frac);
-                }
-                int b = built.Count(Counts);
-                double p;
-                if (c.Rule != null)
-                {
-                    // the agent's rule in place of the game's roll (StormGate): storm at the first check it is met, or never
-                    bool met = c.Rule.Now || (c.Rule.Mode == 1 && b >= c.Rule.Engines && (c.Rule.Ratio <= 0 || d <= 0 || attackers / d >= c.Rule.Ratio));
-                    p = met ? 1 : 0;
-                    if (met && double.IsNaN(c.RuleStormAt)) c.RuleStormAt = t;
-                    if (d > 0 && t <= now + Step) c.RatioNow = attackers / (d * Math.Pow(adv, e));
-                }
-                else if (d <= 0) p = 1;
-                else
-                {
-                    double ratio = attackers / (d * Math.Pow(adv, e));
-                    if (t <= now + Step) c.RatioNow = ratio;
-                    if (ratio <= 1) p = 0;
-                    else
-                    {
-                        c.NeverByStrength = false;
-                        double pmax = currentType != null ? current : 0;
-                        double q = pmax + 0.25 * (5 - b);
-                        p = 0.1 * ratio * Math.Min(3, b) / 3.0 * (1 - 0.85 * q * q);
-                    }
-                }
-                if (p <= 0) continue;
-                if (double.IsNaN(c.FirstChanceAt)) c.FirstChanceAt = t;
-                survive = p >= 1 ? 0 : survive * Math.Pow(1 - Math.Min(1, p), RollsPerHour * Step);
-                double stormed = 1 - survive;
-                if (t - now <= 24) c.Within24 = stormed;
-                if (t - now <= 48) c.Within48 = stormed;
-                if (t - now <= 72) c.Within72 = stormed;
-                c.Within240 = stormed;
-                if (double.IsNaN(c.MedianAt) && stormed >= 0.5) c.MedianAt = t;
-            }
-            return c;
-        }
+        public static SiegeClock Siege(SiegeRow g, double now, StormRule rule = null) => SiegeRun.Run(g, now, rule);
 
         /// <summary>The siege's clock in words, for the report: the camp's building, when a storm could come (by the agent's own rule when it set one), a storm begun now, the food.</summary>
         public static string SiegeText(Snapshot s, SiegeRow g, SiegeClock c, bool ours, string stormNow = null, bool known = true)
@@ -337,6 +257,7 @@ namespace BannerlordAgents
                 if (!double.IsNaN(c.CohesionOutAt)) sb.Append(" The besieging army holds together about " + HoursText(c.CohesionOutAt - c.Now) + " more.");
                 return sb.ToString();
             }
+            sb.Append(WallsText(g, c)).Append(' ');
             if (c.Rule != null)
                 sb.Append("Your storm rule: " + c.Rule + "; by it the camp storms " + (double.IsNaN(c.RuleStormAt) ? "not within 10 days" : c.RuleStormAt <= c.Now + 0.2 ? "now" : "about " + Text.When(c.RuleStormAt)));
             else if (c.Within240 <= 0)
@@ -362,27 +283,95 @@ namespace BannerlordAgents
         /// would win, how, in how long, and with how many left. The besiegers' or the defenders' morale, when the realm cannot
         /// see it, is run low, middling and high.
         /// </summary>
-        public static string StormNow(Snapshot s, SiegeRow g, bool attackersOurs, IList<Tuple<bool, int, double>> joiners)
+        public static string StormNow(Snapshot s, SiegeRow g, bool attackersOurs, IList<Tuple<bool, int, double>> joiners, double advantage = double.NaN, string opening = "A storm begun now")
         {
             if (g == null || g.AttackerMen <= 0) return null;
+            float adv = double.IsNaN(advantage) ? g.Advantage : (float)advantage;
             bool town = s.SettlementById.TryGetValue(g.Settlement, out SettlementRow h) && h.Kind == "town";
             float tactics = attackersOurs && g.Besieger != null && s.PartyById.TryGetValue(g.Besieger, out PartyRow lead) ? lead.Tactics * 0.001f : 0f;
             var att = new BattleSide { Men = g.AttackerMen, Power = g.Attackers / Math.Max(1, g.AttackerMen), Advantage = 0.9f + tactics, Morale = g.AttackerMorale };
             var def = new BattleSide { Men = g.DefenderMen, Power = g.DefenderMen > 0 ? g.Defenders / g.DefenderMen : 1f, Advantage = 1f, Morale = 50, Walls = true };
             var js = (joiners ?? new List<Tuple<bool, int, double>>()).Select(j => new BattleJoiner { Attackers = j.Item1, Men = j.Item2, At = Math.Max(0, j.Item3 - s.Hours) }).ToList();
-            if (g.DefenderMen <= 0) return "A storm begun now would take it at once: nobody holds the walls.";
-            BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, g.Advantage, att, def, !attackersOurs, js);
+            if (g.DefenderMen <= 0) return opening + " would take it at once: nobody holds the walls.";
+            BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, adv, att, def, !attackersOurs, js);
             BattleOutcome o = runs[1];
             string coming = js.Count == 0 ? "" : ", counting the " + js.Count + (js.Count == 1 ? " lord" : " lords") + " seen marching to it (" + Text.N((int)js.Sum(j => j.Men)) + " men) as they arrive";
-            if (o.Winner == null) return "A storm begun now would not end within 5 days" + coming + ".";
+            if (o.Winner == null) return opening + " would not end within 5 days" + coming + ".";
             string how = o.Winner == "attackers"
                 ? "the besiegers would take it with about " + Text.N(o.AttackersLeft) + " of their " + Text.N(g.AttackerMen) + " men left"
                 : "the defenders would hold: the besiegers " + (o.How == "rout" ? "break" : "fall") + ", " + Text.N(o.DefendersLeft) + " defenders still standing";
-            return "A storm begun now would last " + GameBattle.HoursRange(runs) + ": " + how + coming + " (the attackers losing about " + Math.Round(o.AttackerLossPerHour)
+            return opening + " would last " + GameBattle.HoursRange(runs) + ": " + how + coming + " (the attackers losing about " + Math.Round(o.AttackerLossPerHour)
                    + " men an hour at first, the defenders about " + Math.Round(o.DefenderLossPerHour) + ").";
         }
 
+        /// <summary>
+        /// The walls and both sides' throwing engines now, and how the camp's engines are chosen and what they should do, run ahead (0.20.0): for a
+        /// siege the realm can see into.
+        /// </summary>
+        public static string WallsText(SiegeRow g, SiegeClock c)
+        {
+            var sb = new StringBuilder();
+            List<float> w = g.WallSections ?? new List<float>();
+            bool down = g.WallsDown || (w.Count > 0 && w.All(x => x <= 1e-4f));
+            string level = "walls level " + Math.Max(1, g.WallLevel);
+            if (down) sb.Append("The walls (" + level + ") are down, both stretches: they now count a quarter in a storm");
+            else if (w.Count == 0 || w.All(x => x >= 0.999f)) sb.Append("The walls (" + level + "): both stretches whole");
+            else sb.Append("The walls (" + level + "): one stretch " + Stretch(w[0]) + ", the other " + (w.Count > 1 ? Stretch(w[1]) : "?") + " (both must be down before they count less in a storm)");
+            string mine = EngineList(g.Engines, true), theirs = EngineList(g.DefEngines, true);
+            sb.Append("; the besiegers' throwing engines: " + (mine.Length > 0 ? mine : "none") + "; the defenders': " + (theirs.Length > 0 ? theirs : "none") + ". ");
+            string WhenOr(double at, string never) => double.IsNaN(at) ? never : at <= c.Now + 0.2 ? "now" : "about " + Text.When(at);
+            string wallsDown = down ? "" : double.IsNaN(c.WallsDownAt) ? "the walls not down within 10 days" : "the walls down " + WhenOr(c.WallsDownAt, "") + (double.IsNaN(c.AdvDown) ? "" : " (the walls' worth then " + c.AdvDown.ToString("0.0", Text.Inv) + ")");
+            switch (c.Mode)
+            {
+                case "drill":
+                {
+                    int massed = g.Engines.Count(e => e.Reserve && e.Type == SiegeDrill.Trebuchet && e.Progress >= 1f);
+                    if (!g.RolledOut && (double.IsNaN(c.RolledOutAt) || c.RolledOutAt > c.Now + 0.2))
+                        sb.Append("The siege drill: every tower and the ram, then trebuchets held in reserve until " + g.DrillTrebuchets + " are ready (" + massed + " now); they roll out together " + WhenOr(c.RolledOutAt, "not within 10 days at this pace"));
+                    else sb.Append("The siege drill: the trebuchets are out, a new one built for each that falls");
+                    if (!double.IsNaN(c.SilencedAt) && c.SilencedAt > c.Now + 0.2) sb.Append("; the defenders' engines all silenced about " + Text.When(c.SilencedAt));
+                    if (wallsDown.Length > 0) sb.Append("; " + wallsDown);
+                    if (c.FireCase) sb.Append("; against the player in person, once his engines are silenced the trebuchets give way one by one to fire onagers, four in place " + WhenOr(c.SwapDoneAt, "not within 10 days"));
+                    sb.Append('.');
+                    break;
+                }
+                case "rams": sb.Append("The camp builds only its towers and ram: with no throwing engine the walls stay up."); break;
+                case "player": sb.Append("The player leads this camp and chooses its engines" + (wallsDown.Length > 0 ? "; at their present fire, if he builds no more, " + wallsDown : "") + "."); break;
+                case "off": sb.Append("The game's own strategy chooses the camp's engines (the drill is off)" + (wallsDown.Length > 0 ? "; " + wallsDown : "") + "."); break;
+                default: sb.Append("The camp builds by the game's own strategy" + (wallsDown.Length > 0 ? "; " + wallsDown : "") + "."); break;
+            }
+            return sb.ToString();
+        }
+
+        private static string Stretch(float share) => share <= 1e-4f ? "down" : Math.Round(share * 100) + "% standing";
+
+        /// <summary>A side's throwing engines in words: in place and working, coming back from the reserve, being built, in reserve.</summary>
+        public static string EngineList(List<EngineRow> rows, bool rangedOnly)
+        {
+            if (rows == null) return "";
+            var parts = new List<string>();
+            IEnumerable<EngineRow> list = rows.Where(e => e?.Type != null && (!rangedOnly || SiegeDrill.IsRanged(e.Type))).ToList();
+            string Count(IEnumerable<EngineRow> xs, string where)
+            {
+                var named = xs.GroupBy(e => EngineName(e.Type, true)).Select(x => x.Count() + " " + x.Key + (x.Count() > 1 ? "s" : "")).ToList();
+                return named.Count == 0 ? null : string.Join(", ", named) + " " + where;
+            }
+            string inPlace = Count(list.Where(e => !e.Reserve && e.Progress >= 1f && e.Redeploy >= 1f), "in place");
+            string back = Count(list.Where(e => !e.Reserve && e.Progress >= 1f && e.Redeploy < 1f), "coming out of reserve");
+            string building = Count(list.Where(e => !e.Reserve && e.Progress < 1f), "being built");
+            string reserve = Count(list.Where(e => e.Reserve && e.Progress >= 1f), "in reserve");
+            foreach (string x in new[] { inPlace, back, building, reserve }) if (x != null) parts.Add(x);
+            return string.Join("; ", parts);
+        }
+
         private static string Pct(double p) => p >= 0.995 ? "almost certain" : p < 0.005 ? "almost none" : Math.Round(p * 100) + "%";
+
+        /// <summary>An engine's name; with fire, the fire kinds by their own names (fire onager, fire catapult, fire ballista).</summary>
+        public static string EngineName(string type, bool fire)
+        {
+            if (fire && type != null && type.StartsWith("fire_", StringComparison.Ordinal)) return "fire " + EngineName(type.Substring(5));
+            return EngineName(type);
+        }
 
         public static string EngineName(string type)
         {

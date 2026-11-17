@@ -14,7 +14,9 @@ namespace BannerlordAgents
     /// </summary>
     internal sealed class StormRule
     {
-        /// <summary>0 the game's own commander decides; 1 storm once the camp is ready, Engines are built and the besiegers are Ratio times the defenders; 2 do not storm.</summary>
+        /// <summary>0 the game's own commander decides; 1 storm once the camp is ready, Engines are built and the besiegers are Ratio times the defenders; 2 do not storm;
+        /// 3 storm once both wall stretches are down (0.20.0), and when the human player defends in person under the siege drill, once his engines are all silenced
+        /// and four fire onagers stand in place too.</summary>
         public int Mode;
         public int Engines;
         public float Ratio;
@@ -28,7 +30,9 @@ namespace BannerlordAgents
 
         public override string ToString() => Now ? "storm as soon as the camp may (a relief bar was met)"
             : Mode == 1 ? "storm once ready" + (Engines > 0 ? ", " + Engines + (Engines == 1 ? " engine" : " engines") + " built" : "") + (Ratio > 0 ? ", the besiegers " + Ratio.ToString("0.#", Text.Inv) + " times the defenders" : "")
-            : Mode == 2 ? "do not storm" : "the game's own commander decides" + (Hold ? "; held by the storm guard" : "");
+            : Mode == 2 ? "do not storm"
+            : Mode == 3 ? "storm once the walls are down (against the player in person under the siege drill: and his engines silenced, four fire onagers in place)" + (Hold ? "; held by the storm guard" : "")
+            : "the game's own commander decides" + (Hold ? "; held by the storm guard" : "");
     }
 
     /// <summary>
@@ -69,6 +73,20 @@ namespace BannerlordAgents
             if (r.Now) { storm = true; why = "a relief bar was met"; }
             else if (r.Hold) { storm = false; why = "the storm guard holds it: " + (r.HoldWhy ?? "a relief could turn it"); }
             else if (r.Mode == 2) { storm = false; why = "your rule: do not storm"; }
+            else if (r.Mode == 3)
+            {
+                Settlement place = camp.SiegeEvent?.BesiegedSettlement;
+                DrillRule d = SiegeDrill.For(leader);
+                bool fire = d.Mode == 1 && d.Fire && SiegeDrillGame.PlayerDefends(camp.SiegeEvent);
+                int theirs = SiegeDrillGame.ActiveRanged(place?.SiegeEngines), fires = 0;
+                if (camp.SiegeEngines?.DeployedRangedSiegeEngines != null)
+                    foreach (SiegeEvent.SiegeEngineConstructionProgress e in camp.SiegeEngines.DeployedRangedSiegeEngines)
+                        if (e != null && e.IsActive && e.SiegeEngine?.StringId == SiegeDrill.FireOnager) fires++;
+                if (!SiegeDrillGame.WallsDown(place)) { storm = false; why = "the walls still stand"; }
+                else if (fire && theirs > 0) { storm = false; why = "the walls are down, but " + theirs + " of the player's engines still shoot"; }
+                else if (fire && fires < SiegeDrill.FireNeeded) { storm = false; why = "the walls are down, " + fires + " of " + SiegeDrill.FireNeeded + " fire onagers in place"; }
+                else { storm = true; why = fire ? "the walls are down, the player's engines silenced, four fire onagers in place" : "the walls are down"; }
+            }
             else if (r.Mode != 1) return null;
             else
             {

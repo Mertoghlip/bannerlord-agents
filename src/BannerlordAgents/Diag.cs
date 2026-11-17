@@ -43,7 +43,7 @@ namespace BannerlordAgents
         /// </summary>
         private static readonly HashSet<string> RunKinds = new HashSet<string>(StringComparer.Ordinal)
         {
-            "run", "order", "tool", "poke", "answer", "agent", "lieutenant", "decision", "recorder", "army", "notice", "takings", "wages", "purse", "storm",
+            "run", "order", "tool", "poke", "answer", "agent", "lieutenant", "decision", "recorder", "army", "notice", "takings", "wages", "purse", "storm", "drill",
             "alarm", "error", "freeze", "fog", "sight_check", "speed", "focus", "save", "load", "session", "history", "self_check", "pac", "command", "day"
         };
 

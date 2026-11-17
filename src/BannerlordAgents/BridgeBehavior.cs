@@ -142,6 +142,7 @@ namespace BannerlordAgents
             // a test run (0.11, docs/RUNS.md): the run's save readies one; one of a running run's own saves carries it on
             try { Run.OnLoad(save, loadedAt, LoadId); }
             catch (Exception e) { Diag.Error("the test run at the load", e); }
+            SiegeDrillGame.Reset();   // 0.20.0: what the siege drill remembered belongs to the old campaign
             Background.Post("new campaign", () => Brain.Reset(id, loadedAt, configs, histories, history));
             // the lords whose game AI is off in the save as loaded, before any order of ours is carried on (0.13.10: after it, the sweep counted
             // the carried-on lords as caught by the save, and the past hand-backs' check raised load_frozen for 99 of them, Oct 29)

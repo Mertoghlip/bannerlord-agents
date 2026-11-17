@@ -48,11 +48,30 @@ namespace BannerlordAgents
         public static bool WitnessInstalled, ReasonsInstalled, KeepHeldInstalled, StormInstalled, PacEntryInstalled, SallyInstalled;
         /// <summary>The money hooks (0.9.4, Purse): our loot-only sale for held lords, the game's prisoner sale measured, a won battle's takings.</summary>
         public static bool LootSaleInstalled, PrisonerSaleInstalled, TakingsInstalled;
+        /// <summary>
+        /// The siege drill (0.20.0): in front of the game's choice of each siege side's next engine step (DefaultSiegeStrategyActionModel.GetLogicalActionForStrategy,
+        /// asked every frame for both sides of every siege), patched where it is declared (another model's class that only inherits it cannot be patched).
+        /// </summary>
+        private static void InstallDrill()
+        {
+            var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
+            MethodInfo target = typeof(TaleWorlds.CampaignSystem.GameComponents.DefaultSiegeStrategyActionModel).GetMethod("GetLogicalActionForStrategy", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
+            if (target == null) { Parts["siege drill"] = "the siege drill: the game's choice of siege engines was not found, so the game's own siege strategies decide"; return; }
+            object model = Campaign.Current?.Models?.SiegeStrategyActionModel;
+            string live = model == null ? "" : model.GetType() == typeof(TaleWorlds.CampaignSystem.GameComponents.DefaultSiegeStrategyActionModel) ? "" : " (the model in force is " + model.GetType().FullName + ")";
+            h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(DrillPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+            DrillInstalled = Ours(target);
+            Parts["siege drill"] = "the siege drill " + (DrillInstalled ? "attached" : "did not attach") + Others(target) + live + (Settings.SiegeDrill ? "" : " (switched off in settings.txt)");
+            Log.Line("game hooks: " + Status);
+        }
+
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried, _siegeFoodTried;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried, _siegeFoodTried, _drillTried;
         /// <summary>The siege food rule (0.19.5, SiegeFood): a besieged place's day draws on its lords' food once its own store would run out.</summary>
         public static bool SiegeFoodInstalled;
+        /// <summary>The siege drill (0.20.0, SiegeDrill): which siege engines the computer's camps and the defenders against the player build, hold back and roll out.</summary>
+        public static bool DrillInstalled;
         /// <summary>The agents' diplomacy (0.13): the ruler's choice in a vote, and a vote's announcement held for an agent's say.</summary>
         public static bool DiplomacyInstalled;
         /// <summary>The record's hooks (0.13): the party screen's Done, your votes in the realm's council, the offer windows shown to you.</summary>
@@ -110,6 +129,17 @@ namespace BannerlordAgents
                 {
                     Parts["siege food"] = "the siege food rule could not attach (" + e.GetType().Name + ": " + e.Message + "), so the game's own food rule holds";
                     Diag.Swallowed("the siege food hook", e);
+                }
+            }
+            // the siege drill (0.20.0): it changes the game, so apart from the others; settings.txt's siege_drill switches its work off
+            if (!_drillTried)
+            {
+                _drillTried = true;
+                try { InstallDrill(); }
+                catch (Exception e)
+                {
+                    Parts["siege drill"] = "the siege drill could not attach (" + e.GetType().Name + ": " + e.Message + "), so the game's own siege strategies decide";
+                    Diag.Swallowed("the siege drill hook", e);
                 }
             }
             // the chat box's hooks only once a lieutenant is in the agents' settings, apart from the others
@@ -383,6 +413,18 @@ namespace BannerlordAgents
             __result = d.Value;
             return false;
         }
+    }
+
+    /// <summary>
+    /// The siege drill (0.20.0): every frame, each side of every siege asks the game's strategy for its next engine step; the drill answers in its
+    /// place for the computer's camps, and for defenders against the player's own siege (SiegeDrill.Decide). A side the player leads, and
+    /// defenders against computer camps, keep the game's own answer.
+    /// </summary>
+    internal static class DrillPatch
+    {
+        private static bool Prefix(TaleWorlds.CampaignSystem.Siege.ISiegeEventSide side, ref TaleWorlds.CampaignSystem.ComponentInterfaces.SiegeStrategyActionModel.SiegeAction siegeAction,
+                                   ref TaleWorlds.Core.SiegeEngineType siegeEngineType, ref int deploymentIndex, ref int reserveIndex)
+            => SiegeDrillGame.Decide(side, ref siegeAction, ref siegeEngineType, ref deploymentIndex, ref reserveIndex);
     }
 
     /// <summary>

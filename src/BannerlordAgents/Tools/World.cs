@@ -996,6 +996,58 @@ namespace BannerlordAgents.Tools
             return need.Value <= 0 ? 99 : g.Attackers / need.Value;
         }
 
+        // ---------- the walls and the engines (0.20.0) ----------
+
+        /// <summary>A siege the realm can see into: at its own or an ally's holding, or by its own or an ally's camp.</summary>
+        private SiegeRow SeenInto(string place)
+        {
+            SiegeRow g = Siege(place);
+            if (g == null) return null;
+            SettlementRow h = Holding(place);
+            return h?.Faction == Realm || Ally(h?.Faction) || g.BesiegerFaction == Realm || Ally(g.BesiegerFaction) ? g : null;
+        }
+
+        private readonly Dictionary<string, Forecast.SiegeClock> _clocks = new Dictionary<string, Forecast.SiegeClock>(StringComparer.Ordinal);
+
+        /// <summary>The siege's clock run ahead, engines and walls with it (once an hour per place).</summary>
+        private Forecast.SiegeClock ClockOf(SiegeRow g)
+        {
+            if (_clocks.TryGetValue(g.Settlement, out Forecast.SiegeClock c)) return c;
+            StormRule rule = g.BesiegerFaction == Realm ? Runner.StormRuleFor(g.Besieger) : null;
+            c = Forecast.Siege(g, Hours, rule);
+            _clocks[g.Settlement] = c;
+            return c;
+        }
+
+        /// <summary>How much of a besieged place's walls still stands (0 to 1, both stretches together); null for a siege the realm cannot see into.</summary>
+        public double? WallsLeft(string place)
+        {
+            SiegeRow g = SeenInto(place);
+            if (g == null) return null;
+            if (g.WallSections != null && g.WallSections.Count > 0) return g.WallSections.Average(w => (double)w);
+            return g.WallsDown ? 0 : g.WallShare;
+        }
+
+        /// <summary>Hours until both wall stretches of a besieged place are down, run ahead with the engines as the siege drill or the game's strategy builds them (0: down now); NaN when not within 10 days or not a siege the realm can see into.</summary>
+        public double WallsDownIn(string place)
+        {
+            SiegeRow g = SeenInto(place);
+            if (g == null) return double.NaN;
+            if (g.WallsDown) return 0;
+            Forecast.SiegeClock c = ClockOf(g);
+            return double.IsNaN(c.WallsDownAt) ? double.NaN : Math.Max(0, c.WallsDownAt - Hours);
+        }
+
+        /// <summary>The other side's working throwing engines at a siege: the defenders' at a siege of the realm's or an ally's, the besiegers' at a holding of its own or an ally's; null otherwise.</summary>
+        public int? EnemyEngines(string place)
+        {
+            SiegeRow g = SeenInto(place);
+            if (g == null) return null;
+            bool ourCamp = g.BesiegerFaction == Realm || Ally(g.BesiegerFaction);
+            List<EngineRow> rows = ourCamp ? g.DefEngines : g.Engines;
+            return rows?.Count(e => e != null && !e.Reserve && e.Ranged && e.Progress >= 1f && e.Redeploy >= 1f && e.Hitpoints > 0) ?? 0;
+        }
+
         /// <summary>Is a storm of the place being fought now (a siege the realm can know of)?</summary>
         public bool Storming(string place) => Siege(place)?.Storming == true;
 
