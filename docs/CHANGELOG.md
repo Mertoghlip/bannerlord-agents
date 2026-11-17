@@ -2694,4 +2694,5 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test, war room self-test and dashboard self-test all passed (`scripts/deploy.ps1`); the installed DLL and the war room carry the new wording.
 - **Installed** with the game closed (14:10): module 0.20.2 into the game's Modules folder, war room 0.19.3. The war rooms, dashboard and archive keeper were stopped for the build and started again (14:12).
 - **Outside the repository:** installed for the orcs, Dol Guldur and my kingdom's council (`warroom-system.md`, backups `.bak-20261117-before-two-ways`) and the orcs' and Dol Guldur's `warroom-continuous.md` (same backups); each installed file equals its template but for the realm's two lines (checked). The lieutenant's instructions are unchanged.
+- **Commit:** 1a08fb8.
 - **Next:** the orcs and Dol Guldur carry on their conversations of 13:35, so their next wake opens with YOUR INSTRUCTIONS CHANGED (since war room 0.19.2); my kingdom's council reads the new instructions at its next call.
