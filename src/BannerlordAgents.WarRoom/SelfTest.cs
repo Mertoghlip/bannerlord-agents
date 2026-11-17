@@ -176,6 +176,7 @@ namespace BannerlordAgents.WarRoom
             ToolCheckTests(root);
             ContinuousTests(root);
             LieutenantContinuousTests(root);
+            InstructionsTests(root);
             RollbackTests(root);
             PastTests(root);
             KeptTests(root);

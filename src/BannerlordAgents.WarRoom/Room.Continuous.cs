@@ -53,6 +53,11 @@ namespace BannerlordAgents.WarRoom
         public HashSet<string> Static = new HashSet<string>(StringComparer.Ordinal);
         /// <summary>The agent's own tools as this conversation knows them ("name vN").</summary>
         public List<string> OwnTools = new List<string>();
+        /// <summary>
+        /// The instructions and order library this conversation has been told of, by their text's fingerprint (war room 0.19.2): null, those it began with (SystemHash).
+        /// A conversation keeps the instructions it began with; when they change, its next message tells what changed, and this moves on.
+        /// </summary>
+        public string ToldHash;
         /// <summary>Wakes by in-game day (the day's number), for "wakes today".</summary>
         public Dictionary<string, int> WakesByDay = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -82,7 +87,7 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>What the conversation has been shown, copied before a message is built: a call that never reached the conversation gives it back (Restore).</summary>
-        public object[] Mark() => new object[] { new Dictionary<string, string>(Sent), new Dictionary<string, double>(SentAt), new HashSet<string>(Static), new List<string>(OwnTools) };
+        public object[] Mark() => new object[] { new Dictionary<string, string>(Sent), new Dictionary<string, double>(SentAt), new HashSet<string>(Static), new List<string>(OwnTools), ToldHash };
 
         public void Restore(object[] mark)
         {
@@ -90,6 +95,7 @@ namespace BannerlordAgents.WarRoom
             SentAt = (Dictionary<string, double>)mark[1];
             Static = (HashSet<string>)mark[2];
             OwnTools = (List<string>)mark[3];
+            ToldHash = mark.Length > 4 ? (string)mark[4] : ToldHash;
         }
 
         /// <summary>The conversation ends (a handover, a reload): the next wake begins a new one, told why.</summary>
@@ -108,6 +114,7 @@ namespace BannerlordAgents.WarRoom
             SentAt.Clear();
             Static.Clear();
             OwnTools.Clear();
+            ToldHash = null;
             NextWhy = why;
             Save();
         }
@@ -228,6 +235,7 @@ namespace BannerlordAgents.WarRoom
             SentAt = o.SentAt ?? new Dictionary<string, double>(StringComparer.Ordinal);
             Static = o.Static ?? new HashSet<string>(StringComparer.Ordinal);
             OwnTools = o.OwnTools ?? new List<string>();
+            ToldHash = o.ToldHash;
             WakesByDay = o.WakesByDay ?? new Dictionary<string, int>(StringComparer.Ordinal);
             ForkFrom = ForkAt = null;
             SinceCheckpoint = false;
@@ -327,7 +335,7 @@ namespace BannerlordAgents.WarRoom
             object[] mark = _talk.Mark();
             var sb = new StringBuilder();
             if (opening) sb.Append(Opening(meta, number, firstLook ? null : "the wake that brought you here", out _));
-            string notes = Join(carried, OwnToolsNote());
+            string notes = Join(Join(carried, OwnToolsNote()), InstructionsNote());
             if (!string.IsNullOrEmpty(notes)) sb.AppendLine(notes.TrimEnd()).AppendLine();
             sb.Append(Slim(pokeText, meta?.Hours ?? _pokeHours, opening));
             string day = DayKey(meta?.Hours ?? _pokeHours);
@@ -436,6 +444,7 @@ namespace BannerlordAgents.WarRoom
                 _talk.StartedWhy = _talk.NextWhy ?? "";
                 _talk.LoadId = meta?.LoadId ?? _mem.LoadId;
                 _talk.OwnTools = OwnToolNames(ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "");
+                _talk.ToldHash = null;
                 _talk.Save();
             }
             else if (_talk.SystemFile == null || !File.Exists(_talk.SystemFile))
@@ -757,6 +766,115 @@ namespace BannerlordAgents.WarRoom
             return words.Count(char.IsLetter) >= 4 && !words.Any(char.IsLower);
         }
 
+        // ---------- its instructions and order library, told when they change (war room 0.19.2) ----------
+
+        /// <summary>
+        /// When the instructions or the order library changed since what this conversation knows (it keeps the system prompt it began with, so the cache
+        /// holds): each line that is new or reads differently, as it now stands. Null for a conversation not yet begun, or nothing changed.
+        /// </summary>
+        private string InstructionsNote()
+        {
+            if (!_talk.Started) return null;
+            string now = SystemFile(_talk.Routes, false, true, false);   // the instructions as they stand now (this conversation keeps its own)
+            return InstructionsChange(_talk, now, _systemHash, _logDir, Say);
+        }
+
+        /// <summary>InstructionsNote, for any conversation (the continuous lieutenant's too): the text it knows against the text now, told once.</summary>
+        internal static string InstructionsChange(Talk talk, string nowFile, string nowHash, string logDir, Action<string> say = null)
+        {
+            if (talk == null || !talk.Started || string.IsNullOrEmpty(nowHash)) return null;
+            string known = talk.ToldHash ?? talk.SystemHash;
+            if (string.IsNullOrEmpty(known) || known == nowHash) return null;
+            string knownFile = Path.Combine(logDir, "system-" + known + ".md");
+            if (!File.Exists(knownFile) && talk.SystemHash == known && talk.SystemFile != null) knownFile = talk.SystemFile;
+            if (!File.Exists(knownFile) || nowFile == null || !File.Exists(nowFile))
+            {
+                talk.ToldHash = nowHash;
+                say?.Invoke("Continuous: the instructions changed since this conversation began, but the text it knows is gone, so what changed cannot be told.");
+                return null;
+            }
+            string note = InstructionsDiff(File.ReadAllText(knownFile), File.ReadAllText(nowFile), out int lines);
+            talk.ToldHash = nowHash;
+            if (note == null) return null;
+            say?.Invoke("Continuous: the instructions changed since this conversation knew them (" + known + " to " + nowHash + "); its next message tells the " + lines + (lines == 1 ? " line" : " lines") + " that changed.");
+            return note;
+        }
+
+        private static readonly Regex BoldBullet = new Regex(@"^- \*\*([^*]+)\*\*", RegexOptions.Compiled);
+        private static readonly Regex Principle = new Regex(@"^(\d+)\. \*\*", RegexOptions.Compiled);
+        private static readonly Regex CapsHeading = new Regex(@"^[A-Z][A-Z ,'\u2019-]{5,}(\s*\(|$)", RegexOptions.Compiled);
+
+        /// <summary>A line's name, so a line that reads differently is known for the one it replaces: a bold bullet (an order, a rule), a numbered principle, a heading.</summary>
+        private static string LineKey(string line)
+        {
+            Match m = BoldBullet.Match(line);
+            if (m.Success) return "b:" + m.Groups[1].Value;
+            m = Principle.Match(line);
+            if (m.Success) return "p:" + m.Groups[1].Value;
+            if (line.StartsWith("#", StringComparison.Ordinal)) return "h:" + line.TrimStart('#', ' ');
+            return null;
+        }
+
+        private static bool IsInstructionsHeading(string line) => line.StartsWith("#", StringComparison.Ordinal) || CapsHeading.IsMatch(line)
+                                                      || (line.EndsWith(":", StringComparison.Ordinal) && line.Length < 200 && !line.StartsWith("-", StringComparison.Ordinal));
+
+        /// <summary>
+        /// The lines of the instructions now that the old text lacks, under the heading each stands in, and those dropped, line by line (a paragraph or a bullet
+        /// is one line in these files). The agent's own tools are left out: OwnToolsChange tells them. Null when nothing differs.
+        /// </summary>
+        internal static string InstructionsDiff(string before, string now, out int count)
+        {
+            count = 0;
+            static List<string> Lines(string t) => t.Replace("\r", "").Split('\n').Select(l => l.TrimEnd()).Where(l => l.Trim().Length > 0).ToList();
+            List<string> o = Lines(before), n = Lines(now);
+            var oldSet = new HashSet<string>(o, StringComparer.Ordinal);
+            var newSet = new HashSet<string>(n, StringComparer.Ordinal);
+            var oldKeys = new HashSet<string>(o.Select(LineKey).Where(k => k != null), StringComparer.Ordinal);
+            var newKeys = new HashSet<string>(n.Select(LineKey).Where(k => k != null), StringComparer.Ordinal);
+            var body = new StringBuilder();
+            string heading = null, shown = null;
+            bool own = false;
+            foreach (string line in n)
+            {
+                if (IsInstructionsHeading(line))
+                {
+                    heading = line.Trim();
+                    own = line.StartsWith("YOUR OWN TOOLS", StringComparison.Ordinal);
+                    if (oldSet.Contains(line) || own) continue;
+                }
+                if (own || oldSet.Contains(line)) continue;
+                string key = LineKey(line);
+                if (heading != shown && heading != null && heading != line.Trim()) { body.AppendLine().AppendLine("In " + heading.TrimStart('#', ' ').TrimEnd(':') + ":"); shown = heading; }
+                body.AppendLine((key != null && oldKeys.Contains(key) ? "(reads differently now) " : "(new) ") + line);
+                count++;
+            }
+            var gone = new List<string>();
+            own = false;
+            foreach (string line in o)
+            {
+                if (IsInstructionsHeading(line)) { own = line.StartsWith("YOUR OWN TOOLS", StringComparison.Ordinal); if (own) continue; }
+                if (own || newSet.Contains(line)) continue;
+                string key = LineKey(line);
+                if (key != null && newKeys.Contains(key)) continue;
+                gone.Add(line.Length > 160 ? line.Substring(0, 160) + "..." : line);
+            }
+            if (count == 0 && gone.Count == 0) return null;
+            var sb = new StringBuilder();
+            sb.AppendLine("YOUR INSTRUCTIONS CHANGED (this conversation keeps them word for word as they were when it began; below is each line that is new or reads differently now, as it now stands, and where it differs from what you have, it holds)");
+            sb.Append(body.ToString().TrimStart('\n', '\r'));
+            if (gone.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("No longer in your instructions:");
+                foreach (string g in gone) sb.AppendLine("- " + g);
+                count += gone.Count;
+            }
+            string text = sb.ToString().Replace("\r\n", "\n").TrimEnd();
+            const int Cap = 60000;
+            if (text.Length > Cap) text = text.Substring(0, Cap) + "\n... (more changed than one message tells; the lines above come first in your instructions)";
+            return text;
+        }
+
         // ---------- its own tools, told when they change ----------
 
         private static readonly Regex OwnTool = new Regex(@"^- \*\*([a-z0-9_]+)\*\* \(yours, (v\d+|one-off)\)", RegexOptions.Compiled | RegexOptions.Multiline);
@@ -930,7 +1048,7 @@ namespace BannerlordAgents.WarRoom
             string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
             var sb = new StringBuilder();
             object[] mark = _talk.Mark();
-            string notes = OwnToolsNote();
+            string notes = Join(OwnToolsNote(), InstructionsNote());
             if (!string.IsNullOrEmpty(notes)) sb.AppendLine(notes).AppendLine();
             sb.AppendLine("STRATEGY REVIEW, " + meta.Date);
             sb.AppendLine("Why it sits now: " + why.TrimEnd('.') + ".");

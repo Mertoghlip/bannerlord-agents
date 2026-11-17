@@ -166,6 +166,13 @@ namespace BannerlordAgents.WarRoom
             string library = Room.ReadShared(Path.Combine(_c.ChannelDir, "tools.txt"));
             string own = library != null ? Room.OwnToolsChange(_talk, library) : null;
             if (own != null) sb.AppendLine(own).AppendLine();
+            // the instructions and the order library as they stand now, against what this conversation knows (war room 0.19.2)
+            if (_talk.Started)
+            {
+                string nowFile = SystemFile(_talk.Routes);
+                string told = Room.InstructionsChange(_talk, nowFile, _systemHash, _logDir, Say);
+                if (told != null) sb.AppendLine(told).AppendLine();
+            }
             Middle(sb, chat, NewReceipts(Path.Combine(_c.ChannelDir, "receipts.log")), "WHAT BECAME OF ORDERS SINCE YOUR LAST ANSWER (receipts.log, newest last)", "- Nothing new.");
             sb.AppendLine("THE REALM NOW (the report of the hour, less what this conversation holds: a section exactly as you last saw it is one line, and the big lists come whole every few hours; "
                           + "the whole report of this hour is report.txt)");
@@ -263,6 +270,7 @@ namespace BannerlordAgents.WarRoom
                 _talk.StartedWall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                 _talk.StartedWhy = _talk.NextWhy ?? "";
                 _talk.OwnTools = Room.OwnToolNames(Room.ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "");
+                _talk.ToldHash = null;
                 _talk.Save();
             }
             else if (_talk.SystemFile == null || !File.Exists(_talk.SystemFile))

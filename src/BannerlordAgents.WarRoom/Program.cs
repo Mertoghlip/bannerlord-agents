@@ -69,6 +69,8 @@ namespace BannerlordAgents.WarRoom
             Native.Self();
             string mode = args.Length > 0 && !args[0].StartsWith("--") ? args[0].ToLowerInvariant() : "run";
             if (mode == "selftest") return SelfTest.Run();   // its own scratch folder: the live agent folder is never read or written
+            // war room 0.19.2: what a conversation that knows one instructions file would be told against another (both system-*.md files of a log folder)
+            if (mode == "changes" && args.Length >= 3) { Console.WriteLine(Room.InstructionsDiff(File.ReadAllText(args[1]), File.ReadAllText(args[2]), out int n) ?? "(nothing changed)"); Console.WriteLine("(" + n + " lines)"); return 0; }
             if (mode == "toolcheck") return args.Contains("--write") ? ToolWrite(Arg(args, "--model") ?? "claude-haiku-5-5") : ToolCheck(Arg(args, "--model") ?? "claude-haiku-5-5", args.Contains("--big"));
             string dir = Arg(args, "--dir");
             Config c = Config.Load(dir);
