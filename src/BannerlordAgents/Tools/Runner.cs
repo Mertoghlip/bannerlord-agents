@@ -475,7 +475,20 @@ namespace BannerlordAgents.Tools
                 Issue(t, w0);
             }
             AgentChannel.Receipt(a, "applied", t.Order.LordName + "'s " + t.Def.Name + " now has " + string.Join(", ", settings.Keys.Select(k => k + " " + ToolDef.Num(t.Settings[k])))
-                                               + (notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : ""), hours);
+                                               + (notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : "") + GuardOffClock(t, settings, s0), hours);
+        }
+
+        /// <summary>
+        /// The storm's clock when an adjust switches a siege's storm guard off (0.20.5): when the camp may storm, when a storm begun then would end, and who could
+        /// come before; empty otherwise (another setting, the guard left on, no siege of the order's place yet).
+        /// </summary>
+        internal static string GuardOffClock(ToolInstance t, Dictionary<string, double> settings, Snapshot s)
+        {
+            if (s == null || t?.Order?.At == null || !settings.Keys.Any(k => string.Equals(k, "storm_guard", StringComparison.OrdinalIgnoreCase))) return "";
+            if (!t.Settings.TryGetValue("storm_guard", out double g) || g > 0) return "";
+            string clock = WorldFor(s).StormClock(t.Order.At);
+            // the receipt adds the closing full stop
+            return clock == null ? ". With the storm guard off, nothing holds a storm whoever could come: ask the odds before the camp may storm" : ". " + clock.TrimEnd('.', ' ');
         }
 
         /// <summary>

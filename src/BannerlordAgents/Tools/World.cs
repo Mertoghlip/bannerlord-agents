@@ -1054,10 +1054,12 @@ namespace BannerlordAgents.Tools
         // ---------- the storm guard (0.19.1) ----------
 
         /// <summary>
-        /// The slowest the storm guard takes any force that could relieve a siege to march (0.19.1, Nov 13): the game's speed 2.8, the mean speed of the game's mid- to
-        /// high-strength lord parties (strength from the median, about 400, to the 95th percentile, about 2,500), measured over 313 hourly copies of this campaign (115,640
-        /// sightings of lord parties marching on their own: strength under 300 averaged 3.5, 300 to 600 3.0, 600 to 1,500 2.7, 1,500 to 2,500 2.45). A force seen marching
-        /// slower, or known only from where it was last seen, is never counted slower than that.
+        /// The slowest the storm guard takes a force that could relieve a siege to march when its own pace cannot be trusted (0.19.1, Nov 13): the game's speed 2.8, the mean
+        /// speed of the game's mid- to high-strength lord parties (strength from the median, about 400, to the 95th percentile, about 2,500), measured over 313 hourly copies of
+        /// this campaign (115,640 sightings of lord parties marching on their own: strength under 300 averaged 3.5, 300 to 600 3.0, 600 to 1,500 2.7, 1,500 to 2,500 2.45).
+        /// Since 0.20.5 (Nov 17, run 20261117-2146-A: the guard counted Aragorn's army, marching at about 1 map unit an hour through forest, at speed 2.8, so Dol Guldur
+        /// switched the guard off and its storm of Imnagath ran into his arrival) a force in view on the march is counted at its own pace over open ground, night counted
+        /// (still faster than it goes through forest), and only one out of view, standing still or inside a holding at no slower than this.
         /// </summary>
         public const float ReliefFloorSpeed = 2.8f;
 
@@ -1074,6 +1076,16 @@ namespace BannerlordAgents.Tools
             public double LeftShare;
             /// <summary>Clear to storm: no relief could come in time, or with it the storm is still won keeping at least keep of the besiegers' men.</summary>
             public bool Clear(double keep) => ReliefCount == 0 || (Won && LeftShare >= keep - 1e-9);
+            /// <summary>The relief one by one (the storm's clock, 0.20.5): its id, strength, hours from now to the camp, and whether its own pace was used (else the floor).</summary>
+            public readonly List<(string Id, double Strength, double At, bool OwnPace)> Comers = new List<(string, double, double, bool)>();
+        }
+
+        /// <summary>A relief's march to the camp in hours (0.20.5): an enemy in view on the march at its own pace over open ground, night counted; anyone else never slower than ReliefFloorSpeed.</summary>
+        private double ReliefHours(PartyRow e, double d, double floor, out bool own)
+        {
+            double per = PerHour(e);
+            own = Moving(e) && Forecast.DayPerHour(S, e) > 0.05f;
+            return d / (own ? Math.Max(0.3, per) : Math.Max(Math.Max(0.3, per), floor));
         }
 
         private readonly Dictionary<string, StormCheckResult> _stormChecks = new Dictionary<string, StormCheckResult>(StringComparer.Ordinal);
@@ -1088,7 +1100,47 @@ namespace BannerlordAgents.Tools
             return res;
         }
 
-        private StormCheckResult StormCheckNow(string place)
+        private StormCheckResult StormCheckNow(string place) => StormReckon(place, 0);
+
+        /// <summary>
+        /// The storm's clock (0.20.5, told when an agent switches its storm guard off; Nov 17, run 20261117-2146-A: Dol Guldur switched the guard off at Imnagath
+        /// trusting a 12-hour storm due to end long before Aragorn could come, while the camp could not storm for another day and the storm then ran past his arrival):
+        /// when the camp may storm, how long a storm begun then should last and when it would end, the enemy lords and armies that could reach the camp before then and
+        /// when, and whether, joining the defenders as each arrives, they would turn it. Null for no siege of the realm's or an ally's at the place.
+        /// </summary>
+        public string StormClock(string place)
+        {
+            SettlementRow h = Holding(place);
+            SiegeRow g = OurSiege(h) ? Siege(place) : null;
+            if (g == null) return null;
+            string name = h.Name ?? place;
+            if (g.Storming) return "A storm of " + name + " is being fought now: nobody leaves it until it ends.";
+            double prep = PrepHours(place);
+            bool prepKnown = !double.IsNaN(prep);
+            double start = prepKnown ? Math.Max(0, prep) : 0;
+            StormCheckResult c = StormReckon(place, start);
+            if (c == null) return null;
+            var sb = new System.Text.StringBuilder("The storm's clock at " + name + ": ");
+            sb.Append(!prepKnown ? "when the camp's preparations will be done is not known; counted from now, "
+                      : start <= 0.05 ? "the camp may storm now; " : "the camp may storm in about " + Forecast.HoursText(start) + " (" + Text.When(Hours + start) + "), once its preparations are done, not before; ");
+            if (g.DefenderMen <= 0) return sb.Append("nobody defends it.").ToString();
+            bool endless = c.Hours >= 24 * 5 - 0.01;
+            sb.Append(endless ? "a storm begun then would not end within five days." : "a storm begun then should last about " + Forecast.HoursText(c.Hours) + ", ending about " + Text.When(Hours + start + c.Hours) + ".");
+            if (c.Comers.Count == 0) return sb.Append(" No enemy lord or army in view or seen lately could reach the camp before then.").ToString();
+            sb.Append(" Enemy lords and armies that could reach the camp before then: ");
+            sb.Append(string.Join("; ", c.Comers.OrderBy(x => x.At).Take(6).Select(x => Name(x.Id) + " (strength " + Text.N((int)Math.Round(x.Strength)) + ") about " + Text.When(Hours + x.At)
+                                                                                        + (x.OwnPace ? "" : " at the soonest"))));
+            if (c.Comers.Count > 6) sb.Append("; and " + (c.Comers.Count - 6) + " more");
+            sb.Append(". Joining the defenders as each arrives, they would " + (c.Won ? "leave your besiegers about " + Math.Round(c.LeftShare * 100) + "% of their men" : "turn the storm") + ".");
+            if (c.Comers.Any(x => !x.OwnPace)) sb.Append(" Those marked \"at the soonest\" are out of view, standing still or inside a holding, so counted at no slower than speed 2.8.");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// A storm of a siege of the realm's or an ally's begun in startIn hours (0 for now: the storm guard), run ahead by the game's battle rules: alone, and with every
+        /// enemy lord and army that could reach the camp before it would end joining the defenders as each arrives (those there by its start join at once).
+        /// </summary>
+        internal StormCheckResult StormReckon(string place, double startIn)
         {
             SettlementRow h = Holding(place);
             SiegeRow g = OurSiege(h) ? Siege(place) : null;
@@ -1105,20 +1157,23 @@ namespace BannerlordAgents.Tools
             res.Won = alone.Winner == "attackers";
             res.LeftShare = res.Won ? alone.AttackersLeft / (double)Math.Max(1, g.AttackerMen) : 0;
             if (!Where(place, out float px, out float py)) return res;
-            // the relief: every enemy lord and army in view, and those seen in the last hours from where they were seen, that could reach the camp before the storm would end,
-            // each at its own pace but never slower than the floor; lords inside the place are its defenders already, lords shut in another siege cannot come
+            // the relief: every enemy lord and army in view, and those seen in the last hours from where they were seen, that could reach the camp before the storm would end:
+            // one in view on the march at its own pace, anyone else never slower than the floor (0.20.5); lords inside the place are its defenders already, lords shut in
+            // another siege cannot come
             double floor = Common.GamePace.DayAverageOfSpeed(ReliefFloorSpeed);
+            double end = Math.Max(0, startIn) + res.Hours;
             var relief = new List<Common.BattleJoiner>();
             var counted = new HashSet<string>(StringComparer.Ordinal);
             foreach (PartyRow e in _enemies)
             {
                 if (e.InSettlement == place || !counted.Add(e.Id)) continue;
                 double d = Math.Sqrt((e.X - px) * (e.X - px) + (e.Y - py) * (e.Y - py));
-                double t = d / Math.Max(Math.Max(0.3, PerHour(e)), floor);
-                if (t > res.Hours) continue;
+                double t = ReliefHours(e, d, floor, out bool own);
+                if (t > end) continue;
                 int men = Math.Max(1, MenOf(e));
-                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = t, Power = (float)(StrengthOf(e) / men) });
+                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, t - startIn), Power = (float)(StrengthOf(e) / men) });
                 res.ReliefStrength += StrengthOf(e);
+                res.Comers.Add((e.Id, StrengthOf(e), t, own));
             }
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
@@ -1129,11 +1184,12 @@ namespace BannerlordAgents.Tools
                 double per = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
                 double d = Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py));
                 double t = Math.Max(0, d / Math.Max(Math.Max(0.3, per), floor) - (Hours - v.SeenHours));
-                if (t > res.Hours) continue;
+                if (t > end) continue;
                 counted.Add(kv.Key);
                 int men = Math.Max(1, v.ArmyMen > 0 ? v.ArmyMen : v.Men);
-                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = t, Power = v.Strength / men });
+                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, t - startIn), Power = v.Strength / men });
                 res.ReliefStrength += v.Strength;
+                res.Comers.Add((kv.Key, v.Strength, t, false));
             }
             res.ReliefCount = relief.Count;
             if (relief.Count == 0) return res;

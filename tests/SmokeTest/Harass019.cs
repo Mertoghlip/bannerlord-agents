@@ -368,8 +368,34 @@ namespace SmokeTest
             bool slowCounted = Expr.Number(F(floor, "storm_relief", "castle_men")) == 3000 && F(floor, "storm_clear", "castle_men", 0.25) is bool c2 && !c2;
             Check(hours > 1 && aloneClear && nearHeld && farClear && slowOwnLate && slowCounted,
                   "the storm guard: a storm of Fornost run ahead lasts about " + ToolDef.Num(Math.Round(hours, 1)) + " hours; with no relief it is clear; a 3,000 army 8 away would come in time and turn it; "
-                  + "the same army out of reach leaves it clear; a slow army (speed 1) that would come too late at its own pace is counted at speed 2.8 and holds it ("
+                  + "the same army out of reach leaves it clear; a slow army (speed 1) standing still, that would come too late at its own pace, is counted at speed 2.8 and holds it ("
                   + aloneClear + ", " + nearHeld + ", " + farClear + ", " + slowOwnLate + ", " + slowCounted + ")");
+
+            // 0.20.5: the same slow army seen on the march toward the camp is counted at its own pace, comes too late, and leaves the storm clear
+            var marching = Man("sr6", 3000, 1500, (float)(170 + between), 103, 1);
+            marching.Doing = "GoToSettlement";
+            marching.Tx = 170;
+            marching.Ty = 103;
+            World ownPace = W(Sieged(h, marching));
+            bool marchingClear = Expr.Truthy(F(ownPace, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(ownPace, "storm_relief", "castle_men")) == 0;
+            Check(marchingClear, "the storm guard counts a slow army seen on the march at its own pace (speed 1, about " + ToolDef.Num(Math.Round(between, 1))
+                                 + " away, too late for a storm of about " + ToolDef.Num(Math.Round(hours, 1)) + " hours): clear (" + marchingClear + ")");
+
+            // 0.20.5: the storm's clock, told when the guard is switched off: when the camp may storm, when the storm would end, who could come before then and whether they turn it
+            string clockNow = W(Sieged(h, Man("sr7", 3000, 1500, 178, 103, 4))).StormClock("castle_men") ?? "";
+            var coming = Man("sr8", 3000, 1500, 178, 103, 4);
+            coming.Doing = "GoToSettlement";
+            coming.Tx = 170;
+            coming.Ty = 103;
+            Snapshot unready = Sieged(h, coming);
+            unready.Sieges[0].Prep = 0.5f;
+            string clockLater = W(unready).StormClock("castle_men") ?? "";
+            string clockNone = alone.StormClock("castle_men") ?? "";
+            bool nowOk = clockNow.Contains("may storm now") && clockNow.Contains("sr7 (strength 3,000)") && clockNow.Contains("at the soonest") && clockNow.Contains("turn the storm");
+            bool laterOk = clockLater.Contains("may storm in about 25 hours") && clockLater.Contains("sr8 (strength 3,000)") && !clockLater.Contains("at the soonest");
+            bool noneOk = clockNone.Contains("No enemy lord or army") && alone.StormClock("castle_nowhere") == null;
+            Check(nowOk && laterOk && noneOk, "the storm's clock: a camp ready now with a strong army close by ('" + clockNow + "'); a camp ready in 25 hours, with the slow army on the march arriving within the storm ('"
+                                              + clockLater + "'); no relief ('" + clockNone + "') (" + nowOk + ", " + laterOk + ", " + noneOk + ")");
 
             // the besiege order's storm rule: held while that relief could turn the storm, free once it cannot; storm_guard 0 never holds
             var rules = new List<KeyValuePair<string, StormRule>>();
