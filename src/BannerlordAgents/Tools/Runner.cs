@@ -1537,6 +1537,44 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
+        /// Where a lord runs when no castle or town can take him in before the danger (0.20.3, Nov 17: Vorgoth ran straight away from the strongest of
+        /// twelve enemy parties around him, Nár 16 to his north-west, into Dáin and Iridi 5.5 and 10 to his south, and was caught within two hours):
+        /// of 24 ways round him, out to far, the one on which the first enemy who could be at a point of his way before him gets there latest, each
+        /// enemy at its own pace and every one counted; a way none can cut within far beats any that can be cut, and ties go to the way that keeps
+        /// him farthest ahead of them. Game-free (the smoke test runs it).
+        /// </summary>
+        internal static (double X, double Y) EscapePoint(double mx, double my, double myPace, IList<(double X, double Y, double Pace)> foes, double far)
+        {
+            const int Ways = 24, Steps = 12;
+            double pace = myPace > 0.05 ? myPace : 1;
+            double bestCaught = double.NegativeInfinity, bestSlack = double.NegativeInfinity, bx = mx + far, by = my;
+            for (int k = 0; k < Ways; k++)
+            {
+                double a = 2 * Math.PI * k / Ways, dx = Math.Cos(a), dy = Math.Sin(a);
+                double caught = double.PositiveInfinity, slack = double.PositiveInfinity;
+                for (int i = 1; i <= Steps; i++)
+                {
+                    double s = far * i / Steps, px = mx + dx * s, py = my + dy * s, mine = s / pace, lead = double.PositiveInfinity;
+                    foreach (var f in foes)
+                    {
+                        double theirs = Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) / (f.Pace > 0.05 ? f.Pace : 1);
+                        lead = Math.Min(lead, theirs - mine);
+                    }
+                    slack = lead;
+                    if (lead <= 0) { caught = mine; break; }
+                }
+                if (caught > bestCaught || (caught == bestCaught && slack > bestSlack))
+                {
+                    bestCaught = caught;
+                    bestSlack = slack;
+                    bx = mx + dx * far;
+                    by = my + dy * far;
+                }
+            }
+            return (bx, by);
+        }
+
+        /// <summary>
         /// The lord takes shelter from a danger, or runs from it (World.ChooseRefuge): inside the first castle or town it can
         /// reach whose defenders, with it, would hold against the danger and every force near that place; if none would,
         /// toward the nearest one that takes it farther from the danger, stopping outside. The agent is told which, and why.
@@ -1548,16 +1586,23 @@ namespace BannerlordAgents.Tools
             SettlementRow fort = forced ?? w.ChooseRefuge(me.Id, preferred, World.HoldRadius, danger, out holds, out running, group.Strength, group.Ids);
             if (fort == null)
             {
-                // nowhere it can reach before the danger: straight away from it, twice the danger radius, again each hour
-                double dx = me.X - danger.X, dy = me.Y - danger.Y, len = Math.Sqrt(dx * dx + dy * dy);
-                if (len < 0.01) { dx = 1; dy = 0; len = 1; }
+                // nowhere it can reach before the danger: away from all of it, twice the danger radius, again each hour (0.20.3: the way on which the
+                // first of the danger's parties to reach him gets there latest, EscapePoint; until then straight away from its strongest party alone)
                 double far = Math.Max(12, 2 * (t.Settings.TryGetValue("danger_radius", out double dr) ? dr : Library.DangerRadius.Default));
+                var foes = new List<(double X, double Y, double Pace)>();
+                foreach (string id in group.Ids ?? new HashSet<string>())
+                {
+                    PartyRow e = w.Party(id);
+                    if (e != null) foes.Add((e.X, e.Y, w.PerHour(e)));
+                }
+                if (foes.Count == 0) foes.Add((danger.X, danger.Y, w.PerHour(danger)));
+                (double ex, double ey) = EscapePoint(me.X, me.Y, w.PerHour(me), foes, far);
                 bool first = t.Shelter == null;
                 t.Shelter = Away;
                 t.ShelterFrom = danger.Id;
                 t.Running = true;
                 if (!again) t.AsideSince = w.Hours;
-                t.Pending = new Move { Verb = "toward", X = (float)(me.X + dx / len * far), Y = (float)(me.Y + dy / len * far) };
+                t.Pending = new Move { Verb = "toward", X = (float)ex, Y = (float)ey };
                 t.HasPending = true;
                 if (first)
                 {

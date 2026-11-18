@@ -247,6 +247,7 @@ namespace SmokeTest
             BordersTests();
             SiegeFoodTests();
             SiegeDrillTests();
+            EscapeTests();
             Runner.MoveSink = keptMove;
             Runner.ReleaseSink = keptRelease;
         }

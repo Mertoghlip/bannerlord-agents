@@ -65,13 +65,33 @@ namespace BannerlordAgents
             Log.Line("game hooks: " + Status);
         }
 
+        /// <summary>
+        /// The campaign map's pace (0.20.3): in front of the game's map clock (Campaign.TickMapTime, every frame on the map), whose real seconds set both
+        /// the clock and the campaign's step every party marches by (Campaign.CampaignDt), so both slow together. A private method of some 140 bytes of
+        /// code, above the 100 the JIT inlines, so its caller cannot bake it in (the IL size is in the status line).
+        /// </summary>
+        private static void InstallMapSpeed()
+        {
+            var h = (HarmonyLib.Harmony)(_harmony ?? (_harmony = new HarmonyLib.Harmony(Owner)));
+            MethodInfo target = typeof(Campaign).GetMethod("TickMapTime", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(float) }, null);
+            if (target == null) { Parts["map speed"] = "the map's pace: the game's map clock was not found, so the game keeps its own pace"; return; }
+            int il = target.GetMethodBody()?.GetILAsByteArray()?.Length ?? -1;
+            h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(MapSpeedPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
+            MapSpeedInstalled = Ours(target);
+            Parts["map speed"] = "the map's pace " + (MapSpeedInstalled ? "attached" : "did not attach") + Others(target)
+                                 + " (" + (Settings.MapSpeed == 1 ? "the game's own" : Settings.MapSpeed.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " of the game's own") + "; IL " + il + " bytes)";
+            Log.Line("game hooks: " + Status);
+        }
+
         /// <summary>The lieutenant's key (ChatHook): Enter on the campaign map opens its window instead of the game's chat box.</summary>
         public static bool ChatInstalled;
-        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried, _siegeFoodTried, _drillTried;
+        private static bool _keepHeldTried, _stormTried, _moneyTried, _chatTried, _sallyTried, _recordTried, _diplomacyTried, _siegeFoodTried, _drillTried, _mapSpeedTried;
         /// <summary>The siege food rule (0.19.5, SiegeFood): a besieged place's day draws on its lords' food once its own store would run out.</summary>
         public static bool SiegeFoodInstalled;
         /// <summary>The siege drill (0.20.0, SiegeDrill): which siege engines the computer's camps and the defenders against the player build, hold back and roll out.</summary>
         public static bool DrillInstalled;
+        /// <summary>The campaign map's pace (0.20.3, Settings.MapSpeed): the game's clock and every march at a share of the game's own pace.</summary>
+        public static bool MapSpeedInstalled;
         /// <summary>The agents' diplomacy (0.13): the ruler's choice in a vote, and a vote's announcement held for an agent's say.</summary>
         public static bool DiplomacyInstalled;
         /// <summary>The record's hooks (0.13): the party screen's Done, your votes in the realm's council, the offer windows shown to you.</summary>
@@ -140,6 +160,17 @@ namespace BannerlordAgents
                 {
                     Parts["siege drill"] = "the siege drill could not attach (" + e.GetType().Name + ": " + e.Message + "), so the game's own siege strategies decide";
                     Diag.Swallowed("the siege drill hook", e);
+                }
+            }
+            // the campaign map's pace (0.20.3): it changes the game, so apart from the others; settings.txt's map_speed sets it (1: the game's own)
+            if (!_mapSpeedTried)
+            {
+                _mapSpeedTried = true;
+                try { InstallMapSpeed(); }
+                catch (Exception e)
+                {
+                    Parts["map speed"] = "the map's pace could not attach (" + e.GetType().Name + ": " + e.Message + "), so the game keeps its own pace";
+                    Diag.Swallowed("the map speed hook", e);
                 }
             }
             // the chat box's hooks only once a lieutenant is in the agents' settings, apart from the others
@@ -420,6 +451,16 @@ namespace BannerlordAgents
     /// place for the computer's camps, and for defenders against the player's own siege (SiegeDrill.Decide). A side the player leads, and
     /// defenders against computer camps, keep the game's own answer.
     /// </summary>
+    /// <summary>The campaign map's pace (0.20.3): the real seconds the game's map clock is handed, at settings.txt's map_speed. Allocation-free, every frame.</summary>
+    internal static class MapSpeedPatch
+    {
+        private static void Prefix(ref float realDt)
+        {
+            double k = Settings.MapSpeed;
+            if (k != 1.0) realDt *= (float)k;
+        }
+    }
+
     internal static class DrillPatch
     {
         private static bool Prefix(TaleWorlds.CampaignSystem.Siege.ISiegeEventSide side, ref TaleWorlds.CampaignSystem.ComponentInterfaces.SiegeStrategyActionModel.SiegeAction siegeAction,

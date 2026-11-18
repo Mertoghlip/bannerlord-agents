@@ -58,6 +58,12 @@ What the game and the TAOM pack do, as read in their code and seen in play while
 - A party's food: one food item is one food (100 in `RemainingFoodPercentage`); each day it eats its `FoodChange` (`FoodConsumptionBehavior.PartyConsumeFood`), at random among its food items, then slaughters livestock. In an army, a starving party takes food from the army party whose food lasts longest (`TotalFood / |FoodChange|`), the cheapest item first, and the giver gains a little influence. Lords inside a place never eat its store.
 - 0.19.5 (`SiegeFood`): a prefix on `Town.DailyTick` makes a besieged place take its shortfall from its lords' food by that same sharing rule, once its day would leave the store below one.
 
+## The campaign map's clock and pace (1.4.8; read Nov 17 for 0.20.3)
+
+- `Campaign.RealTick(realDt)` calls `TickMapTime(realDt)` every map frame: at play the campaign's step is `0.25 * realDt`, at fast-forward that times `SpeedUpMultiplier` (4, set back to 4 at each load; the cheat `campaign.set_campaign_speed_multiplier` changes it), nothing while stopped or while the main party waits in a stoppable mode. The step is kept as `_dt` (`Campaign.CampaignDt`), which every party's thinking and march, the sieges and the campaign events tick by, and the clock moves `4320 * step` seconds: 1,080 campaign seconds a real second, 18 in-game hours a real minute at play, 72 at fast-forward.
+- So scaling the real seconds `TickMapTime` is handed slows the clock and every march together, while the map's visuals keep their own real time (`CampaignEntityComponent.OnTick` gets the untouched `realDt`). `TickMapTime` is a private method of about 140 bytes of IL, above the 100 the JIT inlines, so a prefix on it holds (module 0.20.3, `MapSpeedPatch`, settings.txt `map_speed`; the hooks' status line gives its IL size).
+- What the game offers itself: only fast-forward's multiplier. Nothing slows play.
+
 ## Siege engines, walls and the storm (1.4.8; read Nov 16 for 0.20.0)
 
 Read in the decompiled 1.4.8 source (`C:\BannerlordArchive\refsrc\TW148`) and checked against hourly copies of the Nov 16 session. None of the active mods changes these rules: TAOM's siege model only adds a trebuchet to the player's own defender list, and TFAOMFixes' fire-catapult patch fails to attach every session ("You can only patch implemented methods").
