@@ -514,7 +514,13 @@ namespace BannerlordAgents
             Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", known);
             ag.Channel.OnHour(v.Hours, report);
             // a self-waking agent's review (0.18) sees its watches with the realm
-            ag.Channel.WriteCouncil(Facts.Council(w) + (ag.Config.WakeSelf ? "\r\n\r\n" + Watches.Section(ag.Watches, v) + "\r\n" : ""));
+            // 0.20.4: the review is where plans are made, so it opens with the realm's own order delay too
+            ag.Channel.Lag(out double usualLag, out double lateLag);
+            string briefing = Facts.Council(w);
+            int head = briefing.IndexOf('\n');
+            string delay = "\r\nYOUR ORDER DELAY\r\n- " + Views.LagLine(usualLag, lateLag) + "\r\n";
+            briefing = head < 0 ? briefing + delay : briefing.Substring(0, head + 1) + delay + briefing.Substring(head + 1);
+            ag.Channel.WriteCouncil(briefing + (ag.Config.WakeSelf ? "\r\n\r\n" + Watches.Section(ag.Watches, v) + "\r\n" : ""));
             if (ag.Config.Theatre)
             {
                 // a news wake no longer writes the look-up files (its question book replaces them, 0.14), but a council, which keeps the whole

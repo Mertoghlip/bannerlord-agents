@@ -147,10 +147,17 @@ namespace BannerlordAgents
                                   + (string.IsNullOrEmpty(f.How) ? "" : ": " + f.How) + ". Shown is everyone who can be there " + shown + ".");
                 }
             }
-            if (t.Focuses.Any(f => !double.IsNaN(f.DecidedAt)))
-                sb.AppendLine("- Your answers' orders take effect about " + Math.Round(t.UsualLag) + " in-game hours after their report as a rule, and " + Math.Round(t.LateLag)
-                              + " or more for one answer in ten, since the game runs while you think: each lord below is marked against the clock with that counted.");
+            // 0.20.4 (Nov 17): told at every wake, not only beside a clock of the game's, so every plan is made for the hour its orders will land
+            sb.AppendLine("- " + LagLine(t.UsualLag, t.LateLag) + (t.Focuses.Any(f => !double.IsNaN(f.DecidedAt)) ? " Each lord below is marked against the clock with that counted." : ""));
         }
+
+        /// <summary>
+        /// The agent's own order delay in words (0.20.4): in-game hours from a report to its answer's first order taking effect, as a rule and for one
+        /// answer in ten (Channel.Lag), for the wake's clock and the review's briefing alike.
+        /// </summary>
+        internal static string LagLine(double usual, double late)
+            => "Your answers' orders take effect about " + Math.Round(usual) + " in-game hours after the report they answer as a rule, and " + Math.Round(late)
+               + " or more for one answer in ten, since the game runs while you think: plan for where things will be then, not where they are now.";
 
         private static string TagOf(View v, string partyId)
         {
