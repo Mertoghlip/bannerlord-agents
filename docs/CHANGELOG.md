@@ -2703,4 +2703,5 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test (new `EscapeTests`: Vorgoth's hour, the old way cut off within 1.5 hours, the new one away from Dáin and Iridi and not cut off for 7.2; one enemy, straight away; hemmed in on three sides, out of the open side), war room self-test and dashboard self-test passed; RefCheck: 874 member references, missing 0 (`TickMapTime` is reached by name, checked at load in the hooks' status line).
 - **Installed** with the game closed (17:12): module 0.20.3. The war rooms, dashboard and archive keeper were stopped for the build and started again (17:13).
 - **Outside the repository:** `%LOCALAPPDATA%\BannerlordAgents\settings.txt` gets `map_speed = 0.5` (backup `settings.txt.bak-20261117-before-map-speed`).
+- **Commit:** 07322ef.
 - **Next:** at the next load the hooks' status should say "the map's pace attached (0.5 of the game's own; IL ... bytes)", and the health log's in-game hours should run about 9 a real minute at play.
