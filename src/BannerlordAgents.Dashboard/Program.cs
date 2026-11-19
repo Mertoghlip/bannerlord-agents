@@ -171,6 +171,8 @@ namespace BannerlordAgents.Dashboard
             var errNew = new List<double>(); var errOld = new List<double>(); var errWay = new List<double>();
             var others = new List<float>();
             var longNew = new List<double>(); var longOld = new List<double>(); var longWay = new List<double>();
+            // 0.21.0: the march clock as the rules use it until the copy of the game's way-finder: the straight line to where it walks, the ground read along it
+            var errLine = new List<double>(); var longLine = new List<double>();
             var started = new HashSet<string>();
             var lines = new List<string>();
             for (int i = 0; i < hours.Count; i++)
@@ -232,6 +234,13 @@ namespace BannerlordAgents.Dashboard
                         }
                     }
                     double hWay = t - hours[i];
+                    var cp = new BannerlordAgents.Common.ClockParty { Id = id, X = way[0][0], Y = way[0][1], SeenHours = hours[i], InView = true, Pace = pace };
+                    BannerlordAgents.Common.MarchTime line = BannerlordAgents.Common.MarchClock.Reach(cp, BannerlordAgents.Common.MarchClock.Straight(cp, tx, ty), (x, y) => m.GroundAt(x, y), hours[i]);
+                    if (line.Reached)
+                    {
+                        errLine.Add((line.Hours - actual) / actual * 100);
+                        if (actual >= 12) longLine.Add((line.Hours - actual) / actual * 100);
+                    }
                     errNew.Add((hNew - actual) / actual * 100);
                     errOld.Add((hOld - actual) / actual * 100);
                     errWay.Add((hWay - actual) / actual * 100);
@@ -253,10 +262,12 @@ namespace BannerlordAgents.Dashboard
             Console.WriteLine(Sum("the game's rule (0.7.3)", errNew));
             Console.WriteLine(Sum("the old sum, length over the speed number", errOld));
             Console.WriteLine(Sum("the old way-finder", errWay));
+            Console.WriteLine(Sum("the march clock on the straight line (0.21.0, until the copy of the game's way-finder)", errLine));
             Console.WriteLine("Marches of 12 hours or more (" + longNew.Count + "), where the frames' hour-long steps blur less:");
             Console.WriteLine(Sum("the game's rule (0.7.3)", longNew));
             Console.WriteLine(Sum("the old sum", longOld));
             Console.WriteLine(Sum("the old way-finder", longWay));
+            Console.WriteLine(Sum("the march clock on the straight line", longLine));
             return 0;
         }
 
