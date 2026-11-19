@@ -1779,8 +1779,8 @@ namespace SmokeTest
             Check(seen != null && seen.NearestHolding == "Orc Keep" && report.Contains("22.4 (27.4 by road) from your Orc Keep"), "the report gives the nearest holding by road, both as the crow flies and by road");
             Check(report.Contains("as the crow flies, then in brackets by road"), "and says what the two distances are");
             Check(Math.Abs(Runner.WorldFor(s).RoadDistance("p_ugr", "p_far") - 183.9) < 0.3, "between two parties, each through its own entrance (" + Text.D((float)Runner.WorldFor(s).RoadDistance("p_ugr", "p_far")) + ")");
-            Check(Facts.Lookups(Runner.WorldFor(s), Brain.Get("orcs").LastSeen, Brain.Get("orcs").Trails).TryGetValue("lord_ugr", out string page) && page.Contains("Orc Keep [castle_two]: about 11 h"),
-                  "a lord's look-up gives hours by road at its pace by the game's rules (45 by road at speed 5: 4.0 map units an hour over a day, night counted)");
+            Check(Facts.Lookups(Runner.WorldFor(s), Brain.Get("orcs").LastSeen, Brain.Get("orcs").Trails).TryGetValue("lord_ugr", out string page) && page.Contains("Orc Keep [castle_two]: about 12 h"),
+                  "a lord's look-up gives hours by road at its pace by the game's rules (0.21.0, the march clock: 45 by road at speed 5 from 20:00, 4.2 map units an hour by day and 3.1 through the night from 22:00 to 02:00: about 12 hours; it was 11 at a day's average)");
             Brain.OnHour(ToolWorld(7101, far, ug));
             Check(!Roads.Known, "without the game's table (a made-up world) distances go back to the crow's alone");
         }

@@ -158,12 +158,44 @@ namespace BannerlordAgents
                 Arrival a = ArrivalOf(s, r, maxHours);
                 if (a != null) { a.Way = true; a.To = h.Id; return a; }
             }
-            float per = DayPerHour(s, lead);
-            if (per <= 0.05f) return null;
-            float road = Roads.To(s, lead, h);
-            double d = !float.IsNaN(road) ? road : Math.Sqrt((h.X - lead.X) * (h.X - lead.X) + (h.Y - lead.Y) * (h.Y - lead.Y));
-            double hours = d / per;
-            return new Arrival { Hours = hours, At = s.Hours + hours, Reached = hours <= maxHours, Length = d, To = h.Id, Way = false };
+            // 0.21.0, the march clock: its exact pace stretch by stretch for the ground and the hour along the straight line to the gate, stretched to the game's road
+            // length where its table knows the way (until the copy of the game's way-finder, docs/PLAN-ways.md); it was the road at its pace over a day on open ground
+            Pace p = PaceOf(s, lead);
+            if (p == null || p.Base <= 0) return null;
+            var sp = new ClockParty { Id = lead.Id, X = lead.X, Y = lead.Y, SeenHours = s.Hours, InView = true, Pace = p };
+            bool gate = h.Gx != 0 || h.Gy != 0;
+            MapGround g = MapGround.For(s.MapCrc);
+            MarchTime m = MarchClock.Reach(sp, MarchClock.Straight(sp, gate ? h.Gx : h.X, gate ? h.Gy : h.Y), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours, maxHours);
+            m = MarchClock.ByRoad(sp, m, Roads.To(s, lead, h), s.Hours);
+            if (double.IsNaN(m.Hours)) return null;
+            return new Arrival { Hours = m.Hours, At = m.At, Reached = m.Reached, Length = m.Length, To = h.Id, Way = false };
+        }
+
+        /// <summary>
+        /// A party in view to a point by the march clock (0.21.0): its exact pace stretch by stretch for the ground and the hour along the straight line (until the
+        /// copy of the game's way-finder, docs/PLAN-ways.md). For the report's own reckonings, which have no World: the rules use World.MarchTo.
+        /// </summary>
+        public static MarchTime InViewTo(Snapshot s, PartyRow r, float x, float y, double maxHours = 24 * 30)
+        {
+            PartyRow lead = Lead(s, r);
+            Pace p = lead != null ? PaceOf(s, lead) : null;
+            if (p == null || p.Base <= 0) return new MarchTime();
+            var cp = new ClockParty { Id = lead.Id, X = lead.X, Y = lead.Y, SeenHours = s.Hours, InView = true, Pace = p };
+            MapGround g = MapGround.For(s.MapCrc);
+            return MarchClock.Reach(cp, MarchClock.Straight(cp, x, y), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours, maxHours);
+        }
+
+        /// <summary>
+        /// A party seen earlier to a holding by the march clock (0.21.0): from where it was seen, its pace then +10% (no slower than speed 2.8 after a day), the
+        /// clock running since; stretched to the game's road length where its table knows the way. Basis Forgotten after three days.
+        /// </summary>
+        public static MarchTime SeenEarlierTo(Snapshot s, ViewParty p, SettlementRow h)
+        {
+            var cp = Tools.World.SeenOf(p);
+            bool gate = h.Gx != 0 || h.Gy != 0;
+            MapGround g = MapGround.For(s.MapCrc);
+            MarchTime m = MarchClock.Reach(cp, MarchClock.Straight(cp, gate ? h.Gx : h.X, gate ? h.Gy : h.Y), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours);
+            return MarchClock.ByRoad(cp, m, Roads.To(s, p.X, p.Y, p.Entrance, null, h), s.Hours);
         }
 
         /// <summary>"there in about 14 hours (Summer 19, 14:00), 38 to go on its way", or "more than 20 days away".</summary>

@@ -10,7 +10,7 @@ namespace BannerlordAgents.Common
     /// A party as the clock knows it (Nov 18, PLAN-ways.md): where it stands or was last seen, when, its pace then (the game's own speed sum),
     /// for an army its leader's own pace as well, and for a party in a battle the hour the battle should end.
     /// </summary>
-    public sealed class SeenParty
+    public sealed class ClockParty
     {
         public string Id;
         public float X, Y;
@@ -60,7 +60,7 @@ namespace BannerlordAgents.Common
         /// <summary>The speed a party of no known pace is counted at (World.DefaultSpeed).</summary>
         public const float UnknownSpeed = 4f;
 
-        public static PaceBasis BasisAt(SeenParty s, double now)
+        public static PaceBasis BasisAt(ClockParty s, double now)
         {
             if (s == null) return PaceBasis.Unknown;
             if (s.InView) return s.Pace != null && s.Pace.Base > 0 ? PaceBasis.Exact : PaceBasis.Unknown;
@@ -85,7 +85,7 @@ namespace BannerlordAgents.Common
         }
 
         /// <summary>Map units an hour this party is counted at on one ground at one hour, by its basis.</summary>
-        public static float UnitsPerHour(SeenParty s, PaceBasis basis, int ground, bool night)
+        public static float UnitsPerHour(ClockParty s, PaceBasis basis, int ground, bool night)
         {
             if (basis == PaceBasis.Unknown) return GamePace.PerHour(Math.Max(GamePace.MinimumSpeed, UnknownSpeed * (1f + (night ? GamePace.NightFactor : 0f))));
             float Own(Pace p) => p == null ? 0f : p.Flat > 0 ? p.Flat : GamePace.PerHour(GamePace.Speed(p, ground, night));
@@ -100,7 +100,7 @@ namespace BannerlordAgents.Common
         private static readonly int[] Grounds = { GamePace.Plain, GamePace.Steppe, GamePace.Desert, GamePace.Dune, GamePace.Snow, GamePace.Forest, GamePace.Swamp, GamePace.Fording };
 
         /// <summary>The most map units an hour the party is counted at on any ground, by day or night (its people may march faster at night): a bound for questions that need no march.</summary>
-        public static float FastestUnits(SeenParty s, PaceBasis basis)
+        public static float FastestUnits(ClockParty s, PaceBasis basis)
         {
             float best = 0f;
             foreach (int g in Grounds)
@@ -112,14 +112,30 @@ namespace BannerlordAgents.Common
         }
 
         /// <summary>The straight way from where the party is (or was seen) to a point: the first version of the way, the ground read along it.</summary>
-        public static List<float[]> Straight(SeenParty s, float x, float y) => new List<float[]> { new[] { s.X, s.Y }, new[] { x, y } };
+        public static List<float[]> Straight(ClockParty s, float x, float y) => new List<float[]> { new[] { s.X, s.Y }, new[] { x, y } };
+
+        /// <summary>
+        /// A march on the straight line stretched to the game's road length when that is longer (its table of ways between holdings): the ground as read along the
+        /// line, the hours in proportion. Until the copy of the game's way-finder this keeps long marches between holdings from looking short (docs/PLAN-ways.md).
+        /// </summary>
+        public static MarchTime ByRoad(ClockParty s, MarchTime m, double road, double now)
+        {
+            if (m == null || !m.Reached || double.IsNaN(road) || m.Length <= 0.5 || road <= m.Length) return m;
+            double start = s.InView ? now : s.SeenHours;
+            if (!double.IsNaN(s.FreeAt) && s.FreeAt > start) start = s.FreeAt;
+            double k = road / m.Length;
+            var r = new MarchTime { Reached = true, Basis = m.Basis, SeenAgo = m.SeenAgo, SeenSpeed = m.SeenSpeed, CountedSpeed = m.CountedSpeed, Length = road };
+            r.At = start + (m.At - start) * k;
+            r.Hours = Math.Max(0, r.At - now);
+            return r;
+        }
 
         /// <summary>
         /// When the party could reach the end of a way (its first point where it stands or was seen): marched stretch by stretch (a quarter unit at a time)
         /// at its counted pace for the ground under it and the hour, from when it was seen (or from the end of its battle). Hours are from now; one that
         /// could be there already gives 0. A forgotten party, or one with no way, gives NaN.
         /// </summary>
-        public static MarchTime Reach(SeenParty s, IList<float[]> way, Func<float, float, int> groundAt, double now, double maxHours = 24 * 30)
+        public static MarchTime Reach(ClockParty s, IList<float[]> way, Func<float, float, int> groundAt, double now, double maxHours = 24 * 30)
         {
             var r = new MarchTime { Basis = BasisAt(s, now) };
             if (s == null) return r;

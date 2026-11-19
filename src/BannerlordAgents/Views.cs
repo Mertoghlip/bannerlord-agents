@@ -99,6 +99,8 @@ namespace BannerlordAgents
         /// </summary>
         public string Arrives;
         public double ArrivesAt = double.NaN;
+        /// <summary>Seen earlier: where it could be by now, by the march clock, worked out at each report (0.21.0); null when it marched nowhere known or is no longer counted.</summary>
+        public string Reckoned;
         public Common.Pace March;
         /// <summary>
         /// The army it is marching to join (0.12.3: every lord marching to an army within view should be listed under that
@@ -242,10 +244,11 @@ namespace BannerlordAgents
                 PartyRow head = JoiningHead(s, r);
                 if (head == null || !(head.Faction == fid || sees.ContainsKey(head.Id))) continue;
                 float d = Dist(head.X, head.Y, r.X, r.Y);
-                float per = Forecast.DayPerHour(s, r);
+                // 0.21.0: by the march clock, the ground and the hour stretch by stretch
+                Common.MarchTime jm = Forecast.InViewTo(s, r, head.X, head.Y);
                 p.Joining = head.Id;
                 p.JoiningDistance = Text.R1(d);
-                p.JoiningHours = per > 0.05f ? Math.Round(d / per, 1) : double.NaN;
+                p.JoiningHours = jm.Reached ? Math.Round(jm.Hours, 1) : double.NaN;
             }
 
             foreach (SettlementRow h in own)
@@ -285,6 +288,15 @@ namespace BannerlordAgents
                                                              .OrderBy(SeenRank).ThenBy(x => s.Hours - x.SeenHours).ToList();
                 int keepEarlier = Math.Max(25, earlier.Count(x => SeenRank(x) == 0));
                 v.LastSeen = earlier.Take(keepEarlier).ToList();
+                // 0.21.0: where each could be by now, by the march clock, worked out afresh at every report (it was the arrival reckoned when it was seen)
+                foreach (ViewParty p in v.LastSeen)
+                {
+                    p.Reckoned = null;
+                    if (p.Toward == null || !s.SettlementById.TryGetValue(p.Toward, out SettlementRow th)) continue;
+                    Common.MarchTime m = Forecast.SeenEarlierTo(s, p, th);
+                    if (m.Basis == Common.PaceBasis.Forgotten || !m.Reached) continue;
+                    p.Reckoned = (m.At <= s.Hours ? "it could be at " + th.Name + " already" : "it could be at " + th.Name + " by " + Text.When(m.At)) + " (" + Common.MarchClock.Basis(m) + ")";
+                }
                 // a trail of one point says no more than the lists above
                 v.Trails = mem.Trails.Values.Where(t => t.Points.Count >= 2).OrderByDescending(t => t.Strength).ToList();
                 if (Chronicle.Holds(fid))
@@ -799,7 +811,7 @@ namespace BannerlordAgents
             => "- " + p.Name + Tag(p) + " (" + p.FactionName + "): " + (p.ArmyMen > 0 ? "army of " + Text.N(p.ArmyMen) : Text.N(p.Men)) + " men, strength "
                + Text.N((int)p.Strength) + ", last seen " + Where(p)
                + ", " + Math.Round(now - p.SeenHours) + " hours ago, " + p.Doing
-               + (!double.IsNaN(p.ArrivesAt) && p.ArrivesAt > now ? " (if it kept on, there about " + Text.When(p.ArrivesAt) + ")" : "") + ".";
+               + (p.Reckoned != null ? "; " + p.Reckoned : !double.IsNaN(p.ArrivesAt) && p.ArrivesAt > now ? " (if it kept on, there about " + Text.When(p.ArrivesAt) + ")" : "") + ".";
 
         /// <summary>An enemy holding near the realm's lands, as ENEMY HOLDINGS NEAR YOUR LANDS lists it.</summary>
         internal static string FrontierLine(ViewHolding h)

@@ -1018,8 +1018,10 @@ namespace BannerlordAgents
         /// <summary>The hours from one of the realm's lords to an enemy in view: by road where the game's table knows the way, at his own pace (0.15, the chances to strike).</summary>
         private static double MarchHours(Tools.World w, ViewParty own, ViewParty foe)
         {
-            double d = w.RoadDistance(own.Id, foe.Id);
-            if (double.IsNaN(d)) d = Views.Dist(own.X, own.Y, foe.X, foe.Y) * Theatre.RoadFactor;
+            // 0.21.0: by the march clock, to where the foe stands or was last seen
+            double h = w.HoursFor(w.Party(own.Id), foe.Id);
+            if (!double.IsNaN(h)) return h;
+            double d = Views.Dist(own.X, own.Y, foe.X, foe.Y) * Theatre.RoadFactor;
             return d / Math.Max(0.3, w.PerHour(w.Party(own.Id)));
         }
 
@@ -1030,20 +1032,18 @@ namespace BannerlordAgents
         /// </summary>
         internal static Theatre TheatreOf(Snapshot s, View v, List<Trigger> triggers, Tools.World w, Channel ch)
         {
-            double usual = UsualPaceOf(v);
-            double Hours(ViewParty p, Focus f, double perHour)
+            // 0.21.0: by the march clock (World.MarchTo): in view at its exact pace, the ground and the hour stretch by stretch; seen earlier from where it was seen at its
+            // pace then +10%, no slower than speed 2.8 after a day, not counted after three days; to a holding stretched to the game's road length where it is known
+            double Hours(Common.ClockParty cp, Focus f)
             {
-                double d = f.Id != null ? w.RoadDistance(p.Id, f.Id) : double.NaN;
-                if (double.IsNaN(d)) d = Views.Dist(p.X, p.Y, f.X, f.Y) * Theatre.RoadFactor;
-                return d / Math.Max(0.3, perHour);
+                Common.MarchTime m = f.Id != null && s.SettlementById.TryGetValue(f.Id, out SettlementRow fh) ? w.MarchTo(cp, fh) : w.MarchTo(cp, f.X, f.Y);
+                return m.Basis == Common.PaceBasis.Forgotten ? double.NaN : m.Reached ? m.Hours : double.PositiveInfinity;
             }
-            Func<ViewParty, Focus, double> own = (p, f) => Hours(p, f, w.PerHour(w.Party(p.Id)));
+            Func<ViewParty, Focus, double> own = (p, f) => w.Party(p.Id) is PartyRow mine ? Hours(w.SeenOf(mine), f) : double.NaN;
             Func<ViewParty, Focus, double> other = (p, f) =>
             {
-                // in view: its pace now; seen earlier: its pace then (the realm's usual pace when not known)
                 PartyRow r = w.InView(p.Id) ? w.Party(p.Id) : null;
-                double per = r != null ? w.PerHour(r) : Theatre.PerHour(p);
-                return Hours(p, f, per > 0.06 ? per : usual);
+                return Hours(r != null ? w.SeenOf(r) : Tools.World.SeenOf(p), f);
             };
             Func<string, Tuple<float, float, string>> place = id => s.SettlementById.TryGetValue(id, out SettlementRow h) ? Tuple.Create(h.X, h.Y, h.Name) : null;
             ch.Lag(out double usualLag, out double lateLag);

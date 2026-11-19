@@ -109,13 +109,8 @@ namespace BannerlordAgents
             return lines;
         }
 
-        /// <summary>Hours to march there at the lord's pace on open ground: by road where the game's table knows the way (0.7.1), else as the crow flies.</summary>
-        private static double Hours(World w, PartyRow lord, string place)
-        {
-            double d = w.RoadDistance(lord.Id, place);
-            if (double.IsNaN(d)) d = w.Distance(lord.Id, place);
-            return double.IsNaN(d) ? double.NaN : d / w.PerHour(lord);
-        }
+        /// <summary>Hours to march there by the march clock (0.21.0: the lord's exact pace, the ground and the hour stretch by stretch, stretched to the game's road length where its table knows the way; it was the road at his pace on open ground).</summary>
+        private static double Hours(World w, PartyRow lord, string place) => w.HoursFor(lord, place);
 
         /// <summary>"12 (14 by road)" between two things the realm knows of.</summary>
         private static string Far(World w, string a, string b)

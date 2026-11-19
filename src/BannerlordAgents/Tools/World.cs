@@ -139,7 +139,7 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>Where something is and the entrance its road distances count from (a holding: itself, at its gate).</summary>
-        private bool Locate(string id, out float x, out float y, out string entrance, out SettlementRow holding)
+        internal bool Locate(string id, out float x, out float y, out string entrance, out SettlementRow holding)
         {
             x = y = 0;
             entrance = null;
@@ -292,10 +292,10 @@ namespace BannerlordAgents.Tools
         // ---------- the march clock (0.21.0, docs/PLAN-ways.md) ----------
 
         /// <summary>A party in view as the clock knows it: where it (its army) stands, its exact pace (Forecast.PaceOf), its leader's own pace if it leads an army, and when its battle ends.</summary>
-        public Common.SeenParty SeenOf(PartyRow e)
+        public Common.ClockParty SeenOf(PartyRow e)
         {
             PartyRow lead = Lead(e) ?? e;
-            var sp = new Common.SeenParty { Id = e.Id, X = lead.X, Y = lead.Y, SeenHours = Hours, InView = true, Pace = Forecast.PaceOf(S, lead) };
+            var sp = new Common.ClockParty { Id = e.Id, X = lead.X, Y = lead.Y, SeenHours = Hours, InView = true, Pace = Forecast.PaceOf(S, lead) };
             if (sp.Pace != null && lead.ArmyMen > lead.Men) sp.AlonePace = Common.MarchClock.AlonePace(sp.Pace, lead.ArmyMen, lead.Men);
             if (lead.InBattle)
             {
@@ -306,9 +306,9 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>A party seen earlier as the clock knows it: where and when it was seen, its pace then, and for an army its leader's own pace.</summary>
-        public static Common.SeenParty SeenOf(ViewParty v)
+        public static Common.ClockParty SeenOf(ViewParty v)
         {
-            var sp = new Common.SeenParty { Id = v.Id, X = v.X, Y = v.Y, SeenHours = v.SeenHours, InView = false, Pace = v.March };
+            var sp = new Common.ClockParty { Id = v.Id, X = v.X, Y = v.Y, SeenHours = v.SeenHours, InView = false, Pace = v.March };
             if (v.March != null && v.ArmyMen > v.Men) sp.AlonePace = Common.MarchClock.AlonePace(v.March, v.ArmyMen, v.Men);
             return sp;
         }
@@ -320,7 +320,7 @@ namespace BannerlordAgents.Tools
         /// than speed 2.8 after a day), forgotten after three days. The way: the one the game planned for it when it marches to that very point, else a straight
         /// line with the ground read along it, until the copy of the game's own way-finder takes its place (docs/PLAN-ways.md).
         /// </summary>
-        public Common.MarchTime MarchTo(Common.SeenParty sp, float x, float y)
+        public Common.MarchTime MarchTo(Common.ClockParty sp, float x, float y)
         {
             string key = (sp.Id ?? "?") + (sp.InView ? "|v|" : "|s|") + Math.Round(x, 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + Math.Round(y, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (_marches.TryGetValue(key, out Common.MarchTime kept)) return kept;
@@ -330,19 +330,41 @@ namespace BannerlordAgents.Tools
             return m;
         }
 
-        /// <summary>When a party could reach a holding (its gate, where parties arrive).</summary>
-        public Common.MarchTime MarchTo(Common.SeenParty sp, SettlementRow h)
+        /// <summary>
+        /// When a party could reach a holding (its gate, where parties arrive): on the straight line stretched to the game's road length where its table knows the
+        /// way from where the party is or was seen (MarchClock.ByRoad), unless it marches there on the way the game planned for it.
+        /// </summary>
+        public Common.MarchTime MarchTo(Common.ClockParty sp, SettlementRow h)
         {
             if (h == null) return new Common.MarchTime();
             bool gate = h.Gx != 0 || h.Gy != 0;
-            return MarchTo(sp, gate ? h.Gx : h.X, gate ? h.Gy : h.Y);
+            float x = gate ? h.Gx : h.X, y = gate ? h.Gy : h.Y;
+            Common.MarchTime m = MarchTo(sp, x, y);
+            if (sp.InView && sp.Id != null && Party(sp.Id) is PartyRow e && Lead(e) is PartyRow lead && Forecast.Marching(lead) && (lead.Tx - x) * (lead.Tx - x) + (lead.Ty - y) * (lead.Ty - y) <= 25f)
+                return m;
+            return Common.MarchClock.ByRoad(sp, m, sp.Id != null ? RoadDistance(sp.Id, h.Id) : double.NaN, Hours);
+        }
+
+        /// <summary>
+        /// Hours a party (one of the realm's own, or one in view) needs to reach a holding, a party or a spot the realm knows of, by the march clock (0.21.0): to a
+        /// holding at its gate, stretched to the game's road length where it is known; to a party where it stands or was last seen. NaN when either is unknown.
+        /// </summary>
+        public double HoursFor(PartyRow r, string to)
+        {
+            if (r == null || to == null) return double.NaN;
+            Common.MarchTime m;
+            SettlementRow h = Holding(to);
+            if (h != null) m = MarchTo(SeenOf(r), h);
+            else if (Locate(to, out float x, out float y, out _, out _)) m = MarchTo(SeenOf(r), x, y);
+            else return double.NaN;
+            return m.Reached ? m.Hours : double.NaN;
         }
 
         /// <summary>
         /// The door for ways (docs/PLAN-ways.md): the way the game planned for a party in view that marches to this very point (within 5 of its end), else the
         /// straight line. The copy of the game's way-finder comes in here.
         /// </summary>
-        private IList<float[]> WayFor(Common.SeenParty sp, float x, float y)
+        private IList<float[]> WayFor(Common.ClockParty sp, float x, float y)
         {
             if (sp.InView && sp.Id != null && Party(sp.Id) is PartyRow e && Lead(e) is PartyRow lead && Forecast.Marching(lead) && (lead.Tx != 0 || lead.Ty != 0)
                 && (lead.Tx - x) * (lead.Tx - x) + (lead.Ty - y) * (lead.Ty - y) <= 25f)
@@ -354,7 +376,7 @@ namespace BannerlordAgents.Tools
         /// Could the party reach a point within so many hours? Answered without marching when even its fastest pace on the straight line could not (most
         /// of a realm's enemies, for most questions), else by the clock.
         /// </summary>
-        public bool CanReachWithin(Common.SeenParty sp, float x, float y, double hours, out Common.MarchTime m)
+        public bool CanReachWithin(Common.ClockParty sp, float x, float y, double hours, out Common.MarchTime m)
         {
             m = null;
             if (hours < 0) return false;
@@ -804,7 +826,7 @@ namespace BannerlordAgents.Tools
             // Alvar and Haldir, sheltering from a group, were caught on the way by another part of it; 0.21.0: each by the march clock, the ground and the hour
             // stretch by stretch, where it was the speed number over the straight distance)
             PartyRow mine = Party(me);
-            Common.SeenParty mySeen = mine != null ? SeenOf(mine) : null;
+            Common.ClockParty mySeen = mine != null ? SeenOf(mine) : null;
             List<PartyRow> members = (group ?? new List<string>()).Select(Party).Where(p => p != null).ToList();
             if (danger != null && !members.Contains(danger)) members.Add(danger);
             double Eta(Common.MarchTime m) => m != null && m.Reached ? m.Hours : double.PositiveInfinity;

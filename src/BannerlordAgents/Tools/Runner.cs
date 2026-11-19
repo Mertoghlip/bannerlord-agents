@@ -1357,8 +1357,16 @@ namespace BannerlordAgents.Tools
 
         private static bool CanClose(World w, PartyRow r, string target)
         {
-            double d = w.Distance(r.Id, target), pace = w.PerHour(r);
-            return !double.IsNaN(d) && (d <= CloseKeep + 3 || (pace > 0 && (d - CloseKeep) / pace <= CloseHours));
+            double d = w.Distance(r.Id, target);
+            if (double.IsNaN(d)) return false;
+            if (d <= CloseKeep + 3) return true;
+            // 0.21.0: his march, by the clock, to the spot CloseKeep short of the target on the line between them
+            if (!w.Locate(target, out float tx, out float ty, out _, out _)) return false;
+            PartyRow lead = w.Lead(r) ?? r;
+            double k = CloseKeep / d;
+            float px = (float)(tx + (lead.X - tx) * k), py = (float)(ty + (lead.Y - ty) * k);
+            Common.MarchTime m = w.MarchTo(w.SeenOf(r), px, py);
+            return m.Reached && m.Hours <= CloseHours;
         }
 
         /// <summary>The strength of the lords sent at the human player who will strike with this one: in position, or able to be within CloseHours; those within the ring of him are counted with him already.</summary>
@@ -1631,11 +1639,11 @@ namespace BannerlordAgents.Tools
                 {
                     PartyRow e = w.Party(id);
                     if (e == null) continue;
-                    Common.SeenParty es = w.SeenOf(e);
+                    Common.ClockParty es = w.SeenOf(e);
                     foes.Add((px, py) => H(w.MarchTo(es, (float)px, (float)py)));
                 }
-                if (foes.Count == 0) { Common.SeenParty ds = w.SeenOf(danger); foes.Add((px, py) => H(w.MarchTo(ds, (float)px, (float)py))); }
-                Common.SeenParty ms = w.SeenOf(me);
+                if (foes.Count == 0) { Common.ClockParty ds = w.SeenOf(danger); foes.Add((px, py) => H(w.MarchTo(ds, (float)px, (float)py))); }
+                Common.ClockParty ms = w.SeenOf(me);
                 (double ex, double ey) = EscapePoint(me.X, me.Y, (px, py) => H(w.MarchTo(ms, (float)px, (float)py)), foes, far);
                 bool first = t.Shelter == null;
                 t.Shelter = Away;
@@ -1692,9 +1700,9 @@ namespace BannerlordAgents.Tools
         /// <summary>The days of food under which a lord rides to buy more (0.16): the trip to the nearest market and a day and a half; it was 2 days, near a market or far.</summary>
         internal static double FoodNeed(PartyRow me, SettlementRow market, World w)
         {
-            double pace = w.PerHour(me), d = market != null ? w.Distance(me.Id, market.Id) : double.NaN;
-            double trip = double.IsNaN(d) || double.IsNaN(pace) || pace <= 0 ? 0 : d / pace / 24;
-            return 1.5 + trip;
+            // 0.21.0: the trip by the march clock
+            double hours = market != null ? w.HoursFor(me, market.Id) : double.NaN;
+            return 1.5 + (double.IsNaN(hours) ? 0 : hours / 24);
         }
 
         private static bool Supply(ToolInstance t, PartyRow me, World w, Scope scope)
@@ -2074,7 +2082,7 @@ namespace BannerlordAgents.Tools
                 switch (fn.ToLowerInvariant())
                 {
                     case "distance": return Nan(_w.Distance(Id(a[0]), Id(a[1])));
-                    case "hours_to": { double d = _w.Distance(_t.Order.Party, Id(a[0])); return double.IsNaN(d) ? null : (object)(d / _w.PerHour(me)); }
+                    case "hours_to": { double h = _w.HoursFor(me, Id(a[0])); return double.IsNaN(h) ? null : (object)h; }
                     case "inside": return me != null && Id(a[0]) != null && me.InSettlement == Id(a[0]);
                     case "within": { double d = _w.Near(_t.Order.Party, Id(a[0])); return !double.IsNaN(d) && d <= Expr.Number(a[1]); }
                     case "besieged": return _w.Besieged(H(a[0]));
