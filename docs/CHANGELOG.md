@@ -2780,3 +2780,4 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Checks:** smoke test (626 checks), war room self-test and dashboard self-test passed; RefCheck: 890 member references, missing 0.
 - **Installed** with the game closed (00:34): module 0.21.2. The war rooms were stopped for it; the module starts them again at the next load.
 - **Outside the repository:** `warroom-system.md` installed for the orcs, Dol Guldur and my kingdom's council (principle 2 and the march clock line in How battles are joined) and my lieutenant (its besiege line), backups `warroom-system.md.bak-20261120-before-march-clock`; each equals its template but for the realm's two lines (checked; the continuous files already did). Their conversations carry on and are told YOUR INSTRUCTIONS CHANGED at their next message.
+- **Commit:** e548287.
