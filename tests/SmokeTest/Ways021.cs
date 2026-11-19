@@ -51,6 +51,8 @@ namespace SmokeTest
                     }
                 for (int f = 0; f <= n; f++) m.FLinkStart[f] = 0;
                 m.VX = vx.ToArray(); m.VY = vy.ToArray(); m.VFlags = vf.ToArray(); m.EA = ea.ToArray(); m.EB = eb.ToArray(); m.EKind = new byte[ea.Count];
+                // as on the game's map: an edge between two faces is kind 2, one on the mesh's edge kind 1
+                for (int f = 0; f < n; f++) for (int k = 0; k < 4; k++) m.EKind[m.FEdge[f * 4 + k]] = (byte)(m.FNbr[f * 4 + k] >= 0 ? 2 : 1);
                 return m;
             }
             NavMesh open = Grid(false, false), closed = Grid(true, false), split = Grid(false, true);
@@ -71,6 +73,16 @@ namespace SmokeTest
             List<float[]> again = back != null ? NavCopy.Path(back, 5, 5, 25, 25, NavQuery.Party(back)) : null;
             bool saved = again != null && again.Count == round?.Count && Math.Abs(again[0][0] - round[0][0]) < 1e-5 && Math.Abs(again[0][1] - round[0][1]) < 1e-5 && back.PartyExcluded.Length == 1;
             try { File.Delete(file); } catch (Exception) { }
+            // the engine's pass over the way (copy version 3): a start face flagged 8 makes the search run although the straight line is open; the corridor's funnel
+            // then bends where the corridor turns, and the pass drops every bend the straight line from the start reaches, through faces outside the corridor too
+            NavMesh flagged = Grid(false, false);
+            flagged.FFlags[0] = 1 | 8;
+            NavQuery qFlag = NavQuery.Party(flagged);
+            List<int> corridor = NavCopy.Search(flagged, 0, 8, 5, 3, 25, 27, qFlag);
+            List<float[]> dropped = NavCopy.Path(flagged, 0, 8, 5, 3, 25, 27, qFlag);
+            bool pass = corridor != null && dropped != null && dropped.Count == 1 && Near(dropped[0], 25, 27);
+            Check(pass, "the copy drops the bends the straight line saves, as the engine's pass does: corridor " + (corridor == null ? "none" : string.Join(",", corridor))
+                        + ", way " + (dropped == null ? "none" : string.Join(" -> ", dropped.ConvertAll(p => "(" + p[0].ToString("0.###") + ", " + p[1].ToString("0.###") + ")"))));
             Check(oneLeg && rounds && islands && faces && saved,
                   "the copy of the game's way-finder: a clear straight line is one leg (" + oneLeg + "); round a closed square the way bends twice, 0.3 off its corner on each side ("
                   + (round == null ? "none" : string.Join(" -> ", round.ConvertAll(p => "(" + p[0].ToString("0.###") + ", " + p[1].ToString("0.###") + ")"))) + ", " + rounds

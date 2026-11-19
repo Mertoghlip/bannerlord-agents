@@ -38,6 +38,21 @@ namespace BannerlordAgents.Common
 
         public int Faces => FN?.Length ?? 0;
 
+        /// <summary>One of the two faces an edge lies between (side 0 or 1; -1 when it lies on the mesh's edge), as the engine keeps them at the edge's +0x10 and +0x18.</summary>
+        public int EdgeFace(int e, int side)
+        {
+            if (_edgeFaces == null)
+            {
+                var ef = new int[EA.Length * 2];
+                for (int i = 0; i < ef.Length; i++) ef[i] = -1;
+                for (int f = 0; f < Faces; f++)
+                    for (int i = 0; i < FN[f]; i++) { int x = FEdge[f * MaxCorners + i]; if (ef[x * 2] < 0) ef[x * 2] = f; else if (ef[x * 2] != f) ef[x * 2 + 1] = f; }
+                _edgeFaces = ef;
+            }
+            return _edgeFaces[e * 2 + side];
+        }
+        private int[] _edgeFaces;
+
         public float CenterX(int f) { float s = 0; for (int i = 0; i < FN[f]; i++) s += VX[EA[FEdge[f * MaxCorners + i]]] + VX[EB[FEdge[f * MaxCorners + i]]]; return s / (2 * Math.Max(1, (int)FN[f])); }
         public float CenterY(int f) { float s = 0; for (int i = 0; i < FN[f]; i++) s += VY[EA[FEdge[f * MaxCorners + i]]] + VY[EB[FEdge[f * MaxCorners + i]]]; return s / (2 * Math.Max(1, (int)FN[f])); }
 
@@ -61,6 +76,32 @@ namespace BannerlordAgents.Common
             return _partyBit = best;
         }
         private int _partyBit = -2;
+
+        /// <summary>
+        /// Corner i of a face as the engine keeps it (+0x80 + i x 8): the corner its edge slots i - 1 and i share, so edge slot i runs from corner i to corner i + 1,
+        /// counter-clockwise round the face (checked on the whole 1.4.8 campaign map, Nov 19: every face).
+        /// </summary>
+        public int Ring(int f, int i)
+        {
+            if (_ring == null) BuildRing();
+            return _ring[f * MaxCorners + i];
+        }
+        private int[] _ring;
+
+        private void BuildRing()
+        {
+            var ring = new int[Faces * MaxCorners];
+            for (int f = 0; f < Faces; f++)
+            {
+                int n = FN[f];
+                for (int i = 0; i < n; i++)
+                {
+                    int e0 = FEdge[f * MaxCorners + (i + n - 1) % n], e1 = FEdge[f * MaxCorners + i];
+                    ring[f * MaxCorners + i] = EA[e1] == EA[e0] || EA[e1] == EB[e0] ? EA[e1] : EB[e1];
+                }
+            }
+            _ring = ring;
+        }
 
         public byte Region(int group) => GroupRegion != null && group >= 0 && group < GroupRegion.Length ? GroupRegion[group] : (byte)0;
 
@@ -211,10 +252,13 @@ namespace BannerlordAgents.Common
     /// </summary>
     public static class NavCopy
     {
-        /// <summary>The copy's version: a proof counts only for the version it checked, so a changed copy is proven again (2: the engine's own corner bits).</summary>
-        public const int Version = 2;
+        /// <summary>
+        /// The copy's version: a proof counts only for the version it checked, so a changed copy is proven again (2: the engine's own corner bits; 3: the engine's own
+        /// straightening, its line test and its pass over the way, read from +0x4E8080, +0x4F8BC0 and +0x51C3F0).
+        /// </summary>
+        public const int Version = 3;
 
-        private const float ShrinkBoth = 0.49f, ShrinkOne = 0.99f, CostScale = 0.5f;
+        private const float ShrinkBoth = 0.49f, ShrinkOne = 0.99f, CostScale = 0.5f, ShrinkLine = 0.4f;
 
         private struct Node { public int Face; public float G, F, X, Y; }
 
@@ -232,7 +276,7 @@ namespace BannerlordAgents.Common
             if (s == t) return new List<float[]> { new[] { ex, ey } };
             // the start face allows a straight line unless it is special or flagged so (+0x414120)
             bool mustSearch = (m.FFlags[s] & 4) != 0 || (m.FFlags[s] & 8) != 0;
-            if (!mustSearch && LineClear(m, s, t, sx, sy, ex, ey, q)) return new List<float[]> { new[] { ex, ey } };
+            if (!mustSearch && LineClear(m, q, s, t, sx, sy, ex - sx, ey - sy)) return new List<float[]> { new[] { ex, ey } };
             List<int> corridor = Search(m, s, t, sx, sy, ex, ey, q);
             if (corridor == null) return null;
             return Pull(m, corridor, sx, sy, ex, ey, q);
@@ -427,106 +471,351 @@ namespace BannerlordAgents.Common
             return top;
         }
 
-        // ---------- the straight line ----------
+        // ---------- the straight line (+0x50F320, its walk +0x51C3F0; the search's own direct line +0x50F230 walks by the same rules) ----------
+
+        // the walk's visit marks: a fresh generation per line, as the engine's search slot bumps its own (+0x4178C0, by 3)
+        private sealed class Marks { public int[] Stamp; public int Gen; }
+        [ThreadStatic] private static Dictionary<NavMesh, Marks> _marks;
+
+        private static Marks MarksFor(NavMesh m)
+        {
+            if (_marks == null) _marks = new Dictionary<NavMesh, Marks>();
+            if (!_marks.TryGetValue(m, out Marks k)) _marks[m] = k = new Marks { Stamp = new int[m.Faces] };
+            if (++k.Gen == int.MaxValue) { Array.Clear(k.Stamp, 0, k.Stamp.Length); k.Gen = 1; }
+            return k;
+        }
 
         /// <summary>
-        /// Does the straight line from start to end stay on faces the question may enter, crossing each edge inside its shortened portal (+0x50F230, as read)?
-        /// Walked face by face from the start: the edge the line leaves by, the face beyond.
+        /// Is the straight line from a point in one face, along a direction, open to the face of its end (+0x50F320)? Its end inside the first face, or the two faces
+        /// one, is open at once; otherwise the line is walked face by face through the shortened portals it leaves each face by (+0x51C3F0).
         /// </summary>
-        public static bool LineClear(NavMesh m, int s, int t, float sx, float sy, float ex, float ey, NavQuery q)
+        public static bool LineClear(NavMesh m, NavQuery q, int baseFace, int endFace, float bx, float by, float dx, float dy)
         {
-            int f = s, from = -1;
-            for (int guard = 0; guard < m.Faces && f != t; guard++)
+            if (baseFace < 0) return false;
+            Marks k = MarksFor(m);
+            float tx = dx + bx, ty = dy + by;
+            bool inside = PointInFace(m, baseFace, tx, ty);
+            if (baseFace == endFace) return true;
+            if (endFace < 0) { if (inside) return true; }
+            else if (inside && dy * dy + dx * dx < 1e-5f) return true;
+            if (dy * dy + dx * dx >= 1e-5f) return Walk(m, q, k, baseFace, endFace, bx, by, dx, dy, !PointInFace(m, baseFace, bx, by));
+            // too short to walk: the end inside a neighbour the question may enter
+            for (int i = 0; i < m.FN[baseFace]; i++)
             {
-                int next = -1, nextEdge = -1;
-                for (int i = 0; i < m.FN[f]; i++)
-                {
-                    int e = m.FEdge[f * NavMesh.MaxCorners + i], nb = m.FNbr[f * NavMesh.MaxCorners + i];
-                    if (nb == from) continue;
-                    if (!Crosses(m, e, sx, sy, ex, ey, out float u)) continue;
-                    if (nb < 0 || !Open(m, q, nb)) return false;
-                    Portal(m, q, e, out float ax, out float ay, out float bx, out float by, out _, out _, out float len);
-                    if (len <= 0) return false;
-                    // the crossing must fall inside the shortened portal
-                    float cx = sx + (ex - sx) * u, cy = sy + (ey - sy) * u;
-                    float along = (cx - ax) * (bx - ax) + (cy - ay) * (by - ay), span = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
-                    if (along < 0 || along > span) return false;
-                    next = nb; nextEdge = e;
-                    break;
-                }
-                if (next < 0) return false;
-                from = f;
-                f = next;
+                int nb = m.FNbr[baseFace * NavMesh.MaxCorners + i];
+                if (nb >= 0 && Enterable(m, q, nb, m.FEdge[baseFace * NavMesh.MaxCorners + i]) && PointInFace(m, nb, tx, ty)) return true;
             }
-            return f == t;
+            return false;
         }
 
-        /// <summary>Does the segment cross the edge (u: where along the segment, 0 to 1)?</summary>
-        private static bool Crosses(NavMesh m, int e, float sx, float sy, float ex, float ey, out float u)
+        /// <summary>
+        /// The engine's walk of a straight line (+0x51C3F0): from a face, every edge whose portal (each closed corner moved min(0.4 x its length, the radius) toward
+        /// the other) the line crosses on its way out, into the face beyond when the question may enter it, its ground has no extra cost and the step needs no region
+        /// switch that costs; open as soon as it reaches the end face with the end inside it (or, the end lying outside, leaves the end face by any portal). A start
+        /// outside its own face (outside: true) first looks for the portal the line enters it by.
+        /// </summary>
+        private static bool Walk(NavMesh m, NavQuery q, Marks k, int face, int endFace, float bx, float by, float dx, float dy, bool outside)
         {
-            float ax = m.VX[m.EA[e]], ay = m.VY[m.EA[e]], bx = m.VX[m.EB[e]], by = m.VY[m.EB[e]];
-            float rx = ex - sx, ry = ey - sy, qx = bx - ax, qy = by - ay;
-            float den = rx * qy - ry * qx;
-            u = 0;
-            if (Math.Abs(den) < 1e-9f) return false;
-            float wx = ax - sx, wy = ay - sy;
-            u = (wx * qy - wy * qx) / den;
-            float v = (wx * ry - wy * rx) / den;
-            return u > 1e-6f && u <= 1f + 1e-6f && v >= -1e-6f && v <= 1f + 1e-6f;
+            if (k.Stamp[face] >= k.Gen) return false;
+            bool atEnd = false;
+            if (!outside) { k.Stamp[face] = k.Gen; atEnd = face == endFace; }
+            int skip = OneWayIndex(m, face), n = m.FN[face];
+            for (int i = 0; i < n; i++)
+            {
+                if (i == skip) continue;
+                int nb = m.FNbr[face * NavMesh.MaxCorners + i];
+                if (nb < 0 && !atEnd) continue;
+                int edge = m.FEdge[face * NavMesh.MaxCorners + i];
+                if (!outside && !atEnd && m.EKind[edge] <= 1) continue;
+                int other = outside || atEnd ? face : nb;
+                if (!Enterable(m, q, other, edge)) continue;
+                byte rf = m.Region(m.FGroup[face]), ro = m.Region(m.FGroup[other]);
+                if (rf != ro && (rf != 0 ? q.CostTo1 : q.CostTo0) != 0) continue;
+                int a = m.EA[edge], b = m.EB[edge];
+                float ax = m.VX[a], ay = m.VY[a], bxx = m.VX[b], byy = m.VY[b];
+                ShortenLine(m, q, a, b, ref ax, ref ay, ref bxx, ref byy);
+                if (!Hits(ax, ay, bxx - ax, byy - ay, bx, by, dx, dy)) continue;
+                float tx = dx + bx, ty = dy + by;
+                bool inside = PointInFace(m, other, tx, ty), found;
+                if ((inside && endFace < 0) || other == endFace) found = true;
+                else
+                {
+                    found = false;
+                    if (0f < m.FCost[other]) continue;
+                }
+                // only an edge the line leaves the face by (or, from outside, enters it by)
+                float ddx = dx, ddy = dy;
+                if (outside && !found) { ddx = -dx; ddy = -dy; }
+                int ci = m.Ring(face, i), cn = m.Ring(face, (i + 1) % n);
+                float dot = (m.VY[ci] - m.VY[cn]) * ddx + (m.VX[cn] - m.VX[ci]) * ddy;
+                if (dot > 0.0001f) continue;
+                if (found) return atEnd || inside || Walk(m, q, k, endFace, endFace, bx, by, dx, dy, false);
+                if (Walk(m, q, k, other, endFace, bx, by, dx, dy, false)) return true;
+            }
+            return false;
         }
 
-        // ---------- pulling the way taut ----------
+        /// <summary>Whether a face may be entered across an edge (+0x41F8D0): a one-way face only by its own entry edge, and the question's ground tests.</summary>
+        private static bool Enterable(NavMesh m, NavQuery q, int f, int edge)
+        {
+            if (m.FOneWay[f] != 0)
+            {
+                int entry = OneWayIndex(m, f);
+                if (entry < 0 || m.FEdge[f * NavMesh.MaxCorners + entry] != edge) return false;
+            }
+            return Open(m, q, f);
+        }
 
-        /// <summary>The shortest way from start to end through the corridor's shortened portals (the simple stupid funnel); the corners after the start, the end last.</summary>
+        /// <summary>
+        /// Does a point lie in a face (+0x416370)? On the inner side of every edge, counter-clockwise from corner i to corner i + 1, within 0.0025 (as twice the
+        /// area). The engine first tries two circles round the face's centre (inside the inner, outside the outer); they only save time.
+        /// </summary>
+        public static bool PointInFace(NavMesh m, int f, float x, float y)
+        {
+            int n = m.FN[f];
+            for (int i = 0; i < n; i++)
+            {
+                int ci = m.Ring(f, i), cn = m.Ring(f, (i + 1) % n);
+                float cx = m.VX[ci], cy = m.VY[ci];
+                if ((m.VX[cn] - cx) * (y - cy) - (m.VY[cn] - cy) * (x - cx) < -0.0025f) return false;
+            }
+            return n >= 3;
+        }
+
+        /// <summary>
+        /// Do two segments meet (+0x41F970): from (px, py) along (ex, ey), and from (qx, qy) along (fx, fy), each within 0.001 of its length past its ends. Lying on
+        /// one line, they meet when either's direction projected on the other falls within it, as the engine has it.
+        /// </summary>
+        private static bool Hits(float px, float py, float ex, float ey, float qx, float qy, float fx, float fy)
+        {
+            float den = ex * fy - fx * ey;
+            float wx = qx - px, wy = qy - py;
+            float nt = wx * fy - wy * fx;
+            if (den != 0f)
+            {
+                float inv = 1f / den;
+                float t = inv * nt, u = (wx * ey - wy * ex) * inv;
+                if (t < -0.001f || t > 1.001f || u < -0.001f || u > 1.001f) return false;
+                if (Math.Min(u, t) > 1f) return false;
+                return Math.Max(u, t) >= 0f;
+            }
+            if (nt != 0f || wx * ey - wy * ex != 0f) return false;
+            float ff = fy * fy + fx * fx, rf = Rsqrt(ff);
+            float pe = fy * rf * ey + fx * rf * ex;
+            if (pe >= 0f && pe <= rf * ff) return true;
+            float ee = ey * ey + ex * ex, re = Rsqrt(ee);
+            float pf = ex * re * fx + ey * re * fy;
+            return pf >= 0f && pf <= re * ee;
+        }
+
+        /// <summary>The engine's 1/sqrt: its quick estimate refined once (rsqrtss and one Newton step); the estimate here is exact, the step the engine's own.</summary>
+        private static float Rsqrt(float x)
+        {
+            float r = (float)(1.0 / Math.Sqrt(x));
+            return 0.5f * r * (3f - x * (r * r));
+        }
+
+        /// <summary>
+        /// A portal as the line test and the straightening narrow it (+0x51C833, +0x4F8DFB): each closed corner moved toward the other by min(0.4 x the edge's
+        /// length, the radius), whether one end or both are closed (the search's own crossing points use 0.49 and 0.99 instead).
+        /// </summary>
+        private static void ShortenLine(NavMesh m, NavQuery q, int a, int b, ref float ax, ref float ay, ref float bx, ref float by)
+        {
+            if (!m.RadiusOn) return;
+            bool fa = Boundary(m, q, a), fb = Boundary(m, q, b);
+            if (!fa && !fb) return;
+            float dx = ax - bx, dy = ay - by, len2 = dx * dx + dy * dy, r = Rsqrt(len2);
+            float ux = dx * r, uy = dy * r, cut = Math.Min(r * len2 * ShrinkLine, q.Radius);
+            if (fa) { ax -= cut * ux; ay -= cut * uy; }
+            if (fb) { bx += cut * ux; by += cut * uy; }
+        }
+
+        // ---------- pulling the way taut (+0x417970 lays out the doorways, +0x4E8080 runs the straightening +0x4F8BC0 over them and keeps the bends) ----------
+
+        private struct Door { public int Edge, Face; public float X, Y; public bool Bend; }
+
+        /// <summary>
+        /// The way through the corridor as the engine draws it: its bends after the start, the end last. One entry per doorway (the edge between corridor faces k and
+        /// k + 1, held by face k) and one for the end; the straightening marks bends, the pass keeps only them.
+        /// </summary>
         public static List<float[]> Pull(NavMesh m, List<int> corridor, float sx, float sy, float ex, float ey, NavQuery q)
         {
-            var lefts = new List<float[]>(); var rights = new List<float[]>();
-            lefts.Add(new[] { sx, sy }); rights.Add(new[] { sx, sy });
-            for (int i = 0; i + 1 < corridor.Count; i++)
+            int n = corridor.Count;
+            if (n == 0) return null;
+            var d = new Door[n];
+            for (int k = 0; k + 1 < n; k++)
             {
-                int a = corridor[i], b = corridor[i + 1];
-                int edge = SharedEdge(m, a, b);
+                int edge = SharedEdge(m, corridor[k], corridor[k + 1]);
                 if (edge < 0) return null;
-                Portal(m, q, edge, out float ax, out float ay, out float bx, out float by, out _, out _, out _);
-                // left and right as seen going from a to b
-                float cax = m.CenterX(a), cay = m.CenterY(a), cbx = m.CenterX(b), cby = m.CenterY(b);
-                float dxx = cbx - cax, dyy = cby - cay;
-                float sideA = dxx * (ay - cay) - dyy * (ax - cax), sideB = dxx * (by - cay) - dyy * (bx - cax);
-                if (sideA >= sideB) { lefts.Add(new[] { ax, ay }); rights.Add(new[] { bx, by }); }
-                else { lefts.Add(new[] { bx, by }); rights.Add(new[] { ax, ay }); }
+                d[k] = new Door { Edge = edge, Face = corridor[k] };
             }
-            lefts.Add(new[] { ex, ey }); rights.Add(new[] { ex, ey });
-
+            d[n - 1] = new Door { Edge = -1, Face = corridor[n - 1], X = ex, Y = ey, Bend = true };
+            Sections(m, q, d, sx, sy);
             var path = new List<float[]>();
-            float[] apex = lefts[0], left = lefts[0], right = rights[0];
-            int apexI = 0, leftI = 0, rightI = 0;
-            for (int i = 1; i < lefts.Count; i++)
+            foreach (Door x in d) if (x.Bend) path.Add(new[] { x.X, x.Y });
+            return path;
+        }
+
+        private static bool Flag8(NavMesh m, int f) => f >= 0 && (m.FFlags[f] & 8) != 0;
+
+        private static void Fix(NavMesh m, Door[] d, int i)
+        {
+            if (d[i].Edge >= 0) { int a = m.EA[d[i].Edge], b = m.EB[d[i].Edge]; d[i].X = (m.VX[a] + m.VX[b]) * 0.5f; d[i].Y = (m.VY[a] + m.VY[b]) * 0.5f; }
+            else if (d[i].Face >= 0) { d[i].X = m.CenterX(d[i].Face); d[i].Y = m.CenterY(d[i].Face); }
+        }
+
+        /// <summary>
+        /// The pass over the doorways (+0x4E8080): a doorway into or out of a face flagged 8 is a fixed point at its edge's middle (the end, in such a face, its centre);
+        /// the straightening runs on each stretch between fixed points, from the last one.
+        /// </summary>
+        private static void Sections(NavMesh m, NavQuery q, Door[] d, float sx, float sy)
+        {
+            int count = d.Length;
+            if (count <= 1) return;
+            int from = 0, last = 0;
+            float px = sx, py = sy;
+            while (true)
             {
-                float[] l = lefts[i], r = rights[i];
-                // the right side narrows the funnel
-                if (Area(apex, right, r) <= 0)
+                int fixedAt = -1;
+                for (int i = from + 1; i < count; i++)
                 {
-                    if (Same(apex, right) || Area(apex, left, r) > 0) { right = r; rightI = i; }
-                    else
+                    last = i;
+                    bool atEdge = d[i].Edge >= 0 && (Flag8(m, m.EdgeFace(d[i].Edge, 0)) || Flag8(m, m.EdgeFace(d[i].Edge, 1)));
+                    if (atEdge || Flag8(m, d[i].Face))
                     {
-                        path.Add(left); apex = left; apexI = leftI; left = apex; right = apex; leftI = rightI = apexI;
-                        i = apexI;
-                        continue;
+                        fixedAt = i;
+                        if (atEdge) { int a = m.EA[d[i].Edge], b = m.EB[d[i].Edge]; d[i].X = (m.VX[a] + m.VX[b]) * 0.5f; d[i].Y = (m.VY[a] + m.VY[b]) * 0.5f; }
+                        else { d[i].X = m.CenterX(d[i].Face); d[i].Y = m.CenterY(d[i].Face); }
+                        break;
                     }
                 }
-                if (Area(apex, left, l) >= 0)
+                if (fixedAt >= 0)
                 {
-                    if (Same(apex, left) || Area(apex, right, l) < 0) { left = l; leftI = i; }
-                    else
-                    {
-                        path.Add(right); apex = right; apexI = rightI; left = apex; right = apex; leftI = rightI = apexI;
-                        i = apexI;
-                        continue;
-                    }
+                    if (from + 1 < fixedAt) Straighten(m, q, d, from, fixedAt, px, py);
+                    if (!d[fixedAt].Bend) { d[fixedAt].Bend = true; Fix(m, d, fixedAt); }
+                    px = d[fixedAt].X; py = d[fixedAt].Y;
+                    last = fixedAt - 1;
+                }
+                else if (from != last)
+                {
+                    Straighten(m, q, d, from, last + 1, px, py);
+                    if (!d[last].Bend) { d[last].Bend = true; Fix(m, d, last); }
+                    px = d[last].X; py = d[last].Y;
+                }
+                else if (!d[last].Bend && d[last].Face >= 0) { d[last].Bend = true; Fix(m, d, last); }
+                from = last + 1;
+                last = from;
+                if (from >= count) break;
+            }
+        }
+
+        /// <summary>
+        /// The engine's straightening of a stretch of doorways [from, to) from a start point (+0x4F8BC0), in three passes: the funnel through the portals (narrowed
+        /// as the line test narrows them) marks a bend at each corner the way must turn round; each bend the straight line from the bend before last reaches is dropped,
+        /// and the line then tried from up to ten doorways further back; and a region change on the way gets a point where the line crosses it.
+        /// </summary>
+        private static void Straighten(NavMesh m, NavQuery q, Door[] d, int from, int to, float sx, float sy)
+        {
+            int total = d.Length, last = to - 1;
+            // 1. the funnel, apex-relative
+            float apx = sx, apy = sy, lx = 0, ly = 0, rx = 0, ry = 0;
+            int leftI = -1, rightI = -1, init = from;
+            for (int i = from; i < to;)
+            {
+                float p1x, p1y, p2x, p2y;
+                if (i < last)
+                {
+                    int a = m.EA[d[i].Edge], b = m.EB[d[i].Edge];
+                    float ax = m.VX[a] - apx, ay = m.VY[a] - apy, bx = m.VX[b] - apx, by = m.VY[b] - apy;
+                    if ((ax == 0f && ay == 0f) || (bx == 0f && by == 0f)) { init++; i++; continue; }
+                    ShortenLine(m, q, a, b, ref ax, ref ay, ref bx, ref by);
+                    if (by * ax - bx * ay >= 0f) { p1x = bx; p1y = by; p2x = ax; p2y = ay; }
+                    else { p1x = ax; p1y = ay; p2x = bx; p2y = by; }
+                }
+                else
+                {
+                    float px, py;
+                    if (i == total - 1) { px = d[i].X; py = d[i].Y; }
+                    else if (d[i].Edge >= 0) { int a = m.EA[d[i].Edge], b = m.EB[d[i].Edge]; px = (m.VX[a] + m.VX[b]) * 0.5f; py = (m.VY[a] + m.VY[b]) * 0.5f; }
+                    else if (d[i].Face >= 0) { px = m.CenterX(d[i].Face); py = m.CenterY(d[i].Face); }
+                    else { i++; continue; }
+                    p1x = p2x = px - apx; p1y = p2y = py - apy;
+                }
+                if (i == init) { lx = p1x; ly = p1y; leftI = i; rx = p2x; ry = p2y; rightI = i; i++; continue; }
+                bool turnLeft;
+                if (p2y * lx - p2x * ly > 0f) turnLeft = true;
+                else if (p1y * rx - p1x * ry >= 0f)
+                {
+                    if (p1y * lx - p1x * ly < 0f) { lx = p1x; ly = p1y; leftI = i; }
+                    if (p2y * rx - p2x * ry > 0f) { rx = p2x; ry = p2y; rightI = i; }
+                    i++;
+                    continue;
+                }
+                else turnLeft = false;
+                int at = turnLeft ? leftI : rightI;
+                d[at].X = apx + (turnLeft ? lx : rx); d[at].Y = apy + (turnLeft ? ly : ry); d[at].Bend = true;
+                apx = d[at].X; apy = d[at].Y;
+                if (at + 1 == last) { i++; continue; }
+                init = at + 1;
+                i = at + 1;
+            }
+            // 2. dropping the bends the straight line saves
+            int anchor = -1, prev = -1;
+            for (int i = from; i < to; i++)
+            {
+                if (!d[i].Bend) continue;
+                if (prev < 0) { prev = i; continue; }
+                float bx = anchor >= 0 ? d[anchor].X : sx, by = anchor >= 0 ? d[anchor].Y : sy;
+                int baseFace = anchor >= 0 ? d[anchor].Face : d[0].Face;
+                if (!LineClear(m, q, baseFace, d[i].Face, bx, by, d[i].X - bx, d[i].Y - by)) { anchor = prev; prev = i; continue; }
+                d[prev].Bend = false;
+                prev = i;
+                for (int k = anchor - 1; k >= Math.Max(anchor - 10, 0); k--)
+                {
+                    if (!d[k].Bend) continue;
+                    if (!LineClear(m, q, d[k].Face, d[i].Face, d[k].X, d[k].Y, d[i].X - d[k].X, d[i].Y - d[k].Y)) break;
+                    d[anchor].Bend = false;
+                    anchor = k;
                 }
             }
-            if (path.Count == 0 || !Same(path[path.Count - 1], new[] { ex, ey })) path.Add(new[] { ex, ey });
-            return path;
+            // 3. a point where the way changes region (land and sea)
+            float ppx = 0, ppy = 0;
+            int prevGroup = -1;
+            for (int i = from; i < to; i++)
+            {
+                int f = d[i].Face;
+                if (f < 0) continue;
+                if (d[i].Bend || prevGroup == -1)
+                {
+                    prevGroup = m.FGroup[f];
+                    if (d[i].Bend) { ppx = d[i].X; ppy = d[i].Y; } else { ppx = sx; ppy = sy; }
+                    continue;
+                }
+                if (prevGroup < 0 || m.Region(m.FGroup[f]) == m.Region(prevGroup)) continue;
+                int next = -1;
+                for (int c = i + 1; c < to; c++) if (d[c].Bend) { next = c; break; }
+                if (next >= 0 && d[i].Edge >= 0)
+                {
+                    d[i].Bend = true;
+                    int a = m.EA[d[i].Edge], b = m.EB[d[i].Edge];
+                    float ax = m.VX[a], ay = m.VY[a], bx = m.VX[b], by = m.VY[b];
+                    if (m.RadiusOn && (Boundary(m, q, a) || Boundary(m, q, b)))
+                    {
+                        float ux = bx - ax, uy = by - ay, len2 = ux * ux + uy * uy, r = Rsqrt(len2);
+                        float cut = Math.Min(len2 * r * ShrinkLine, q.Radius);
+                        ux *= r; uy *= r;
+                        if (Boundary(m, q, a)) { ax += cut * ux; ay += cut * uy; }
+                        if (Boundary(m, q, b)) { bx -= cut * ux; by -= cut * uy; }
+                    }
+                    float wx = bx - ax, wy = by - ay, nx = d[next].X - ppx, ny = d[next].Y - ppy;
+                    float den = wx * ny - wy * nx;
+                    float t = den == 0f ? -1f : ((ppx - ax) * ny - (ppy - ay) * nx) / den;
+                    if (t >= 0f) { t = Math.Min(t, 1f); d[i].X = t * wx + ax; d[i].Y = t * wy + ay; }
+                    else { d[i].X = ax; d[i].Y = ay; }
+                }
+                prevGroup = m.FGroup[f];
+                ppx = d[i].X; ppy = d[i].Y;
+            }
         }
 
         private static int SharedEdge(NavMesh m, int a, int b)

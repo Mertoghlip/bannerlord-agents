@@ -2734,3 +2734,39 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed (22:18): module 0.20.5; instructions for the orcs, Dol Guldur, my kingdom's council and my lieutenant (`warroom-system.md`, backups `.bak-20261117-before-guard-pace`), each equal to its template but for the realm's two lines (checked). The war rooms, dashboard and archive keeper were stopped for the build and started again. The besiege order's description changed, so a besiege order a save carries keeps its old text until the intervention upgrades it.
 - **Commit:** 7912917.
 - **Next:** at the next load, a storm guard switched off should be answered with the storm's clock; watch whether the agents leave the guard on against a slow army in view.
+
+## Thursday, November 19
+
+### 05:23 · Module 0.21.0: the march clock; the copy of the game's own way-finder and its proof · commits d13123e, e022966, 8a06760, 4458de6, a7a1e83, 4176a0f, be60359, 62fbdd6
+- **Why:** in run 20261117-2146-A Dol Guldur underestimated how long my army would take to relieve Imnagath. An audit then found that most rules inside the game timed a march at a party's exact pace but on open ground along a straight line, that nothing added a margin for an enemy out of sight, and that the rules forgot an enemy six hours after losing sight of it. I asked for one march clock everywhere, with exact paces in view, a careful margin out of sight, and the game's own ways (docs/PLAN-ways.md, its decisions and examples).
+- **What** (docs/PLAN-ways.md, Phase 1):
+  - `Common/MarchClock.cs`: a party in view at its exact pace, stretch by stretch for the ground and the hour, with a fresh speed from the game's own formula when it stands, besieges or fights (`Capture`, `SpeedFresh`). Out of sight up to a day: its last pace and a tenth. From a day to three: no slower than speed 2.8, the agent told both. After three days it is not counted, only listed. An army out of sight goes at the faster of its own pace and its leader's alone. Every answer says which of these it rests on.
+  - Every rule moved onto it, each with tests: the storm guard and its clock, the siege relief bars and warnings, joining times and relief rides, could_reach, the danger rule with refuges and the escape point, the report's arrival times, joining times and the seen-earlier list, the theatre, and our own lords' marches. The order setting `unseen_floor` (every order; 0 trusts the last pace and a tenth after a day).
+  - The war room's tools on the same rule (ask_the_way and its race, the cut-off check, can_catch). The dashboard's `etacheck` replays recorded arrivals with the clock on the straight line.
+  - Phase 2's start: the game's way-finder read in the engine (its search, crossing points, step costs, land and sea). The walking mesh is copied out of the engine once per map (`Ways.cs`, `NavMeshDump`: 19,396 faces, the first 50 checked against the game's own answers). The copy is `Common/NavCopy.cs`, with its proof `NavProof`: 2,000 pairs against the game's own call, at least 999 in 1,000 identical within 0.01. Until it passes, the rules keep the straight line, stretched to the game's road length where known, and the war room keeps today's finder.
+  - The instructions' templates: principle 2 and a march clock line in How battles are joined, and my lieutenant's besiege line.
+- **Checks:** smoke test, war room self-test and dashboard self-test passed (`scripts/deploy.ps1`).
+- **Installed** with the game closed (about 05:23): module 0.21.0. Not yet in the agents' folders: the march clock's instruction lines wait for the proof, so the line on ways is installed once, in its final form.
+
+### 23:22 to 00:04 · The copy's first proof in the game
+- **What:** at the campaign's load the module copied the walking mesh (`%LOCALAPPDATA%\BannerlordAgents\map\b8dc7db0\navmesh.bin`; 19,396 faces, 16,338 corners, 35,811 edges, no one-way, special or linked faces) and ran the proof in 9 seconds. Of 2,000 pairs, 354 were identical (17.7%) and 136 had no way for either; the median length gap was 0.023%. The war rooms were started by the module at the load, as it does when they are not running. No agent call was made, and I stopped them for the work.
+- **Read** (commit 3f687be, 23:35; in module 0.21.1 below): the game's bends sit exactly 0.3 from a mesh corner, so the search's narrowing was right. Through fans of faces the game bends less than the copy. The copy now uses the engine's own corner bits, and the next proof writes every pair's game way and runs again whenever the copy changes.
+
+## Friday, November 20
+
+### 00:06 · Module 0.21.1: the engine's own straightening in the copy of its way-finder
+- **Why:** the first proof showed the copy's search right and its straightening wrong. The engine draws a way in three passes, read on Nov 19 and 20 (docs/PLAN-ways.md, "Phase 2 notes"; docs/ENGINE-NOTES.md).
+- **What** (`Common/NavCopy.cs`, copy version 3):
+  - the engine's doorways and the pass that keeps only bends;
+  - the funnel narrowed as the engine narrows it (min(0.4 x the edge, 0.3) at closed corners);
+  - each bend dropped when the straight line from the bend before it reaches the next, walked face by face through any open faces as the engine's line test does, then tried from up to ten doorways further back;
+  - a point at each land and sea change;
+  - fixed points at faces flagged 8 (three on this map);
+  - the search's own straight line before it searches by the same walk.
+- **Checks:**
+  - Offline against every pair the first proof recorded (`navprobe`), all 241 identical: the 200 logged differences, the 21 identical pairs before them and the 20 with no way. Corner counts are all equal, the largest point gap's median is 0.0007, and length gaps are at most 0.001%.
+  - The 2,000 pairs take 0.9 seconds (median 0.27 ms a way, the slowest 9.5 ms).
+  - The smoke test, 626 checks: new is the copy dropping a bend that the straight line through faces outside the corridor saves; the made-up grid now marks its edges' kinds as the game's map does. The war room self-test and the dashboard self-test also passed.
+  - RefCheck: 890 member references, missing 0.
+- **Installed** with the game closed for it (00:06): module 0.21.1. The war rooms, dashboard and archive keeper were not running.
+- **Next:** at the next load of the campaign the proof runs again (copy version 3), and writes every pair's game way to `waycheck-all.jsonl`. On a pass (999 of 1,000), the rules and the war room take the copy's ways. The instructions' line on ways then says the game's own way, and they are installed for the orcs, Dol Guldur, my kingdom's council and my lieutenant.
