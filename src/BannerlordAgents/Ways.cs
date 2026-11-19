@@ -41,7 +41,7 @@ namespace BannerlordAgents
                 Mesh = m;
                 PartyQuery = NavQuery.Party(m);
                 string proof = Path.Combine(mapDir, "navcopy-proof.json");
-                double rate = ReadRate(proof);
+                double rate = ProofFor(proof) ? ReadRate(proof) : double.NaN;
                 Proven = !double.IsNaN(rate) && rate >= ProofBar;
                 Status = "walking mesh of " + m.Faces + " faces; " + (double.IsNaN(rate) ? "the copy's proof not run yet" : "the copy matched " + (rate * 100).ToString("0.0", CultureInfo.InvariantCulture) + "% of the game's own ways")
                          + (Proven ? ": ways by the copy of the game's way-finder" : ": ways by the straight line until it passes " + (ProofBar * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%");
@@ -50,6 +50,13 @@ namespace BannerlordAgents
         }
 
         public static void SetProven(double rate) { Proven = Mesh != null && rate >= ProofBar; }
+
+        /// <summary>Is the proof file there and of this copy's version (NavCopy.Version)? A proof of another version is run again.</summary>
+        public static bool ProofFor(string path)
+        {
+            try { return File.Exists(path) && File.ReadAllText(path).Contains("\"copy_version\":" + NavCopy.Version + ","); }
+            catch (Exception) { return false; }
+        }
 
         private static double ReadRate(string path)
         {
@@ -268,7 +275,7 @@ namespace BannerlordAgents
                     Log.Line("walking mesh: " + DumpResult);
                 }
                 Ways.Load(dir);
-                if (Ways.Mesh != null && !File.Exists(Path.Combine(dir, "navcopy-proof.json"))) Log.Line("way-finder copy: " + NavProof.Start(dir, 2000));
+                if (Ways.Mesh != null && !Ways.ProofFor(Path.Combine(dir, "navcopy-proof.json"))) Log.Line("way-finder copy: " + NavProof.Start(dir, 2000));
                 Log.Line("ways: " + Ways.Status);
             }
             catch (Exception e) { Diag.Swallowed("setting up the ways", e); }
@@ -291,7 +298,7 @@ namespace BannerlordAgents
         private static int _next, _same, _gameNone, _copyNone, _bothNone;
         private static readonly List<double> _gaps = new List<double>();
         private static string _dir;
-        private static StreamWriter _log;
+        private static StreamWriter _log, _all;
         private static int _logged;
         private const int PerFrame = 20, MostLogged = 200;
 
@@ -317,6 +324,8 @@ namespace BannerlordAgents
             }
             _pairs = pairs; _next = _same = _gameNone = _copyNone = _bothNone = 0; _gaps.Clear(); _dir = dir; _logged = 0;
             try { _log?.Dispose(); _log = new StreamWriter(Path.Combine(dir, "waycheck.jsonl"), false); } catch (Exception e) { Diag.Swallowed("opening waycheck.jsonl", e); _log = null; }
+            // every pair's two ways, for working on the copy with the game closed (waycheck-all.jsonl)
+            try { _all?.Dispose(); _all = new StreamWriter(Path.Combine(dir, "waycheck-all.jsonl"), false); } catch (Exception e) { Diag.Swallowed("opening waycheck-all.jsonl", e); _all = null; }
             Progress = "0 of " + pairs.Count + " pairs";
             return "the proof begins: " + pairs.Count + " pairs";
         }
@@ -346,6 +355,7 @@ namespace BannerlordAgents
                     // the game's points may begin with the start: line them up
                     if (game.Count > 0 && Math.Abs(game[0][0] - ca.x) < 0.01f && Math.Abs(game[0][1] - ca.y) < 0.01f && !(copy.Count > 0 && Math.Abs(copy[0][0] - ca.x) < 0.01f && Math.Abs(copy[0][1] - ca.y) < 0.01f))
                         game.RemoveAt(0);
+                    All(a, b, ca, cb, game);
                     double gl = Length(ca, game), cl = Length(ca, copy);
                     if (gl > 0) _gaps.Add((cl - gl) / gl * 100);
                     bool same = game.Count == copy.Count;
@@ -366,6 +376,14 @@ namespace BannerlordAgents
             return len;
         }
 
+        private static void All(int a, int b, Vec2 ca, Vec2 cb, List<float[]> game)
+        {
+            if (_all == null) return;
+            _all.WriteLine("{\"a\":" + a + ",\"b\":" + b + ",\"from\":[" + ca.x.ToString("R", CultureInfo.InvariantCulture) + "," + ca.y.ToString("R", CultureInfo.InvariantCulture) + "],\"to\":["
+                           + cb.x.ToString("R", CultureInfo.InvariantCulture) + "," + cb.y.ToString("R", CultureInfo.InvariantCulture) + "],\"game\":["
+                           + string.Join(",", game.Select(p => "[" + p[0].ToString("R", CultureInfo.InvariantCulture) + "," + p[1].ToString("R", CultureInfo.InvariantCulture) + "]")) + "]}");
+        }
+
         private static void Log(int a, int b, Vec2 ca, Vec2 cb, List<float[]> game, List<float[]> copy, string what)
         {
             if (_log == null || _logged >= MostLogged) return;
@@ -383,14 +401,15 @@ namespace BannerlordAgents
             double medGap = _gaps.Count > 0 ? _gaps.Select(Math.Abs).OrderBy(x => x).ElementAt(_gaps.Count / 2) : double.NaN;
             try
             {
-                File.WriteAllText(Path.Combine(_dir, "navcopy-proof.json"), "{\"pairs\":" + n + ",\"identical\":" + _same + ",\"rate\":" + rate.ToString("0.#####", CultureInfo.InvariantCulture)
+                File.WriteAllText(Path.Combine(_dir, "navcopy-proof.json"), "{\"copy_version\":" + NavCopy.Version + ",\"pairs\":" + n + ",\"identical\":" + _same + ",\"rate\":" + rate.ToString("0.#####", CultureInfo.InvariantCulture)
                     + ",\"game_none\":" + _gameNone + ",\"copy_none\":" + _copyNone + ",\"both_none\":" + _bothNone
                     + ",\"median_length_gap_pct\":" + (double.IsNaN(medGap) ? "null" : medGap.ToString("0.###", CultureInfo.InvariantCulture))
                     + ",\"made\":\"" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "\"}");
             }
             catch (Exception e) { Diag.Swallowed("writing navcopy-proof.json", e); }
             try { _log?.Dispose(); } catch (Exception) { }
-            _log = null;
+            try { _all?.Dispose(); } catch (Exception) { }
+            _log = null; _all = null;
             Ways.SetProven(rate);
             Progress = "done: " + _same + " of " + n + " identical (" + (rate * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%), median length gap " + (double.IsNaN(medGap) ? "?" : medGap.ToString("0.00", CultureInfo.InvariantCulture) + "%")
                        + (Ways.Proven ? "; the copy now plans the ways" : "; the copy does not plan ways yet");

@@ -41,6 +41,27 @@ namespace BannerlordAgents.Common
         public float CenterX(int f) { float s = 0; for (int i = 0; i < FN[f]; i++) s += VX[EA[FEdge[f * MaxCorners + i]]] + VX[EB[FEdge[f * MaxCorners + i]]]; return s / (2 * Math.Max(1, (int)FN[f])); }
         public float CenterY(int f) { float s = 0; for (int i = 0; i < FN[f]; i++) s += VY[EA[FEdge[f * MaxCorners + i]]] + VY[EB[FEdge[f * MaxCorners + i]]]; return s / (2 * Math.Max(1, (int)FN[f])); }
 
+        /// <summary>
+        /// The flag bit the engine gave the party's set of closed ground (its handle, given when the set was first used, so not fixed): the bit (0 to 6) whose corners
+        /// cover the most corners of faces the party may not enter, the fewest others breaking ties; -1 when no bit covers any (the set was not used yet when copied).
+        /// </summary>
+        public int PartyCornerBit(NavQuery q)
+        {
+            if (_partyBit != -2) return _partyBit;
+            var closed = new bool[VX.Length];
+            for (int f = 0; f < Faces; f++)
+                if (!NavCopy.Open(this, q, f)) for (int i = 0; i < FN[f]; i++) { int e = FEdge[f * MaxCorners + i]; closed[EA[e]] = true; closed[EB[e]] = true; }
+            int best = -1, bestHit = 0, bestOther = int.MaxValue;
+            for (int bit = 0; bit < 7; bit++)
+            {
+                int hit = 0, other = 0;
+                for (int v = 0; v < VX.Length; v++) if ((VFlags[v] & (1 << bit)) != 0) { if (closed[v]) hit++; else other++; }
+                if (hit > bestHit || (hit == bestHit && hit > 0 && other < bestOther)) { best = bit; bestHit = hit; bestOther = other; }
+            }
+            return _partyBit = best;
+        }
+        private int _partyBit = -2;
+
         public byte Region(int group) => GroupRegion != null && group >= 0 && group < GroupRegion.Length ? GroupRegion[group] : (byte)0;
 
         // ---------- saving and loading ----------
@@ -166,8 +187,19 @@ namespace BannerlordAgents.Common
         public float ExtraCostMultiplier = 2f;
         /// <summary>The cost added on entering a face of region 0 and of a region other than 0 (the engine's two region switch costs, as the call passes them).</summary>
         public int CostTo0, CostTo1;
+        /// <summary>
+        /// The corner flag bits that make a corner closed for this question, as the engine tests them (0x80, the mesh's edge, and the bit the engine gave this set of
+        /// closed ground when it was first used: bts 0x80, handle); 0 when not known, and the corners of closed faces are worked out instead.
+        /// </summary>
+        public int CornerMask;
 
-        public static NavQuery Party(NavMesh m) => new NavQuery { Excluded = new HashSet<int>(m?.PartyExcluded ?? new int[0]), CostTo0 = m?.PartyCostTo0 ?? 0, CostTo1 = m?.PartyCostTo1 ?? 0 };
+        public static NavQuery Party(NavMesh m)
+        {
+            var q = new NavQuery { Excluded = new HashSet<int>(m?.PartyExcluded ?? new int[0]), CostTo0 = m?.PartyCostTo0 ?? 0, CostTo1 = m?.PartyCostTo1 ?? 0 };
+            int bit = m != null ? m.PartyCornerBit(q) : -1;
+            if (bit >= 0) q.CornerMask = 0x80 | (1 << bit);
+            return q;
+        }
     }
 
     /// <summary>
@@ -179,6 +211,9 @@ namespace BannerlordAgents.Common
     /// </summary>
     public static class NavCopy
     {
+        /// <summary>The copy's version: a proof counts only for the version it checked, so a changed copy is proven again (2: the engine's own corner bits).</summary>
+        public const int Version = 2;
+
         private const float ShrinkBoth = 0.49f, ShrinkOne = 0.99f, CostScale = 0.5f;
 
         private struct Node { public int Face; public float G, F, X, Y; }
@@ -326,6 +361,7 @@ namespace BannerlordAgents.Common
 
         private static bool Boundary(NavMesh m, NavQuery q, int v)
         {
+            if (q.CornerMask != 0) return (m.VFlags[v] & q.CornerMask) != 0;
             bool[] set;
             string key = string.Join(",", SortedExcluded(q));
             lock (BoundaryCache)

@@ -85,6 +85,7 @@ namespace BannerlordAgents.Routes
                 string proof = System.IO.Path.Combine(dir, "navcopy-proof.json");
                 if (!System.IO.File.Exists(proof)) return;
                 string text = System.IO.File.ReadAllText(proof);
+                if (!text.Contains("\"copy_version\":" + BannerlordAgents.Common.NavCopy.Version + ",")) return;
                 int i = text.IndexOf("\"rate\":", System.StringComparison.Ordinal);
                 if (i < 0) return;
                 int j = i + 7, k = j;
