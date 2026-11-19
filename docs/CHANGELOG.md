@@ -2769,4 +2769,5 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - The smoke test, 626 checks: new is the copy dropping a bend that the straight line through faces outside the corridor saves; the made-up grid now marks its edges' kinds as the game's map does. The war room self-test and the dashboard self-test also passed.
   - RefCheck: 890 member references, missing 0.
 - **Installed** with the game closed for it (00:06): module 0.21.1. The war rooms, dashboard and archive keeper were not running.
+- **Commit:** c07ce6e.
 - **Next:** at the next load of the campaign the proof runs again (copy version 3), and writes every pair's game way to `waycheck-all.jsonl`. On a pass (999 of 1,000), the rules and the war room take the copy's ways. The instructions' line on ways then says the game's own way, and they are installed for the orcs, Dol Guldur, my kingdom's council and my lieutenant.
