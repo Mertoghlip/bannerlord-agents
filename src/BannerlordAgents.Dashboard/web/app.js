@@ -367,6 +367,13 @@ function routeOf(p) {
 }
 
 function lerpPos(it) {
+  if (S.playback) {
+    const n = S.nextPos && S.nextPos.get(it.id);
+    if (!n || reduceMotion) return [it.x, it.y];
+    const dx = n[0] - it.x, dy = n[1] - it.y;
+    if (dx * dx + dy * dy > 900) return [it.x, it.y];
+    return [it.x + dx * (S.frac || 0), it.y + dy * (S.frac || 0)];
+  }
   if (!S.prev || reduceMotion) return [it.x, it.y];
   const t = Math.min(1, (performance.now() - S.animStart) / 700);
   const p = S.prev.get(it.id);
@@ -514,6 +521,7 @@ function draw() {
     }
     g.restore();
   }
+  if (typeof drawReplay === 'function') drawReplay(g, w, h);
   if (animating) requestDraw();
 }
 
@@ -864,23 +872,24 @@ function renderLog() {
     const hit = ids && names.some((n) => ids.has(n));
     if (only && !hit) continue;
     if (S.frame && !S.live && e.hours > S.frame.hours + 0.5) continue;
-    let text = esc(e.text);
+    let text = esc(typeof fixText === 'function' ? fixText(e.text) : e.text);
     if (e.orders && e.orders.length) {
       text += '<ul>' + e.orders.map((o) => '<li>' + who(o.lord) + ': ' + esc(o.do) + (o.at ? ' ' + who(o.at) : '') + (o.target ? ' ' + who(o.target) : '')
         + (o.lords && o.lords.length ? ' with ' + o.lords.map(who).join(', ') : '') + (o.then ? '; then ' + esc(o.then) : '') + (o.why ? ' <span class="muted">(' + esc(o.why) + ')</span>' : '') + '</li>').join('') + '</ul>';
     }
-    if (e.plan) text += '<div class="plan">' + esc(e.plan) + '</div>';
+    if (e.plan) text += '<div class="plan">' + esc(typeof fixText === 'function' ? fixText(e.plan) : e.plan) + '</div>';
     if (e.kind !== 'answer' && e.kind !== 'council' && e.ids && e.ids.length) text += ' <span class="muted">' + e.ids.slice(0, 4).map(who).join(' ') + '</span>';
     rows.push('<li class="' + (hit ? 'hit' : '') + '"><span class="log-time">' + (e.hours ? when(e.hours, true) : '') + (e.poke >= 0 && (e.kind === 'woke' || e.kind === 'answer' || e.kind === 'council') ? '<br>#' + e.poke : '') + '</span>'
       + '<span class="log-kind k-' + e.kind + '">' + (KIND_LABEL[e.kind] || e.kind) + '</span><div class="log-text">' + text + '</div></li>');
     if (rows.length >= 300) break;
   }
-  list.innerHTML = rows.join('') || '<li><span></span><div class="log-text muted">Nothing yet for this load.</div></li>';
+  list.innerHTML = rows.join('') || '<li><span></span><div class="log-text muted">Nothing yet' + (typeof runMode === 'function' && runMode() ? ' at this hour of the run.' : ' for this load.') + '</div></li>';
   list.querySelectorAll('.who').forEach((b) => (b.onclick = () => selectParty(b.dataset.id)));
   $('log-count').textContent = S.log.length ? S.log.length + ' lines' : '';
 }
 
 async function refreshLog() {
+  if (typeof runMode === 'function' && runMode()) { if (typeof refreshRunLog === 'function') refreshRunLog(); return; }
   if (!S.campaign) return;
   const rf = S.frame && S.frame.realms ? S.frame.realms[S.realm] : null;
   const realm = rf && rf.agent ? S.realm : (S.status && S.status.current && S.status.current.agent) || S.realm;
@@ -956,6 +965,7 @@ async function loadFrame(hour) {
   try {
     const f = await getJSON('/api/frame?campaign=' + encodeURIComponent(S.campaign) + '&load=' + encodeURIComponent(S.load) + '&h=' + (hour == null ? 'latest' : hour));
     const prevModel = S.model;
+    if (typeof fixFrame === 'function') fixFrame(f);
     S.frame = f;
     S.idx = indexFrame(f);
     if (!S.map) S._b = null;
@@ -1003,6 +1013,7 @@ document.querySelectorAll('.seg button').forEach((b) => (b.onclick = () => {
 }));
 
 function syncSlider() {
+  if (typeof runMode === 'function' && runMode()) { syncRunSlider(); return; }
   const sl = $('slider');
   sl.max = Math.max(0, S.hours.length - 1);
   const i = S.frame ? S.hours.indexOf(Math.floor(S.frame.hours + 1e-6)) : -1;
@@ -1015,50 +1026,10 @@ function syncSlider() {
   else if (age != null && age < 45) { chip.textContent = 'live'; chip.className = 'chip chip-live'; }
   else { chip.textContent = age == null ? 'idle' : 'no new hour'; chip.className = 'chip chip-idle'; chip.title = age == null ? '' : 'The last hour came ' + Math.round(age) + ' s ago: the game is paused, in a menu or closed.'; }
 }
-$('slider').oninput = () => {
-  S.live = false; stopPlay();
-  const h = S.hours[+$('slider').value];
-  if (h != null) loadFrame(h);
-};
-$('golive').onclick = () => { S.live = true; stopPlay(); loadFrame(null); refreshLog(); };
-$('play').onclick = () => {
-  if (S.playing) { stopPlay(); return; }
-  S.live = false;
-  $('play').innerHTML = '&#10074;&#10074;';
-  S.playing = setInterval(() => {
-    const sl = $('slider');
-    const i = +sl.value + 1;
-    if (i >= S.hours.length) { S.live = true; stopPlay(); loadFrame(null); return; }
-    sl.value = i; loadFrame(S.hours[i]);
-  }, 650);
-};
-function stopPlay() { if (S.playing) clearInterval(S.playing); S.playing = null; $('play').innerHTML = '&#9654;'; }
-$('load').onchange = async () => {
-  S.load = $('load').value;
-  const cur = S.status && S.status.current;
-  S.live = !!(cur && cur.load_id === S.load);
-  await refreshHours();
-  loadFrame(S.live ? null : S.hours[S.hours.length - 1]);
-  refreshLog();
-};
-
 async function refreshHours() {
   if (!S.campaign || !S.load) return;
   const d = await getJSON('/api/frames?campaign=' + encodeURIComponent(S.campaign) + '&load=' + encodeURIComponent(S.load)).catch(() => null);
   if (d) S.hours = d.hours || [];
-}
-
-function fillLoads(st) {
-  const sel = $('load');
-  const loads = st.loads || [];
-  const key = loads.map((l) => l.load_id + ':' + l.frames).join('|');
-  if (sel.dataset.key === key) return;
-  sel.dataset.key = key;
-  sel.innerHTML = loads.map((l) => {
-    const wall = l.load_id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*$/, '$3.$2 $4:$5');
-    return '<option value="' + esc(l.load_id) + '">Load of ' + esc(wall) + ': ' + when(l.first, true) + ' to ' + when(l.last, true) + '</option>';
-  }).join('');
-  sel.value = S.load || '';
 }
 
 function showEmpty(title, text) {
@@ -1080,7 +1051,7 @@ async function poll() {
       if (!S.campaign) { S.campaign = cur.campaign; S.load = cur.load_id; }
       if (!S.frame && !S.live && HASH.get('hour')) { await loadMap(st.map && st.map.ready ? st.map.crc : null); await refreshHours(); await loadFrame(+HASH.get('hour')); }
       if (S.live && (cur.campaign !== S.campaign || cur.load_id !== S.load)) { S.campaign = cur.campaign; S.load = cur.load_id; S.view.fitted = false; S.log = []; }
-      fillLoads(st);
+      fillSources(st);
       await loadMap(st.map && st.map.ready ? st.map.crc : null);
       if (!S.map && st.map) $('date').title = st.map.progress || '';
       if (S.live && cur.frame !== lastFrameName) {
@@ -1088,7 +1059,7 @@ async function poll() {
         await refreshHours();
         await loadFrame(null);
       }
-      if (Date.now() - lastLogAt > 4000) { lastLogAt = Date.now(); refreshLog(); }
+      if (Date.now() - lastLogAt > 4000 && !runMode()) { lastLogAt = Date.now(); refreshLog(); }
       syncSlider();
     }
   } catch (e) {
@@ -1109,8 +1080,10 @@ let pendingSelect = HASH.get('select');
 try { if (localStorage.getItem('warmap.legend') === 'closed') $('legend').open = false; } catch (e) { /* private window: it opens */ }
 $('legend').addEventListener('toggle', () => { try { localStorage.setItem('warmap.legend', $('legend').open ? 'open' : 'closed'); } catch (e) { /* not kept */ } });
 
-readColours();
-buildLegend();
-buildFilters();
-resize();
-poll();
+document.addEventListener('DOMContentLoaded', () => {
+  readColours();
+  buildLegend();
+  buildFilters();
+  resize();
+  poll();
+});

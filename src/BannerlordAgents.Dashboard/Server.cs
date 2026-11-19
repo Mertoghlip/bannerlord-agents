@@ -11,7 +11,8 @@ namespace BannerlordAgents.Dashboard
     /// <summary>
     /// The dashboard's web server, on http://localhost:port/ only: the page (embedded, or from --web), and the readings it asks for.
     /// GET /api/status, /api/frames, /api/frame (the bridge's gzipped frame as it is), /api/map/meta, /api/map/picture, /api/atlas,
-    /// /api/route (our way between two points), /api/log (the agent's log for a load), /api/checks; POST /api/way (a way given by
+    /// /api/route (our way between two points), /api/log (the agent's log for a load), /api/checks, and for whole runs (0.10) /api/runs,
+    /// /api/run, /api/runprep, /api/runlog and /api/slim (an hour's light copy); POST /api/way (a way given by
     /// its corners, described). Nothing here writes where the game or the agent reads.
     /// </summary>
     internal sealed class Server
@@ -82,6 +83,11 @@ namespace BannerlordAgents.Dashboard
                     case "/api/way": Way(res, q); return;
                     case "/api/log": LogJson(res, q.QueryString["campaign"], q.QueryString["load"], q.QueryString["realm"]); return;
                     case "/api/checks": Json(res, _checks.Summary()); return;
+                    case "/api/runs": Json(res, RunsJson()); return;
+                    case "/api/run": RunJson(res, q.QueryString["id"]); return;
+                    case "/api/runprep": RunPrep(res, q.QueryString["id"]); return;
+                    case "/api/runlog": RunLog(res, q.QueryString["id"], q.QueryString["realm"]); return;
+                    case "/api/slim": SlimHour(res, q.QueryString["campaign"], q.QueryString["load"], q.QueryString["h"]); return;
                     default: Error(res, 404, "no such reading: " + path); return;
                 }
             }
@@ -248,6 +254,64 @@ namespace BannerlordAgents.Dashboard
             realm ??= li?.Realm ?? (string)cur?["agent"];
             List<LogEntry> entries = campaign == null ? new List<LogEntry>() : _log.Read(campaign, li, realm);
             Json(res, new { campaign, load, realm, entries });
+        }
+
+        // ---------- recordings: whole runs played back (since 0.10) ----------
+
+        private object RunsJson() => new
+        {
+            runs = Recording.Runs(_store).Select(r => new
+            {
+                id = r.Id, arm = r.Arm, save = r.Save, status = r.Status, started = r.Started, finished = r.Finished, days = r.Days, campaign = r.Campaign,
+                kingdom = r.Kingdom, kingdom_name = r.KingdomName, who = r.Who, hours = r.HourCount, first = r.First, last = r.Last, loads = r.Segments.Count(s => s.Hours.Count > 0)
+            }).ToList()
+        };
+
+        private void RunJson(HttpListenerResponse res, string id)
+        {
+            RunInfo r = Recording.Read(_store, id);
+            if (r == null || r.HourCount == 0) { Error(res, 404, "no such run with hours on disk: " + id); return; }
+            object prep = Recording.Prepare(_store, r);
+            HashSet<string> kingdoms = Recording.KingdomNames(_store, r);
+            var decisions = new Dictionary<string, List<LogEntry>>();
+            foreach (KeyValuePair<string, string> kv in r.Who)
+                if (kv.Value == "agent") decisions[kv.Key] = Recording.RealmLog(_store, _log, r, kv.Key, true);
+            Json(res, new
+            {
+                id = r.Id, arm = r.Arm, save = r.Save, status = r.Status, started = r.Started, finished = r.Finished, days = r.Days, campaign = r.Campaign,
+                kingdom = r.Kingdom, kingdom_name = r.KingdomName, who = r.Who, saves = r.Saves,
+                segments = r.Segments.Where(s => s.Hours.Count > 0).Select(s => new { load = s.Load, how = s.How, from = s.From, hours = s.Hours }).ToList(),
+                news = Recording.News(_store, r, kingdoms), decisions, prep
+            });
+        }
+
+        private void RunPrep(HttpListenerResponse res, string id)
+        {
+            RunInfo r = Recording.Read(_store, id);
+            if (r == null) { Error(res, 404, "no such run: " + id); return; }
+            Json(res, Recording.Prepare(_store, r));
+        }
+
+        private void RunLog(HttpListenerResponse res, string id, string realm)
+        {
+            RunInfo r = Recording.Read(_store, id);
+            if (r == null) { Error(res, 404, "no such run: " + id); return; }
+            Json(res, new { id, realm, entries = Recording.RealmLog(_store, _log, r, realm, false) });
+        }
+
+        private void SlimHour(HttpListenerResponse res, string campaign, string load, string h)
+        {
+            if (campaign == null || load == null || !long.TryParse(h, NumberStyles.Integer, CultureInfo.InvariantCulture, out long hour) || campaign.Contains("..") || load.Contains(".."))
+            { Error(res, 400, "campaign, load and h are needed"); return; }
+            byte[] data;
+            try { data = Recording.Slim(_store, campaign, load, hour); }
+            catch (IOException) { Error(res, 503, "the frame is being written; ask again"); return; }
+            if (data == null) { Error(res, 404, "no frame for that hour"); return; }
+            res.ContentType = "application/json; charset=utf-8";
+            res.Headers["Content-Encoding"] = "gzip";
+            res.Headers["Cache-Control"] = "max-age=3600";
+            res.ContentLength64 = data.Length;
+            res.OutputStream.Write(data, 0, data.Length);
         }
 
         // ---------- plumbing ----------

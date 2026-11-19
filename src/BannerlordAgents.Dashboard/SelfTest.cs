@@ -95,6 +95,7 @@ namespace BannerlordAgents.Dashboard
 
             // the log
             LogTests(scratch);
+            RecordingTests(scratch);
 
             Console.WriteLine(_failed == 0 ? "ALL " + _passed + " CHECKS PASSED" : _failed + " OF " + (_passed + _failed) + " CHECKS FAILED");
             return _failed == 0 ? 0 : 1;
@@ -133,6 +134,80 @@ namespace BannerlordAgents.Dashboard
             Check(got.Count == 5 && got[4].Kind == "carried", "a line finished later is read on the next look (" + got.Count + ")");
             LoadInfo l1 = store.Load("camp", "L1");
             Check(l1.Ends.TryGetValue("pokes_orcs.jsonl", out long e1) && e1 == p0, "a load's lines end where the next load's begin");
+        }
+
+        /// <summary>Whole runs played back (0.10): the line a run kept across its loads, an hour's light copy, the run's news.</summary>
+        private static void RecordingTests(string scratch)
+        {
+            // load A from the run's save at hour 100 played to 120; B loaded a save of hour 110 and played to 130 (A's 110 to 120 were never
+            // saved); X loaded at 125 but its frames are gone; C carried on from a save of hour 131 to 140
+            var frames = new Dictionary<string, List<long>>
+            {
+                ["A"] = Enumerable.Range(100, 21).Select(h => (long)h).ToList(),
+                ["X"] = new List<long>(),
+                ["B"] = Enumerable.Range(110, 21).Select(h => (long)h).ToList(),
+                ["C"] = Enumerable.Range(131, 10).Select(h => (long)h).ToList(),
+            };
+            var run = new RunInfo { Id = "test", Campaign = "camp" };
+            run.Segments.Add(new RunSeg { Load = "A", From = 100.3, To = 120.5 });
+            run.Segments.Add(new RunSeg { Load = "B", From = 110.2, To = 130.9 });
+            run.Segments.Add(new RunSeg { Load = "X", From = 125.0, To = 125.5 });
+            run.Segments.Add(new RunSeg { Load = "C", From = 131.4, To = 140.2 });
+            Recording.KeepLine(run, l => frames[l]);
+            List<long> line = run.Segments.SelectMany(s => s.Hours).ToList();
+            bool kept = run.Segments[0].Hours.First() == 100 && run.Segments[0].Hours.Last() == 109 && run.Segments[1].Hours.First() == 110 && run.Segments[1].Hours.Last() == 130
+                        && run.Segments[2].Hours.Count == 0 && run.Segments[3].Hours.First() == 131 && line.Count == 41 && line.Distinct().Count() == 41;
+            Check(kept, "a run's kept line: each hour once, a load of an earlier save dropping what the load before played past it, a later save carried on, a load "
+                        + "whose frames are gone cutting nothing (" + string.Join(" | ", run.Segments.Select(s => s.Load + " " + (s.Hours.Count > 0 ? s.Hours.First() + "-" + s.Hours.Last() : "none"))) + ")");
+
+            // an hour's light copy
+            string frame = "{\"campaign\":\"camp\",\"load_id\":\"A\",\"hours\":105.25,\"date\":\"Summer 1\",\"factions\":[{\"id\":\"orcs\",\"name\":\"Orcs\",\"color\":\"#222222\",\"kingdom\":true,\"ruler\":\"x\"}],"
+                + "\"settlements\":[{\"id\":\"castle_a\",\"name\":\"Keep\",\"kind\":\"castle\",\"faction\":\"orcs\",\"x\":10.04,\"y\":20.06,\"garrison\":300}],"
+                + "\"parties\":["
+                + "{\"id\":\"p_lord\",\"name\":\"Bolg\",\"kind\":\"lord\",\"faction\":\"orcs\",\"x\":1.234,\"y\":5.678,\"men\":100,\"strength\":250.4,\"gold\":9999,\"route\":[1,2,3,4]},"
+                + "{\"id\":\"p_mate\",\"name\":\"Azog\",\"kind\":\"lord\",\"faction\":\"orcs\",\"x\":1,\"y\":5,\"attached\":true,\"army_leader\":\"p_lord\"},"
+                + "{\"id\":\"p_gar\",\"kind\":\"garrison\",\"faction\":\"orcs\",\"x\":10,\"y\":20},"
+                + "{\"id\":\"p_car\",\"kind\":\"caravan\",\"faction\":\"orcs\",\"x\":3,\"y\":3,\"in_settlement\":\"castle_a\"},"
+                + "{\"id\":\"p_band\",\"kind\":\"bandit\",\"x\":7,\"y\":7}],"
+                + "\"realms\":{\"orcs\":{\"name\":\"Orcs\",\"agent\":true,\"cut\":[\"p_band\"],\"orders\":{\"p_lord\":\"Bolg: defend Keep\"},\"view\":{\"seen\":[{\"id\":\"p_band\",\"name\":\"Bandits\",\"relation\":\"enemy\",\"kind\":\"bandit\",\"x\":7,\"y\":7,\"near\":\"Keep\"}],"
+                + "\"last_seen\":[],\"holdings\":[{\"id\":\"castle_a\",\"garrison\":300}],\"news\":\"long\"}}},"
+                + "\"sieges\":[{\"settlement\":\"castle_a\",\"besieger\":\"p_x\",\"besieger_faction\":\"men\",\"start_hours\":100,\"engines\":[]}],"
+                + "\"battles\":[{\"key\":\"k\",\"kind\":\"field\",\"x\":4,\"y\":4,\"start_hours\":104,\"attackers\":{\"leader\":\"p_lord\",\"faction\":\"orcs\",\"healthy\":90,\"start_healthy\":100},\"defenders\":{\"leader\":\"p_band\",\"healthy\":5,\"start_healthy\":30}}]}";
+            JsonNode slim;
+            using (var doc = System.Text.Json.JsonDocument.Parse(frame)) slim = JsonNode.Parse(Recording.SlimJson(doc.RootElement));
+            JsonArray parties = slim?["parties"] as JsonArray;
+            var ids = parties?.Select(p => (string)p[0]).ToList() ?? new List<string>();
+            JsonArray lord = parties?.FirstOrDefault(p => (string)p[0] == "p_lord") as JsonArray, mate = parties?.FirstOrDefault(p => (string)p[0] == "p_mate") as JsonArray;
+            JsonNode realm = slim?["realms"]?["orcs"];
+            bool light = ids.SequenceEqual(new[] { "p_lord", "p_mate", "p_band" }) && lord != null && (double)lord[4] == 1.2 && (double)lord[7] == 250 && lord.Count == 19
+                         && mate != null && (int)mate[18] == 1 && (slim["settlements"] as JsonArray)?.Count == 1 && ((JsonArray)slim["settlements"][0]).Count == 8
+                         && (realm?["view"]?["seen"] as JsonArray)?.Count == 1 && ((JsonArray)realm["view"]["seen"][0]).Count == 13 && realm["view"]["news"] == null
+                         && (string)realm["orders"]?["p_lord"] == "Bolg: defend Keep" && ((JsonArray)slim["battles"][0]).Count == 14 && slim["factions"]?[0]?["ruler"] == null;
+            Check(light, "an hour's light copy keeps what the map draws (lords, those riding in an army marked, bands; no garrison or caravan inside), positions to a tenth, "
+                         + "each realm's sightings, cuts and orders, the sieges and battles, and nothing else (" + slim?.ToJsonString().Length + " characters)");
+
+            // the run's news: a battle between realms, one with a caravan and one with a band, a holding taken, a tool's report; and an hour another load took over
+            var store = new Store(scratch);
+            string data = store.DataDir("newscamp");
+            Directory.CreateDirectory(data);
+            string notices = Path.Combine(data, "notices.jsonl");
+            System.IO.File.WriteAllText(notices,
+                "{\"hours\":101,\"kind\":\"battle\",\"text\":\"Battle: Bolg (Orcs) against Aragorn (Gondor); Aragorn won.\",\"factions\":[\"orcs\"]}\n"
+                + "{\"hours\":102,\"kind\":\"battle\",\"text\":\"Battle: Bolg (Orcs) against Armed Caravan of Tom (Gondor); Bolg won.\",\"factions\":[\"orcs\"]}\n"
+                + "{\"hours\":103,\"kind\":\"battle\",\"text\":\"Battle: Bolg (Orcs) against Looters (Looters); Bolg won.\",\"factions\":[\"orcs\"]}\n"
+                + "{\"hours\":104,\"kind\":\"holding_changed\",\"text\":\"Keep passed from Gondor to Orcs.\",\"factions\":[\"orcs\"],\"place\":\"castle_a\"}\n"
+                + "{\"hours\":104,\"kind\":\"holding_changed\",\"text\":\"Keep passed from Gondor to Orcs.\",\"factions\":[\"orcs\"],\"place\":\"castle_a\"}\n"
+                + "{\"hours\":105,\"kind\":\"tool\",\"text\":\"Bolg is sheltering.\",\"factions\":[\"orcs\"]}\n"
+                + "{\"hours\":106,\"kind\":\"holding_changed\",\"text\":\"Hold passed from Rohan to Dunland.\",\"factions\":[\"rohan\"]}\n"
+                + "{\"hours\":115,\"kind\":\"captured\",\"text\":\"Played past the save, never kept.\",\"factions\":[\"orcs\"]}\n");
+            System.IO.File.WriteAllText(Path.Combine(data, "loads.jsonl"), "{\"load_id\":\"A\",\"offsets\":{\"notices.jsonl\":0}}\n");
+            var newsRun = new RunInfo { Id = "news", Campaign = "newscamp" };
+            newsRun.Who["orcs"] = "agent";
+            newsRun.Segments.Add(new RunSeg { Load = "A", From = 100, Hours = Enumerable.Range(100, 10).Select(h => (long)h).ToList(), Until = 110 });
+            List<object> news = Recording.News(store, newsRun, new HashSet<string> { "Orcs", "Gondor" });
+            string kinds = string.Join(",", news.Select(n => (string)n.GetType().GetProperty("kind").GetValue(n)));
+            Check(kinds == "battle,holding_changed", "the run's news: the battle between realms and the holding taken, once each; no caravan, band, tool report, other "
+                                                     + "realms' news or hour played past a save (" + kinds + ")");
         }
 
         private static void Check(bool ok, string what)

@@ -56,12 +56,27 @@
     </details>
     <div class="card" id="card" hidden></div>
     <div class="pick-hint" id="pick-hint" hidden>Click where it should go: a holding, or any spot. <button type="button" class="link" id="pick-cancel">Cancel</button></div>
+    <div class="captions" id="captions" aria-live="polite"></div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <div class="present-title" id="present-title" hidden>
+      <div class="present-run" id="present-run"></div>
+      <div class="present-date" id="present-date"></div>
+    </div>
+    <div class="score" id="score" hidden></div>
+    <div class="buffering" id="buffering" hidden>Getting the next hours ready</div>
     <div class="timeline" id="timeline">
-      <button type="button" class="btn btn-icon" id="play" aria-label="Play the hours">&#9654;</button>
-      <input type="range" id="slider" min="0" max="0" value="0" aria-label="Hour shown">
+      <button type="button" class="btn btn-icon" id="play" aria-label="Play">&#9654;</button>
+      <button type="button" class="btn btn-icon" id="step-back" aria-label="One hour back" title="One hour back (,)">&#8249;</button>
+      <button type="button" class="btn btn-icon" id="step-fwd" aria-label="One hour on" title="One hour on (.)">&#8250;</button>
+      <div class="track">
+        <canvas id="marks" class="marks" aria-hidden="true"></canvas>
+        <input type="range" id="slider" min="0" max="0" value="0" aria-label="Hour shown">
+      </div>
       <span id="slider-label" class="slider-label"></span>
-      <select id="load" aria-label="Which load of the campaign"></select>
+      <select id="speed" aria-label="Playback speed, in-game hours a second" title="In-game hours a second"></select>
+      <select id="source" aria-label="What to show: the live session, an earlier load, or a whole test run"></select>
       <button type="button" class="btn btn-live" id="golive">Live</button>
+      <button type="button" class="btn" id="present" aria-pressed="false" title="Presentation mode (P)">Present</button>
     </div>
   </section>
 
@@ -78,5 +93,6 @@
   </aside>
 </main>
 <script src="app.js"></script>
+<script src="replay.js"></script>
 </body>
 </html>

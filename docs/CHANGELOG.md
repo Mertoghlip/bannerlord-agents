@@ -2781,3 +2781,22 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed (00:34): module 0.21.2. The war rooms were stopped for it; the module starts them again at the next load.
 - **Outside the repository:** `warroom-system.md` installed for the orcs, Dol Guldur and my kingdom's council (principle 2 and the march clock line in How battles are joined) and my lieutenant (its besiege line), backups `warroom-system.md.bak-20261120-before-march-clock`; each equals its template but for the realm's two lines (checked; the continuous files already did). Their conversations carry on and are told YOUR INSTRUCTIONS CHANGED at their next message.
 - **Commit:** e548287.
+
+### 01:15 · Dashboard 0.10.0 and module 0.21.3: whole test runs played back, for demos
+- **Why:** I want to use the dashboard for demos. It showed one load of the game at a time and kept only the newest 12 loads' hours. It should hold everything of a run, from its start save through every load, and play it from start to finish. I chose to keep every run's hours in full, and decision captions, event pop-ups and a presentation mode as the extras.
+- **What** (docs/DASHBOARD.md, "Recordings"):
+  - **Module 0.21.3** (`LiveMap.Prune`): the frames of a load that is part of a test run (any run that began, by its run.json) are never removed; `keep_loads` still applies to other loads. About 0.45 MB an in-game hour, some 650 MB for a run of 60 days.
+  - **Dashboard 0.10.0** (`Recording.cs`, `web/replay.js`):
+    - Every run that began and has hours on disk can be picked from the source list or opened by a link (`#run=<id>&at=&speed=&present=1&play=1`).
+    - Its line keeps each hour once, from the load whose stretch it is: a load of an earlier save drops what was played past that save, and a load of a later save leaves the one before whole.
+    - Playback runs at 1 to 48 in-game hours a second, with smooth movement between hours, on a timeline marked with loads, the agents' decisions and the news; paused, it shows the hour's full frame.
+    - Light copies of each hour (about 90 KB against the frame's 2.7 MB of JSON) are made in the background when a run is opened and kept in `dashboard\slim\v2\`.
+    - Captions show each agent's answer or strategy review with orders: its plan and orders in words, with the ordered lords pulsing on the map. Pop-ups show the game's news where it happened: battles between realms, captures, deaths, sieges, holdings taken, raids, armies, alliances, letters, wars and peace.
+    - Presentation mode (P) shows the map full screen, the run and date in large type, and a scoreboard of each realm's holdings, lords and field strength.
+    - The run's side log covers the whole line. Double-encoded names are shown as the game means them.
+- **Checks:**
+  - **Dashboard self-test, 30 checks.** New: the kept line with a reload of an earlier save, a later save, and a load whose frames are gone; the light copy's contents; the news filter, which drops battles with caravans and bands, tool reports, other realms' news and hours played past a save.
+  - **Smoke test (626 checks) and war room self-test** passed. RefCheck: 891 member references, missing 0.
+  - **On the real run 20261117-1614-A** (190 hours, one load), in a headless Chrome on the real clock: playback ran 26 hours in 9 seconds at 3 hours a second. Its 190 light copies took about a second to make (17 MB). It has 75 news items and 49 agent decisions. Captions, pop-ups and the scoreboard appear, and the live session and an earlier load step through their hours as before.
+- **Installed** with the game closed (01:10): module 0.21.3. The dashboard is run from the repository's build (`scripts\dashboard.ps1`).
+- **On disk now:** the runs since Nov 13 still have their hours, the longest being 20261113-1739-A at 514 hours over two loads, and 20261117-1614-A at 190 hours. The runs of October and the 60-day run of Oct 29 lost theirs to `keep_loads` before this change.

@@ -54,14 +54,33 @@ It opens http://localhost:7329/ in the browser. The page is served on this lapto
 
   Names are links: clicking one selects that lord or place on the map. The kinds can be filtered, and "Only the selected" keeps the lines naming what is selected. Those lines are highlighted anyway.
 - **Rewind.**
-  - The slider runs over every hour of this load; play steps through them.
-  - The load list picks an earlier load of the campaign, kept for the newest `keep_loads` (12) loads.
+  - The slider runs over every hour of this load; play steps through them, at the speed chosen.
+  - The source list picks the live session, an earlier load of the campaign (the newest `keep_loads`, 12, plus every load of a test run), or a whole test run (below).
   - "Live" follows the game again. When rewound, the log stops at that hour.
 - **Checks** (top right):
   - whether the walking map and the crossing atlas are ready;
   - the accuracy check, our way-finder against the game's own planned ways ([ROUTES.md](ROUTES.md));
   - the measured speed on each ground.
 - **Links.** `#mode=truth&realm=<id>&select=<party, lord or holding id>&hour=<hour>&layers=allways,truth` opens the page on that view, for example `http://localhost:7329/#select=lord_MM1_1`.
+
+## Recordings: whole runs played back (since 0.10, Nov 20)
+
+For demos. A test run (docs/RUNS.md) is played from its first hour to its last, across every load of the game it took, on the same map.
+
+- **Opening one.** The source list's "Test runs, played back whole" lists every run that began and has hours on disk. A link opens one directly:
+  `http://localhost:7329/#run=20261117-1614-A&at=0&speed=6&present=1&play=1` (`at`: the hour of the run to start from, counted from its first; `speed`: in-game hours a second; `present` and `play`: 1 to start in presentation mode and playing).
+- **The run's line.** Each in-game hour once, from the load whose stretch it is. A load of an earlier save of the run drops what the load before played past that save, since it was never saved; a load of a later save leaves the one before whole. A load whose frames are gone (from before module 0.21.3 kept them) cuts nothing.
+- **Playing.** Play and pause (space), an hour back or on (`,` and `.`), and 1 to 48 in-game hours a second. Parties move smoothly between the hours. The timeline marks where each load began (grey), each agent's decisions (in the realm's colour), the major news (red) and the minor news (faint); hovering says what each is, and clicking jumps there. While playing the map draws each hour's light copy. When paused it shows the hour's full frame, so cards, ways and every layer work as for a live hour. Clicking a lord while playing pauses on that hour.
+- **Captions.** When the playback passes an agent's answer or strategy review that gave orders, it appears for a few seconds: the realm, its plan, and up to six orders in words with their reasons. The lords it ordered pulse on the map in the realm's colour.
+- **Pop-ups.** The game's news along the run for its realms, where it happened:
+  - **Major, ringed in red with a label:** battles between realms (not with bands, caravans or villagers), lords taken prisoner or killed, sieges laid and lifted, holdings changing hands, wars and peace.
+  - **Minor, a fainter ring:** raids and lootings.
+  - **Listed as notes in the corner:** the major news, armies formed, alliances and the agents' letters.
+- **Presentation mode** (the Present button or P; Esc leaves). The header, the side log, the legend and the card go. The map fills the screen, with the run and the date in large type, a scoreboard of each realm of the run (its towns and castles, its lords, and the strength of its lords in the field), the captions and the pop-ups. The timeline hides while the mouse rests.
+- **The side log** is the followed realm's moves along the whole run, up to the hour shown.
+- **Names** that reach the frames double-encoded (UTF-8 read as Latin-1, as "GrishÃ»l") are shown as the game means them ("Grishûl").
+- **Keeping the hours.** Since module 0.21.3 the bridge never removes the frames of a load that is part of a test run (about 0.45 MB an hour, some 650 MB for a run of 60 days); `keep_loads` still applies to every other load.
+- **The light copies.** Opening a run makes a light copy of each of its hours from the frame, in the background, three at a time (the frames are about 2.7 MB of JSON each, too heavy to play several a second). The copy holds only what the map draws while playing: the parties outside garrisons and militias, with their positions, men, strength, army, fight, holding and errand; the holdings; each realm's sightings, cuts and orders; the sieges and battles. It is about 90 KB an hour (some 130 MB for 60 days), kept in `dashboard\slim\v2\<campaign>\<load>\` under the bridge's folder, and made again only when its layout changes (`Recording.SlimVersion`). Playback can start before they are all made: the chip beside the date says how far it has come.
 
 ## How it works
 
@@ -77,8 +96,9 @@ It opens http://localhost:7329/ in the browser. The page is served on this lapto
   - `LogReader`: the side log, each file read on from where it was left.
   - `Picture`: the map picture, made once (`picture-v1.png` beside the map).
   - `Checks`: works out the atlas once per map when it is missing, measures the accuracy and the speeds.
-  - The page: `web/` (no outside libraries; canvas).
-- **Settings** (`settings.txt` of the bridge): `dashboard = on` (the map copy, the planned ways and the frames) and `keep_loads = 12`.
+  - `Recording` (0.10): the runs and their kept lines (`runs\<id>\run.json`), the light copies, the run's news and the agents' decisions along it. Readings `/api/runs`, `/api/run`, `/api/runprep`, `/api/runlog` and `/api/slim`.
+  - The page: `web/` (no outside libraries; canvas): `app.js` the map, cards and log; `replay.js` (0.10) the timeline, the sources, playing a run, captions, pop-ups and presentation mode.
+- **Settings** (`settings.txt` of the bridge): `dashboard = on` (the map copy, the planned ways and the frames) and `keep_loads = 12` (the loads of test runs are always kept, since module 0.21.3).
 
 ## What it costs the game
 

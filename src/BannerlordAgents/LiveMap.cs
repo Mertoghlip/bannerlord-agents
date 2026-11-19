@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
 namespace BannerlordAgents
@@ -175,20 +176,51 @@ namespace BannerlordAgents
             return p;
         }
 
-        /// <summary>Only the newest keep_loads loads of a campaign keep their frames.</summary>
+        /// <summary>
+        /// Only the newest keep_loads loads of a campaign keep their frames, but a load that is part of a test run is never removed (0.21.3: the
+        /// dashboard plays a whole run back, docs/DASHBOARD.md "Recordings"; about 0.45 MB a frame, some 650 MB for a run of 60 days).
+        /// </summary>
         private static void Prune(string campaignDir, string keep)
         {
             try
             {
+                HashSet<string> inRuns = RunLoads();
                 List<string> loads = Directory.GetDirectories(campaignDir).OrderByDescending(d => Path.GetFileName(d), StringComparer.Ordinal).ToList();
                 foreach (string d in loads.Skip(Math.Max(1, Settings.KeepLoads)))
                 {
                     if (string.Equals(d, keep, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (inRuns.Contains(Path.GetFileName(d))) continue;
                     Directory.Delete(d, true);
                     Diag.Count("dashboard:old loads removed");
                 }
             }
             catch (Exception e) { Diag.Swallowed("removing old dashboard frames", e); }
+        }
+
+        /// <summary>The loads of every test run that began (each run.json's segments), whose frames are kept for playing the run back.</summary>
+        private static HashSet<string> RunLoads()
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                if (!Directory.Exists(Paths.Runs)) return set;
+                foreach (string dir in Directory.GetDirectories(Paths.Runs))
+                {
+                    string file = Path.Combine(dir, "run.json");
+                    if (!File.Exists(file)) continue;
+                    try
+                    {
+                        JObject run = JObject.Parse(File.ReadAllText(file));
+                        if (string.IsNullOrEmpty((string)run["started"])) continue;
+                        if (run["segments"] is JArray segs)
+                            foreach (JToken s in segs)
+                                if (s["load"] is JValue v && v.Value is string load && load.Length > 0) set.Add(load);
+                    }
+                    catch (Exception e) when (e is IOException || e is JsonException) { Diag.Swallowed("reading a run's loads for the dashboard (" + file + ")", e); }
+                }
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { Diag.Swallowed("listing the runs for the dashboard", e); }
+            return set;
         }
 
         private static string Safe(string s)
