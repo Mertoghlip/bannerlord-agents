@@ -165,8 +165,9 @@ namespace BannerlordAgents
             var sp = new ClockParty { Id = lead.Id, X = lead.X, Y = lead.Y, SeenHours = s.Hours, InView = true, Pace = p };
             bool gate = h.Gx != 0 || h.Gy != 0;
             MapGround g = MapGround.For(s.MapCrc);
-            MarchTime m = MarchClock.Reach(sp, MarchClock.Straight(sp, gate ? h.Gx : h.X, gate ? h.Gy : h.Y), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours, maxHours);
-            m = MarchClock.ByRoad(sp, m, Roads.To(s, lead, h), s.Hours);
+            List<float[]> way = Ways.Between(sp.X, sp.Y, gate ? h.Gx : h.X, gate ? h.Gy : h.Y, out bool real);
+            MarchTime m = MarchClock.Reach(sp, way, g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours, maxHours);
+            if (!real) m = MarchClock.ByRoad(sp, m, Roads.To(s, lead, h), s.Hours);
             if (double.IsNaN(m.Hours)) return null;
             return new Arrival { Hours = m.Hours, At = m.At, Reached = m.Reached, Length = m.Length, To = h.Id, Way = false };
         }
@@ -182,7 +183,7 @@ namespace BannerlordAgents
             if (p == null || p.Base <= 0) return new MarchTime();
             var cp = new ClockParty { Id = lead.Id, X = lead.X, Y = lead.Y, SeenHours = s.Hours, InView = true, Pace = p };
             MapGround g = MapGround.For(s.MapCrc);
-            return MarchClock.Reach(cp, MarchClock.Straight(cp, x, y), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours, maxHours);
+            return MarchClock.Reach(cp, Ways.Between(cp.X, cp.Y, x, y, out _), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours, maxHours);
         }
 
         /// <summary>
@@ -194,8 +195,8 @@ namespace BannerlordAgents
             var cp = Tools.World.SeenOf(p);
             bool gate = h.Gx != 0 || h.Gy != 0;
             MapGround g = MapGround.For(s.MapCrc);
-            MarchTime m = MarchClock.Reach(cp, MarchClock.Straight(cp, gate ? h.Gx : h.X, gate ? h.Gy : h.Y), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours);
-            return MarchClock.ByRoad(cp, m, Roads.To(s, p.X, p.Y, p.Entrance, null, h), s.Hours);
+            MarchTime m = MarchClock.Reach(cp, Ways.Between(cp.X, cp.Y, gate ? h.Gx : h.X, gate ? h.Gy : h.Y, out bool real), g != null ? (Func<float, float, int>)g.TerrainAt : null, s.Hours);
+            return real ? m : MarchClock.ByRoad(cp, m, Roads.To(s, p.X, p.Y, p.Entrance, null, h), s.Hours);
         }
 
         /// <summary>"there in about 14 hours (Summer 19, 14:00), 38 to go on its way", or "more than 20 days away".</summary>

@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.20.5</Version>
+    <Version>0.21.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -29,6 +29,8 @@
     <Compile Include="..\Common\GameBattle.cs" Link="Common\GameBattle.cs" />
     <!-- the one march clock (Nov 18, docs/PLAN-ways.md), shared by the game module and the way-finder -->
     <Compile Include="..\Common\MarchClock.cs" Link="Common\MarchClock.cs" />
+    <!-- the copy of the game's own way-finder over the walking mesh copied out of the engine (docs/PLAN-ways.md, Phase 2) -->
+    <Compile Include="..\Common\NavCopy.cs" Link="Common\NavCopy.cs" />
     <!-- which chronicle lines a report shows (0.13.16), one rule for the bridge and the war room -->
     <Compile Include="..\Common\RecentHistory.cs" Link="Common\RecentHistory.cs" />
   </ItemGroup>

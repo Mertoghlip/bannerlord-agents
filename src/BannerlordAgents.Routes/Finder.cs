@@ -70,9 +70,39 @@ namespace BannerlordAgents.Routes
 
         public int MaxExpand = 6_000_000;
 
+        /// <summary>
+        /// The copy of the game's own way-finder (docs/PLAN-ways.md, Phase 2), when the walking mesh copied out of the engine lies beside this map and its proof against
+        /// the game's own ways passed (navcopy-proof.json, rate at least 0.999): the shortest way is then the one the game itself would plan, described as before.
+        /// </summary>
+        public BannerlordAgents.Common.NavMesh Copy { get; private set; }
+        public BannerlordAgents.Common.NavQuery CopyQuery { get; private set; }
+
+        private void LoadCopy(string dir)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(dir)) return;
+                string proof = System.IO.Path.Combine(dir, "navcopy-proof.json");
+                if (!System.IO.File.Exists(proof)) return;
+                string text = System.IO.File.ReadAllText(proof);
+                int i = text.IndexOf("\"rate\":", System.StringComparison.Ordinal);
+                if (i < 0) return;
+                int j = i + 7, k = j;
+                while (k < text.Length && (char.IsDigit(text[k]) || text[k] == '.' || text[k] == 'E' || text[k] == 'e' || text[k] == '-')) k++;
+                if (!double.TryParse(text.Substring(j, k - j), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double rate) || rate < 0.999) return;
+                var mesh = BannerlordAgents.Common.NavMesh.Load(System.IO.Path.Combine(dir, "navmesh.bin"));
+                if (mesh == null) return;
+                mesh.FaceAt(0, 0);
+                Copy = mesh;
+                CopyQuery = BannerlordAgents.Common.NavQuery.Party(mesh);
+            }
+            catch (System.Exception) { Copy = null; CopyQuery = null; }
+        }
+
         public Finder(WalkMap m)
         {
             _m = m;
+            LoadCopy(m.Dir);
             int n = m.W * m.H;
             _g = new float[n];
             _parent = new int[n];
@@ -88,6 +118,17 @@ namespace BannerlordAgents.Routes
             costs ??= Costs.Equal;
             var sw = Stopwatch.StartNew();
             var r = new RouteResult { FromX = x0, FromY = y0, ToX = x1, ToY = y1, Straight = WalkMap.Dist(x0, y0, x1, y1) };
+            // the copy of the game's own way-finder, once proven, for the shortest way (a search with crossings closed, or another cost guess, stays on the cells)
+            if (Copy != null && blocked == null && costs == Costs.Equal)
+            {
+                List<float[]> pts = BannerlordAgents.Common.NavCopy.Path(Copy, x0, y0, x1, y1, CopyQuery);
+                if (pts == null) { r.Why = "no way there over walkable ground (the game's own way-finder finds none)"; r.Ms = sw.Elapsed.TotalMilliseconds; return r; }
+                pts.Insert(0, new[] { x0, y0 });
+                RouteResult byCopy = analyse ? FromPoints(pts) : new RouteResult { Ok = true, Points = pts, FromX = x0, FromY = y0, ToX = x1, ToY = y1, Straight = r.Straight };
+                if (!analyse) for (int i = 1; i < pts.Count; i++) byCopy.Length += WalkMap.Dist(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+                byCopy.Ms = sw.Elapsed.TotalMilliseconds;
+                return byCopy;
+            }
             int s = _m.NearestWalkable(x0, y0, 12, blocked), t = _m.NearestWalkable(x1, y1, 12, blocked);
             if (s < 0) { r.Why = "the start is not on walkable ground"; return r; }
             if (t < 0) { r.Why = "the destination is not on walkable ground"; return r; }

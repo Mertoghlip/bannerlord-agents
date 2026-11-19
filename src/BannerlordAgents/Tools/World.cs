@@ -348,6 +348,8 @@ namespace BannerlordAgents.Tools
             Common.MarchTime m = MarchTo(sp, x, y);
             if (sp.InView && sp.Id != null && Party(sp.Id) is PartyRow e && Lead(e) is PartyRow lead && Forecast.Marching(lead) && (lead.Tx - x) * (lead.Tx - x) + (lead.Ty - y) * (lead.Ty - y) <= 25f)
                 return m;
+            // the game's own way (the proven copy of its way-finder) needs no stretching; the straight line is stretched to the road
+            if (Ways.Proven) return m;
             return Common.MarchClock.ByRoad(sp, m, sp.Id != null ? RoadDistance(sp.Id, h.Id) : double.NaN, Hours);
         }
 
@@ -367,15 +369,15 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
-        /// The door for ways (docs/PLAN-ways.md): the way the game planned for a party in view that marches to this very point (within 5 of its end), else the
-        /// straight line. The copy of the game's way-finder comes in here.
+        /// The door for ways (docs/PLAN-ways.md): the way the game planned for a party in view that marches to this very point (within 5 of its end); else the way the
+        /// game itself would plan (the proven copy of its way-finder, Ways; null when it finds none); else, until that copy is proven, the straight line.
         /// </summary>
         private IList<float[]> WayFor(Common.ClockParty sp, float x, float y)
         {
             if (sp.InView && sp.Id != null && Party(sp.Id) is PartyRow e && Lead(e) is PartyRow lead && Forecast.Marching(lead) && (lead.Tx != 0 || lead.Ty != 0)
                 && (lead.Tx - x) * (lead.Tx - x) + (lead.Ty - y) * (lead.Ty - y) <= 25f)
                 return Forecast.WayOf(lead);
-            return Common.MarchClock.Straight(sp, x, y);
+            return Ways.Between(sp.X, sp.Y, x, y, out _);
         }
 
         /// <summary>

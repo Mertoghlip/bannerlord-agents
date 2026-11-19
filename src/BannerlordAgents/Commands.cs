@@ -188,6 +188,28 @@ namespace BannerlordAgents
                    + "\nThe dashboard: run scripts\\dashboard.ps1, then open http://localhost:7329/";
         });
 
+        /// <summary>The ways (docs/PLAN-ways.md): the walking mesh copied out of the engine, the copy of its way-finder and its proof; "again" copies the mesh anew, "proof N" runs the proof on N pairs.</summary>
+        [CommandLineFunctionality.CommandLineArgumentFunction("ways", "agents")]
+        public static string WaysCommand(List<string> args) => Cmd("ways", args, () =>
+        {
+            if (Campaign.Current == null || !Bridge.Running) return "Load a campaign first.";
+            string dir = MapExport.Folder;
+            if (dir == null || !MapExport.Ready) return "The walking map is not copied yet: " + MapExport.Progress;
+            string first = args != null && args.Count > 0 ? args[0].ToLowerInvariant() : "";
+            if (first == "again")
+            {
+                string r = NavMeshDump.Run(dir);
+                Ways.Load(dir);
+                return "Walking mesh: " + r + "\nWays: " + Ways.Status;
+            }
+            if (first == "proof")
+            {
+                int n = args.Count > 1 && int.TryParse(args[1], out int k) ? Math.Max(10, Math.Min(20000, k)) : 2000;
+                return NavProof.Start(dir, n) + ". It runs in small slices on the campaign map; agents.ways shows how far it is.";
+            }
+            return "Walking mesh: " + NavSetup.DumpResult + "\nWays: " + Ways.Status + "\nProof: " + NavProof.Progress + "\nFolder: " + dir;
+        });
+
         [CommandLineFunctionality.CommandLineArgumentFunction("pokes", "agents")]
         public static string Pokes(List<string> args) => Cmd("pokes", args, () =>
         {

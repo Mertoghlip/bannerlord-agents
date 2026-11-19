@@ -91,6 +91,7 @@ namespace BannerlordAgents
             Background.DrainToUi();
             LieutenantWindow.Frame();
             MapExport.Frame();
+            NavSetup.Frame();
             PlayerBattles.Frame();
         }
 

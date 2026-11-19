@@ -248,6 +248,7 @@ namespace SmokeTest
             SiegeFoodTests();
             SiegeDrillTests();
             EscapeTests();
+            NavCopyTests();
             Runner.MoveSink = keptMove;
             Runner.ReleaseSink = keptRelease;
         }
