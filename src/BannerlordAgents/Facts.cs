@@ -308,7 +308,8 @@ namespace BannerlordAgents
                               + "- a lord of yours held prisoner: where and since when, and your lords who can reach that place soonest;\n"
                               + "- an enemy: where it is or was last seen, its strength, for an army its trail over the last two days, your holdings near it, your lords who can reach it soonest.\n"
                               + "lookups/captured.txt lists all your lords held prisoner, by where they are held.\n"
-                              + "Travel hours are by road where the game knows the way (else as the crow flies), at the lord's own pace by the game's rules (its speed / 1.2 map units an hour on open ground, night counted); forest, fords and bridges on the way slow it further.\n";
+                              + (Ways.Proven ? "Travel hours follow the way the game itself would plan for the march, round mountains and water," : "Travel hours are by road where the game knows the way (else as the crow flies),")
+                              + " at the lord's own pace by the game's rules (its speed / 1.2 map units an hour on open ground, night counted); forest, fords and bridges on the way slow it further.\n";
             // the human player (0.17.3): who he is, how his battles are fought, every battle of his the realm knows of, and what it saw him do
             if (w.S.PlayerParty != null && w.S.PartyById.TryGetValue(w.S.PlayerParty, out PartyRow hp))
             {

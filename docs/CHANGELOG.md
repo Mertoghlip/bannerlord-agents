@@ -2771,3 +2771,12 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed for it (00:06): module 0.21.1. The war rooms, dashboard and archive keeper were not running.
 - **Commit:** c07ce6e.
 - **Next:** at the next load of the campaign the proof runs again (copy version 3), and writes every pair's game way to `waycheck-all.jsonl`. On a pass (999 of 1,000), the rules and the war room take the copy's ways. The instructions' line on ways then says the game's own way, and they are installed for the orcs, Dol Guldur, my kingdom's council and my lieutenant.
+
+### 00:17 · The copy's proof in the game: 2,000 of 2,000 identical
+- **What:** at the campaign's load the module read the walking mesh it had copied and ran the proof of copy version 3 in 5 seconds: all 2,000 pairs identical to the game's own ways within 0.01 (rate 1; 136 with no way for either; median length gap 0). Every pair's game way is in `waycheck-all.jsonl` beside the proof. From then the rules, the reports and the look-ups take the copy's ways, and the war room's Finder does too at its next start. The war rooms were started by the module at the load; no agent call was made. A pause while the game loaded (20 seconds, the loading screen, no code of ours running) was the game's own.
+
+### 00:36 · Module 0.21.2 and the march clock's instructions installed
+- **What:** with the copy proven, the instructions' line on ways says the way counted is the one the game itself would plan for the march, round mountains and water (`agent/warroom-system.template.md`, the march clock line), and the look-ups' travel-hours line says so once the copy is proven (`Facts`, module 0.21.2; before that it keeps "by road where the game knows the way, else as the crow flies").
+- **Checks:** smoke test (626 checks), war room self-test and dashboard self-test passed; RefCheck: 890 member references, missing 0.
+- **Installed** with the game closed (00:34): module 0.21.2. The war rooms were stopped for it; the module starts them again at the next load.
+- **Outside the repository:** `warroom-system.md` installed for the orcs, Dol Guldur and my kingdom's council (principle 2 and the march clock line in How battles are joined) and my lieutenant (its besiege line), backups `warroom-system.md.bak-20261120-before-march-clock`; each equals its template but for the realm's two lines (checked; the continuous files already did). Their conversations carry on and are told YOUR INSTRUCTIONS CHANGED at their next message.
