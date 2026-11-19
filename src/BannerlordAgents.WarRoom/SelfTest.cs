@@ -218,7 +218,7 @@ namespace BannerlordAgents.WarRoom
                 + "\"seen\":[{\"id\":\"p_ar\",\"lord\":\"lord_ar\",\"name\":\"Aragorn\",\"in_person\":true,\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":900,\"army_men\":5000,\"strength\":12000,\"x\":80,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":1000},"
                 + "{\"id\":\"p_sc\",\"lord\":\"lord_sc\",\"name\":\"Hirgon\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":30,\"strength\":40,\"x\":30,\"y\":29,\"doing\":\"holding position\",\"seen_hours\":1000}],"
                 + "\"takings\":{\"battles\":4,\"fallen\":400,\"loot\":8000,\"prisoners\":160,\"ransom\":3200,\"loot_per_fallen\":20,\"prisoners_per_fallen\":0.4,\"ransom_per_prisoner\":20},\"takings_enough\":3,"
-                + "\"last_seen\":[],\"trails\":[{\"id\":\"p_ar\",\"points\":[{\"hours\":990,\"x\":90,\"y\":29},{\"hours\":1000,\"x\":80,\"y\":29}]}],\"holdings\":[],"
+                + "\"last_seen\":[{\"id\":\"p_oh\",\"lord\":\"lord_oh\",\"name\":\"Ohtar\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":500,\"strength\":700,\"x\":60,\"y\":29,\"doing\":\"going to Edoras\",\"toward\":\"castle_e\",\"seen_hours\":970,\"march\":{\"base\":1.0}}],\"trails\":[{\"id\":\"p_ar\",\"points\":[{\"hours\":990,\"x\":90,\"y\":29},{\"hours\":1000,\"x\":80,\"y\":29}]}],\"holdings\":[],"
                 + "\"frontier\":[{\"id\":\"castle_e\",\"name\":\"Edoras\",\"kind\":\"castle\",\"garrison\":100,\"militia\":50,\"defence\":260,\"wall_level\":1}],"
                 + "\"enemy_holdings\":{\"Arnor\":[\"town_b\",\"castle_d\"]}}");
             string logs = Path.Combine(root, "logs");
@@ -236,10 +236,14 @@ namespace BannerlordAgents.WarRoom
             string a2 = Call("{\"from\":\"p_ar\",\"to\":\"Edoras\",\"also_from\":[\"p_bolg\"]}");
             Check(a2 != null && a2.Contains("pace its trail shows") && a2.Contains("WHO GETS THERE FIRST") && !a2.Contains("HOW MARCHING WORKS"),
                   "an enemy from where it was seen, at the pace its trail shows, against one of the realm's lords; the rules told once a call: " + a2?.Replace("\n", " | "));
+            // 0.21.0, the march clock: an enemy seen 30 hours ago at speed 1 is reckoned from where it was seen at no slower than speed 2.8, and the answer says so
+            string a4 = Call("{\"from\":\"p_oh\",\"to\":\"Edoras\",\"also_from\":[\"p_bolg\"]}");
+            Check(a4 != null && a4.Contains("it could be there already") && a4.Contains("last seen 30 hours ago at speed 1.0, counted at no slower than 2.8") && a4.Contains("the soonest it could be there"),
+                  "an enemy seen 30 hours ago is reckoned by the march clock, at no slower than speed 2.8 from where it was seen, and the answer says what it rests on: " + a4?.Replace("\n", " | "));
             string a3 = Call("{\"from\":\"p_hidden\",\"to\":\"town_b\"}");
             Check(a3 != null && a3.Contains("knows no lord, army or holding called \"p_hidden\""), "a party the realm never saw is refused: " + a3);
             string[] logged = File.Exists(Path.Combine(logs, "routes.jsonl")) ? File.ReadAllLines(Path.Combine(logs, "routes.jsonl")) : new string[0];
-            Check(logged.Length == 3 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[2].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
+            Check(logged.Length == 4 && logged[0].Contains("\"poke\":12") && logged[0].Contains("\"from_id\":\"p_bolg\"") && logged[3].Contains("\"error\""), "every question is logged with its poke (" + logged.Length + ")");
             // 0.13.22 (Nov 1: Zulgora's army ran for Westoft, 8 hours ahead by the race, and was caught on the way about 16 hours later):
             // can the other side cut the way? Hirgon stands on Bolg's road east, Aragorn's slow army at its end; nobody can reach the pass road south first
             string c1 = Call("{\"from\":\"lord_bolg\",\"to\":\"town_b\",\"also_from\":[\"lord_sc\",\"lord_ar\"]}");

@@ -19,6 +19,20 @@ namespace BannerlordAgents.WarRoom
         public double At = double.NaN;
         public bool Place, Own;
         public string Toward;
+        /// <summary>Its men and, leading an army, the army's (0.21.0: an army out of sight is counted at its own pace or its leader's alone, whichever is faster).</summary>
+        public int Men, ArmyMen;
+
+        /// <summary>
+        /// An enemy seen earlier as the march clock counts it (0.21.0, docs/PLAN-ways.md): from where and when it was seen, at its pace then; null for one in view,
+        /// one of the realm's own and a place, which are timed at their own pace as before.
+        /// </summary>
+        public BannerlordAgents.Common.ClockParty Unseen(double now)
+        {
+            if (Place || Own || March == null || double.IsNaN(At) || At >= now - 0.5) return null;
+            var cp = new BannerlordAgents.Common.ClockParty { Id = Id, X = X, Y = Y, SeenHours = At, InView = false, Pace = March };
+            if (ArmyMen > Men && Men > 0) cp.AlonePace = BannerlordAgents.Common.MarchClock.AlonePace(March, ArmyMen, Men);
+            return cp;
+        }
     }
 
     /// <summary>
@@ -228,10 +242,10 @@ namespace BannerlordAgents.WarRoom
             RouteResult r;
             lock (Gate) r = _finder.Find(from.X, from.Y, to.X, to.Y);
             double start = double.IsNaN(from.At) ? now : from.At;
-            List<string> way = Explain.Way(m, atlas, r, from.March, from.PaceFrom, start, cal.When, out double _, out double arrive);
+            List<string> way = Explain.Way(m, atlas, r, from.March, from.PaceFrom, start, cal.When, out double _, out double arrive, from.Unseen(now), now);
             foreach (string l in way) lines.Add("- " + l);
             if (r.Ok && !double.IsNaN(from.At) && from.At < now - 0.5)
-                lines.Add("- That is if it marched on from where it was seen " + Words.N(now - from.At) + " hours ago, at once and without turning aside.");
+                lines.Add("- That is the soonest it could be there, had it marched on from where it was seen " + Words.N(now - from.At) + " hours ago, at once and without turning aside.");
             if (also.Count > 0 && r.Ok)
             {
                 var race = new List<(string who, double arrive, string note)>();
@@ -243,16 +257,23 @@ namespace BannerlordAgents.WarRoom
                     RouteResult rk;
                     lock (Gate) rk = _finder.Find(k.X, k.Y, to.X, to.Y);
                     if (!rk.Ok) { lines.Add("- " + k.Name + ": no way there (" + rk.Why + ")."); continue; }
+                    BannerlordAgents.Common.ClockParty ck = k.Unseen(now);
+                    if (ck != null)
+                    {
+                        // 0.21.0: seen earlier, by the march clock
+                        BannerlordAgents.Common.MarchTime mt = Marching.Clock(rk, m, ck, now);
+                        if (mt.Reached) race.Add((k.Name, mt.At, " (" + Words.N(rk.Length) + " by the shortest way, " + BannerlordAgents.Common.MarchClock.Basis(mt) + ", from where it was seen; the soonest)"));
+                        continue;
+                    }
                     double hk = Marching.Hours(rk, m, k.March, double.IsNaN(k.At) ? now : k.At, out double ak);
-                    race.Add((k.Name, ak, " (" + Words.N(rk.Length) + " by the shortest way " + Explain.PaceWords(k.March) + ", " + k.PaceFrom
-                                          + (double.IsNaN(k.At) || k.At >= now - 0.5 ? "" : ", from where it was seen " + Words.N(now - k.At) + " hours ago") + ")"));
+                    race.Add((k.Name, ak, " (" + Words.N(rk.Length) + " by the shortest way " + Explain.PaceWords(k.March) + ", " + k.PaceFrom + ")"));
                     _ = hk;
                 }
                 if (race.Count > 1)
                 {
                     lines.Add("WHO GETS THERE FIRST, marching at once by the shortest way");
                     foreach ((string who, double a, string note) in race.OrderBy(x => x.arrive))
-                        lines.Add("- " + who + ": about " + cal.When(a) + note + ".");
+                        lines.Add("- " + who + ": " + (a <= now + 0.01 ? "could be there already (by about " + cal.When(a) + ")" : "about " + cal.When(a)) + note + ".");
                 }
                 // 0.13.22: whether one of the other side could get onto the way before it passes (CutOff.cs)
                 lines.AddRange(CutOff(m, known, from, r, also, start, now, cal));
@@ -310,6 +331,7 @@ namespace BannerlordAgents.WarRoom
                 list.Add(new Known
                 {
                     Id = id, Lord = Str(o["lord"]), Name = Str(o["name"]), X = F(o["x"]), Y = F(o["y"]), At = Num(o["seen_hours"]), March = march, PaceFrom = from, Toward = Str(o["toward"]),
+                    Men = I(o["men"]), ArmyMen = I(o["army_men"]),
                     What = (Str(o["relation"]) ?? "seen") + (I(o["army_men"]) > 0 ? " army" : "") + " of " + (Str(o["faction_name"]) ?? "?") + ", " + Words.N(men) + " men, " + (Str(o["doing"]) ?? "")
                            
                 });

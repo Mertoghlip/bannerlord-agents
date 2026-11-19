@@ -217,7 +217,7 @@ namespace BannerlordAgents.Tools
             ["mates"] = "mates(): the lord's group: the other lords of yours holding the same order at the same place (or on the same lord), and the lords the order names",
             ["nearest_mate"] = "nearest_mate(x, r): the nearest to the lord of his mates within r of x (none when none is)",
             ["mates_strength"] = "mates_strength(x, r): the strength of the lord and his mates within r of x",
-            ["could_reach"] = "could_reach(x, hours): the strength of the enemy lords and armies in view (and those seen in the last 6 hours, from where they were seen) that could march to x within that many hours at their own pace",
+            ["could_reach"] = "could_reach(x, hours): the strength of the enemy lords and armies in view, and those seen in the last three days, that could march to x within that many hours, by the march clock (in view at their own pace for each stretch of ground and hour; seen earlier from where they were seen, at their pace then and a tenth faster, after a day no slower than speed 2.8 unless the order's unseen_floor is 0)",
             ["raid_hours"] = "raid_hours(v): about how many hours this lord would take to loot village v by the game's raid rule (each hour the raiders take the square root of their number + 5, over 900, of its health, from full health, or from what is left of it while it is being raided; an hour more for its militia first); a raid holds the raiders until it is done; none for anything but a village not looted",
             ["fall_back"] = "fall_back(r): where the safety rule would take this lord from the forces within r of him (and those who could join them within join_hours): the first castle or town of yours or an ally's he reaches before them whose defenders, with him, would hold it, else the nearest he reaches first that takes him farther from them; none when there is none",
             ["our_siege"] = "our_siege(h): whether h is besieged by a camp of yours or an ally's",
@@ -228,7 +228,7 @@ namespace BannerlordAgents.Tools
             ["walls_down_in"] = "walls_down_in(h): hours until both of h's wall stretches are down, run ahead with the engines the camp builds and the defenders' engines shooting back (0: down now); none when not within 10 days; only for a siege of yours or an ally's, or at your own or an ally's holding",
             ["enemy_engines"] = "enemy_engines(h): the other side's throwing engines in place and working at h's siege: the defenders' at a siege of yours or an ally's, the besiegers' at your own or an ally's holding",
             ["storm_hours"] = "storm_hours(h): about how many hours a storm of h begun now would last by the game's battle rules (a storm is paced by the defenders' number; 120 when it would not end within five days); only for a siege of yours or an ally's",
-            ["storm_relief"] = "storm_relief(h): the strength of the enemy lords and armies that could reach your camp at h before a storm begun now would end, one in view on the march counted at its own pace over open ground, night counted; one out of view (known from where it was last seen in the last hours), standing still or inside a holding at no slower than speed 2.8, the average speed of the game's mid- to high-strength lord parties; only for a siege of yours or an ally's",
+            ["storm_relief"] = "storm_relief(h): the strength of the enemy lords and armies that could reach your camp at h before a storm begun now would end, each by the march clock (in view at its own pace for each stretch of ground and hour; seen earlier from where it was seen, at its pace then and a tenth faster, after a day no slower than speed 2.8 unless the order's unseen_floor is 0; not after three days); only for a siege of yours or an ally's",
             ["storm_clear"] = "storm_clear(h, keep): whether a storm of h begun now is clear: no relief could reach your camp before it ends, or, with every lord and army of that relief joining the defenders as each arrives, the besiegers would still win keeping at least keep (a share, 0 to 1) of their men; false when that relief would turn the storm; only for a siege of yours or an ally's"
         };
 
@@ -364,6 +364,8 @@ namespace BannerlordAgents.Tools
             }
             // taking men from the clan's own garrisons while recruiting (0.13.19), on every tool
             if (!d.Settings.ContainsKey("garrison_floor")) d.Settings["garrison_floor"] = Library.GarrisonFloor;
+            // how enemies seen more than a day ago are counted (0.21.0, the march clock), on every tool
+            if (!d.Settings.ContainsKey("unseen_floor")) d.Settings["unseen_floor"] = Library.UnseenFloor;
             return d;
         }
 
@@ -557,9 +559,9 @@ namespace BannerlordAgents.Tools
 
         /// <summary>The safety rule every tool and move carries unless it opts out.</summary>
         public static readonly SettingDef Caution = new SettingDef { Name = "caution", Default = 1.5, Min = 0, Max = 10, About = "when anything hostile comes close to the lord, so a fight may start where he is, and the enemy lords, armies and bandits close to him, with every enemy lord and army in view that could reach him within join_hours, are this many times stronger together, shelter in the nearest castle or town of yours or an ally's that the lord can reach first and whose garrison, militia and lords, with this one, would hold it against them and everything else near it (the game's own test for whether besiegers should assault); if none would, fall back toward one farther from the enemy and stay outside rather than be trapped (lords camped in a siege the order is striking do not count; a lord inside a place that would not hold leaves it); 0 never shelters" };
-        public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "the least distance that counts as close for caution, in map units (danger_hours may count farther)" };
+        public static readonly SettingDef DangerRadius = new SettingDef { Name = "danger_radius", Default = 8, Min = 2, Max = 30, About = "the distance within which any hostile party counts as close for caution, whatever its pace, in map units (danger_hours counts what could reach him in time from farther)" };
         /// <summary>The danger counted by the hours to shelter (0.16, the lieutenant's guard loop made a general rule): Runner.DangerReach.</summary>
-        public static readonly SettingDef DangerHours = new SettingDef { Name = "danger_hours", Default = 3, Min = 0, Max = 24, About = "for caution, what could reach him before he could get behind walls: as close counts the distance he marches in the hours to the nearest castle or town of yours or an ally's, plus 2, at most this many hours, and never less than danger_radius; 0 counts danger_radius alone" };
+        public static readonly SettingDef DangerHours = new SettingDef { Name = "danger_hours", Default = 3, Min = 0, Max = 24, About = "for caution, what could reach him before he could get behind walls: any hostile party in view that could reach him, at its own pace by the march clock, within the hours he needs to the nearest castle or town of yours or an ally's, plus 2, at most this many hours, counts as close, as does anything within danger_radius; 0 counts danger_radius alone" };
         /// <summary>The hours window of a fight (0.12.3, chosen: "Hours window only"): who could join it, by the agent's own reckoning of how long it lasts.</summary>
         /// <summary>The relief rule (0.13.15, Runner.Relief): the longest a fight is waited on; one the battle clock sees lasting longer (or not ending in five days) counts as this.</summary>
         public const double MaxReliefHours = 24;
@@ -587,10 +589,16 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public static readonly SettingDef GarrisonFloor = new SettingDef { Name = "garrison_floor", Default = 0, Min = 0, Max = 100000, About = "at a castle or town of his own clan (YOUR HOLDINGS names the clan that owns each one; his look-up file names his), while he recruits there (the recruit order's tour, or a recruit stop), he also takes healthy men from its garrison, the best first, by the recruit order's rules (all kinds until 80% of his ranks, then his clan's own troop lines, his wage cap), as long as the garrison's strength (YOUR HOLDINGS shows it) stays at or above this; the recruit order's tour also stops at such places. 0 takes none" };
 
-        /// <summary>The settings every move and tool carries, described once in the library rather than with each (0.13.19).</summary>
-        public static bool Shared(string name) => name == "caution" || name == "danger_radius" || name == "danger_hours" || name == "join_hours" || name == "garrison_floor";
+        /// <summary>
+        /// How an order counts enemy lords and armies out of sight for more than a day (0.21.0, the march clock, docs/PLAN-ways.md): 1, at no slower than speed 2.8;
+        /// 0, at their pace when last seen +10%, for when the agent judges they are still as slow as they were seen.
+        /// </summary>
+        public static readonly SettingDef UnseenFloor = new SettingDef { Name = "unseen_floor", Default = 1, Min = 0, Max = 1, About = "how the order counts enemy lords and armies last seen more than a day ago (in its caution, relief bars, storm guard and could_reach): 1, the default, at their pace when last seen +10% or speed 2.8, whichever is faster; 0, at their pace when last seen +10%, for when you judge they are still as slow as they were seen (an army dragging a siege camp, one you know is waiting for its lords). Seen within a day they always count at their pace then +10%; seen more than three days ago, not at all" };
 
-        public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, at its own pace as the crow flies, counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
+        /// <summary>The settings every move and tool carries, described once in the library rather than with each (0.13.19).</summary>
+        public static bool Shared(string name) => name == "caution" || name == "danger_radius" || name == "danger_hours" || name == "join_hours" || name == "garrison_floor" || name == "unseen_floor";
+
+        public static readonly SettingDef JoinHours = new SettingDef { Name = "join_hours", Default = 8, Min = 0, Max = 96, About = "how many hours ahead the order's fights count the enemy lords and armies in view that could join them: every one that could march to the fight within this many hours, by the march clock (its own pace for each stretch of ground and hour), counts with it, for caution (marching to the lord) and for a strike, a hunt or the threat near a holding (marching to the target or the holding); 0 counts only those already close. The engagement question says how long a fight would last and who could reach it in time" };
 
         public static Dictionary<string, ToolDef> All
         {

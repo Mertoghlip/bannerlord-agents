@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace BannerlordAgents.Common
 {
     /// <summary>What a march time rests on (PLAN-ways.md): the party seen now, seen within a day (its pace +10%), seen one to three days ago (that pace or speed 2.8, whichever is faster), seen too long ago to count, or no pace known.</summary>
-    public enum PaceBasis { Exact, Margin, Floor, Forgotten, Unknown }
+    public enum PaceBasis { Exact, Margin, Floor, Forgotten, Unknown, Trusted }
 
     /// <summary>
     /// A party as the clock knows it (Nov 18, PLAN-ways.md): where it stands or was last seen, when, its pace then (the game's own speed sum),
@@ -23,6 +23,8 @@ namespace BannerlordAgents.Common
         public Pace AlonePace;
         /// <summary>In a battle: the in-game hour the battle should end, when its march can begin; NaN otherwise.</summary>
         public double FreeAt = double.NaN;
+        /// <summary>Seen more than a day ago and the order asking trusts its last pace (its unseen_floor 0): counted at that pace +10%, without the minimum.</summary>
+        public bool Trust;
     }
 
     /// <summary>When a party could get somewhere, and what that rests on.</summary>
@@ -67,7 +69,7 @@ namespace BannerlordAgents.Common
             double ago = now - s.SeenHours;
             if (ago > ForgetHours) return PaceBasis.Forgotten;
             if (s.Pace == null || s.Pace.Base <= 0) return PaceBasis.Unknown;
-            return ago > MarginHours ? PaceBasis.Floor : PaceBasis.Margin;
+            return ago <= MarginHours ? PaceBasis.Margin : s.Trust ? PaceBasis.Trusted : PaceBasis.Floor;
         }
 
         /// <summary>
@@ -135,14 +137,16 @@ namespace BannerlordAgents.Common
         /// at its counted pace for the ground under it and the hour, from when it was seen (or from the end of its battle). Hours are from now; one that
         /// could be there already gives 0. A forgotten party, or one with no way, gives NaN.
         /// </summary>
-        public static MarchTime Reach(ClockParty s, IList<float[]> way, Func<float, float, int> groundAt, double now, double maxHours = 24 * 30)
+        public static MarchTime Reach(ClockParty s, IList<float[]> way, Func<float, float, int> groundAt, double now, double maxHours = 24 * 30, bool countForgotten = false)
         {
             var r = new MarchTime { Basis = BasisAt(s, now) };
             if (s == null) return r;
             r.SeenAgo = s.InView ? 0 : Math.Max(0, now - s.SeenHours);
             r.SeenSpeed = s.Pace != null && s.Pace.Base > 0 ? s.Pace.OpenSpeed : 0f;
-            r.CountedSpeed = UnitsPerHour(s, r.Basis, GamePace.Plain, false) / GamePace.UnitsPerSpeedHour;
-            if (r.Basis == PaceBasis.Forgotten || way == null || way.Count == 0) return r;
+            // a question the agent asks still gets a time for one seen over three days ago (countForgotten, the war room's tools): at the minimum, its basis saying the rules no longer count it
+            PaceBasis basis = r.Basis == PaceBasis.Forgotten && countForgotten ? (s.Pace != null && s.Pace.Base > 0 ? PaceBasis.Floor : PaceBasis.Unknown) : r.Basis;
+            r.CountedSpeed = UnitsPerHour(s, basis, GamePace.Plain, false) / GamePace.UnitsPerSpeedHour;
+            if (basis == PaceBasis.Forgotten || way == null || way.Count == 0) return r;
             double start = s.InView ? now : s.SeenHours;
             if (!double.IsNaN(s.FreeAt) && s.FreeAt > start) start = s.FreeAt;
             double t = start;
@@ -159,7 +163,7 @@ namespace BannerlordAgents.Common
                     float piece = Math.Min(0.25f, len - d);
                     float x = a[0] + dx / len * (d + piece * 0.5f), y = a[1] + dy / len * (d + piece * 0.5f);
                     int g = groundAt != null ? groundAt(x, y) : GamePace.Plain;
-                    float units = UnitsPerHour(s, r.Basis, g, GamePace.IsNight(t));
+                    float units = UnitsPerHour(s, basis, g, GamePace.IsNight(t));
                     t += piece / Math.Max(0.05f, units);
                     if (t > limit) { r.Length = length; r.At = t; r.Hours = maxHours; return r; }
                 }
@@ -185,7 +189,8 @@ namespace BannerlordAgents.Common
                 case PaceBasis.Exact: return "seen now, speed " + Sp(m.SeenSpeed) + " on open ground by day";
                 case PaceBasis.Margin: return "last seen " + ago + " ago at speed " + Sp(m.SeenSpeed) + ", counted at " + Sp(m.CountedSpeed);
                 case PaceBasis.Floor: return "last seen " + ago + " ago at speed " + Sp(m.SeenSpeed) + ", counted at no slower than " + Sp(FloorSpeed);
-                case PaceBasis.Forgotten: return "last seen " + ago + " ago" + (m.SeenSpeed > 0 ? " at speed " + Sp(m.SeenSpeed) : "") + ", no longer counted";
+                case PaceBasis.Trusted: return "last seen " + ago + " ago at speed " + Sp(m.SeenSpeed) + ", counted at " + Sp(m.CountedSpeed) + " (your order's unseen_floor 0 trusts that pace)";
+                case PaceBasis.Forgotten: return "last seen " + ago + " ago" + (m.SeenSpeed > 0 ? " at speed " + Sp(m.SeenSpeed) : "") + ", no longer counted by your orders" + (m.Reached ? "; reckoned here at no slower than " + Sp(FloorSpeed) : "");
                 default: return "its speed not known, counted at " + Sp(UnknownSpeed);
             }
         }

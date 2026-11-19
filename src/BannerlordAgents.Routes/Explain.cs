@@ -81,7 +81,8 @@ namespace BannerlordAgents.Routes
         /// The answer about one way: its length against the straight line, the time at the party's pace (null pace: no time),
         /// the ground, the crossings and what closing each would cost, and the narrowest place.
         /// </summary>
-        public static List<string> Way(WalkMap m, Atlas atlas, RouteResult r, BannerlordAgents.Common.Pace pace, string paceFrom, double startHours, Func<double, string> when, out double hours, out double arrive)
+        public static List<string> Way(WalkMap m, Atlas atlas, RouteResult r, BannerlordAgents.Common.Pace pace, string paceFrom, double startHours, Func<double, string> when, out double hours, out double arrive,
+                                       BannerlordAgents.Common.ClockParty unseen = null, double now = double.NaN)
         {
             hours = arrive = double.NaN;
             var lines = new List<string>();
@@ -91,7 +92,15 @@ namespace BannerlordAgents.Routes
                 return lines;
             }
             string time = "";
-            if (pace != null && pace.Base > 0.05f)
+            if (unseen != null)
+            {
+                // 0.21.0: an enemy seen earlier, by the march clock (its pace then and a tenth, the minimum after a day)
+                BannerlordAgents.Common.MarchTime mt = Marching.Clock(r, m, unseen, now);
+                hours = mt.Hours;
+                arrive = mt.At;
+                if (mt.Reached) time = (mt.At <= now + 0.01 ? "; it could be there already (by about " + when(arrive) + ")" : "; it could be there by about " + when(arrive)) + " (" + BannerlordAgents.Common.MarchClock.Basis(mt) + ")";
+            }
+            else if (pace != null && pace.Base > 0.05f)
             {
                 hours = Marching.Hours(r, m, pace, startHours, out arrive);
                 time = "; about " + Words.N(hours) + " hours " + PaceWords(pace) + " (" + paceFrom + "), so about " + when(arrive);

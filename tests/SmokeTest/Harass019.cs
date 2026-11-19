@@ -392,6 +392,11 @@ namespace SmokeTest
             bool forgotten = Expr.Truthy(F(u96, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(u96, "storm_relief", "castle_men")) == 0;
             string told = u30.StormClock("castle_men") ?? "";
             bool toldBoth = told.Contains("last seen 30 hours ago at speed 1.0, counted at no slower than 2.8");
+            // the order's own judgement: unseen_floor 0 counts the army seen 30 hours ago at its pace then +10%, so too late (clear), and the clock says so
+            World u30t = Unseen(30);
+            u30t.TrustLastPace = true;
+            bool trustClear = Expr.Truthy(F(u30t, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(u30t, "storm_relief", "castle_men")) == 0;
+            Check(trustClear, "with unseen_floor 0 the order trusts the last-seen pace of the army seen 30 hours ago (speed 1, counted at 1.1): too late, the storm is clear (" + trustClear + ")");
             Check(marginClear && floorHeld && forgotten && toldBoth,
                   "the storm guard out of sight: seen 5 hours ago, counted at its pace +10%, too late (clear); 30 hours ago, at no slower than 2.8, in time (held, and the clock says '"
                   + told + "'); 4 days ago, not counted (" + marginClear + ", " + floorHeld + ", " + forgotten + ", " + toldBoth + ")");

@@ -35,7 +35,11 @@ namespace BannerlordAgents.WarRoom
                 Known k = Find(known, m, q);
                 if (k == null || k.Place || k.Own == from.Own || k.March == null) continue;
                 double kStart = double.IsNaN(k.At) ? now : k.At;
-                double fastest = CutReach * PerHour(k.March);
+                // 0.21.0: an enemy seen earlier is counted by the march clock (its pace then and a tenth, the minimum after a day), so its bound is the clock's fastest
+                BannerlordAgents.Common.ClockParty ck = k.Unseen(now);
+                double fastest = ck != null
+                    ? CutReach * BannerlordAgents.Common.MarchClock.FastestUnits(ck, now - k.At > BannerlordAgents.Common.MarchClock.MarginHours ? BannerlordAgents.Common.PaceBasis.Floor : BannerlordAgents.Common.PaceBasis.Margin)
+                    : CutReach * PerHour(k.March);
                 string seen = double.IsNaN(k.At) || k.At >= now - 0.5 ? "" : ", from where it was seen " + Words.N(now - k.At) + " hours ago";
                 bool found = false;
                 foreach ((double at, float x, float y) p in points)
@@ -45,7 +49,9 @@ namespace BannerlordAgents.WarRoom
                     RouteResult rk;
                     lock (Gate) rk = _finder.Find(k.X, k.Y, p.x, p.y, analyse: false);
                     if (!rk.Ok) continue;
-                    Marching.Hours(rk, m, k.March, kStart, out double ka);
+                    double ka;
+                    if (ck != null) { BannerlordAgents.Common.MarchTime mt = Marching.Clock(rk, m, ck, now); ka = mt.Reached ? mt.At : double.PositiveInfinity; }
+                    else Marching.Hours(rk, m, k.March, kStart, out ka);
                     if (ka > p.at) continue;
                     float along = Explain.Along(r, p.x, p.y, out _);
                     double ahead = p.at - ka;

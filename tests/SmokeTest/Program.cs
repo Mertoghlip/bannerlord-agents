@@ -1006,7 +1006,7 @@ namespace SmokeTest
             Brain.OnHour(Sieged(7205, nag, near, faramir, idle, beregond));
             Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against your side's 3,400 (Naglur's 3,400"),
                   "a third lord makes 2,800, above 0.8 of its strength: besiege calls back, counting lords, not only armies");
-            Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Faramir, strength 900, 60\.0 away \(due in about \d+ hours\), defending Fornost"),
+            Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Faramir, strength 900, 60\.0 away \(could be there in about \d+ hours\), defending Fornost"),
                   "and names them nearest first, with what each is doing (those heading for it count from any distance)");
             Brain.OnHour(Sieged(7206, nag, near, faramir, idle, beregond));
             Check(Calls() == 1, "the same relief is not called again");

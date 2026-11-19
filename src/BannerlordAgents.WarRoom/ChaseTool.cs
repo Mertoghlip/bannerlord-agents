@@ -48,13 +48,18 @@ namespace BannerlordAgents.WarRoom
             if (q == null || q.Place || q.Own) return "Name an enemy lord or army your report shows in quarry, by its id in [brackets] (" + Show(quarryQ) + " is not one).";
             if (h.March == null || q.March == null) return "The pace of " + (h.March == null ? h.Name : q.Name) + " is not known, so the chase cannot be worked out.";
             GameCalendar cal = Calendar();
-            double vh = PerHour(h.March), vq = PerHour(q.March);
             bool fresh = double.IsNaN(q.At) || q.At >= now - 0.5;
+            // 0.21.0: a quarry seen earlier is counted by the march clock: its pace then and a tenth faster, after a day no slower than speed 2.8
+            BannerlordAgents.Common.ClockParty cq = q.Unseen(now);
+            BannerlordAgents.Common.PaceBasis bq = cq == null ? BannerlordAgents.Common.PaceBasis.Exact
+                : now - q.At > BannerlordAgents.Common.MarchClock.MarginHours ? BannerlordAgents.Common.PaceBasis.Floor : BannerlordAgents.Common.PaceBasis.Margin;
+            double vh = PerHour(h.March), vq = cq != null ? BannerlordAgents.Common.MarchClock.UnitsPerHour(cq, bq, BannerlordAgents.Common.GamePace.Plain, false) : PerHour(q.March);
+            string counted = cq == null ? "" : bq == BannerlordAgents.Common.PaceBasis.Floor ? "; counted at no slower than speed 2.8, as it was seen over a day ago" : "; counted a tenth faster, as it was seen earlier";
             var lines = new List<string>
             {
                 "CAN " + Head(h) + " CATCH " + Head(q) + "?",
                 "- " + h.Name + ": " + Explain.PaceWords(h.March) + ", " + h.PaceFrom + ".",
-                "- " + q.Name + ": " + Explain.PaceWords(q.March) + ", " + q.PaceFrom + (fresh ? ", in view now." : ", last seen " + Words.N(now - q.At) + " hours ago.")
+                "- " + q.Name + ": " + Explain.PaceWords(q.March) + ", " + q.PaceFrom + (fresh ? ", in view now." : ", last seen " + Words.N(now - q.At) + " hours ago" + counted + ".")
             };
             RouteResult r;
             lock (Gate) r = _finder.Find(h.X, h.Y, q.X, q.Y);
@@ -82,7 +87,9 @@ namespace BannerlordAgents.WarRoom
                 {
                     RouteResult rq, rh;
                     lock (Gate) { rq = _finder.Find(q.X, q.Y, dest.X, dest.Y); rh = _finder.Find(h.X, h.Y, dest.X, dest.Y); }
-                    Marching.Hours(rq, m, q.March, double.IsNaN(q.At) ? now : q.At, out double aq);
+                    double aq;
+                    if (cq != null) { BannerlordAgents.Common.MarchTime mt = Marching.Clock(rq, m, cq, now); aq = mt.Reached ? mt.At : double.PositiveInfinity; }
+                    else Marching.Hours(rq, m, q.March, double.IsNaN(q.At) ? now : q.At, out aq);
                     Marching.Hours(rh, m, h.March, now, out double ah);
                     if (rq.Ok && rh.Ok)
                         lines.Add("- It is marching to " + dest.Name + " [" + dest.Id + "]: it gets there about " + cal.When(aq) + ", " + h.Name + " about " + cal.When(ah)

@@ -305,10 +305,16 @@ namespace BannerlordAgents.Tools
             return sp;
         }
 
-        /// <summary>A party seen earlier as the clock knows it: where and when it was seen, its pace then, and for an army its leader's own pace.</summary>
-        public static Common.ClockParty SeenOf(ViewParty v)
+        /// <summary>
+        /// The order whose rules are being run trusts the last-seen pace of enemies seen more than a day ago (its unseen_floor 0, 0.21.0): set by the runner around
+        /// each order's hour, so its caution, relief bars, storm guard and could_reach count them at that pace +10% rather than no slower than speed 2.8.
+        /// </summary>
+        public bool TrustLastPace;
+
+        /// <summary>A party seen earlier as the clock knows it: where and when it was seen, its pace then, and for an army its leader's own pace (trust: see TrustLastPace).</summary>
+        public static Common.ClockParty SeenOf(ViewParty v, bool trust = false)
         {
-            var sp = new Common.ClockParty { Id = v.Id, X = v.X, Y = v.Y, SeenHours = v.SeenHours, InView = false, Pace = v.March };
+            var sp = new Common.ClockParty { Id = v.Id, X = v.X, Y = v.Y, SeenHours = v.SeenHours, InView = false, Pace = v.March, Trust = trust };
             if (v.March != null && v.ArmyMen > v.Men) sp.AlonePace = Common.MarchClock.AlonePace(v.March, v.ArmyMen, v.Men);
             return sp;
         }
@@ -322,7 +328,7 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public Common.MarchTime MarchTo(Common.ClockParty sp, float x, float y)
         {
-            string key = (sp.Id ?? "?") + (sp.InView ? "|v|" : "|s|") + Math.Round(x, 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + Math.Round(y, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            string key = (sp.Id ?? "?") + (sp.InView ? "|v|" : sp.Trust ? "|t|" : "|s|") + Math.Round(x, 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + Math.Round(y, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (_marches.TryGetValue(key, out Common.MarchTime kept)) return kept;
             MapGround g = MapGround.For(S?.MapCrc);
             Common.MarchTime m = Common.MarchClock.Reach(sp, WayFor(sp, x, y), g != null ? (Func<float, float, int>)g.TerrainAt : null, Hours);
@@ -698,7 +704,7 @@ namespace BannerlordAgents.Tools
                 // seen earlier: from where it was then, at its pace then +10% (no slower than speed 2.8 after a day), the clock running since it was seen; not
                 // counted after three days (0.21.0)
                 SettlementRow at = Holding(place);
-                Common.MarchTime m = at != null ? MarchTo(SeenOf(v), at) : MarchTo(SeenOf(v), px, py);
+                Common.MarchTime m = at != null ? MarchTo(SeenOf(v, TrustLastPace), at) : MarchTo(SeenOf(v, TrustLastPace), px, py);
                 if (m.Basis == Common.PaceBasis.Forgotten) continue;
                 list.Add(new Comer { Id = kv.Key, Name = v.Name ?? kv.Key, Doing = v.Doing, Strength = v.Strength, Distance = d, Heading = heading, SeenAgo = Hours - v.SeenHours,
                                      March = m, Eta = m.Reached ? m.Hours : double.PositiveInfinity });
@@ -713,8 +719,9 @@ namespace BannerlordAgents.Tools
             List<Comer> list = ReliefComing(place, r);
             if (list.Count == 0) return "none in sight";
             IEnumerable<string> lines = list.Take(most).Select(c => c.Name + ", strength " + Text.N((int)Math.Round(c.Strength)) + ", "
-                + Roads.Both((float)c.Distance, (float)c.Road) + " away" + (double.IsNaN(c.Eta) ? "" : double.IsInfinity(c.Eta) ? " (more than 10 days off at its pace)" : " (due in about " + Forecast.HoursText(c.Eta) + ")") + ", " + (c.Doing ?? "doing what is not known")
-                + (c.SeenAgo > 0 ? " (seen " + Math.Round(c.SeenAgo) + " hours ago)" : ""));
+                + Roads.Both((float)c.Distance, (float)c.Road) + " away" + (double.IsNaN(c.Eta) ? "" : double.IsInfinity(c.Eta) ? " (more than 30 days off at its pace)" : " (could be there in about " + Forecast.HoursText(c.Eta) + ")") + ", " + (c.Doing ?? "doing what is not known")
+                // 0.21.0: one seen earlier says what its time rests on (its pace then +10%, or no slower than speed 2.8 after a day)
+                + (c.SeenAgo > 0 && c.March != null ? " (" + Common.MarchClock.Basis(c.March) + ")" : c.SeenAgo > 0 ? " (seen " + Math.Round(c.SeenAgo) + " hours ago)" : ""));
             string text = string.Join("; ", lines);
             if (list.Count > most)
                 text += "; and " + (list.Count - most) + " more (strength " + Text.N((int)Math.Round(list.Skip(most).Sum(c => c.Strength))) + ")";
@@ -1109,7 +1116,7 @@ namespace BannerlordAgents.Tools
                 if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || InView(kv.Key) || Gone(kv.Key)) continue;
                 PartyRow now = Party(kv.Key);
                 if (now != null && now.Attached) continue;
-                if (CanReachWithin(SeenOf(v), px, py, hours, out _)) sum += v.Strength;
+                if (CanReachWithin(SeenOf(v, TrustLastPace), px, py, hours, out _)) sum += v.Strength;
             }
             return sum;
         }
@@ -1235,9 +1242,10 @@ namespace BannerlordAgents.Tools
         public StormCheckResult StormCheck(string place)
         {
             if (place == null) return null;
-            if (_stormChecks.TryGetValue(place, out StormCheckResult kept)) return kept;
+            string key = TrustLastPace ? place + "|t" : place;
+            if (_stormChecks.TryGetValue(key, out StormCheckResult kept)) return kept;
             StormCheckResult res = StormCheckNow(place);
-            _stormChecks[place] = res;
+            _stormChecks[key] = res;
             return res;
         }
 
@@ -1317,7 +1325,7 @@ namespace BannerlordAgents.Tools
                 if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || InView(kv.Key) || Gone(kv.Key)) continue;
                 PartyRow now = Party(kv.Key);
                 if (now != null && now.Attached) continue;
-                if (!CanReachWithin(SeenOf(v), px, py, end, out Common.MarchTime m)) continue;
+                if (!CanReachWithin(SeenOf(v, TrustLastPace), px, py, end, out Common.MarchTime m)) continue;
                 counted.Add(kv.Key);
                 int men = Math.Max(1, v.ArmyMen > 0 ? v.ArmyMen : v.Men);
                 relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, m.Hours - startIn), Power = v.Strength / men });

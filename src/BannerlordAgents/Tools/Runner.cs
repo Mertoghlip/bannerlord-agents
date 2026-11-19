@@ -486,7 +486,9 @@ namespace BannerlordAgents.Tools
         {
             if (s == null || t?.Order?.At == null || !settings.Keys.Any(k => string.Equals(k, "storm_guard", StringComparison.OrdinalIgnoreCase))) return "";
             if (!t.Settings.TryGetValue("storm_guard", out double g) || g > 0) return "";
-            string clock = WorldFor(s).StormClock(t.Order.At);
+            World w = WorldFor(s);
+            w.TrustLastPace = t.Settings.TryGetValue("unseen_floor", out double uf) && uf <= 0;
+            string clock = w.StormClock(t.Order.At);
             // the receipt adds the closing full stop
             return clock == null ? ". With the storm guard off, nothing holds a storm whoever could come: ask the odds before the camp may storm" : ". " + clock.TrimEnd('.', ' ');
         }
@@ -526,6 +528,8 @@ namespace BannerlordAgents.Tools
             foreach (ToolInstance t in agent.Tools.Values.ToList())
             {
                 long began = Stopwatch.GetTimestamp();
+                // 0.21.0: the order's own judgement of enemies seen more than a day ago (unseen_floor 0 trusts their last pace)
+                w.TrustLastPace = t.Settings.TryGetValue("unseen_floor", out double uf) && uf <= 0;
                 try { Step(t, w); }
                 catch (Exception e)
                 {

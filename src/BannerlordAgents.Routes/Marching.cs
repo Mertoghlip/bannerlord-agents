@@ -63,6 +63,16 @@ namespace BannerlordAgents.Routes
             return BannerlordAgents.Common.GamePace.March(r.Points, m != null ? (Func<float, float, int>)((x, y) => m.GroundAt(x, y)) : null, p, startHours, out arrive, out _);
         }
 
+        /// <summary>
+        /// The march clock over a found way (0.21.0, docs/PLAN-ways.md): an enemy seen earlier from where it was seen, at its pace then and a tenth faster, after a day
+        /// no slower than speed 2.8, the clock running since; one seen over three days ago still reckoned (at the minimum) for the agent's question, its basis saying so.
+        /// </summary>
+        public static BannerlordAgents.Common.MarchTime Clock(RouteResult r, WalkMap m, BannerlordAgents.Common.ClockParty cp, double now)
+        {
+            if (r == null || !r.Ok || cp == null) return new BannerlordAgents.Common.MarchTime();
+            return BannerlordAgents.Common.MarchClock.Reach(cp, r.Points, m != null ? (Func<float, float, int>)((x, y) => m.GroundAt(x, y)) : null, now, 24 * 30, countForgotten: true);
+        }
+
         /// <summary>How marching works, in plain words: the first answer of the "ask the way" tool in a call carries it, and so does marching.txt.</summary>
         public static string Rules(IDictionary<string, string> peopleBonuses = null) => BannerlordAgents.Common.GamePace.Rules(peopleBonuses);
 
