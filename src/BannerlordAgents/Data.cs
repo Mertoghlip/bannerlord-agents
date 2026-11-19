@@ -49,6 +49,8 @@ namespace BannerlordAgents
         /// ground and hour perks (GamePace.Perk flags); the share of its men on foot; and snowfall where it stands.
         /// </summary>
         public float SpeedBase, SpeedFactors;
+        /// <summary>The sum was worked out afresh by the game's own formula (a party in a holding, a siege or a battle, or standing still: 0.21.0), not read from the game's cache.</summary>
+        public bool SpeedFresh;
         public int Terrain;
         public string Culture;
         public int ScoutPerks;

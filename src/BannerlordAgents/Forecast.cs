@@ -48,13 +48,22 @@ namespace BannerlordAgents
                 Base = lead.SpeedBase, Factors = lead.SpeedFactors, Perks = lead.ScoutPerks, FootShare = lead.FootShare,
                 PerkValues = s?.PerkValues, Feats = Feats(s, lead.Culture)
             };
-            if (Marching(lead) && lead.FinalSpeed > 0)
+            if (Marching(lead) && lead.FinalSpeed > 0 && !lead.SpeedFresh)
             {
                 float rest = GamePace.Residual(p, lead.FinalSpeed, lead.Terrain, s != null && s.Night, lead.Snowing);
-                if (!float.IsNaN(rest) && Math.Abs(rest) <= 0.6f) p.Other = (float)Math.Round(rest, 3);
+                if (!float.IsNaN(rest) && Math.Abs(rest) <= 0.6f)
+                {
+                    p.Other = (float)Math.Round(rest, 3);
+                    if (lead.Id != null) LastOther[lead.Id] = p.Other;
+                }
             }
+            // what was measured on its last march is carried on while it stands, since the part the rules do not name is constant for a party (0.21.0)
+            else if (lead.Id != null && LastOther.TryGetValue(lead.Id, out float kept)) p.Other = kept;
             return p;
         }
+
+        /// <summary>Each party's unexplained part of its speed as last measured on the march (0.21.0), carried on while it stands (a few hundred lords: a float each).</summary>
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> LastOther = new System.Collections.Concurrent.ConcurrentDictionary<string, float>(StringComparer.Ordinal);
 
         /// <summary>
         /// The hourly check of the marching rule: for every lord marching in the open, what the named rules leave unexplained in

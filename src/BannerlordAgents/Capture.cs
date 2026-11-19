@@ -397,7 +397,18 @@ namespace BannerlordAgents
         {
             try
             {
-                if (BaseSpeedField != null)
+                // the game keeps its cached sum up only while a party moves (MobileParty.CalculateSpeedForPartyUnified, from its Speed): a party in a holding,
+                // a siege or a battle, or standing still, gets its sum worked out afresh by the game's own formula (0.21.0, docs/PLAN-ways.md: a lord who
+                // recruited 300 footmen in a town still had the speed he walked in with)
+                bool still = p.CurrentSettlement != null || p.MapEvent != null || p.BesiegerCamp != null || !p.IsMoving;
+                if (still)
+                {
+                    ExplainedNumber e = Campaign.Current.Models.PartySpeedCalculatingModel.CalculateBaseSpeed(p);
+                    r.SpeedBase = (float)Math.Round(e.BaseNumber, 4);
+                    r.SpeedFactors = (float)Math.Round(e.SumOfFactors, 4);
+                    r.SpeedFresh = true;
+                }
+                else if (BaseSpeedField != null)
                 {
                     ExplainedNumber e = BaseSpeedField(p);
                     r.SpeedBase = (float)Math.Round(e.BaseNumber, 4);
@@ -405,11 +416,8 @@ namespace BannerlordAgents
                 }
                 if (FinalSpeedField != null) r.FinalSpeed = (float)Math.Round(FinalSpeedField(p), 4);
                 r.Culture = (leader?.Culture ?? p.MapFaction?.Culture ?? p.Owner?.Culture)?.StringId;
-                // the ground, the scout's perks and the weather matter only on the march (0.7.4: a cost trim; the weather call carries
-                // TAOM's own prefix)
-                if (r.InSettlement != null) return;
-                PathFaceRecord face = p.CurrentNavigationFace;
-                if (face.IsValid()) r.Terrain = (int)Campaign.Current.MapSceneWrapper.GetFaceTerrainType(face);
+                // the scout's ground and hour perks belong to the party wherever it is (0.21.0: a party in a holding marches out with them); the ground
+                // under it and the weather matter only on the march (0.7.4: a cost trim; the weather call carries TAOM's own prefix)
                 Hero scout = p.EffectiveScout;
                 if (scout != null)
                 {
@@ -426,6 +434,9 @@ namespace BannerlordAgents
                         r.FootShare = all > 0 ? (float)Math.Round((float)p.Party.NumberOfMenWithoutHorse / all, 3) : 1f;
                     }
                 }
+                if (r.InSettlement != null) return;
+                PathFaceRecord face = p.CurrentNavigationFace;
+                if (face.IsValid()) r.Terrain = (int)Campaign.Current.MapSceneWrapper.GetFaceTerrainType(face);
                 MapWeatherModel.WeatherEvent w = Campaign.Current.Models.MapWeatherModel.GetWeatherEventInPosition(p.Position.ToVec2());
                 r.Snowing = w == MapWeatherModel.WeatherEvent.Snowy || w == MapWeatherModel.WeatherEvent.Blizzard;
             }

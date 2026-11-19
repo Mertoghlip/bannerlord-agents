@@ -279,8 +279,94 @@ namespace BannerlordAgents.Tools
         /// </summary>
         public PartyRow HeadOf(PartyRow e) => e == null ? null : Views.JoiningHead(S, e) is PartyRow head ? Lead(head) : Lead(e);
 
-        /// <summary>Hours a party needs to reach a point at its own pace, as the crow flies (a fight's place is no holding, so there is no road table to it).</summary>
-        public double HoursTo(PartyRow e, float x, float y) => Math.Sqrt((e.X - x) * (e.X - x) + (e.Y - y) * (e.Y - y)) / Math.Max(0.3, PerHour(e));
+        /// <summary>
+        /// Hours a party in view needs to reach a point (0.21.0: by the march clock, its exact pace stretch by stretch for the ground and the hour, starting
+        /// when its battle ends; until the copy of the game's way-finder the way is the straight line, the ground read along it). +inf when it cannot.
+        /// </summary>
+        public double HoursTo(PartyRow e, float x, float y)
+        {
+            Common.MarchTime m = MarchTo(SeenOf(e), x, y);
+            return m.Reached ? m.Hours : double.PositiveInfinity;
+        }
+
+        // ---------- the march clock (0.21.0, docs/PLAN-ways.md) ----------
+
+        /// <summary>A party in view as the clock knows it: where it (its army) stands, its exact pace (Forecast.PaceOf), its leader's own pace if it leads an army, and when its battle ends.</summary>
+        public Common.SeenParty SeenOf(PartyRow e)
+        {
+            PartyRow lead = Lead(e) ?? e;
+            var sp = new Common.SeenParty { Id = e.Id, X = lead.X, Y = lead.Y, SeenHours = Hours, InView = true, Pace = Forecast.PaceOf(S, lead) };
+            if (sp.Pace != null && lead.ArmyMen > lead.Men) sp.AlonePace = Common.MarchClock.AlonePace(sp.Pace, lead.ArmyMen, lead.Men);
+            if (lead.InBattle)
+            {
+                double left = Runner.HoursLeftAlone(BattleOf(lead.Id), this);
+                if (!double.IsNaN(left)) sp.FreeAt = Hours + left;
+            }
+            return sp;
+        }
+
+        /// <summary>A party seen earlier as the clock knows it: where and when it was seen, its pace then, and for an army its leader's own pace.</summary>
+        public static Common.SeenParty SeenOf(ViewParty v)
+        {
+            var sp = new Common.SeenParty { Id = v.Id, X = v.X, Y = v.Y, SeenHours = v.SeenHours, InView = false, Pace = v.March };
+            if (v.March != null && v.ArmyMen > v.Men) sp.AlonePace = Common.MarchClock.AlonePace(v.March, v.ArmyMen, v.Men);
+            return sp;
+        }
+
+        private readonly Dictionary<string, Common.MarchTime> _marches = new Dictionary<string, Common.MarchTime>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// When a party could reach a point, by the march clock (kept for the hour): in view at its exact pace, seen earlier at its pace then +10% (and no slower
+        /// than speed 2.8 after a day), forgotten after three days. The way: the one the game planned for it when it marches to that very point, else a straight
+        /// line with the ground read along it, until the copy of the game's own way-finder takes its place (docs/PLAN-ways.md).
+        /// </summary>
+        public Common.MarchTime MarchTo(Common.SeenParty sp, float x, float y)
+        {
+            string key = (sp.Id ?? "?") + (sp.InView ? "|v|" : "|s|") + Math.Round(x, 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + Math.Round(y, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (_marches.TryGetValue(key, out Common.MarchTime kept)) return kept;
+            MapGround g = MapGround.For(S?.MapCrc);
+            Common.MarchTime m = Common.MarchClock.Reach(sp, WayFor(sp, x, y), g != null ? (Func<float, float, int>)g.TerrainAt : null, Hours);
+            _marches[key] = m;
+            return m;
+        }
+
+        /// <summary>When a party could reach a holding (its gate, where parties arrive).</summary>
+        public Common.MarchTime MarchTo(Common.SeenParty sp, SettlementRow h)
+        {
+            if (h == null) return new Common.MarchTime();
+            bool gate = h.Gx != 0 || h.Gy != 0;
+            return MarchTo(sp, gate ? h.Gx : h.X, gate ? h.Gy : h.Y);
+        }
+
+        /// <summary>
+        /// The door for ways (docs/PLAN-ways.md): the way the game planned for a party in view that marches to this very point (within 5 of its end), else the
+        /// straight line. The copy of the game's way-finder comes in here.
+        /// </summary>
+        private IList<float[]> WayFor(Common.SeenParty sp, float x, float y)
+        {
+            if (sp.InView && sp.Id != null && Party(sp.Id) is PartyRow e && Lead(e) is PartyRow lead && Forecast.Marching(lead) && (lead.Tx != 0 || lead.Ty != 0)
+                && (lead.Tx - x) * (lead.Tx - x) + (lead.Ty - y) * (lead.Ty - y) <= 25f)
+                return Forecast.WayOf(lead);
+            return Common.MarchClock.Straight(sp, x, y);
+        }
+
+        /// <summary>
+        /// Could the party reach a point within so many hours? Answered without marching when even its fastest pace on the straight line could not (most
+        /// of a realm's enemies, for most questions), else by the clock.
+        /// </summary>
+        public bool CanReachWithin(Common.SeenParty sp, float x, float y, double hours, out Common.MarchTime m)
+        {
+            m = null;
+            if (hours < 0) return false;
+            Common.PaceBasis basis = Common.MarchClock.BasisAt(sp, Hours);
+            if (basis == Common.PaceBasis.Forgotten) return false;
+            double head = sp.InView ? 0 : Math.Max(0, Hours - sp.SeenHours);
+            if (!double.IsNaN(sp.FreeAt) && sp.FreeAt > Hours) head = -(sp.FreeAt - Hours);
+            double d = Math.Sqrt((sp.X - x) * (sp.X - x) + (sp.Y - y) * (sp.Y - y));
+            if (d / Math.Max(0.05, Common.MarchClock.FastestUnits(sp, basis)) - head > hours + 0.01) return false;
+            m = MarchTo(sp, x, y);
+            return m.Reached && m.Hours <= hours;
+        }
 
         /// <summary>
         /// Who could join a fight at a point (0.12.3: the agent decides which lords count, by an hours window, so a fight
@@ -291,7 +377,10 @@ namespace BannerlordAgents.Tools
         public List<PartyRow> Joiners(float x, float y, double hours)
         {
             if (hours <= 0) return new List<PartyRow>();
-            return _enemies.Where(e => HoursTo(e, x, y) <= hours).OrderBy(e => HoursTo(e, x, y)).ToList();
+            var found = new List<KeyValuePair<PartyRow, double>>();
+            foreach (PartyRow e in _enemies)
+                if (CanReachWithin(SeenOf(e), x, y, hours, out Common.MarchTime m)) found.Add(new KeyValuePair<PartyRow, double>(e, m.Hours));
+            return found.OrderBy(kv => kv.Value).Select(kv => kv.Key).ToList();
         }
 
         /// <summary>
@@ -481,6 +570,34 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
+        /// What threatens a lord where he stands, by the march clock (0.21.0, the safety rule; docs/PLAN-ways.md): every hostile lord, army and band of
+        /// bandits in view that could reach him within hours at its own pace (stretch by stretch for the ground and the hour), or stands within floor of him,
+        /// and once any does, every hostile lord and army in view that could reach him within joinHours, together; spared parties left out. Before 0.21.0
+        /// the reach was a radius made of his own pace (DangerAround), so a slow army near him counted and a fast band farther off did not.
+        /// </summary>
+        public List<PartyRow> DangerWithin(string me, double hours, double floor, double joinHours, Func<PartyRow, bool> spared)
+        {
+            var list = new List<PartyRow>();
+            PartyRow lord = Party(me);
+            if (lord == null) return list;
+            var near = new List<PartyRow>();
+            foreach (PartyRow e in _enemies.Concat(_bandits))
+            {
+                if (e.Id == me) continue;
+                double d = Math.Sqrt((e.X - lord.X) * (e.X - lord.X) + (e.Y - lord.Y) * (e.Y - lord.Y));
+                if (d <= floor || (hours > 0 && CanReachWithin(SeenOf(e), lord.X, lord.Y, hours, out _))) near.Add(e);
+            }
+            if (near.Count == 0) return list;
+            var seen = new HashSet<string>();
+            HashSet<string> hunted = RulerHunts();
+            foreach (PartyRow e in near.OrderBy(e => (e.X - lord.X) * (e.X - lord.X) + (e.Y - lord.Y) * (e.Y - lord.Y)))
+                if (!spared(e) && !hunted.Contains(e.Id) && seen.Add(e.Id)) list.Add(e);
+            foreach (PartyRow m in Joiners(lord.X, lord.Y, joinHours))
+                if (m.Id != me && !spared(m) && !hunted.Contains(m.Id) && seen.Add(m.Id)) list.Add(m);
+            return list;
+        }
+
+        /// <summary>
         /// The enemy the realm's ruler is attacking in person (RulerTarget) and every hostile lord and army that could join that fight within
         /// RulerHuntHours, when the ruler's force (his army, if he leads one) is the stronger; else none (0.13.11). Their threat is the ruler's fight:
         /// a guard nearby joins it rather than shelters or flees from it (Oct 29, when I was chasing Mauhur: my realm's guards turned back).
@@ -513,14 +630,16 @@ namespace BannerlordAgents.Tools
             public string Id, Name, Doing;
             public double Strength, Distance, Road = double.NaN, SeenAgo;
             public bool Heading;
-            /// <summary>Hours until it gets there by the game's marching rules (0.7.4): along its planned way when heading for it, else its distance at its pace over a day.</summary>
+            /// <summary>Hours until it could get there by the march clock (0.21.0): along its planned way when it marches to the place, else the straight line with the ground read along it; +inf when it cannot.</summary>
             public double Eta = double.NaN;
+            /// <summary>Its march by the clock: what the time rests on (seen now, seen earlier with the margin, or at the minimum).</summary>
+            public Common.MarchTime March;
         }
 
         /// <summary>
         /// The enemy coming to a place's relief, as the realm can judge it: hostile lords and armies in view within r of it,
-        /// or heading for it from anywhere (going to it, defending it, besieging it), and those seen so within the last
-        /// RecentHours, where they were last seen. Each counted once, an army as a whole; nearest first. Lords are counted
+        /// or heading for it from anywhere (going to it, defending it, besieging it), and those seen so within the last three
+        /// days, from where they were last seen, by the march clock (0.21.0). Each counted once, an army as a whole; nearest first. Lords are counted
         /// one by one, not only armies: the game sends a besieged holding's realm's lords to it one at a time (Oct 16,
         /// Hollin Gate: about 50 of Arnor's lords turned toward it within six hours of the siege, none in an army, so a
         /// relief alarm that waited for an army never rang). A party known gone is not counted.
@@ -537,28 +656,30 @@ namespace BannerlordAgents.Tools
                 bool heading = Views.Toward(e) == place;
                 if (d > r && !heading) continue;
                 var c = new Comer { Id = e.Id, Name = e.Name ?? e.Id, Doing = Views.Doing(S, e), Strength = StrengthOf(e), Distance = d, Heading = heading };
-                // when it gets there (0.7.4): along its way only when that way ends at the place, else by road at its pace (two lords
-                // walking to a waypoint 8.6 ahead were counted "due in about 3 hours" at Hollin Gate, 96.5 away by road, and set
-                // off the withdrawal bar)
+                // when it could get there (0.7.4: along its way only when that way ends at the place, since two lords walking to a waypoint 8.6 ahead were
+                // counted "due in about 3 hours" at Hollin Gate, 96.5 away by road, and set off the withdrawal bar; 0.21.0: by the march clock, the ground and
+                // the hour stretch by stretch)
                 SettlementRow at = Holding(place);
-                Forecast.Arrival arr = at != null ? Forecast.ToHolding(S, e, at, 24 * 10) : null;
-                c.Eta = arr != null ? (arr.Reached ? arr.Hours : double.PositiveInfinity) : d / Math.Max(0.3, PerHour(e));
+                c.March = at != null ? MarchTo(SeenOf(e), at) : MarchTo(SeenOf(e), px, py);
+                c.Eta = c.March.Reached ? c.March.Hours : double.PositiveInfinity;
                 list.Add(c);
             }
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
                 ViewParty v = kv.Value;
-                if (v.Relation != "enemy" || v.Kind != "lord" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                if (v.Relation != "enemy" || v.Kind != "lord" || InView(kv.Key) || Gone(kv.Key)) continue;
                 PartyRow now = Party(kv.Key);
                 if (now != null && now.Attached) continue;
                 double d = Dist(v.X, v.Y);
                 bool heading = v.Toward == place;
                 if (d > r && !heading) continue;
-                // seen earlier: from where it was then (by road where the game's table knows the way), at its pace then, less the hours since
-                double perHour = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
-                double road = RoadDistance(kv.Key, place);
+                // seen earlier: from where it was then, at its pace then +10% (no slower than speed 2.8 after a day), the clock running since it was seen; not
+                // counted after three days (0.21.0)
+                SettlementRow at = Holding(place);
+                Common.MarchTime m = at != null ? MarchTo(SeenOf(v), at) : MarchTo(SeenOf(v), px, py);
+                if (m.Basis == Common.PaceBasis.Forgotten) continue;
                 list.Add(new Comer { Id = kv.Key, Name = v.Name ?? kv.Key, Doing = v.Doing, Strength = v.Strength, Distance = d, Heading = heading, SeenAgo = Hours - v.SeenHours,
-                                     Eta = Math.Max(0, (double.IsNaN(road) ? d : road) / Math.Max(0.3, perHour) - (Hours - v.SeenHours)) });
+                                     March = m, Eta = m.Reached ? m.Hours : double.PositiveInfinity });
             }
             foreach (Comer c in list) c.Road = RoadDistance(c.Id, place);
             return list.OrderBy(c => double.IsNaN(c.Road) ? c.Distance : c.Road).ToList();
@@ -679,14 +800,20 @@ namespace BannerlordAgents.Tools
             double dangerStrength = groupStrength >= 0 ? groupStrength : danger != null ? StrengthOf(danger) : 0;
             ICollection<string> counted = group ?? (danger != null ? new HashSet<string> { danger.Id } : null);
             double DistTo(SettlementRow h, float x, float y) => Math.Sqrt((h.X - x) * (h.X - x) + (h.Y - y) * (h.Y - y));
-            // reached before the danger: the lord's hours to it, at its own speed, no more than any of the danger's parties' at
-            // theirs (0.12.4: only the strongest was weighed, and Zlatka, Alvar and Haldir, sheltering from a group, were caught on
-            // the way by another part of it)
-            double mySpeed = Speed(Party(me));
+            // reached before the danger: the lord's hours to it no more than any of the danger's parties' (0.12.4: only the strongest was weighed, and Zlatka,
+            // Alvar and Haldir, sheltering from a group, were caught on the way by another part of it; 0.21.0: each by the march clock, the ground and the hour
+            // stretch by stretch, where it was the speed number over the straight distance)
+            PartyRow mine = Party(me);
+            Common.SeenParty mySeen = mine != null ? SeenOf(mine) : null;
             List<PartyRow> members = (group ?? new List<string>()).Select(Party).Where(p => p != null).ToList();
             if (danger != null && !members.Contains(danger)) members.Add(danger);
-            bool Reachable(SettlementRow h) => members.Count == 0 || DistTo(h, mx, my) < 2
-                                               || members.All(d => DistTo(h, mx, my) / mySpeed <= DistTo(h, d.X, d.Y) / Speed(d));
+            double Eta(Common.MarchTime m) => m != null && m.Reached ? m.Hours : double.PositiveInfinity;
+            bool Reachable(SettlementRow h)
+            {
+                if (members.Count == 0 || DistTo(h, mx, my) < 2) return true;
+                double myHours = mySeen != null ? Eta(MarchTo(mySeen, h)) : double.PositiveInfinity;
+                return members.All(d => myHours <= Eta(MarchTo(SeenOf(d), h)));
+            }
             List<SettlementRow> places = S.Settlements
                 .Where(h => IsFort(h) && (h.Faction == Realm || Ally(h.Faction)) && (!Besieged(h) || (h.Id == preferred && danger == null)))
                 .OrderBy(h => h.Id == preferred ? -1 : DistTo(h, mx, my)).ToList();
@@ -943,9 +1070,9 @@ namespace BannerlordAgents.Tools
         }
 
         /// <summary>
-        /// The strength that could reach a place within so many hours (0.19, harass's raids): every enemy lord and army in view that could march there in that time at
-        /// its own pace, as the crow flies (Joiners), and those seen in the last RecentHours, from where they were seen at their pace then, less the hours since.
-        /// Bandits are left out: they do not come to a lord's fight.
+        /// The strength that could reach a place within so many hours (0.19, harass's raids): every enemy lord and army in view that could march there in that time
+        /// (Joiners), and those seen in the last three days, from where they were seen; all by the march clock (0.21.0). Bandits are left out: they do not come to a
+        /// lord's fight.
         /// </summary>
         public double ReachWithin(string place, double hours)
         {
@@ -957,12 +1084,10 @@ namespace BannerlordAgents.Tools
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
                 ViewParty v = kv.Value;
-                if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || InView(kv.Key) || Gone(kv.Key)) continue;
                 PartyRow now = Party(kv.Key);
                 if (now != null && now.Attached) continue;
-                double per = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
-                double d = Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py));
-                if (d / Math.Max(0.3, per) - (Hours - v.SeenHours) <= hours) sum += v.Strength;
+                if (CanReachWithin(SeenOf(v), px, py, hours, out _)) sum += v.Strength;
             }
             return sum;
         }
@@ -1059,9 +1184,10 @@ namespace BannerlordAgents.Tools
         /// this campaign (115,640 sightings of lord parties marching on their own: strength under 300 averaged 3.5, 300 to 600 3.0, 600 to 1,500 2.7, 1,500 to 2,500 2.45).
         /// Since 0.20.5 (Nov 17, run 20261117-2146-A: the guard counted Aragorn's army, marching at about 1 map unit an hour through forest, at speed 2.8, so Dol Guldur
         /// switched the guard off and its storm of Imnagath ran into his arrival) a force in view on the march is counted at its own pace over open ground, night counted
-        /// (still faster than it goes through forest), and only one out of view, standing still or inside a holding at no slower than this.
+        /// (still faster than it goes through forest), and only one out of view, standing still or inside a holding at no slower than this. Since 0.21.0 (the
+        /// march clock, docs/PLAN-ways.md) it is the minimum only for a party out of sight for more than a day (Common.MarchClock.FloorSpeed).
         /// </summary>
-        public const float ReliefFloorSpeed = 2.8f;
+        public const float ReliefFloorSpeed = Common.MarchClock.FloorSpeed;
 
         /// <summary>A storm begun now at a siege of the realm's or an ally's, run ahead by the game's battle rules: alone, and with the relief that could reach the camp before it ends.</summary>
         internal sealed class StormCheckResult
@@ -1076,17 +1202,10 @@ namespace BannerlordAgents.Tools
             public double LeftShare;
             /// <summary>Clear to storm: no relief could come in time, or with it the storm is still won keeping at least keep of the besiegers' men.</summary>
             public bool Clear(double keep) => ReliefCount == 0 || (Won && LeftShare >= keep - 1e-9);
-            /// <summary>The relief one by one (the storm's clock, 0.20.5): its id, strength, hours from now to the camp, and whether its own pace was used (else the floor).</summary>
-            public readonly List<(string Id, double Strength, double At, bool OwnPace)> Comers = new List<(string, double, double, bool)>();
+            /// <summary>The relief one by one (the storm's clock, 0.20.5): its id, strength, hours from now to the camp, and its march by the clock (0.21.0: what that rests on).</summary>
+            public readonly List<(string Id, double Strength, double At, Common.MarchTime March)> Comers = new List<(string, double, double, Common.MarchTime)>();
         }
 
-        /// <summary>A relief's march to the camp in hours (0.20.5): an enemy in view on the march at its own pace over open ground, night counted; anyone else never slower than ReliefFloorSpeed.</summary>
-        private double ReliefHours(PartyRow e, double d, double floor, out bool own)
-        {
-            double per = PerHour(e);
-            own = Moving(e) && Forecast.DayPerHour(S, e) > 0.05f;
-            return d / (own ? Math.Max(0.3, per) : Math.Max(Math.Max(0.3, per), floor));
-        }
 
         private readonly Dictionary<string, StormCheckResult> _stormChecks = new Dictionary<string, StormCheckResult>(StringComparer.Ordinal);
 
@@ -1126,13 +1245,12 @@ namespace BannerlordAgents.Tools
             if (g.DefenderMen <= 0) return sb.Append("nobody defends it.").ToString();
             bool endless = c.Hours >= 24 * 5 - 0.01;
             sb.Append(endless ? "a storm begun then would not end within five days." : "a storm begun then should last about " + Forecast.HoursText(c.Hours) + ", ending about " + Text.When(Hours + start + c.Hours) + ".");
-            if (c.Comers.Count == 0) return sb.Append(" No enemy lord or army in view or seen lately could reach the camp before then.").ToString();
+            if (c.Comers.Count == 0) return sb.Append(" No enemy lord or army in view or seen in the last three days could reach the camp before then.").ToString();
             sb.Append(" Enemy lords and armies that could reach the camp before then: ");
             sb.Append(string.Join("; ", c.Comers.OrderBy(x => x.At).Take(6).Select(x => Name(x.Id) + " (strength " + Text.N((int)Math.Round(x.Strength)) + ") about " + Text.When(Hours + x.At)
-                                                                                        + (x.OwnPace ? "" : " at the soonest"))));
+                                                                                        + " (" + Common.MarchClock.Basis(x.March) + ")")));
             if (c.Comers.Count > 6) sb.Append("; and " + (c.Comers.Count - 6) + " more");
             sb.Append(". Joining the defenders as each arrives, they would " + (c.Won ? "leave your besiegers about " + Math.Round(c.LeftShare * 100) + "% of their men" : "turn the storm") + ".");
-            if (c.Comers.Any(x => !x.OwnPace)) sb.Append(" Those marked \"at the soonest\" are out of view, standing still or inside a holding, so counted at no slower than speed 2.8.");
             return sb.ToString();
         }
 
@@ -1157,39 +1275,32 @@ namespace BannerlordAgents.Tools
             res.Won = alone.Winner == "attackers";
             res.LeftShare = res.Won ? alone.AttackersLeft / (double)Math.Max(1, g.AttackerMen) : 0;
             if (!Where(place, out float px, out float py)) return res;
-            // the relief: every enemy lord and army in view, and those seen in the last hours from where they were seen, that could reach the camp before the storm would end:
-            // one in view on the march at its own pace, anyone else never slower than the floor (0.20.5); lords inside the place are its defenders already, lords shut in
-            // another siege cannot come
-            double floor = Common.GamePace.DayAverageOfSpeed(ReliefFloorSpeed);
+            // the relief: every enemy lord and army in view, and those seen in the last three days from where they were seen, that could reach the camp before the
+            // storm would end, by the march clock (0.21.0); lords inside the place are its defenders already, lords shut in another siege cannot come
             double end = Math.Max(0, startIn) + res.Hours;
             var relief = new List<Common.BattleJoiner>();
             var counted = new HashSet<string>(StringComparer.Ordinal);
             foreach (PartyRow e in _enemies)
             {
                 if (e.InSettlement == place || !counted.Add(e.Id)) continue;
-                double d = Math.Sqrt((e.X - px) * (e.X - px) + (e.Y - py) * (e.Y - py));
-                double t = ReliefHours(e, d, floor, out bool own);
-                if (t > end) continue;
+                if (!CanReachWithin(SeenOf(e), px, py, end, out Common.MarchTime m)) continue;
                 int men = Math.Max(1, MenOf(e));
-                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, t - startIn), Power = (float)(StrengthOf(e) / men) });
+                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, m.Hours - startIn), Power = (float)(StrengthOf(e) / men) });
                 res.ReliefStrength += StrengthOf(e);
-                res.Comers.Add((e.Id, StrengthOf(e), t, own));
+                res.Comers.Add((e.Id, StrengthOf(e), m.Hours, m));
             }
             foreach (KeyValuePair<string, ViewParty> kv in _lastSeen)
             {
                 ViewParty v = kv.Value;
-                if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
+                if (v.Relation != "enemy" || v.Kind != "lord" || counted.Contains(kv.Key) || InView(kv.Key) || Gone(kv.Key)) continue;
                 PartyRow now = Party(kv.Key);
                 if (now != null && now.Attached) continue;
-                double per = v.March != null ? Common.GamePace.DayAverage(v.March) : DefaultSpeed * Common.GamePace.UnitsPerSpeedHour;
-                double d = Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py));
-                double t = Math.Max(0, d / Math.Max(Math.Max(0.3, per), floor) - (Hours - v.SeenHours));
-                if (t > end) continue;
+                if (!CanReachWithin(SeenOf(v), px, py, end, out Common.MarchTime m)) continue;
                 counted.Add(kv.Key);
                 int men = Math.Max(1, v.ArmyMen > 0 ? v.ArmyMen : v.Men);
-                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, t - startIn), Power = v.Strength / men });
+                relief.Add(new Common.BattleJoiner { Attackers = false, Men = men, At = Math.Max(0, m.Hours - startIn), Power = v.Strength / men });
                 res.ReliefStrength += v.Strength;
-                res.Comers.Add((kv.Key, v.Strength, t, false));
+                res.Comers.Add((kv.Key, v.Strength, m.Hours, m));
             }
             res.ReliefCount = relief.Count;
             if (relief.Count == 0) return res;

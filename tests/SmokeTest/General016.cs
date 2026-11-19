@@ -41,10 +41,11 @@ namespace SmokeTest
             Snapshot s0 = ToolWorld(66000, far, nearFort);
             World w0 = Runner.WorldFor(s0);
             ToolInstance Inst(double hours) { var ti = new ToolInstance(); ti.Settings["danger_radius"] = 8; ti.Settings["danger_hours"] = hours; return ti; }
-            double pace = w0.PerHour(far), r3 = Runner.DangerReach(Inst(3), far, w0), r0 = Runner.DangerReach(Inst(0), far, w0), rn = Runner.DangerReach(Inst(3), nearFort, w0);
-            Check(Math.Abs(r3 - Math.Max(8, 3 * pace)) < 0.01 && r0 == 8 && rn >= 8 && rn <= Math.Max(8, 2.5 * pace) + 0.01,
-                  "the danger rule counts what could reach a lord before he is behind walls: far from forts " + ToolDef.Num(Math.Round(r3, 1)) + " (3 hours of his march), next to one "
-                  + ToolDef.Num(Math.Round(rn, 1)) + ", and danger_radius alone (8) with danger_hours 0");
+            // 0.21.0: in hours, each enemy then counted by its own march to him (the march clock); danger_radius stays the distance within which anything counts
+            double dh3 = Runner.DangerHours(Inst(3), far, w0, out double f3), dh0 = Runner.DangerHours(Inst(0), far, w0, out double f0), dhn = Runner.DangerHours(Inst(3), nearFort, w0, out _);
+            Check(Math.Abs(dh3 - 3) < 0.01 && dh0 == 0 && f3 == 8 && f0 == 8 && dhn >= 2 && dhn <= 2.5,
+                  "the danger rule counts what could reach a lord before he is behind walls: far from forts " + ToolDef.Num(Math.Round(dh3, 1)) + " hours (danger_hours), next to one "
+                  + ToolDef.Num(Math.Round(dhn, 1)) + " (his hours to it and 2), and danger_radius alone (8) with danger_hours 0");
             // food bought by the trip to market, not at a fixed 2 days
             SettlementRow market = s0.SettlementById["castle_orc"];
             double needFar = Runner.FoodNeed(far, market, w0), needNear = Runner.FoodNeed(nearFort, market, w0);

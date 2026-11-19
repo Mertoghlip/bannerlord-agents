@@ -27,6 +27,8 @@
     <!-- the game's marching rule, one file shared with the way-finder (src/Common, docs/ROUTES.md) -->
     <Compile Include="..\Common\GamePace.cs" Link="Common\GamePace.cs" />
     <Compile Include="..\Common\GameBattle.cs" Link="Common\GameBattle.cs" />
+    <!-- the one march clock (Nov 18, docs/PLAN-ways.md), shared by the game module and the way-finder -->
+    <Compile Include="..\Common\MarchClock.cs" Link="Common\MarchClock.cs" />
     <!-- which chronicle lines a report shows (0.13.16), one rule for the bridge and the war room -->
     <Compile Include="..\Common\RecentHistory.cs" Link="Common\RecentHistory.cs" />
   </ItemGroup>

@@ -1,0 +1,38 @@
+# One march clock and the game's own ways (Nov 18)
+
+The job: every estimate of how fast a party moves and when it arrives (the rules inside the game, the reports, the war room's tools) goes through one march clock and one way-finder, and the way-finder becomes an exact copy of the game's own. No test runs until the whole job is done.
+
+Why: in run 20261117-2146-A the storm guard counted my army at speed 2.8 while it marched about a map unit an hour through forest, Dol Guldur switched the guard off, and its storm of Imnagath ran into my arrival (module 0.20.5 fixed the guard's pace and added the storm's clock). An audit then found that most rules inside the game use a party's exact pace but on open ground over a straight line, that nothing adds a margin for an enemy out of sight, that the rules forget an enemy 6 hours after losing sight, and that our way-finder is close to the game's but not exact (on 69,495 comparisons with the ways the game planned: half within 1%, 9 in 10 within 5%, 1 in 100 off by 14% or more).
+
+## Decisions
+
+- **In view:** a party's exact pace from what is seen (the game's own speed sum), stretch by stretch for the ground and the hour. A party in a holding, a siege or a battle, whose stored speed the game stops updating, gets a fresh one from the game's own formula (`PartySpeedModel.CalculateBaseSpeed`, which may be called for any active party).
+- **Out of sight up to 24 hours:** its last-seen pace +10%, stretch by stretch, from where it was seen, the clock running since the sighting.
+- **Out of sight 24 hours to 3 days:** on each stretch the faster of its last-seen pace +10% and speed 2.8 (as measured, on any ground: it is the average of lord parties as they actually marched); the agent is told both.
+- **Out of sight over 3 days:** not counted by the rules; still listed for the agent with where, when and at what speed.
+- **Never seen:** not counted, as before.
+- **An army out of sight:** the faster of the army's pace and its leader's own (the army's base scaled by its men: ((200 + army's men) / (200 + his men))^0.4; for my army at Imnagath 1.44 gives 2.02, the measured 2.02).
+- **A party in a battle:** its march starts at the battle's expected end.
+- **News without sight** (a battle or siege named where a lord is): a sighting there and then, keeping his last pace; taken prisoner removes him.
+- **The agent's judgement:** an order setting to count a given force at its own last-seen pace instead of the minimum (default no).
+- **Ways:** our own way-finder, made an exact copy of the game's (`MobileParty.ComputePath` → `GetPathBetweenAIFaces`: agent radius 0.3, the party's closed ground by face group, an extra cost multiplier of 2 on some faces, land and sea switch costs). It searches as far as it is asked: the walking mesh has 19,396 faces, so a search over the whole map takes milliseconds, on a side thread. A party already marching to the very place asked about keeps the way the game planned for it.
+- **Until the copy passes its proof** the rules use a straight line with the ground read along it, marked "rough"; today's way-finder stays in the war room's tools, in reserve.
+- **Left as they are:** the copy of the game's attack-or-flee choice (it mirrors the game's own numbers); the borders' "near your lands", a fixed measure at speed 2.8.
+
+## Steps
+
+Phase 1, the march clock:
+- [x] The game's speed formula can be called for a party in a holding or a battle (1.4.8 source).
+- [x] The clock (Common/MarchClock.cs): pace rules, the margin and the minimum by stretch, the start delay, the basis in words; behind one door for ways (World.MarchTo, WayFor).
+- [x] Fresh speeds for parties in view not marching (Capture.Pace, SpeedFresh; the unexplained part carried on, Forecast.LastOther); sightings kept 3 days (the memory already kept 72 hours; the rules now look that far) with the army's and the leader's paces and the battle's end (Runner.HoursLeftAlone).
+- [ ] Rules switched one at a time, each with tests: [x] the storm guard and its clock; [x] the siege relief bars and warnings; [x] joining times and relief rides (HoursTo, Joiners); [x] could_reach; [x] the danger rule (World.DangerWithin, Runner.DangerHours), refuges and the escape point; [ ] the report's arrival times (recomputed every wake) and the theatre; [ ] our own lords' marches. (Kept as it was: the threat in an area counts enemies seen there in the last 6 hours where they were seen, since it asks who is there, not who could come.)
+- [ ] The agent told the basis; instructions and descriptions updated; the order setting.
+- [ ] The war room's tools on the same out-of-sight rule.
+- [ ] Recorded games replayed, forecast against arrival, before and after.
+
+Phase 2, the exact copy:
+- [ ] The engine's way-finding code read (disassembly): step costs, which faces cost double, the 0.3 radius, the straightening, the 128 corners, ties, land and sea.
+- [ ] The walking mesh copied out of the engine exactly, once per map: faces' corners, neighbours, ground, flags.
+- [ ] The copy built (Common, for the game, the war room and the dashboard).
+- [ ] The proof: every marching lord's planned way each hour, thousands of pairs asked of the game's own finder while paused, the hard cases; at least 999 in 1,000 identical within 0.01 units, every difference explained.
+- [ ] Swapped in behind the door; today's finder retired.

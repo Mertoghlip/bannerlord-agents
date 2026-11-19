@@ -1187,6 +1187,24 @@ namespace BannerlordAgents.Tools
         /// those hours coming in as each would arrive, the shorter used; at most MostHoursLeft. A raid whose defenders are down: the hours until the village is
         /// looted. A fight of the human player's: 0, since it is fought on the spot with the clock standing still, and nobody arrives later.
         /// </summary>
+        /// <summary>
+        /// A battle's hours left fought out alone, with no one joining (0.21.0: when a party in it could start a march, for the march clock; counting joiners
+        /// there would ask the clock about them in turn).
+        /// </summary>
+        internal static double HoursLeftAlone(BattleRow b, World w)
+        {
+            if (b == null) return double.NaN;
+            if (w.S.PlayerParty != null && (b.Attackers.Parties.Contains(w.S.PlayerParty) || b.Defenders.Parties.Contains(w.S.PlayerParty))) return 0;
+            if (b.Kind == "raid" && b.Defenders.Healthy <= 0 && w.Holding(b.Settlement) is SettlementRow village)
+            {
+                double loot = Forecast.RaidHoursLeft(village, w.Hours, b.Attackers.Healthy, out _, out _);
+                return double.IsNaN(loot) ? double.NaN : Math.Min(MostHoursLeft, loot);
+            }
+            bool Friendly(BattleSideRow side) => side.Faction != null && (side.Faction == w.Realm || w.Ally(side.Faction));
+            bool att = Friendly(b.Attackers), def = Friendly(b.Defenders);
+            return Clock(b, w, att == def ? (bool?)null : att, null, MostHoursLeft);
+        }
+
         internal static double HoursLeft(BattleRow b, World w)
         {
             if (b == null) return double.NaN;
@@ -1437,7 +1455,7 @@ namespace BannerlordAgents.Tools
         private static bool Safety(ToolInstance t, PartyRow me, World w, Scope scope)
         {
             double caution = t.Def.Safety && t.Settings.TryGetValue("caution", out double c) ? c : 0;
-            double radius = DangerReach(t, me, w);
+            double reach = DangerHours(t, me, w, out double floor);
             // our side, counted as the danger is (0.12.4): the lord and every lord of the realm or an ally who could join a fight where
             // he stands within join_hours, and those camped in his siege
             var with = new List<PartyRow>();
@@ -1459,9 +1477,9 @@ namespace BannerlordAgents.Tools
                                        || (ride != null && (World.SideIn(ride, e.Id) != null || World.SideIn(ride, w.Lead(e)?.Id) != null));
             // the danger counted as a group (0.12.2): everything in view within reach of the lord and the hosts those lords march
             // with, together (World.DangerAround); the strongest of them stands for where it is and how fast it comes
-            Danger Find(double within)
+            Danger Find(double hours, double near)
             {
-                List<PartyRow> g = w.DangerAround(me.Id, within, JoinHoursOf(t), Spared);
+                List<PartyRow> g = w.DangerWithin(me.Id, hours, near, JoinHoursOf(t), Spared);
                 double sum = g.Sum(World.StrengthOf);
                 // 0.17.3: when the human player's party is among them, a battle with him is fought on the spot, so only the lords of ours within the ring of
                 // this one (3, the game's own) would fight beside him, not those who could come within join_hours
@@ -1479,7 +1497,7 @@ namespace BannerlordAgents.Tools
             string preferred = hasStay && World.IsFort(own) ? own.Id : null;
             if (t.Shelter != null)
             {
-                Danger still = caution > 0 ? Find(radius * 1.5) : null;
+                Danger still = caution > 0 ? Find(reach * 1.5, floor * 1.5) : null;
                 // a reserve whose lord is fighting comes out at once when nothing but that fight is near (0.19): he has a fight to ride to
                 if (still == null && (w.Hours - t.AsideSince >= 2 || (IsReserve(t) && ride != null)))
                 {
@@ -1500,7 +1518,7 @@ namespace BannerlordAgents.Tools
             if (caution <= 0 || me.InBattle || me.Besieging != null) return false;
             SettlementRow inside = w.Holding(me.InSettlement);
             if (inside != null && World.IsFort(inside) && w.Besieged(inside)) return false;   // inside a besieged place: it cannot leave
-            Danger danger = Find(radius);
+            Danger danger = Find(reach, floor);
             if (danger == null) return false;
             if (inside != null && World.IsFort(inside))
             {
@@ -1558,8 +1576,15 @@ namespace BannerlordAgents.Tools
         /// </summary>
         internal static (double X, double Y) EscapePoint(double mx, double my, double myPace, IList<(double X, double Y, double Pace)> foes, double far)
         {
-            const int Ways = 24, Steps = 12;
             double pace = myPace > 0.05 ? myPace : 1;
+            var times = foes.Select(f => (Func<double, double, double>)((px, py) => Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) / (f.Pace > 0.05 ? f.Pace : 1))).ToList();
+            return EscapePoint(mx, my, (px, py) => Math.Sqrt((px - mx) * (px - mx) + (py - my) * (py - my)) / pace, times, far);
+        }
+
+        /// <summary>The same with the hours to each point given by the caller (0.21.0: the march clock for him and for each enemy, the ground and the hour stretch by stretch).</summary>
+        internal static (double X, double Y) EscapePoint(double mx, double my, Func<double, double, double> myHours, IList<Func<double, double, double>> foeHours, double far)
+        {
+            const int Ways = 24, Steps = 12;
             double bestCaught = double.NegativeInfinity, bestSlack = double.NegativeInfinity, bx = mx + far, by = my;
             for (int k = 0; k < Ways; k++)
             {
@@ -1567,12 +1592,9 @@ namespace BannerlordAgents.Tools
                 double caught = double.PositiveInfinity, slack = double.PositiveInfinity;
                 for (int i = 1; i <= Steps; i++)
                 {
-                    double s = far * i / Steps, px = mx + dx * s, py = my + dy * s, mine = s / pace, lead = double.PositiveInfinity;
-                    foreach (var f in foes)
-                    {
-                        double theirs = Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) / (f.Pace > 0.05 ? f.Pace : 1);
-                        lead = Math.Min(lead, theirs - mine);
-                    }
+                    double s = far * i / Steps, px = mx + dx * s, py = my + dy * s, mine = myHours(px, py), lead = double.PositiveInfinity;
+                    foreach (Func<double, double, double> f in foeHours)
+                        lead = Math.Min(lead, f(px, py) - mine);
                     slack = lead;
                     if (lead <= 0) { caught = mine; break; }
                 }
@@ -1602,14 +1624,19 @@ namespace BannerlordAgents.Tools
                 // nowhere it can reach before the danger: away from all of it, twice the danger radius, again each hour (0.20.3: the way on which the
                 // first of the danger's parties to reach him gets there latest, EscapePoint; until then straight away from its strongest party alone)
                 double far = Math.Max(12, 2 * (t.Settings.TryGetValue("danger_radius", out double dr) ? dr : Library.DangerRadius.Default));
-                var foes = new List<(double X, double Y, double Pace)>();
+                // 0.21.0: each by the march clock, him and every party of the danger
+                double H(Common.MarchTime m) => m != null && m.Reached ? m.Hours : double.PositiveInfinity;
+                var foes = new List<Func<double, double, double>>();
                 foreach (string id in group.Ids ?? new HashSet<string>())
                 {
                     PartyRow e = w.Party(id);
-                    if (e != null) foes.Add((e.X, e.Y, w.PerHour(e)));
+                    if (e == null) continue;
+                    Common.SeenParty es = w.SeenOf(e);
+                    foes.Add((px, py) => H(w.MarchTo(es, (float)px, (float)py)));
                 }
-                if (foes.Count == 0) foes.Add((danger.X, danger.Y, w.PerHour(danger)));
-                (double ex, double ey) = EscapePoint(me.X, me.Y, w.PerHour(me), foes, far);
+                if (foes.Count == 0) { Common.SeenParty ds = w.SeenOf(danger); foes.Add((px, py) => H(w.MarchTo(ds, (float)px, (float)py))); }
+                Common.SeenParty ms = w.SeenOf(me);
+                (double ex, double ey) = EscapePoint(me.X, me.Y, (px, py) => H(w.MarchTo(ms, (float)px, (float)py)), foes, far);
                 bool first = t.Shelter == null;
                 t.Shelter = Away;
                 t.ShelterFrom = danger.Id;
@@ -1642,25 +1669,24 @@ namespace BannerlordAgents.Tools
                   + (group.Ours ?? Text.N((int)mine)) + "): " + (forced != null ? "its order keeps it inside." : "its defenders with " + t.Order.LordName + ", strength " + Text.N((int)w.DefenceStrength(fort, me.Id))
                   + " behind walls worth " + ToolDef.Num(Math.Round(World.WallFactor(fort), 1)) + " times that, would hold against " + Text.N((int)opposing) + ".");
             Poke(t, why + " The order resumes once the danger has passed.", w);
-            Log(t, t.State, running ? "running" : "sheltering", "enemies within its danger radius, with their hosts, stronger together than its caution allows");
+            Log(t, t.State, running ? "running" : "sheltering", "enemies that could reach it before it could get behind walls, with their hosts, stronger together than its caution allows");
             return true;
         }
 
         /// <summary>
-        /// How near counts as near for the danger rule (0.16, from the lieutenant's guard loop: what could reach him before he could get behind walls): the
-        /// distance he marches in the hours to the nearest castle or town he could shelter in, plus 2, at most danger_hours; never less than danger_radius.
-        /// Before 0.16 it was danger_radius alone (8 map units by default, about two hours' march).
+        /// How near counts as near for the danger rule (0.16, from the lieutenant's guard loop: what could reach him before he could get behind walls): the hours
+        /// he needs to the nearest castle or town he could shelter in, plus 2, at most danger_hours; floor (danger_radius) is the distance within which any hostile
+        /// party counts whatever its pace. Since 0.21.0 an enemy counts by its own march to him (World.DangerWithin, the march clock); before, the hours were
+        /// turned into a radius at his own pace (before 0.16 it was danger_radius alone, 8 map units by default, about two hours' march).
         /// </summary>
-        internal static double DangerReach(ToolInstance t, PartyRow me, World w)
+        internal static double DangerHours(ToolInstance t, PartyRow me, World w, out double floor)
         {
-            double floor = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
+            floor = t.Settings.TryGetValue("danger_radius", out double r) ? r : Library.DangerRadius.Default;
             double most = t.Settings.TryGetValue("danger_hours", out double dh) ? dh : Library.DangerHours.Default;
-            double pace = me != null ? w.PerHour(me) : double.NaN;
-            if (me == null || double.IsNaN(pace) || pace <= 0 || most <= 0) return floor;
+            if (me == null || most <= 0) return 0;
             SettlementRow fort = w.NearestFort(me.Id);
-            double toFort = fort != null ? w.Distance(me.Id, fort.Id) / pace : double.NaN;
-            double hours = double.IsNaN(toFort) ? most : Math.Min(most, toFort + 2);
-            return Math.Max(floor, hours * pace);
+            Common.MarchTime toFort = fort != null ? w.MarchTo(w.SeenOf(me), fort) : null;
+            return toFort == null || !toFort.Reached ? most : Math.Min(most, toFort.Hours + 2);
         }
 
         /// <summary>The days of food under which a lord rides to buy more (0.16): the trip to the nearest market and a day and a half; it was 2 days, near a market or far.</summary>

@@ -360,16 +360,41 @@ namespace SmokeTest
             double far = hours * BannerlordAgents.Common.GamePace.DayAverageOfSpeed(4f) * 1.5 + 20;
             World away = W(Sieged(h, Man("sr2", 3000, 1500, (float)(170 + far), 103, 4)));
             bool farClear = Expr.Truthy(F(away, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(away, "storm_relief", "castle_men")) == 0;
-            // a slow army (speed 1) that at its own pace would come too late, but is never counted slower than speed 2.8: counted
+            // 0.21.0, the march clock: a slow army (speed 1) standing still in view is counted at its own pace (worked out afresh while it stands) and comes too late
             double between = hours * (BannerlordAgents.Common.GamePace.DayAverageOfSpeed(BannerlordAgents.Tools.World.ReliefFloorSpeed) + 1f * BannerlordAgents.Common.GamePace.UnitsPerSpeedHour) / 2;
             var slow = Man("sr3", 3000, 1500, (float)(170 + between), 103, 1);
-            World floor = W(Sieged(h, slow));
-            bool slowOwnLate = between / floor.PerHour(slow) > hours;
-            bool slowCounted = Expr.Number(F(floor, "storm_relief", "castle_men")) == 3000 && F(floor, "storm_clear", "castle_men", 0.25) is bool c2 && !c2;
-            Check(hours > 1 && aloneClear && nearHeld && farClear && slowOwnLate && slowCounted,
+            World still = W(Sieged(h, slow));
+            bool slowOwnLate = between / still.PerHour(slow) > hours;
+            bool stillClear = Expr.Truthy(F(still, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(still, "storm_relief", "castle_men")) == 0;
+            Check(hours > 1 && aloneClear && nearHeld && farClear && slowOwnLate && stillClear,
                   "the storm guard: a storm of Fornost run ahead lasts about " + ToolDef.Num(Math.Round(hours, 1)) + " hours; with no relief it is clear; a 3,000 army 8 away would come in time and turn it; "
-                  + "the same army out of reach leaves it clear; a slow army (speed 1) standing still, that would come too late at its own pace, is counted at speed 2.8 and holds it ("
-                  + aloneClear + ", " + nearHeld + ", " + farClear + ", " + slowOwnLate + ", " + slowCounted + ")");
+                  + "the same army out of reach leaves it clear; a slow army (speed 1) standing still in view is counted at its own pace and comes too late ("
+                  + aloneClear + ", " + nearHeld + ", " + farClear + ", " + slowOwnLate + ", " + stillClear + ")");
+
+            // 0.21.0, the same army out of sight (docs/PLAN-ways.md): 5 hours ago at its pace then +10% (too late: clear); 30 hours ago at no slower than speed 2.8
+            // (in time: held), the agent told both speeds; 4 days ago not counted
+            World Unseen(double ago)
+            {
+                var hidden = Man("sr9", 3000, 1500, 400, 400, 1);
+                hidden.Spottable = false;
+                Snapshot hs = Sieged(h, hidden);
+                hs.WatchedSees.Remove("p_sr9");
+                var last = new Dictionary<string, ViewParty>
+                {
+                    ["p_sr9"] = new ViewParty { Id = "p_sr9", Name = "sr9", Relation = "enemy", Kind = "lord", X = (float)(170 + between), Y = 103, SeenHours = h - ago, Men = 1500, Strength = 3000,
+                                                March = BannerlordAgents.Common.Pace.FromSpeed(1) }
+                };
+                return new World(hs, "orcs", hs.WatchedSees, last);
+            }
+            World u5 = Unseen(5), u30 = Unseen(30), u96 = Unseen(96);
+            bool marginClear = Expr.Truthy(F(u5, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(u5, "storm_relief", "castle_men")) == 0;
+            bool floorHeld = Expr.Number(F(u30, "storm_relief", "castle_men")) == 3000 && F(u30, "storm_clear", "castle_men", 0.25) is bool c2 && !c2;
+            bool forgotten = Expr.Truthy(F(u96, "storm_clear", "castle_men", 0.25)) && Expr.Number(F(u96, "storm_relief", "castle_men")) == 0;
+            string told = u30.StormClock("castle_men") ?? "";
+            bool toldBoth = told.Contains("last seen 30 hours ago at speed 1.0, counted at no slower than 2.8");
+            Check(marginClear && floorHeld && forgotten && toldBoth,
+                  "the storm guard out of sight: seen 5 hours ago, counted at its pace +10%, too late (clear); 30 hours ago, at no slower than 2.8, in time (held, and the clock says '"
+                  + told + "'); 4 days ago, not counted (" + marginClear + ", " + floorHeld + ", " + forgotten + ", " + toldBoth + ")");
 
             // 0.20.5: the same slow army seen on the march toward the camp is counted at its own pace, comes too late, and leaves the storm clear
             var marching = Man("sr6", 3000, 1500, (float)(170 + between), 103, 1);
@@ -391,8 +416,8 @@ namespace SmokeTest
             unready.Sieges[0].Prep = 0.5f;
             string clockLater = W(unready).StormClock("castle_men") ?? "";
             string clockNone = alone.StormClock("castle_men") ?? "";
-            bool nowOk = clockNow.Contains("may storm now") && clockNow.Contains("sr7 (strength 3,000)") && clockNow.Contains("at the soonest") && clockNow.Contains("turn the storm");
-            bool laterOk = clockLater.Contains("may storm in about 25 hours") && clockLater.Contains("sr8 (strength 3,000)") && !clockLater.Contains("at the soonest");
+            bool nowOk = clockNow.Contains("may storm now") && clockNow.Contains("sr7 (strength 3,000)") && clockNow.Contains("seen now, speed 4.0") && clockNow.Contains("turn the storm");
+            bool laterOk = clockLater.Contains("may storm in about 25 hours") && clockLater.Contains("sr8 (strength 3,000)") && clockLater.Contains("seen now");
             bool noneOk = clockNone.Contains("No enemy lord or army") && alone.StormClock("castle_nowhere") == null;
             Check(nowOk && laterOk && noneOk, "the storm's clock: a camp ready now with a strong army close by ('" + clockNow + "'); a camp ready in 25 hours, with the slow army on the march arriving within the storm ('"
                                               + clockLater + "'); no relief ('" + clockNone + "') (" + nowOk + ", " + laterOk + ", " + noneOk + ")");
