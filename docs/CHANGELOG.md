@@ -2799,4 +2799,5 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
   - **Smoke test (626 checks) and war room self-test** passed. RefCheck: 891 member references, missing 0.
   - **On the real run 20261117-1614-A** (190 hours, one load), in a headless Chrome on the real clock: playback ran 26 hours in 9 seconds at 3 hours a second. Its 190 light copies took about a second to make (17 MB). It has 75 news items and 49 agent decisions. Captions, pop-ups and the scoreboard appear, and the live session and an earlier load step through their hours as before.
 - **Installed** with the game closed (01:10): module 0.21.3. The dashboard is run from the repository's build (`scripts\dashboard.ps1`).
+- **Commit:** e68a904.
 - **On disk now:** the runs since Nov 13 still have their hours, the longest being 20261113-1739-A at 514 hours over two loads, and 20261117-1614-A at 190 hours. The runs of October and the 60-day run of Oct 29 lost theirs to `keep_loads` before this change.
