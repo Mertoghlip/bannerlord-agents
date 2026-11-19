@@ -45,6 +45,8 @@ namespace SmokeTest
         {
             const string campaign = "smoketest";
             Check(Paths.Root == root, "the test writes to its own folder, never the game's (" + Paths.Root + ")");
+            // 0.21.4: every pruned "soonest" list of the look-ups and facts made during the test is checked against ordering all of them (end of the test)
+            Facts.CheckSoonest = true;
             // 0.16: the standard defend is the guard loop; the checks written for the defend of 0.6 to 0.15 test the order engine's own rules with it, so
             // they run on that definition (kept in Fixtures, and what an order carried on from a save of before 0.16 runs), and DefendTests check the new one
             ToolDef oldDefend = ToolDef.FromJson(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Fixtures", "defend-0.15.json")), "defend");
@@ -270,6 +272,8 @@ namespace SmokeTest
             Check(Read(Path.Combine(Diag.SessionDir, "story.log")).Contains("poke:"), "the readable story is written into this launch's folder too");
             Diag.EndLaunch("the smoke test ended");
             Check(!File.Exists(Path.Combine(Diag.SessionDir, "running.marker")), "a clean end removes the running marker");
+            Check(Facts.SoonestChecked > 50 && Facts.SoonestDiffer == 0, "the pruned soonest lists pick the very lords and holdings ordering them all does (" + Facts.SoonestChecked + " checked, " + Facts.SoonestDiffer + " different)");
+            Facts.CheckSoonest = false;
 
             Console.WriteLine(_failures == 0 ? "\nALL CHECKS PASSED" : "\n" + _failures + " CHECK(S) FAILED");
             Console.WriteLine("files: " + root);
@@ -2294,17 +2298,33 @@ namespace SmokeTest
             // 0.14: the agents' news mode for the test (full, shadow or theatre): a news report and, in theatre mode, a question book with each poke
             int ni = Array.IndexOf(args, "--news");
             if (ni > 0 && ni + 1 < args.Length) _perfNews = args[ni + 1];
+            // 0.21.4: --ways <map crc> loads the walking mesh and the copy's proof from the bridge's own map folder, so the hours run with the game's own ways
+            // (Ways.Proven) as in a game; --check also orders all lords by hours beside each pruned "soonest" list and counts any difference
+            int wi = Array.IndexOf(args, "--ways");
+            string waysCrc = wi > 0 && wi + 1 < args.Length ? args[wi + 1] : null;
+            bool check = Array.IndexOf(args, "--check") > 0;
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-perf");
             try { Directory.Delete(root, true); } catch { /* first run */ }
+            string waysDir = null;
+            if (waysCrc != null)
+            {
+                string src = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BannerlordAgents", "map", waysCrc);
+                waysDir = Path.Combine(root, "map", waysCrc);
+                Directory.CreateDirectory(waysDir);
+                foreach (string f in new[] { "meta.json", "ground.bin", "navmesh.bin", "navcopy-proof.json" })
+                    if (File.Exists(Path.Combine(src, f))) File.Copy(Path.Combine(src, f), Path.Combine(waysDir, f), true);
+            }
             Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
-            return PerfMain(root, folder, budget);
+            return PerfMain(root, folder, budget, waysDir, check);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static int PerfMain(string root, string folder, double budget)
+        private static int PerfMain(string root, string folder, double budget, string waysDir = null, bool check = false)
         {
             Diag.StartLaunch();
             Cpu.Detect();
+            if (waysDir != null) { Ways.Load(waysDir); Console.WriteLine("ways: " + Ways.Status); }
+            Facts.CheckSoonest = check;
             List<Snapshot> hours = folder != null ? PerfRecord.Load(folder) : BigWorld(24);
             if (hours.Count == 0) { Console.WriteLine("No saved hours in " + folder); return 1; }
             Console.WriteLine("SPEED TEST of the helper's hour: " + hours.Count + " hours " + (folder != null ? "saved in " + folder : "of a big made-up world")
@@ -2319,6 +2339,10 @@ namespace SmokeTest
             Console.WriteLine("the whole hour: median " + Median(total).ToString("0.0", inv) + " ms, 95th of a hundred " + p95.ToString("0.0", inv) + " ms, most " + total.Max().ToString("0.0", inv) + " ms; budget " + budget.ToString("0", inv) + " ms");
             Console.WriteLine("by part, over all hours: " + string.Join("; ", r.Parts.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value.ToString("0", inv) + " ms")));
             Console.WriteLine("look-up files written " + r.LookupsWritten + ", left alone unchanged " + r.LookupsUnchanged);
+            if (waysDir != null)
+                Console.WriteLine("game's ways: asked " + Ways.Asked + ", worked out " + Ways.Worked + " (" + Ways.WorkedMs.ToString("0", inv) + " ms, "
+                                  + (Ways.Worked > 0 ? (Ways.WorkedMs / Ways.Worked).ToString("0.00", inv) : "0") + " ms each), the rest kept");
+            if (check) Console.WriteLine("soonest lists checked against ordering them all: " + Facts.SoonestChecked + ", different " + Facts.SoonestDiffer);
             bool ok = p95 <= budget;
             Console.WriteLine(ok ? "WITHIN BUDGET" : "OVER BUDGET");
             Diag.EndLaunch("the speed test ended");
@@ -2344,7 +2368,9 @@ namespace SmokeTest
             {
                 string f = Path.Combine(agentsRoot, realm);
                 Directory.CreateDirectory(f);
-                File.WriteAllText(Path.Combine(f, "agent.txt"), "realm = " + realm + "\nmode = shadow\nlords = all\nchannel = warroom\nnews = " + _perfNews + "\n");
+                // 0.21.4: the player's own realm is served by a lieutenant, as in a run, whose look-ups are made every hour (it is never poked)
+                bool lieutenant = realm == hours[0].PlayerFaction;
+                File.WriteAllText(Path.Combine(f, "agent.txt"), "realm = " + realm + "\nmode = shadow\nlords = all\nchannel = warroom\nnews = " + _perfNews + "\n" + (lieutenant ? "kind = lieutenant\n" : ""));
                 Settings.AgentFolders.Add(f);
             }
             Brain.Reset(hours[0].Campaign ?? "perf", double.NaN, Agents.Configured(), null);

@@ -2801,3 +2801,27 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Installed** with the game closed (01:10): module 0.21.3. The dashboard is run from the repository's build (`scripts\dashboard.ps1`).
 - **Commit:** e68a904.
 - **On disk now:** the runs since Nov 13 still have their hours, the longest being 20261113-1739-A at 514 hours over two loads, and 20261117-1614-A at 190 hours. The runs of October and the 60-day run of Oct 29 lost theirs to `keep_loads` before this change.
+
+### 02:50 · Module 0.21.4: the game's own ways kept and asked for less; the helper on time again
+- **Why:** run 20261120-0212-A (from TEST START DGG MERGE, 02:12) was the first run with the game's own ways for every march time (0.21.2). Within one in-game day the helper fell 7 in-game hours behind with the agents' reports (14 `helper_reports_late` alarms; run 20261117-2146-A from the same start had none). It spent 27 s of a core a minute (8 s in run 2146-A). Each hour's orders took 3.6 to 3.7 s (0.16 to 0.19 s before), and the look-ups 8 to 10 s a step (0.12 s before). The cause: every march time worked out its way afresh (about 0.2 to 0.4 ms each on the real mesh), and the look-up pages ordered every lord by hours to every holding, enemy and enemy holding. That is tens of thousands of ways an hour, mostly for my lieutenant's pages, which are made every hour.
+- **What:**
+  - **Ways kept** (`Ways.Between`): a way depends only on its two ends and the mesh, so each one worked out is kept by its exact ends, in two generations of up to 20,000 (the older dropped when the newer fills; about 15 MB at most). Ways from lords standing still and between holdings, asked again every hour, are found there. Cleared at each mesh load.
+  - **Soonest lists pruned** (`Facts.Soonest`, `NearestHoldings`, `TopK`): the pages' "your lords who can reach it soonest" lists (the holding, captive, enemy, enemy holding and poke pages) and each lord's "hours to your holdings" work out the march clock only while the straight line at the party's fastest pace (the bound `World.CanReachWithin` uses) could still bring it among the k. The same lords in the same order; a lord or holding that cannot be reached is now left out of those lists rather than listed first with "?".
+  - **Friends** (`World.Friends`, the safety rule's count of own and allied lords who could join): the same bound first (`CanReachWithin`), the march clock only for those it could bring in time.
+  - The muster lists still time every lord, since they list them all.
+  - **Speed test** (`SmokeTest --perf <hours> --ways <map crc> [--check]`): the hours run with the walking mesh and the copy's proof copied from the bridge's map folder, as in a game; the player's realm is served by a lieutenant (its look-ups every hour, as in a run); it prints the ways asked for and worked out; `--check` orders all lords beside every pruned list and counts any difference.
+- **Numbers** (speed test, the 12 hours saved in run 20261117-2146-A, with the game's own ways and a lieutenant):
+
+  | | before (0.21.3) | after (0.21.4) |
+  |---|---|---|
+  | orders and look, all 12 hours | 25,871 ms | 2,002 ms |
+  | look-ups, all 12 hours | 24,110 ms | 13,846 ms |
+  | the whole hour, median | 3,958 ms | 1,683 ms |
+  | the whole hour, the slowest (the first, nothing kept yet) | 11,124 ms | 5,244 ms |
+
+  At the run's half pace an in-game hour takes about 6.7 s, so the helper keeps up again. The speed test's 1,000 ms budget is still exceeded at the first hour after a load.
+- **Checks:**
+  - **Smoke test, 627 checks.** New: every pruned soonest list made during the test checked against ordering them all (1,321 lists, none different). On the saved hours of this run, `--check` found 533 of 533 the same.
+  - **War room and dashboard self-tests** passed. RefCheck: 891 member references, missing 0.
+- **Installed** with the game closed (02:48): module 0.21.4.
+- **The run's crash (02:41), not from this change:** the game closed with "rglGPU_device_d3d11::create_render_texture: Not enough memory resources are available", and the orcs' war room died of an OutOfMemoryException at the same second. The game's private memory had climbed from 16.5 GB to 33.3 GB in 13 minutes, about 1.2 GB a minute, while the clock was stopped on the campaign map and the game window was in the background (about 113 frames a second; the engine logged only "OnGameWindowFocusChange: False"). The helper was idle and the managed heap was not growing (no gen 2 collections), so the growth was native. Paused in front for the first ten minutes it held at 14.2 GB. Earlier sessions with long stretches in the background did not grow like this (session 20261117-161247: 42 minutes in the background, about +2 GB). The cause is not found yet. My speed tests and builds, running beside the game, added a few GB at the end.

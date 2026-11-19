@@ -112,6 +112,92 @@ namespace BannerlordAgents
         /// <summary>Hours to march there by the march clock (0.21.0: the lord's exact pace, the ground and the hour stretch by stretch, stretched to the game's road length where its table knows the way; it was the road at his pace on open ground).</summary>
         private static double Hours(World w, PartyRow lord, string place) => w.HoursFor(lord, place);
 
+        /// <summary>
+        /// The k lords who could reach a place soonest, soonest first, leaving out those who cannot (0.21.4): the same lords as ordering them all by Hours, but the
+        /// march clock runs only for those whose fastest pace on the straight line could still bring them among the k (the game's way is never shorter than the line;
+        /// the bound World.CanReachWithin uses). With the game's own ways (0.21.2) ordering all of them asked a realm of 80 lords for 80 ways a page, thousands an
+        /// hour. Ties keep the lords' own order, as OrderBy does.
+        /// </summary>
+        private static List<Lord> Soonest(World w, List<Lord> lords, string place, int k)
+        {
+            List<Lord> found = SoonestPruned(w, lords, place, k);
+            if (CheckSoonest)
+            {
+                List<Lord> all = lords.Where(l => !double.IsNaN(Hours(w, l.Row, place))).OrderBy(l => Hours(w, l.Row, place)).Take(k).ToList();
+                SoonestChecked++;
+                if (!all.SequenceEqual(found)) SoonestDiffer++;
+            }
+            return found;
+        }
+
+        /// <summary>The speed test's check that Soonest picks the very lords ordering them all would (and how often it did not).</summary>
+        internal static bool CheckSoonest;
+        internal static long SoonestChecked, SoonestDiffer;
+
+        private static List<Lord> SoonestPruned(World w, List<Lord> lords, string place, int k)
+        {
+            var result = new List<Lord>();
+            if (k <= 0 || lords.Count == 0 || !PointOf(w, place, out float x, out float y)) return result;
+            Common.ClockParty[] sp = lords.Select(l => w.SeenOf(l.Row)).ToArray();
+            foreach (int i in TopK(lords.Count, i => Bound(w, sp[i], x, y), i => Hours(w, lords[i].Row, place), k)) result.Add(lords[i]);
+            return result;
+        }
+
+        /// <summary>The k holdings a lord could reach soonest, soonest first, leaving out those he cannot reach (0.21.4: pruned as Soonest is).</summary>
+        private static List<SettlementRow> NearestHoldings(World w, PartyRow r, List<SettlementRow> holdings, int k)
+        {
+            Common.ClockParty sp = w.SeenOf(r);
+            List<SettlementRow> found = TopK(holdings.Count, i => PointOf(w, holdings[i].Id, out float x, out float y) ? Bound(w, sp, x, y) : double.PositiveInfinity,
+                                             i => Hours(w, r, holdings[i].Id), k).Select(i => holdings[i]).ToList();
+            if (CheckSoonest)
+            {
+                List<SettlementRow> all = holdings.Where(h => !double.IsNaN(Hours(w, r, h.Id))).OrderBy(h => Hours(w, r, h.Id)).Take(k).ToList();
+                SoonestChecked++;
+                if (!all.SequenceEqual(found)) SoonestDiffer++;
+            }
+            return found;
+        }
+
+        /// <summary>Where a march to a place ends, as World.HoursFor takes it: a holding's gate (else its middle), a party or spot where the realm knows it.</summary>
+        private static bool PointOf(World w, string place, out float x, out float y)
+        {
+            x = y = 0;
+            if (place == null) return false;
+            SettlementRow h = w.Holding(place);
+            if (h == null) return w.Locate(place, out x, out y, out _, out _);
+            bool gate = h.Gx != 0 || h.Gy != 0;
+            x = gate ? h.Gx : h.X;
+            y = gate ? h.Gy : h.Y;
+            return true;
+        }
+
+        /// <summary>No march there can take fewer hours: the straight line at the party's fastest pace on any ground, by day or night (World.CanReachWithin's bound).</summary>
+        private static double Bound(World w, Common.ClockParty sp, float x, float y)
+        {
+            double d = Math.Sqrt((sp.X - x) * (sp.X - x) + (sp.Y - y) * (sp.Y - y));
+            return d / Math.Max(0.05, Common.MarchClock.FastestUnits(sp, Common.MarchClock.BasisAt(sp, w.Hours)));
+        }
+
+        /// <summary>
+        /// The k of n with the fewest hours, fewest first (ties in their own order, as OrderBy keeps them; NaN left out), working out the hours only while an
+        /// item's bound could still bring it among the k.
+        /// </summary>
+        private static List<int> TopK(int n, Func<int, double> bound, Func<int, double> hours, int k)
+        {
+            var found = new List<KeyValuePair<int, double>>();
+            if (k <= 0 || n == 0) return new List<int>();
+            double kth = double.PositiveInfinity;
+            foreach (KeyValuePair<int, double> b in Enumerable.Range(0, n).Select(i => new KeyValuePair<int, double>(i, bound(i))).OrderBy(b => b.Value))
+            {
+                if (found.Count >= k && b.Value > kth + 0.01) break;
+                double t = hours(b.Key);
+                if (double.IsNaN(t)) continue;
+                found.Add(new KeyValuePair<int, double>(b.Key, t));
+                if (found.Count >= k) kth = found.Select(e => e.Value).OrderBy(v => v).ElementAt(k - 1);
+            }
+            return found.OrderBy(e => e.Value).ThenBy(e => e.Key).Take(k).Select(e => e.Key).ToList();
+        }
+
         /// <summary>"12 (14 by road)" between two things the realm knows of.</summary>
         private static string Far(World w, string a, string b)
         {
@@ -153,7 +239,7 @@ namespace BannerlordAgents
                 if (h != null && done.Add(place))
                 {
                     subjects++;
-                    List<string> near = lords.Where(l => !double.IsNaN(Hours(w, l.Row, place))).OrderBy(l => Hours(w, l.Row, place)).Take(5).Select(l => LordLine(w, l, place)).ToList();
+                    List<string> near = Soonest(w, lords, place, 5).Select(l => LordLine(w, l, place)).ToList();
                     List<string> foes = w.EnemiesNear(place, 40).Take(3).Select(e => EnemyLine(w, e, place)).ToList();
                     sb.AppendLine("- Near " + h.Name + " [" + h.Id + "]: your nearest lords " + (near.Count > 0 ? string.Join("; ", near) : "none") + "."
                                   + (foes.Count > 0 ? " Enemies in view within 40: " + string.Join("; ", foes) + "." : " No enemy in view within 40."));
@@ -183,13 +269,13 @@ namespace BannerlordAgents
                     double ago = w.SeenAgo(p.Id);
                     string where = w.InView(p.Id) ? "in view" : ago < 9999 ? "last seen " + Math.Round(ago) + " hours ago" : "not seen by your eyes, only named in the news";
                     SettlementRow home = w.S.Settlements.Where(x => x.Faction == w.Realm).OrderBy(x => Reach(w, p.Id, x.Id)).FirstOrDefault();
-                    List<string> near = lords.Where(l => !double.IsNaN(Hours(w, l.Row, p.Id))).OrderBy(l => Hours(w, l.Row, p.Id)).Take(5).Select(l => LordLine(w, l, p.Id)).ToList();
+                    List<string> near = Soonest(w, lords, p.Id, 5).Select(l => LordLine(w, l, p.Id)).ToList();
                     double? str = w.KnownStrength(p.Id);
                     sb.AppendLine("- " + w.Name(p.Id) + " [" + w.Tag(p.Id) + "] (" + where + ", strength " + (str.HasValue ? Text.N((int)str.Value) : "?")
                                   + (home != null ? ", " + Far(w, p.Id, home.Id) + " from your " + home.Name : "") + "): your lords who can reach it soonest "
                                   + (near.Count > 0 ? string.Join("; ", near) : "none") + ".");
                     // a fight with it, by the game's battle rules (0.7.4): the nearest lord alone, and the nearest three together
-                    List<PartyRow> soonest = lords.Where(l => !double.IsNaN(Hours(w, l.Row, p.Id))).OrderBy(l => Hours(w, l.Row, p.Id)).Take(3).Select(l => l.Row).ToList();
+                    List<PartyRow> soonest = Soonest(w, lords, p.Id, 3).Select(l => l.Row).ToList();
                     string odds = Forecast.FieldOddsText(w, soonest, p);
                     if (odds != null) sb.AppendLine("  " + odds);
                 }
@@ -213,7 +299,7 @@ namespace BannerlordAgents
                 sb.AppendLine(h.Name + " [" + h.Id + "], your " + h.Kind + (w.Besieged(h) ? ", UNDER SIEGE" : "") + (h.VillageState == "BeingRaided" ? ", being raided" : h.VillageState == "Looted" ? ", looted" : "")
                               + (World.IsFort(h) ? "; garrison " + Text.N(h.Garrison) + ", militia " + Text.N(h.Militia) : "") + ". As of " + Text.When(w.Hours) + ".");
                 sb.AppendLine("Your lords, soonest first:");
-                foreach (Lord l in lords.OrderBy(l => Hours(w, l.Row, h.Id)).Take(15)) sb.AppendLine("- " + LordLine(w, l, h.Id));
+                foreach (Lord l in Soonest(w, lords, h.Id, 15)) sb.AppendLine("- " + LordLine(w, l, h.Id));
                 List<PartyRow> foes = w.EnemiesNear(h.Id, 60);
                 sb.AppendLine(foes.Count > 0 ? "Enemies in view within 60:" : "No enemy in view within 60.");
                 foreach (PartyRow e in foes.Take(12)) sb.AppendLine("- " + EnemyLine(w, e, h.Id));
@@ -243,7 +329,7 @@ namespace BannerlordAgents
                 if (at != null)
                 {
                     sb.AppendLine("Your lords who can reach " + (c.Holding != null ? "that holding" : "that party") + " soonest:");
-                    foreach (Lord l in lords.Where(l => !double.IsNaN(Hours(w, l.Row, at))).OrderBy(l => Hours(w, l.Row, at)).Take(8)) sb.AppendLine("- " + LordLine(w, l, at));
+                    foreach (Lord l in Soonest(w, lords, at, 8)) sb.AppendLine("- " + LordLine(w, l, at));
                 }
                 else sb.AppendLine("Where that party is now is not in your sight.");
                 files[c.Hero] = sb.ToString();
@@ -264,7 +350,7 @@ namespace BannerlordAgents
                 if (purse != null)
                     sb.AppendLine("Purse: " + purse + "." + (!double.IsNaN(r.SaleHours) && r.SaleText != null ? " Last sale, " + Math.Round(w.Hours - r.SaleHours) + " hours ago: " + r.SaleText + "." : ""));
                 sb.AppendLine("Hours to your holdings, nearest first:");
-                foreach (SettlementRow h in own.OrderBy(h => Hours(w, r, h.Id)).Take(15)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + H(Hours(w, r, h.Id)));
+                foreach (SettlementRow h in NearestHoldings(w, r, own, 15)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + H(Hours(w, r, h.Id)));
                 List<PartyRow> foes = w.EnemiesNear(r.Id, 60);
                 sb.AppendLine(foes.Count > 0 ? "Enemies in view within 60 of this lord:" : "No enemy in view within 60 of this lord.");
                 foreach (PartyRow e in foes.Take(10)) sb.AppendLine("- " + EnemyLine(w, e, r.Id) + ", " + H(Hours(w, r, e.Id)) + " to reach");
@@ -297,7 +383,7 @@ namespace BannerlordAgents
                 sb.AppendLine("Your holdings nearest to it:");
                 foreach (SettlementRow h in own.OrderBy(h => Reach(w, id, h.Id)).Take(5)) sb.AppendLine("- " + h.Name + " [" + h.Id + "]: " + Far(w, id, h.Id) + " away");
                 sb.AppendLine("Your lords who can reach it soonest:");
-                foreach (Lord l in lords.OrderBy(l => Hours(w, l.Row, id)).Take(8)) sb.AppendLine("- " + LordLine(w, l, id));
+                foreach (Lord l in Soonest(w, lords, id, 8)) sb.AppendLine("- " + LordLine(w, l, id));
                 files[tag] = sb.ToString();
             }
 
@@ -348,7 +434,7 @@ namespace BannerlordAgents
                 sb.AppendLine(h.Name + " [" + h.Id + "], a " + h.Kind + " of " + Views.FactionName(w.S, h.Faction) + (w.HostileFaction(h.Faction) ? " (at war with you)" : "") + ": " + counted
                               + (status != null ? "; " + status : "") + ". As of " + Text.When(w.Hours) + ".");
                 sb.AppendLine("Your lords, soonest first:");
-                foreach (Lord l in lords.Where(l => !double.IsNaN(Hours(w, l.Row, h.Id))).OrderBy(l => Hours(w, l.Row, h.Id)).Take(12)) sb.AppendLine("- " + LordLine(w, l, h.Id));
+                foreach (Lord l in Soonest(w, lords, h.Id, 12)) sb.AppendLine("- " + LordLine(w, l, h.Id));
                 List<PartyRow> foes = w.EnemiesNear(h.Id, 60);
                 sb.AppendLine(foes.Count > 0 ? "Enemies in view within 60:" : "No enemy in view within 60.");
                 foreach (PartyRow e in foes.Take(10)) sb.AppendLine("- " + EnemyLine(w, e, h.Id));

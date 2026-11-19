@@ -470,10 +470,11 @@ namespace BannerlordAgents.Tools
                 if (me != null && MarchesWith(r, me))
                 {
                     bool beside = r.InSettlement != null && r.InSettlement == me.InSettlement;
-                    if (beside || (r.InSettlement == null && !(r.InBattle && HoursTo(r, x, y) > 1) && joinHours > 0 && HoursTo(r, x, y) <= joinHours)) list.Add(r);
+                    if (beside || (r.InSettlement == null && !(r.InBattle && HoursTo(r, x, y) > 1) && joinHours > 0 && CanReachWithin(SeenOf(r), x, y, joinHours, out _))) list.Add(r);
                     continue;
                 }
-                if (r.InSettlement != null || (r.InBattle && HoursTo(r, x, y) > 1) || joinHours <= 0 || HoursTo(r, x, y) > joinHours) continue;
+                // 0.21.4: the straight line at his fastest pace first (CanReachWithin), the march clock only when that could bring him in time
+                if (r.InSettlement != null || (r.InBattle && HoursTo(r, x, y) > 1) || joinHours <= 0 || !CanReachWithin(SeenOf(r), x, y, joinHours, out _)) continue;
                 if (objectives == null || objectives.Count == 0) continue;
                 // since 0.13.11 also a lord attacking the same target (Oct 29, when I was chasing Mauhur with 3,865 men: my realm's guards struck
                 // beside me weighing only themselves)

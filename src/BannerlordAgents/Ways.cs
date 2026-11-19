@@ -32,6 +32,7 @@ namespace BannerlordAgents
         public static void Load(string mapDir)
         {
             Mesh = null; PartyQuery = null; Proven = false;
+            ForgetWays();
             try
             {
                 if (mapDir == null) { Status = "no walking map yet"; return; }
@@ -79,12 +80,67 @@ namespace BannerlordAgents
             if (Proven && Mesh != null)
             {
                 real = true;
-                List<float[]> p = NavCopy.Path(Mesh, sx, sy, ex, ey, PartyQuery);
-                if (p == null) return null;
-                p.Insert(0, new[] { sx, sy });
+                float[][] pts = Kept(sx, sy, ex, ey);
+                if (pts == null) return null;
+                var p = new List<float[]>(pts.Length + 1) { new[] { sx, sy } };
+                p.AddRange(pts);
                 return p;
             }
             return new List<float[]> { new[] { sx, sy }, new[] { ex, ey } };
+        }
+
+        // 0.21.4 (Nov 20, run 20261120-0212 fell 7 in-game hours behind with the reports): a way depends only on its two ends and the mesh, so each one worked out
+        // is kept, by the exact ends, in two generations: the newer takes every way asked for, and once it holds KeepWays the older is dropped and the newer becomes
+        // the older. Ways from lords standing still (inside a holding, camped, holding a post) and between holdings are asked again every hour and found here.
+        private const int KeepWays = 20000;
+        private static Dictionary<WayEnds, float[][]> _newer = new Dictionary<WayEnds, float[][]>(), _older = new Dictionary<WayEnds, float[][]>();
+        private static readonly object _keptLock = new object();
+        /// <summary>Ways asked for, ways worked out (not found kept), and the milliseconds spent working them out, since the start (the speed test reads them).</summary>
+        public static long Asked, Worked;
+        public static double WorkedMs;
+
+        private static float[][] Kept(float sx, float sy, float ex, float ey)
+        {
+            var k = new WayEnds(sx, sy, ex, ey);
+            lock (_keptLock)
+            {
+                Asked++;
+                if (_newer.TryGetValue(k, out float[][] kept)) return kept;
+                if (_older.TryGetValue(k, out kept)) { Keep(k, kept); return kept; }
+            }
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            List<float[]> p = NavCopy.Path(Mesh, sx, sy, ex, ey, PartyQuery);
+            float[][] pts = p?.ToArray();
+            double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            lock (_keptLock) { Worked++; WorkedMs += ms; Keep(k, pts); }
+            return pts;
+        }
+
+        private static void Keep(WayEnds k, float[][] pts)
+        {
+            if (_newer.Count >= KeepWays) { _older = _newer; _newer = new Dictionary<WayEnds, float[][]>(); }
+            _newer[k] = pts;
+        }
+
+        /// <summary>Forgets every kept way (a new mesh, or the speed test's fresh start).</summary>
+        public static void ForgetWays() { lock (_keptLock) { _newer = new Dictionary<WayEnds, float[][]>(); _older = new Dictionary<WayEnds, float[][]>(); } }
+
+        private readonly struct WayEnds : IEquatable<WayEnds>
+        {
+            private readonly float _sx, _sy, _ex, _ey;
+            public WayEnds(float sx, float sy, float ex, float ey) { _sx = sx; _sy = sy; _ex = ex; _ey = ey; }
+            public bool Equals(WayEnds o) => _sx.Equals(o._sx) && _sy.Equals(o._sy) && _ex.Equals(o._ex) && _ey.Equals(o._ey);
+            public override bool Equals(object obj) => obj is WayEnds o && Equals(o);
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int h = _sx.GetHashCode();
+                    h = h * 397 ^ _sy.GetHashCode();
+                    h = h * 397 ^ _ex.GetHashCode();
+                    return h * 397 ^ _ey.GetHashCode();
+                }
+            }
         }
     }
 
