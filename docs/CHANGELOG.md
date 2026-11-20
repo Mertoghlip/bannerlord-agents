@@ -2846,7 +2846,7 @@ Every change to the project, oldest first, so the checkpoint (Oct 27) and the fi
 - **Commit:** 537082b.
 - **To see it:** load TEST START DGG MERGE again. The window opens with "(Earlier in this save:)" and our talk up to the save, and the lieutenant's other saves' talks are written again. None of the lieutenant's files or records were changed.
 
-### 17:01 · Module 0.21.6: no shelter across the sea; a refuge within a day's march
+### 17:01 · Module 0.21.6: no shelter across the sea; a refuge within a day's march · commit aa95248
 - **Why:** in run 20261120-1102-A (from TEST START DGG MERGE, 11:06) Dol Guldur's Naltûr and Throrgash, ordered to besiege Imnagath, went to shelter at Orthanc Gate and Blue Craig, and my lords from Imnagath at Baracharn and Hithaegrist. Counted over the day's three runs (20261120-0212-A, -1006-A, -1102-A): 41 of 83 shelter and fall-back moves sent a lord more than 100 map units, the worst 400 to 565 (Throrgash to Blue Craig, my Val to Mithlond, the orcs' Sand-Rider lords to Barnavon and Orthanc Gate). The orcs' agent noticed ("stop 5-day flight to Barnavon") and wrote a wrong lesson from it after Halim was caught.
 - **The way-finder was right** (checked with the game closed, read-only, on the copied mesh `map8dc7db0
 avmesh.bin`):
