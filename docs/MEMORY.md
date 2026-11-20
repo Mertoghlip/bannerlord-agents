@@ -1,5 +1,7 @@
 # Memory: how a realm remembers the war
 
+**Since war room 0.20 (Nov 20):** a files agent's plan, notes and intelligence are pages it writes (kept in `pages.json` and every snapshot, old versions in `history\`), and the chronicler writes the chronicle's day pages: [FILES.md](FILES.md).
+
 Since version 0.5 (Oct 9), each realm keeps a continuous memory of the game. Every answer is still a fresh call, which keeps answers short ([WARROOM.md](WARROOM.md)), so the memory is written down and handed to the agent with each poke.
 
 **Why not one long conversation?** The agent chat of Oct 8 kept everything in one conversation. It grew from 66,000 to 193,000 tokens in 27 minutes, because every report stayed in it.

@@ -9,6 +9,7 @@
   - warroom-system.md and chronicler-system.md: its instructions, and the chronicler's (who writes the story so far);
   - warroom-news.md: the sections of its instructions a news wake reads in their place when agent.txt says news = theatre (0.14);
   - warroom-continuous.md: the sections a continuous agent reads in their place (0.18: wakes, watches, strategy reviews, the handover);
+  - warroom-files.md: the sections a files agent reads over those (war room 0.20, docs/FILES.md: context = files in warroom.txt);
   - warroom.txt: its war room's settings (model, effort, thinking caps, where its logs go);
   - warroom\: the channel the bridge and the war room talk through (orders\done, lookups, the order library tools.txt);
   - memory\<campaign>\: its memory, made by the war room (docs/MEMORY.md).
@@ -114,7 +115,7 @@ New-Item -ItemType Directory -Force (Join-Path $channel 'lookups') | Out-Null
 $fresh = @()
 # a lieutenant's instructions are its own, and it has no chronicler
 if ($Kind -eq 'lieutenant') { $pairs = @(@('lieutenant-system.template.md', 'warroom-system.md'), @('lieutenant-continuous.template.md', 'warroom-continuous.md')) }
-else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'), @('warroom-news.template.md', 'warroom-news.md'), @('warroom-continuous.template.md', 'warroom-continuous.md')) }
+else { $pairs = @(@('warroom-system.template.md', 'warroom-system.md'), @('chronicler-system.template.md', 'chronicler-system.md'), @('warroom-news.template.md', 'warroom-news.md'), @('warroom-continuous.template.md', 'warroom-continuous.md'), @('warroom-files.template.md', 'warroom-files.md')) }
 foreach ($pair in $pairs) {
     $to = Join-Path $Workspace $pair[1]
     if ((Test-Path $to) -and -not $Force) { Write-Host "Kept the folder's own $($pair[1])."; continue }

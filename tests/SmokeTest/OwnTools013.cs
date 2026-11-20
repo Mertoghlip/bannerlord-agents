@@ -176,14 +176,14 @@ namespace SmokeTest
                   "a retired tool leaves the library, tools.txt and tools\\, while the order running it goes on");
             Runner.Ended(9601, "test over");
 
-            // names and limits: never one of ours; at most 30 kept
+            // names and limits: never one of ours; since module 0.22.0 no limit on how many are kept
             said = Answer("poke-" + poke + "-e.json", new JObject { ["tools"] = new JArray(Tool("defend", true, Sweep)) });
             Check(said.Contains("REFUSED") && said.Contains("'defend' is the name of one of our orders"), "a tool of the agent's may not take the name of one of ours");
             var many = new JArray();
             for (int i = 0; i < 31; i++) many.Add(Tool("keep_" + i, true, Sweep));
             said = Answer("poke-" + poke + "-f.json", new JObject { ["tools"] = many });
-            Check(OwnLibrary.For("orcs").Kept.Count == OwnLibrary.MaxKept && said.Contains("tool 31 (keep_30): REFUSED. your library already holds 30 tools"),
-                  "a realm keeps at most " + OwnLibrary.MaxKept + " tools; the next is refused until one is retired");
+            Check(OwnLibrary.For("orcs").Kept.Count == 31 && !said.Contains("REFUSED") && ReadIf(Path.Combine(dir, "tools.txt")).Contains("(31 in your library; it keeps as many as you like.)"),
+                  "a realm keeps as many tools as it writes (31 here, past the old limit of 30), and tools.txt says there is no limit");
 
             // a new load: the library is read again from the folder and carries over
             Brain.Reset("smoketest-owntools-2", double.NaN, "orcs", null);

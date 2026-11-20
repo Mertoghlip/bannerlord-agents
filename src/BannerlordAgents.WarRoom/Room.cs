@@ -354,7 +354,15 @@ namespace BannerlordAgents.WarRoom
         /// <summary>The answer into the notes; a snapshot when they changed. Returns what changed, in a few words.</summary>
         private string Remember(JsonObject answer, int number, string when, PokeMeta meta)
         {
-            string changed = _mem.Apply(answer);
+            string changed;
+            if (_c.Files)
+            {
+                // a files agent's pages (war room 0.20): each kept with when and why, the old one into its history; the receipts told on its shelf
+                List<string> notes = _mem.ApplyPages(answer, meta?.Hours ?? _pokeHours, meta?.Date ?? when);
+                _lastWriteNotes = notes;
+                changed = string.Join(", ", notes);
+            }
+            else changed = _mem.Apply(answer);
             _mem.LastPoke = number;
             if (meta != null && !double.IsNaN(meta.Hours)) _mem.LastHours = meta.Hours;
             _mem.Save();
@@ -1214,6 +1222,8 @@ namespace BannerlordAgents.WarRoom
             // a continuous agent (0.18): each section of warroom-continuous.md takes the place of the same section (wakes, watches, reviews, the handover, the questions on the book)
             if (_c.Continuous) template = ContinuousInstructions(template);
             else if (news) template = NewsInstructions(template);
+            // a files agent (war room 0.20): its files' instructions over those, and its order library is its Orders file
+            if (_c.Files) template = FilesInstructions(template);
             // never promise a tool the call does not have ("check a tool" is served beside "ask the way", 0.13)
             if (!routes)
             {
@@ -1225,7 +1235,7 @@ namespace BannerlordAgents.WarRoom
             if (news || _c.Continuous ? !book : !read) template = ReplaceSection(template, "## Look-ups", null);
             // never promise a tool the call does not have: the model would type tool calls as text instead
             if (!read && !routes && !book) template = template.TrimEnd() + "\n\nYou have no tools in this call: answer from the message alone.\n";
-            string tools = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "(the order library appears once the game has loaded a campaign)";
+            string tools = _c.Files ? FilesOrdersPointer : ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "(the order library appears once the game has loaded a campaign)";
             string text = template.TrimEnd() + "\n\n" + tools.Trim() + "\n";
             string hash = Hash(text);
             _systemHash = hash;

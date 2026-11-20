@@ -101,6 +101,8 @@ namespace BannerlordAgents.WarRoom
         /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools", and for the lieutenant's answers, which alone say "say" and "carry_out".</summary>
         internal static int RunawayLimit(string written) => written.Contains("\"say\"") || written.Contains("\"carry_out\"") ? RunawayCharsLieutenant
                                                             : written.Contains("\"tools\"") || written.Contains("\"propose\"") || written.TrimStart().StartsWith("HANDOVER", StringComparison.Ordinal)
+                                                              // a files agent's pages and handover (war room 0.20)
+                                                              || written.Contains("\"pages\"") || written.Contains("\"handover\"")
                                                               // a continuous agent's handover (0.18) runs to a few thousand words
                                                               ? RunawayCharsWithTools : RunawayChars;
 

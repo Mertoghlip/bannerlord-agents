@@ -77,6 +77,21 @@ namespace BannerlordAgents.WarRoom
         /// <summary>The walking map's folder, once Ready found it.</summary>
         public string MapDir { get; private set; }
 
+        /// <summary>
+        /// The way-finder of a map, for the shelf's march hours (war room 0.20: the places around each holding and the enemy near it, by a way over land): run under the
+        /// tool's own lock, since one finder serves every question. False when the map is not copied.
+        /// </summary>
+        internal static bool WithFinder(string root, string crc, Action<Finder> act)
+        {
+            if (string.IsNullOrEmpty(crc)) return false;
+            lock (Gate)
+            {
+                if (MapFor(root, crc) == null || _finder == null) return false;
+                act(_finder);
+                return true;
+            }
+        }
+
         public string ViewPath => Path.Combine(_root, "live", _campaign ?? "unknown", "view_" + (_realm ?? "unknown") + ".json");
 
         /// <summary>The tool can answer: the realm's view file is there and the map it names has been copied.</summary>
@@ -144,7 +159,7 @@ namespace BannerlordAgents.WarRoom
                     JsonObject args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
                     // the newest hour before every question (0.18.1): the game writes the question book and the view file afresh, so the answer is never older than its last
                     // copied hour, whenever the question comes; check_tool asks the game itself
-                    if (Refresh != null && name != CheckName && name != PastTalk.ToolName)
+                    if (Refresh != null && name != CheckName && name != PastTalk.ToolName && name != OpenName && name != FindName && name != HistoryName)
                     {
                         string fresh = Refresh();
                         if (fresh != null) { BookPath = fresh; _bookRead = false; }
@@ -154,6 +169,8 @@ namespace BannerlordAgents.WarRoom
                                   : name == CheckName && !NoCheck ? Safe(() => CheckTool(args))
                                   : name == LookName && BookPath != null ? LookUp(args) : name == ListName && BookPath != null ? List(args) : name == ChronicleName && BookPath != null ? Chronicle(args)
                                   : name == PastTalk.ToolName && PastMem != null ? PastAnswer(args)
+                                  : name == OpenName && Shelf != null ? Safe(() => OpenAnswer(args)) : name == FindName && Shelf != null ? Safe(() => FindAnswer(args))
+                                  : name == HistoryName && Shelf != null ? Safe(() => HistoryAnswer(args))
                                   : "There is no tool called " + name + " in this call.";
                     result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
                     break;

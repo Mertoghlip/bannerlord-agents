@@ -1,5 +1,7 @@
 # The war room
 
+**Since war room 0.20 (Nov 20):** a continuous agent with `context = files` in its `warroom.txt` reads its realm's files instead of reports, and each message says only what woke it: [FILES.md](FILES.md).
+
 The war room (`WarRoom.exe`, in `src/BannerlordAgents.WarRoom`) is the program beside the game where the agent decides. Since Oct 8 it replaces the agent chat. It makes one fresh, short Claude Code call per poke, on my subscription, with no API key (plan, decision 8). Since Oct 9 (0.5) each call also carries the realm's written memory of the war: the story so far, the agent's notes and its chronicle ([MEMORY.md](MEMORY.md)).
 
 ## Why it is faster than the agent chat

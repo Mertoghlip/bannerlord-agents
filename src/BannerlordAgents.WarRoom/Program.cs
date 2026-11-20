@@ -117,6 +117,13 @@ namespace BannerlordAgents.WarRoom
                         return room.Answer(int.Parse(m.Groups[1].Value), m.Groups[2].Value.Trim(), text).Ok ? 0 : 1;
                     }
                 case "story": return Story(c);
+                case "shelf":
+                    {
+                        // war room 0.20: the realm's files built once from the newest poke (its book, its text, the view), into --out (default: a scratch folder), with each page's size
+                        string outDir = Arg(args, "--out") ?? Path.Combine(Path.GetTempPath(), "BannerlordAgents-shelf-" + Path.GetFileName(c.AgentDir));
+                        int.TryParse(Arg(args, "--from") ?? "", out int from);
+                        return new Room(c).ShelfOnce(outDir, args.Contains("--again"), from);
+                    }
                 case "past": return Past(c, args);
                 case "handover":
                     {

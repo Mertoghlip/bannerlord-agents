@@ -60,6 +60,8 @@ namespace BannerlordAgents.WarRoom
         public string ToldHash;
         /// <summary>Wakes by in-game day (the day's number), for "wakes today".</summary>
         public Dictionary<string, int> WakesByDay = new Dictionary<string, int>(StringComparer.Ordinal);
+        /// <summary>How this conversation learns the war (war room 0.20): "report" (null in conversations begun before) or "files"; a conversation of the other kind is not carried on.</summary>
+        public string Context;
 
         [System.Text.Json.Serialization.JsonIgnore] public string Path;
 
@@ -281,6 +283,7 @@ namespace BannerlordAgents.WarRoom
             Say("One conversation, handed over at the player's battle past " + _c.CompactAtTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens, at the game's close past "
                 + _c.CompactAtCloseTokens.ToString("N0", CultureInfo.InvariantCulture) + ", at any wake past " + _c.CompactHardTokens.ToString("N0", CultureInfo.InvariantCulture) + ". Ctrl+C stops it.");
             _lastAnswered = LastAnsweredOnDisk();
+            if (_c.Files) Say("It learns the war from its realm's files (" + Path.Combine(_c.ChannelDir, Shelf.DirName) + "): each message says only what woke it.");
             // 0.18.10: the agent's own copies of its conversations, before the first wake
             KeptTalk.KeepEvery(_c.MemoryDir, Say);
             int waitingSaid = -2;
@@ -301,6 +304,7 @@ namespace BannerlordAgents.WarRoom
                 {
                     HandoverIfDue();
                     ReviewIfDue();
+                    ChronicleIfDue(stop);
                 }
                 catch (Exception e) when (e is IOException || e is InvalidOperationException || e is JsonException || e is UnauthorizedAccessException)
                 {
@@ -325,6 +329,7 @@ namespace BannerlordAgents.WarRoom
             if (meta != null && !double.IsNaN(meta.Hours)) _pokeHours = meta.Hours;
             string carried = EnsureContinuous(meta);
             CheckTranscript();
+            carried = SwitchContext(carried);
             if (meta != null) { _mem.Run = meta.Run; _mem.Arm = meta.Arm; }
             string why = Section(pokeText, "WHY YOU ARE ASKED NOW");
             // past the hard ceiling: the handover first, and this wake opens the next conversation
@@ -334,13 +339,27 @@ namespace BannerlordAgents.WarRoom
             if (opening) { _talk.Sent.Clear(); _talk.SentAt.Clear(); _talk.Static.Clear(); }
             object[] mark = _talk.Mark();
             var sb = new StringBuilder();
-            if (opening) sb.Append(Opening(meta, number, firstLook ? null : "the wake that brought you here", out _));
-            string notes = Join(Join(carried, OwnToolsNote()), InstructionsNote());
-            if (!string.IsNullOrEmpty(notes)) sb.AppendLine(notes.TrimEnd()).AppendLine();
-            sb.Append(Slim(pokeText, meta?.Hours ?? _pokeHours, opening));
             string day = DayKey(meta?.Hours ?? _pokeHours);
             _talk.WakesByDay.TryGetValue(day, out int today);
-            sb.AppendLine().AppendLine("Wakes today (this in-game day): " + (today + 1) + ", this one included; keep to about " + _c.WakeBudget + " a day.");
+            if (_c.Files)
+            {
+                // a files agent (war room 0.20): its files built from this wake's book, and its message only what woke it
+                _talk.WakesByDay[day] = today + 1;
+                BuildShelf(meta, BookFor(meta, number) ?? NewestBook(meta, number), pokeText, why: why);
+                _talk.WakesByDay[day] = today;
+                if (opening) sb.Append(FilesOpening());
+                string fnotes = Join(carried, InstructionsNote());
+                if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes.TrimEnd()).AppendLine();
+                sb.Append(FilesWake(number, why));
+            }
+            else
+            {
+                if (opening) sb.Append(Opening(meta, number, firstLook ? null : "the wake that brought you here", out _));
+                string notes = Join(Join(carried, OwnToolsNote()), InstructionsNote());
+                if (!string.IsNullOrEmpty(notes)) sb.AppendLine(notes.TrimEnd()).AppendLine();
+                sb.Append(Slim(pokeText, meta?.Hours ?? _pokeHours, opening));
+                sb.AppendLine().AppendLine("Wakes today (this in-game day): " + (today + 1) + ", this one included; keep to about " + _c.WakeBudget + " a day.");
+            }
             string prompt = sb.ToString().Replace("\r\n", "\n");
 
             CallResult r = Converse(prompt, opening ? "opening" : "wake", number, opening || firstLook ? Math.Max(_c.ContinuousTimeoutSeconds, _c.CouncilTimeoutSeconds) : _c.ContinuousTimeoutSeconds, meta, out string folder, out bool retriedStall);
@@ -437,7 +456,7 @@ namespace BannerlordAgents.WarRoom
                 RouteTool probe = Routes(meta ?? ReadMeta(-1), number, "opening", true);
                 _talk.Routes = probe != null && !probe.BookOnly;
                 _talk.PastTool = _talk.Past.Count > 0;
-                _talk.SystemFile = SystemFile(_talk.Routes, false, true, false);
+                _talk.SystemFile = SystemFile(_talk.Routes, false, true, _c.Files);
                 _talk.SystemHash = _systemHash;
                 _talk.StartedHours = meta?.Hours ?? _pokeHours;
                 _talk.StartedWall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -445,12 +464,13 @@ namespace BannerlordAgents.WarRoom
                 _talk.LoadId = meta?.LoadId ?? _mem.LoadId;
                 _talk.OwnTools = OwnToolNames(ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "");
                 _talk.ToldHash = null;
+                _talk.Context = ContextMode;
                 _talk.Save();
             }
             else if (_talk.SystemFile == null || !File.Exists(_talk.SystemFile))
             {
                 // its system prompt's file was cleared away: the same text written again keeps the cache only if nothing in it changed
-                _talk.SystemFile = SystemFile(_talk.Routes, false, true, false);
+                _talk.SystemFile = SystemFile(_talk.Routes, false, true, _c.Files);
                 if (_systemHash != _talk.SystemHash) Say("Continuous: the system prompt this conversation began with is gone and its text has changed since; the next call writes the conversation into the cache again.");
                 _talk.SystemHash = _systemHash;
             }
@@ -463,7 +483,7 @@ namespace BannerlordAgents.WarRoom
             bool fork = !fresh && _talk.ForkFrom != null && _talk.ForkAt != null;
             if (!fresh && !fork) { _talk.SinceCheckpoint = true; _talk.Save(); }   // 0.18.8: whatever this call leaves in the conversation is past the last checkpoint
             if (!fresh) KeptTalk.Ensure(_mem.Dir, fork ? _talk.ForkFrom : _talk.SessionId, _c.ChannelDir, Say);   // 0.18.10: put back if Claude Code deleted it
-            CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
+            CallResult r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, _c.Files, timeout, _c.ContinuousThinkingCap,
                                       fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
                                       forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
             if (r.HandshakeLate) Say(kind + " #" + number + ": Claude Code took over 30 s to answer the tools' handshake; the message went anyway.");
@@ -474,13 +494,14 @@ namespace BannerlordAgents.WarRoom
                 double lost = r.Seconds;
                 retriedStall = true;
                 if (fresh || fork) { _talk.SessionId = Guid.NewGuid().ToString(); _mem.SessionId = _talk.SessionId; }   // a conversation's first call (or a taken-back one's) is begun again under a new id
-                r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, false, timeout, _c.ContinuousThinkingCap,
+                r = Claude.Run(_claude, _talk.SystemFile, prompt, _c.ContinuousModel, _c.ContinuousEffort, _c.ChannelDir, _c.Files, timeout, _c.ContinuousThinkingCap,
                                fork ? _talk.ForkFrom : _talk.SessionId, !fresh, tools: tools, env: ContinuousEnv, stallSeconds: kind.StartsWith("handover", StringComparison.Ordinal) ? Claude.HandoverStallSeconds : 0,
                                forkAt: fork ? _talk.ForkAt : null, forkTo: fork ? _talk.SessionId : null);
                 r.Seconds += lost;
             }
             File.WriteAllText(Path.Combine(folder, kind.EndsWith("retry", StringComparison.Ordinal) ? "raw-retry.jsonl" : "raw.jsonl"), r.Raw ?? "");
             KeepThinking(folder, r);
+            if (_c.Files) AfterFilesCall(r);
             // the session's running total, as Claude Code reports a resumed session's cost: this call's own is what it added
             if (r.Cost > 0)
             {
@@ -532,7 +553,9 @@ namespace BannerlordAgents.WarRoom
             return new RouteTool(RouteTool.DefaultRoot(), _logDir, meta.Campaign, meta.Realm, number, call)
             {
                 ChannelDir = _c.ChannelDir, BookPath = NewestBook(meta, number), ChronicleDir = _c.ChannelDir, Notes = NotesNow, BookOnly = !_talk.Routes, Refresh = FreshNow,
-                PastMem = _talk.PastTool ? _mem.Dir : null, PastIds = _talk.Past
+                PastMem = _talk.PastTool ? _mem.Dir : null, PastIds = _talk.Past,
+                // a files agent's questions on its files (war room 0.20), offered from its conversation's start
+                Shelf = _c.Files ? _shelf ??= new Shelf(_c.ChannelDir) : null, ShelfRefresh = _c.Files ? FilesRefresh : null, HistoryMem = _c.Files ? _mem.Dir : null
             };
         }
 
@@ -1014,6 +1037,7 @@ namespace BannerlordAgents.WarRoom
         internal string ReviewDue(double nowHours)
         {
             if (!_c.Council || _talk == null || !_talk.Started || double.IsNaN(nowHours)) return null;
+            if ((_talk.Context ?? "report") != ContextMode) return null;   // a conversation of the other kind ends at the next wake (war room 0.20)
             if (_reviewWanted != null) return _reviewWanted;
             return !double.IsNaN(_talk.NextReviewHours) && nowHours >= _talk.NextReviewHours - 1e-6 ? "the hour you set for it has come" : null;
         }
@@ -1048,6 +1072,15 @@ namespace BannerlordAgents.WarRoom
             string situation = ReadShared(Path.Combine(_c.ChannelDir, "report.txt")) ?? "";
             var sb = new StringBuilder();
             object[] mark = _talk.Mark();
+            if (_c.Files)
+            {
+                // a files agent's review (war room 0.20): its files built from the newest hour, and its message only that it sits and why
+                BuildShelf(meta, FreshNow() ?? NewestBook(meta, number), null, situation, briefing, fate: fate);
+                string fnotes = InstructionsNote();
+                if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes).AppendLine();
+                sb.Append(FilesReview(number, why));
+                return ReviewCall(sb.ToString().Replace("\r\n", "\n"), why, meta, number, mark, began, briefing.Length, situation.Length);
+            }
             string notes = Join(OwnToolsNote(), InstructionsNote());
             if (!string.IsNullOrEmpty(notes)) sb.AppendLine(notes).AppendLine();
             sb.AppendLine("STRATEGY REVIEW, " + meta.Date);
@@ -1063,7 +1096,12 @@ namespace BannerlordAgents.WarRoom
             }
             sb.AppendLine(briefing.Trim()).AppendLine();
             sb.Append(Trim(situation, meta.Hours, review: true, opening: false));
-            string prompt = sb.ToString().Replace("\r\n", "\n");
+            return ReviewCall(sb.ToString().Replace("\r\n", "\n"), why, meta, number, mark, began, briefing.Length, situation.Length);
+        }
+
+        /// <summary>A review's call, its answer kept and logged (the report agent's and the files agent's alike).</summary>
+        private bool ReviewCall(string prompt, string why, PokeMeta meta, int number, object[] mark, DateTime began, int briefingChars, int situationChars)
+        {
             CallResult r = Converse(prompt, "review", number, _c.CouncilTimeoutSeconds, meta, out string folder, out bool stall);
             if (!Reached(r)) _talk.Restore(mark);
             JsonObject answer = null;
@@ -1090,7 +1128,7 @@ namespace BannerlordAgents.WarRoom
             _mem.Save();
             _talk.Checkpoint(_lastUuid, meta.Hours, meta.Date, meta.LoadId ?? _mem.LoadId);
             double seconds = (DateTime.Now - began).TotalSeconds;
-            LogCall("council", "review", r, number, meta.Date, meta, folder, answer, problem, retried, stall, seconds, prompt.Length, false, why, changed, briefing.Length, situation.Length);
+            LogCall("council", "review", r, number, meta.Date, meta, folder, answer, problem, retried, stall, seconds, prompt.Length, false, why, changed, briefingChars, situationChars);
             int orders = answer?["orders"] is JsonArray a ? a.Count : 0;
             if (answer != null) Say("Strategy review: " + orders + " order" + (orders == 1 ? "" : "s") + " in " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s; next by " + Program.When(_talk.NextReviewHours) + ".");
             else Say("Strategy review: NO ANSWER (" + problem + ") after " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s.");
@@ -1174,8 +1212,8 @@ namespace BannerlordAgents.WarRoom
             int number = meta?.Number ?? Math.Max(0, _lastAnswered);
             long before = _talk.Tokens;
             // the game's own list of the orders in force, the lords with none and the watches, for the handover's parts 4 and 5 (0.18.1): fresh when the game runs, else the last it wrote
-            string facts = HandoverFacts(GameRunning() && Fresh(out _));
-            string prompt = "WRITE YOUR HANDOVER NOW: " + why.TrimEnd('.') + ". This conversation ends with it. Your next message begins a new conversation that holds only your instructions, "
+            string facts = _c.Files ? null : HandoverFacts(GameRunning() && Fresh(out _));
+            string prompt = _c.Files ? FilesHandoverPrompt(why, date) : "WRITE YOUR HANDOVER NOW: " + why.TrimEnd('.') + ". This conversation ends with it. Your next message begins a new conversation that holds only your instructions, "
                             + "this handover, your notes, your chronicle since and a fresh report of your realm, so put in it everything you will need that those do not hold "
                             + "(this conversation stays readable word for word through the past question, but keep at hand what you will need). Write it as "
                             + "\"Your handover\" in your instructions says, in its parts and in your own voice, as plain text beginning with the word HANDOVER and the date (" + date + "). No JSON and no orders: "
@@ -1183,13 +1221,14 @@ namespace BannerlordAgents.WarRoom
                             + (facts != null ? " Write part 4 (orders in force) and part 5 (watches) from the game's own list below, adding what only you know: why each group has its order, what would end it, and which orders are on trial.\n\n" + facts : "");
             Say("Handover (" + why + "): the conversation holds " + before.ToString("N0", CultureInfo.InvariantCulture) + " tokens...");
             CallResult r = Converse(prompt, "handover", number, Math.Max(_c.CouncilTimeoutSeconds, 600), meta, out string folder, out bool stall);
-            string text = r.Ok ? HandoverText(r.Text) : null;
+            string text = r.Ok ? (_c.Files ? FilesHandover(r.Text, hours, date) : HandoverText(r.Text)) : null;
             bool retried = false;
             if (text == null && r.Ok)
             {
                 retried = true;
-                CallResult r2 = Converse("That is not a handover in the shape your instructions give. Write it again: plain text beginning with HANDOVER, every part in it.", "handover-retry", number, Math.Max(_c.CouncilTimeoutSeconds, 600), meta, out _, out _);
-                text = r2.Ok ? HandoverText(r2.Text) : null;
+                CallResult r2 = Converse(_c.Files ? "That is not a handover in the shape asked for. Reply again with ONLY the JSON object: {\"pages\": [...], \"handover\": \"HANDOVER ...\"}."
+                                                  : "That is not a handover in the shape your instructions give. Write it again: plain text beginning with HANDOVER, every part in it.", "handover-retry", number, Math.Max(_c.CouncilTimeoutSeconds, 600), meta, out _, out _);
+                text = r2.Ok ? (_c.Files ? FilesHandover(r2.Text, hours, date) : HandoverText(r2.Text)) : null;
                 r.Seconds += r2.Seconds;
                 r.OutTokens += r2.OutTokens;
                 r.Cost += r2.Cost;
@@ -1329,7 +1368,11 @@ namespace BannerlordAgents.WarRoom
                 orders = answer?["orders"] is JsonArray a ? a.Count : 0, watches = Count(answer, "watch"), review_in = answer?["review_in"]?.ToString(), denied = r.Denied, folder, written = answer != null,
                 run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, system_hash = _talk.SystemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
                 tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters"), message_chars = messageChars,
-                briefing_chars = briefingChars, situation_chars = situationChars, wakes_today = _talk.WakesByDay.TryGetValue(DayKey(meta?.Hours ?? _pokeHours), out int wt) ? wt : 0
+                briefing_chars = briefingChars, situation_chars = situationChars, wakes_today = _talk.WakesByDay.TryGetValue(DayKey(meta?.Hours ?? _pokeHours), out int wt) ? wt : 0,
+                // a files agent (war room 0.20): how long its files took to build, what they flagged, and what it read
+                context = ContextMode, shelf_ms = _c.Files ? Math.Round(_lastShelfMs, 1) : (double?)null, shelf_changes = _c.Files ? _lastShelfChanges : (int?)null,
+                pages_read = _c.Files ? _lastReads.reads : (int?)null, read_steps = _c.Files ? _lastReads.steps : (int?)null, opens = _c.Files ? _lastReads.opens : (int?)null,
+                pages = _c.Files ? _lastReads.pages : null, page_writes = _c.Files && answer != null ? changed : null
             });
         }
     }

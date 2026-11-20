@@ -38,6 +38,11 @@ namespace BannerlordAgents.WarRoom
         public bool SessionStarted;
         /// <summary>Goes up at every cut-back, so a story written meanwhile, from lines now cut, is thrown away.</summary>
         public int Generation;
+        /// <summary>
+        /// The pages of the realm's files the agent and its chronicler write (war room 0.20, docs/FILES.md): "plan/front-south" to its text, when, why and by whom. Kept in
+        /// pages.json and in every snapshot, so a load puts back the pages of its save's history, as it does the notes. Keys starting with "." are the memory's own marks.
+        /// </summary>
+        public Dictionary<string, PageRec> Pages = new Dictionary<string, PageRec>(StringComparer.Ordinal);
 
         private static readonly object Gate = new object();
         public const string Title = "# Notes of the war council";
@@ -52,6 +57,8 @@ namespace BannerlordAgents.WarRoom
         private string StoryFile => Path.Combine(Dir, "story.md");
         private string StateFile => Path.Combine(Dir, "state.json");
         private string SnapshotFile => Path.Combine(Dir, "snapshots.jsonl");
+        private string PagesFile => Path.Combine(Dir, "pages.json");
+        public string HistoryDir => Path.Combine(Dir, "history");
 
         /// <summary>
         /// The memory of one campaign. The first time, the old single journal (journal.md, from before memory was kept per
@@ -97,6 +104,8 @@ namespace BannerlordAgents.WarRoom
         {
             Notes = Read(NotesFile) ?? "";
             Story = Read(StoryFile) ?? "";
+            try { Pages = PagesFrom(File.Exists(PagesFile) ? JsonNode.Parse(File.ReadAllText(PagesFile)) : null); }
+            catch (JsonException) { Pages = new Dictionary<string, PageRec>(StringComparer.Ordinal); }
             try
             {
                 if (File.Exists(StateFile) && JsonNode.Parse(File.ReadAllText(StateFile)) is JsonObject s)
@@ -120,6 +129,7 @@ namespace BannerlordAgents.WarRoom
             {
                 Write(NotesFile, Notes);
                 Write(StoryFile, Story);
+                Write(PagesFile, PagesJson().ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
                 var s = new JsonObject
                 {
                     ["campaign"] = Campaign, ["story_hours"] = double.IsNaN(StoryHours) ? null : StoryHours, ["story_date"] = StoryDate,
@@ -139,7 +149,8 @@ namespace BannerlordAgents.WarRoom
                 {
                     ["hours"] = double.IsNaN(hours) ? null : hours, ["date"] = date, ["poke"] = poke, ["why"] = why, ["load"] = string.IsNullOrEmpty(LoadId) ? null : LoadId, ["at"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                     ["run"] = Run, ["arm"] = Arm,
-                    ["notes"] = Notes, ["story"] = Story, ["story_hours"] = double.IsNaN(StoryHours) ? null : StoryHours, ["story_date"] = StoryDate
+                    ["notes"] = Notes, ["story"] = Story, ["story_hours"] = double.IsNaN(StoryHours) ? null : StoryHours, ["story_date"] = StoryDate,
+                    ["pages"] = Pages.Count > 0 ? PagesJson() : null
                 };
                 File.AppendAllText(SnapshotFile, o.ToJsonString() + "\n", new UTF8Encoding(false));
             }
@@ -171,6 +182,7 @@ namespace BannerlordAgents.WarRoom
                 Story = (string)last?["story"] ?? "";
                 StoryHours = Num(last?["story_hours"]);
                 StoryDate = (string)last?["story_date"] ?? "";
+                Pages = PagesFrom(last?["pages"]);
                 LastHours = loadedAt;
                 Generation++;
                 SessionId = null;   // a conversation held another history; it starts afresh
@@ -217,6 +229,7 @@ namespace BannerlordAgents.WarRoom
                 Story = (string)last?["story"] ?? "";
                 StoryHours = Num(last?["story_hours"]);
                 StoryDate = (string)last?["story_date"] ?? "";
+                Pages = PagesFrom(last?["pages"]);
                 LastHours = toHours;
                 Generation++;
                 SessionId = null;   // a conversation held what came after; it starts afresh
@@ -273,6 +286,145 @@ namespace BannerlordAgents.WarRoom
         }
 
         public List<string> Lessons() { lock (Gate) return Bullets(Get(Sections(Notes), "Lessons") ?? ""); }
+
+        // ---------- the agent's pages (war room 0.20) ----------
+
+        private JsonObject PagesJson()
+        {
+            var o = new JsonObject();
+            foreach (KeyValuePair<string, PageRec> kv in Pages.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+                o[kv.Key] = new JsonObject { ["text"] = kv.Value.Text, ["date"] = kv.Value.Date, ["why"] = kv.Value.Why, ["by"] = kv.Value.By, ["hours"] = double.IsNaN(kv.Value.Hours) ? null : kv.Value.Hours };
+            return o;
+        }
+
+        private static Dictionary<string, PageRec> PagesFrom(JsonNode node)
+        {
+            var d = new Dictionary<string, PageRec>(StringComparer.Ordinal);
+            if (node is not JsonObject o) return d;
+            foreach (KeyValuePair<string, JsonNode> kv in o)
+                if (kv.Value is JsonObject p)
+                    d[kv.Key] = new PageRec { Text = (string)p["text"] ?? "", Date = (string)p["date"] ?? "", Why = (string)p["why"] ?? "", By = (string)p["by"] ?? "you", Hours = Num(p["hours"]) };
+            return d;
+        }
+
+        /// <summary>The pages of the agent's own files, first made from its notes when it has none yet (its plan, its note on each enemy, its lessons).</summary>
+        public Dictionary<string, PageRec> PagesNow()
+        {
+            lock (Gate)
+            {
+                if (!Pages.Keys.Any(k => k.StartsWith("plan/", StringComparison.Ordinal) || k.StartsWith("notes/", StringComparison.Ordinal) || k.StartsWith("intelligence/", StringComparison.Ordinal)))
+                {
+                    Dictionary<string, string> s = Sections(Notes);
+                    string plan = Get(s, "Plan");
+                    if (plan != null) Pages["plan/the-plan"] = new PageRec { Text = plan, Why = "from your notes", By = "you" };
+                    foreach (KeyValuePair<string, string> e in Enemies(Get(s, "Enemies") ?? ""))
+                        Pages["intelligence/" + Shelf.Slug(e.Key)] = new PageRec { Text = e.Key + ": " + e.Value, Why = "from your notes", By = "you" };
+                    List<string> lessons = Bullets(Get(s, "Lessons") ?? "");
+                    if (lessons.Count > 0) Pages["notes/lessons"] = new PageRec { Text = string.Join("\n", lessons.Select(l => "- " + l)), Why = "from your notes", By = "you" };
+                }
+                return new Dictionary<string, PageRec>(Pages, StringComparer.Ordinal);
+            }
+        }
+
+        /// <summary>The longest page the agent may write; a longer one is kept cut to it, and the receipt says so.</summary>
+        public const int MaxPageChars = 12000;
+
+        /// <summary>
+        /// The pages an answer writes ("pages": [{"page": "plan/front-south", "text": "...", "why": "..."}], text "" removes it), and in files mode its plan, enemies and
+        /// lessons as pages too. Each page replaced or removed goes into history\(file)\(page)\ with when and why. Returns the receipts, one per page.
+        /// </summary>
+        public List<string> ApplyPages(JsonObject answer, double hours, string date, string by = "you")
+        {
+            var notes = new List<string>();
+            lock (Gate)
+            {
+                PagesNow();
+                var writes = new List<(string page, string text, string why)>();
+                if (answer["pages"] is JsonArray arr)
+                    foreach (JsonObject w in arr.OfType<JsonObject>())
+                        writes.Add((((string)w["page"] ?? (string)w["name"] ?? "").Trim(), w["text"]?.ToString() ?? "", ((string)w["why"] ?? "").Trim()));
+                else if (answer["pages"] is JsonObject po)
+                    foreach (KeyValuePair<string, JsonNode> kv in po) writes.Add((kv.Key.Trim(), kv.Value?.ToString() ?? "", ""));
+                if (answer["plan"] is JsonValue pv && pv.TryGetValue(out string plan) && !string.IsNullOrWhiteSpace(plan)) writes.Add(("plan/the-plan", plan, "your plan"));
+                if (answer["enemies"] is JsonObject eo)
+                    foreach (KeyValuePair<string, JsonNode> kv in eo) writes.Add(("intelligence/" + Shelf.Slug(kv.Key), (kv.Value?.ToString() ?? "").Length > 0 ? kv.Key + ": " + kv.Value : "", "your note on " + kv.Key));
+                if (answer["lessons"] is JsonArray la)
+                {
+                    var add = la.Select(l => l?.ToString().Trim() ?? "").Where(l => l.Length > 0).ToList();
+                    if (add.Count > 0)
+                    {
+                        string old = Pages.TryGetValue("notes/lessons", out PageRec lp) ? lp.Text.TrimEnd() : "";
+                        writes.Add(("notes/lessons", (old.Length > 0 ? old + "\n" : "") + string.Join("\n", add.Where(a => !old.Contains(a)).Select(a => "- " + a)), "new lessons"));
+                    }
+                }
+                foreach (var (raw, text, why) in writes)
+                {
+                    string page = raw.Replace('\\', '/').Trim('/').ToLowerInvariant();
+                    if (page.StartsWith("files/", StringComparison.Ordinal)) page = page.Substring(6);
+                    if (page.EndsWith(".md", StringComparison.Ordinal)) page = page.Substring(0, page.Length - 3);
+                    int slash = page.IndexOf('/');
+                    string file = slash > 0 ? page.Substring(0, slash) : page;
+                    string name = slash > 0 ? Shelf.Slug(page.Substring(slash + 1)) : "";
+                    if (!Shelf.AgentFiles.Contains(file) || name.Length == 0) { notes.Add(raw + ": refused (you write pages of plan, notes and intelligence only, as \"plan/<page>\")"); continue; }
+                    page = file + "/" + name;
+                    if (Shelf.Reserved.Contains(page)) { notes.Add(page + ": refused (the game keeps that page)"); continue; }
+                    bool had = Pages.TryGetValue(page, out PageRec before);
+                    string t = (text ?? "").Replace("\r", "").Trim();
+                    if (had) Keep(page, before, t.Length == 0 ? "removed" : "replaced", why, date);
+                    if (t.Length == 0)
+                    {
+                        if (had) { Pages.Remove(page); notes.Add(page + ": removed"); }
+                        continue;
+                    }
+                    bool cut = t.Length > MaxPageChars;
+                    if (cut) t = t.Substring(0, MaxPageChars);
+                    Pages[page] = new PageRec { Text = t, Date = date ?? "", Why = why, By = by, Hours = hours };
+                    notes.Add(page + (had ? ": rewritten" : ": written") + (cut ? " (cut to " + MaxPageChars + " characters)" : ""));
+                }
+            }
+            return notes;
+        }
+
+        /// <summary>A page's version as it stood, into the history folder, before it is replaced or removed.</summary>
+        private void Keep(string page, PageRec old, string how, string why, string date)
+        {
+            try
+            {
+                string dir = Path.Combine(HistoryDir, page.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(dir);
+                string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
+                var sb = new StringBuilder();
+                sb.Append("# ").Append(page).Append(" as written ").Append(old.Date.Length > 0 ? "at " + old.Date : "earlier").Append(" by ").Append(old.By).Append("; ").Append(how)
+                  .Append(date != null && date.Length > 0 ? " at " + date : "").Append(why.Length > 0 ? " (" + why + ")" : "").Append('\n');
+                if (old.Why.Length > 0) sb.Append("Why it was written: ").Append(old.Why).Append('\n');
+                sb.Append('\n').Append(old.Text.TrimEnd()).Append('\n');
+                File.WriteAllText(Path.Combine(dir, stamp + ".md"), sb.ToString(), new UTF8Encoding(false));
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        /// <summary>The chronicler's pages (chronicle/...), written as the chronicler's, the old ones kept.</summary>
+        public void SetChroniclePages(Dictionary<string, string> pages, double hours, string date, double through)
+        {
+            lock (Gate)
+            {
+                foreach (KeyValuePair<string, string> kv in pages)
+                {
+                    string page = "chronicle/" + Shelf.Slug(kv.Key);
+                    if (Pages.TryGetValue(page, out PageRec old) && old.Text.Trim() == kv.Value.Trim()) continue;
+                    if (old != null) Keep(page, old, "replaced", "the chronicler's new version", date);
+                    Pages[page] = new PageRec { Text = kv.Value.Trim(), Date = date ?? "", Why = "", By = "chronicler", Hours = hours };
+                }
+                Pages[".chronicle_through"] = new PageRec { Text = through.ToString("R", CultureInfo.InvariantCulture), By = "chronicler", Hours = hours };
+            }
+        }
+
+        /// <summary>The in-game hour the chronicler's day pages reach (NaN: none written yet).</summary>
+        public double ChronicleThrough()
+        {
+            lock (Gate) return Pages.TryGetValue(".chronicle_through", out PageRec p) && double.TryParse(p.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double h) ? h : double.NaN;
+        }
 
         /// <summary>The story and the notes as they stand, read together (the chronicler may be writing the story meanwhile).</summary>
         public void View(out string story, out double storyHours, out string storyDate, out string notes, out int generation)

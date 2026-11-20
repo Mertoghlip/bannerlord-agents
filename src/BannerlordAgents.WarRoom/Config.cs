@@ -89,6 +89,14 @@ namespace BannerlordAgents.WarRoom
         public long CompactAtTokens = 500_000, CompactAtCloseTokens = 500_000, CompactHardTokens = 850_000;
         /// <summary>The wakes a day the agent is told it should keep to (told, not enforced).</summary>
         public int WakeBudget = 12;
+        /// <summary>
+        /// How a continuous agent learns the war (war room 0.20, docs/FILES.md): "report" (the reports pushed in each message, as before) or "files" (its realm's files: each
+        /// message says only what woke it, and the agent reads the pages it needs, by their paths or its questions).
+        /// </summary>
+        public string Context = "report";
+        public bool Files => Continuous && string.Equals(Context, "files", StringComparison.OrdinalIgnoreCase);
+        /// <summary>A files agent's instructions: each "## " section of it takes the place of the same section, over warroom-continuous.md.</summary>
+        public string FilesTemplate => Path.Combine(AgentDir, "warroom-files.md");
 
         /// <summary>What the folder's agent is (its agent.txt's kind, since 0.10): "realm" answers pokes; "lieutenant" answers the player's chat (LieutenantRoom).</summary>
         public string Kind = "realm";
@@ -155,6 +163,7 @@ namespace BannerlordAgents.WarRoom
                     case "compact_at_close_tokens": if (long.TryParse(v.Replace(",", "").Replace("_", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out long cac) && cac >= 0) c.CompactAtCloseTokens = cac; break;
                     case "compact_hard_tokens": if (long.TryParse(v.Replace(",", "").Replace("_", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out long cht) && cht >= 100_000) c.CompactHardTokens = cht; break;
                     case "wake_budget": if (int.TryParse(v, out int wb) && wb > 0) c.WakeBudget = wb; break;
+                    case "context": if (v == "report" || v == "files") c.Context = v; break;
                     case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
                     case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
                     case "story_model": c.StoryModel = v; break;

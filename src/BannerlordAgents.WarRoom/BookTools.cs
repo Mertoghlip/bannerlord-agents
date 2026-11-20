@@ -53,8 +53,9 @@ namespace BannerlordAgents.WarRoom
                 yield return ToolName; yield return OddsName; yield return RoadsName; yield return ChaseName; yield return EngageName;
                 if (!NoCheck) yield return CheckName;
             }
-            if (BookPath != null) { yield return LookName; yield return ListName; yield return ChronicleName; }
+            if (BookPath != null) { yield return LookName; if (Shelf == null) yield return ListName; yield return ChronicleName; }
             if (PastMem != null) yield return PastTalk.ToolName;
+            if (Shelf != null) { yield return OpenName; yield return FindName; yield return HistoryName; }
         }
 
         private JsonArray Definitions()
@@ -65,8 +66,9 @@ namespace BannerlordAgents.WarRoom
                 list.Add(Definition()); list.Add(OddsDefinition()); list.Add(RoadsDefinition()); list.Add(ChaseDefinition()); list.Add(EngageDefinition());
                 if (!NoCheck) list.Add(CheckDefinition());
             }
-            if (BookPath != null) { bool fresh = Refresh != null; list.Add(LookDefinition(fresh)); list.Add(ListDefinition(fresh)); list.Add(ChronicleDefinition(fresh)); }
+            if (BookPath != null) { bool fresh = Refresh != null; list.Add(LookDefinition(fresh)); if (Shelf == null) list.Add(ListDefinition(fresh)); list.Add(ChronicleDefinition(fresh)); }
             if (PastMem != null) list.Add(PastTalk.Definition());
+            if (Shelf != null) { list.Add(OpenDefinition()); list.Add(FindDefinition()); list.Add(HistoryDefinition()); }
             return list;
         }
 

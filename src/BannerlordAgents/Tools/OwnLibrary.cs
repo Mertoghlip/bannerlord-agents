@@ -53,8 +53,7 @@ namespace BannerlordAgents.Tools
     /// </summary>
     internal sealed class OwnLibrary
     {
-        /// <summary>The most tools a realm may keep (A5).</summary>
-        public const int MaxKept = 30;
+        // A5's limit of 30 kept tools was lifted in module 0.22.0 (Nov 20, docs/FILES.md): a realm keeps as many as it likes; the speed rule still stops any tool that slows the game.
 
         private static readonly object Gate = new object();
         private static readonly Dictionary<string, OwnLibrary> ByRealm = new Dictionary<string, OwnLibrary>(StringComparer.Ordinal);
@@ -238,9 +237,6 @@ namespace BannerlordAgents.Tools
             lock (Gate) kept = _index.Tools.FirstOrDefault(t => t.Name == name);
             if (kept != null && !kept.Retired && kept.Hash == hash && Get(name) != null)
                 return Result("unchanged", name, kept.Version, hash, Get(name), name + " v" + kept.Version + " is already in your library as written; nothing changed", poke, hours);
-            int live = Kept.Count;
-            if ((kept == null || kept.Retired) && live >= MaxKept)
-                return Result("refused", name, 0, hash, null, "your library already holds " + live + " tools, the most it may keep; retire one first ({\"name\": \"...\", \"retire\": true})", poke, hours);
             int version = kept == null ? 1 : kept.Version + 1;
             d.Version = version;
             if (shadow) return Result("checked", name, version, hash, d, "valid; it would be kept as " + name + " v" + version + " (shadow mode: checked only, your library is unchanged)", poke, hours);
@@ -380,7 +376,7 @@ namespace BannerlordAgents.Tools
             List<KeptTool> kept = lib?.Kept ?? new List<KeptTool>();
             if (kept.Count == 0)
             {
-                sb.AppendLine("- None yet. You may write tools of your own and keep the ones worth using again (see \"Writing your own tools\" in your instructions); at most " + MaxKept + ".");
+                sb.AppendLine("- None yet. You may write tools of your own and keep the ones worth using again (see \"Writing your own tools\" in your instructions); there is no limit on how many.");
                 return sb.ToString();
             }
             foreach (KeptTool k in kept.OrderBy(t => t.Name))
@@ -395,7 +391,7 @@ namespace BannerlordAgents.Tools
                 }
                 sb.AppendLine(d.Describe() + " " + RecordText(k));
             }
-            sb.AppendLine("(" + kept.Count + " of the " + MaxKept + " your library may keep.)");
+            sb.AppendLine("(" + kept.Count + " in your library; it keeps as many as you like.)");
             return sb.ToString();
         }
 

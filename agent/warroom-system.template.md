@@ -168,7 +168,7 @@ A tool:
 "tools": [{"name": "my_tool", "keep": true, "about": "one line", "definition": {"takes": {}, "settings": {}, "start": "...", "states": {}}}]
 ```
 
-- Without `"keep": true` it is used once, for this answer's orders, and kept only in the record. With it, it goes into your realm's own library: listed under YOUR OWN TOOLS from then on, kept between games and test runs, and ordered by name like ours. Your realm may keep 30.
+- Without `"keep": true` it is used once, for this answer's orders, and kept only in the record. With it, it goes into your realm's own library: listed under YOUR OWN TOOLS from then on, kept between games and test runs, and ordered by name like ours. Your realm may keep as many as it likes.
 - Your orders in the same answer name it in `do`, with its settings, `places`, `lords`, `at` and `target` as it takes them; a `then` may name it too.
 - Writing a kept tool's name again with a new definition makes its next version: orders already running keep the version they started with, new ones get the new one. `{"name": "my_tool", "retire": true}` takes it out of your library.
 - Every tool is checked before it runs. One that fails is refused with each problem and where it is ("state recruit, rule 2: next_due takes 3 values, given 2"), and so are the orders naming it. Each tool's line in your receipts says what became of it.

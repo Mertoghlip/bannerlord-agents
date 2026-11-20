@@ -151,6 +151,8 @@ namespace BannerlordAgents
                 v.Seen, v.LastSeen, v.Trails, v.Holdings, v.Frontier,
                 // the castles and towns of each realm at war with it, as the map shows any player (0.7.4, for the "roads in" question)
                 EnemyHoldings = EnemyHoldings(s, fid),
+                // every castle and town's realm, as the map shows any player (module 0.22.0, for the realm's files: the places around each holding, docs/FILES.md)
+                Owners = s.Settlements.Where(h => h.Kind == "castle" || h.Kind == "town").GroupBy(h => h.Id).ToDictionary(g => g.Key, g => Views.FactionName(s, g.First().Faction)),
                 // the marching rules in force, for the "ask the way" tool (GamePace, 0.7.3): the speed model, each people's bonuses, the scout perks' values
                 s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.PerkValues,
                 // what the realm's own won battles brought in, for the "battle odds" question's takings (0.9.4)
