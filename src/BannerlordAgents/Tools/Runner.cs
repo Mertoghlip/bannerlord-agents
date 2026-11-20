@@ -1601,10 +1601,14 @@ namespace BannerlordAgents.Tools
             for (int k = 0; k < Ways; k++)
             {
                 double a = 2 * Math.PI * k / Ways, dx = Math.Cos(a), dy = Math.Sin(a);
-                double caught = double.PositiveInfinity, slack = double.PositiveInfinity;
+                double caught = double.PositiveInfinity, slack = double.PositiveInfinity, reached = 0;
                 for (int i = 1; i <= Steps; i++)
                 {
                     double s = far * i / Steps, px = mx + dx * s, py = my + dy * s, mine = myHours(px, py), lead = double.PositiveInfinity;
+                    // 0.21.6: a point he has no way to (water, closed ground) ends this direction where he last could go, as if caught there; until then
+                    // "never" minus "never" read as never caught, the safest way of all
+                    if (double.IsNaN(mine) || double.IsInfinity(mine)) { caught = reached; slack = 0; break; }
+                    reached = mine;
                     foreach (Func<double, double, double> f in foeHours)
                         lead = Math.Min(lead, f(px, py) - mine);
                     slack = lead;

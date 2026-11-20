@@ -1021,6 +1021,8 @@ namespace BannerlordAgents
             // 0.21.0: by the march clock, to where the foe stands or was last seen
             double h = w.HoursFor(w.Party(own.Id), foe.Id);
             if (!double.IsNaN(h)) return h;
+            // 0.21.6: with the game's own ways there is no estimate to fall back on: no way there over land (or a foe no longer counted) is no chance to strike
+            if (Ways.Proven) return double.PositiveInfinity;
             double d = Views.Dist(own.X, own.Y, foe.X, foe.Y) * Theatre.RoadFactor;
             return d / Math.Max(0.3, w.PerHour(w.Party(own.Id)));
         }

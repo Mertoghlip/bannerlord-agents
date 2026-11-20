@@ -768,6 +768,13 @@ namespace BannerlordAgents.Tools
         public const double HoldRadius = 20;
 
         /// <summary>
+        /// The farthest a refuge may be, in hours of the lord's own march (0.21.6): a castle or town farther than a day away is no shelter from a danger counted in
+        /// hours (danger_hours, 3 by default). Until then the rule took the nearest place that would hold however far it was (run 20261117-2055-A: 27 of 133
+        /// sheltering lords sent over 100 map units, up to 302).
+        /// </summary>
+        public const double RefugeHours = 24;
+
+        /// <summary>
         /// What a castle's or town's walls are worth to its defenders, by the game's own test for whether besiegers should
         /// assault (BesiegerCamp.StartingAssaultOnBesiegedSettlementIsLogical, 1.4.8): they assault only when stronger than
         /// the defenders times the settlement's advantage to the power 0.8, the advantage being (4 + wall level) over the
@@ -815,8 +822,9 @@ namespace BannerlordAgents.Tools
         /// <summary>
         /// Where a lord goes when it must shelter:
         /// - first the preferred place (the holding an order guards), then the realm's and its allies' castles and towns not
-        ///   under siege, nearest first, but only those the lord can reach before the danger (no nearer to it than to the
-        ///   lord); the preferred one may be under siege when there is no danger party (defend reinforcing its own walls);
+        ///   under siege, nearest first, but only those the lord has a way to over land within RefugeHours of his own march and
+        ///   reaches before the danger (0.21.6); the preferred one may be under siege when there is no danger party (defend
+        ///   reinforcing its own walls);
         /// - the first whose defenders, with this lord, would hold it against what threatens it (the danger, if there is
         ///   one, and every force near that place: ThreatStrength) is the shelter: the lord goes inside (holds = true);
         /// - if none would hold, the lord runs: with a danger party, toward the nearest of those places that takes it
@@ -840,10 +848,17 @@ namespace BannerlordAgents.Tools
             List<PartyRow> members = (group ?? new List<string>()).Select(Party).Where(p => p != null).ToList();
             if (danger != null && !members.Contains(danger)) members.Add(danger);
             double Eta(Common.MarchTime m) => m != null && m.Reached ? m.Hours : double.PositiveInfinity;
+            // 0.21.6: a place he has no way to over land (the game's own walking map: the far west beyond the sea, Orthanc's closed ring) is never one he reaches
+            // first, and none farther than a day's march (RefugeHours). Until then "no way for him" against "no way for them" read as "he gets there first", and
+            // lords near Imnagath were sent to shelter at Orthanc Gate and Blue Craig, 400 to 565 map units away (Nov 20, runs 20261120-0212-A to -1102-A).
+            double fastest = mySeen != null ? Math.Max(0.05, Common.MarchClock.FastestUnits(mySeen, Common.MarchClock.BasisAt(mySeen, Hours))) : 0;
             bool Reachable(SettlementRow h)
             {
-                if (members.Count == 0 || DistTo(h, mx, my) < 2) return true;
-                double myHours = mySeen != null ? Eta(MarchTo(mySeen, h)) : double.PositiveInfinity;
+                if (DistTo(h, mx, my) < 2) return true;
+                if (mySeen == null) return members.Count == 0;
+                if (DistTo(h, mx, my) / fastest > RefugeHours + 0.01) return false;   // not within a day even straight at his fastest
+                double myHours = Eta(MarchTo(mySeen, h));
+                if (double.IsInfinity(myHours) || double.IsNaN(myHours) || myHours > RefugeHours) return false;
                 return members.All(d => myHours <= Eta(MarchTo(SeenOf(d), h)));
             }
             List<SettlementRow> places = S.Settlements
