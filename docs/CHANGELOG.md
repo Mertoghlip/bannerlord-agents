@@ -2865,7 +2865,7 @@ avmesh.bin`):
   - **War room and dashboard self-tests** passed. RefCheck: 893 member references, missing 0. `dotnet build-server shutdown` run.
 - **Installed** with the game closed (17:01): module 0.21.6. The war rooms, the dashboard and the archive keeper were stopped for the build and started again at 17:02.
 
-### 20:34 · War room 0.20 and module 0.22.0: the realm's files in place of the reports
+### 20:34 · War room 0.20 and module 0.22.0: the realm's files in place of the reports · commit 9c71d69
 - **Why:** my redesign of how the agents get their context (Nov 20). Each wake carried about 28,000 characters (a review 85,000), most of it the realm's picture again, and the instructions 153,000, of which some 65,000 were the order library; all of it stayed in the conversation. Now the agent keeps its realm's files and reads what it needs, and each message says only what woke it. Written up in docs/FILES.md.
 - **What:**
   - **The files** (`Shelf.cs`, war room): `files\` in the agent's channel, one folder per file and a small page per tab: lords (a page per army, whose lords have none of their own, and per lord), settlements (garrison, militia, food, siege, the lords tied to each with their hours, the lords within a day, the enemy seen within 3 days' and within a day's march at speed 2 by a way over land, two numbers each flagged, and every castle and town within 3 days' march, or the closest), realm, orders, plan, notes, intelligence, chronicle. Built before each call from the hour's question book; the places around each holding once per map (`.rings.json`) with the way-finder copy (`RouteTool.WithFinder`).
