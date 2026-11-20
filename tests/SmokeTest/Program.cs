@@ -34,6 +34,7 @@ namespace SmokeTest
             if (args.Length > 0 && args[0] == "--coverage") return Coverage(args);
             if (args.Length > 1 && args[0] == "--wake-check") return WakeCheck(args);
             if (args.Length > 0 && args[0] == "--newspokes") return NewsPokes(args);
+            if (args.Length > 2 && args[0] == "--chat") return ChatAtLoad(args);
             string root = Path.Combine(Path.GetTempPath(), "BannerlordAgents-smoketest");
             try { Directory.Delete(root, true); } catch { /* first run */ }
             Environment.SetEnvironmentVariable("BANNERLORD_AGENTS_ROOT", root);
@@ -248,6 +249,7 @@ namespace SmokeTest
             WakeTests(root);
             WatchTests(root);
             DefendTests(root, agentDir);
+            ZoneTests(root);
 
             // whole-file writes are swapped in
             string swap = Path.Combine(root, "swap.txt");
@@ -2028,9 +2030,9 @@ namespace SmokeTest
             List<string> got = LabelledLines.Read(file, s2).Select(o => (string)o["t"]).ToList();
             Check(s2.Found == "marked" && got.SequenceEqual(new[] { "before the save", "just before the save, paused" }),
                   "loading a save brings back exactly the conversation it lived through: not what was said after it while paused, nor another branch's (" + string.Join(" | ", got) + ")");
-            Check(s2.HoldsLine("S2", 500, DateTime.Now.AddHours(1)) && !s2.HoldsLine(null, 50, null), "this session's own lines are always its; unlabelled ones are not a marked save's");
+            Check(s2.HoldsLine("S2", 500, DateTime.Now.AddHours(1).ToString("o", Text.Inv)) && !s2.HoldsLine(null, 50, null), "this session's own lines are always its; unlabelled ones are not a marked save's");
             var old = new History { Load = "S3", Before = new List<HistoryStep> { new HistoryStep { Load = "S1", Until = 120 } } };
-            Check(old.HoldsLine("S1", 120, saved.AddMinutes(30)) && !old.HoldsLine("S1", 121, null), "a note from before 0.11.1 (no wall clock) still goes by the in-game hour");
+            Check(old.HoldsLine("S1", 120, saved.AddMinutes(30).ToString("o", Text.Inv)) && !old.HoldsLine("S1", 121, null), "a note from before 0.11.1 (no wall clock) still goes by the in-game hour");
         }
 
         /// <summary>

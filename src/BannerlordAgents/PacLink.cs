@@ -1052,12 +1052,22 @@ namespace BannerlordAgents
     /// </summary>
     internal static class LabelledLines
     {
-        public static List<JObject> Read(string file, History history)
+        public static List<JObject> Read(string file, History history) => Read(file, history, out _, out _);
+
+        /// <summary>
+        /// The same, and for the log: how many lines of the file the history's sessions wrote (kept or not), and how many lines' wall clocks
+        /// disagreed with their in-game hours about their save (History.HoldsLine; the hour was taken). Each line is read as written (Json.Raw,
+        /// 0.21.5), so its wall clock keeps the offset it was written with.
+        /// </summary>
+        public static List<JObject> Read(string file, History history, out int ofItsSessions, out int clockOff)
         {
             var list = new List<JObject>();
+            ofItsSessions = clockOff = 0;
             try
             {
                 if (file == null || !File.Exists(file)) return list;
+                var sessions = new HashSet<string>(history.Before.Select(s => s.Load ?? ""), StringComparer.Ordinal);
+                if (!string.IsNullOrEmpty(history.Load)) sessions.Add(history.Load);
                 using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 using (var sr = new StreamReader(fs, Encoding.UTF8))
                 {
@@ -1066,11 +1076,13 @@ namespace BannerlordAgents
                     {
                         if (line.Trim().Length == 0) continue;
                         JObject o;
-                        try { o = JObject.Parse(line); }
+                        try { o = Json.Raw(line); }
                         catch (Newtonsoft.Json.JsonException) { continue; }   // a line half-written when the game closed
                         double h = (double?)o["h"] ?? double.NaN;
-                        DateTime? w = DateTime.TryParse((string)o["w"], Text.Inv, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime wt) ? wt : (DateTime?)null;
-                        if (history.HoldsLine((string)o["load"], h, w)) list.Add(o);
+                        string load = (string)o["load"];
+                        if (sessions.Contains(load ?? "")) ofItsSessions++;
+                        if (history.HoldsLine(load, h, (string)o["w"], out bool off)) list.Add(o);
+                        if (off) clockOff++;
                     }
                 }
             }

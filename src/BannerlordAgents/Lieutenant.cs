@@ -115,7 +115,7 @@ namespace BannerlordAgents
             Thread.Clear();
             _chatFile = Path.Combine(Paths.Data(Bridge.CampaignId), "lieutenant", "chat.jsonl");
             if (history == null) return;
-            Thread.AddRange(LabelledLines.Read(_chatFile, history));
+            Thread.AddRange(LabelledLines.Read(_chatFile, history, out int ofItsSessions, out int clockOff));
             int shown = 0;
             foreach (JObject l in Thread)
             {
@@ -137,7 +137,12 @@ namespace BannerlordAgents
                     LieutenantWindow.Add("(Your lieutenant's proposal from before still waits for your answer.)", Aside, false);
                 }
             }
-            if (Thread.Count > 0) Diag.Event("lieutenant", "conversation restored", new { lines = Thread.Count, shown, pending = _pending?.Chat, save = history.Save });
+            // at every load since 0.21.5, none brought back too (Nov 19 and 20: four loads of TEST START DGG MERGE brought back nothing, and the log
+            // said nothing): the lines its sessions wrote in all, and any whose wall clock disagreed with the in-game hour about the save
+            Diag.Event("lieutenant", "conversation restored", new { lines = Thread.Count, shown, pending = _pending?.Chat, save = history.Save, found = history.Found, of_its_sessions = ofItsSessions, clock_off = clockOff });
+            if (Thread.Count == 0 && ofItsSessions > 0)
+                Diag.Alarm("lieutenant_chat_empty", "The lieutenant's window came back empty for save '" + history.Save + "', though the game sessions this save lived through wrote "
+                           + ofItsSessions + " lines of its conversation. Either everything was said after the save, or the rule that finds the save's lines is wrong.", data: new { save = history.Save, of_its_sessions = ofItsSessions });
             // the talks of the ruler's other saves and the words left for this load (0.16): both need the lieutenant, whose agent the helper sets up after
             // this (Brain.Reset), so they wait for the first frame back on the map (AfterLoad). Nov 7: at 0.16.0 both looked for it here, found none, and did nothing.
             _afterLoad = true;
@@ -242,7 +247,7 @@ namespace BannerlordAgents
         private static readonly bool ShowLog = false;
 
         /// <summary>How a kept line looks in the window (null: kept for the record only).</summary>
-        private static KeyValuePair<string, uint>? Shown(JObject l)
+        internal static KeyValuePair<string, uint>? Shown(JObject l)
         {
             string t = (string)l["t"] ?? "";
             switch ((string)l["k"])

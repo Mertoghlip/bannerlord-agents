@@ -12,8 +12,46 @@ namespace BannerlordAgents
     {
         public string Load;
         public double Until = double.NaN;
-        /// <summary>The wall clock of the save that ended this step (0.11.1; null in notes written before), for lines written while paused.</summary>
-        public DateTime? Wall;
+        /// <summary>The wall clock of the save that ended this step (0.11.1; null in notes written before), for lines written while paused, as the note wrote it.</summary>
+        public WallTime? Wall;
+    }
+
+    /// <summary>
+    /// A wall clock as a record wrote it (0.21.5): the clock time it showed and, when it says one, its offset from UTC. Saves' notes wrote the
+    /// clock alone until 0.21.5 ("2026-11-17 21:51:14.169"), the lieutenant's lines write it with the offset ("2026-11-17T21:49:12.07-08:00").
+    /// Until 0.21.5 a line's time was turned into this computer's time zone and compared with the note's clock as written, so once the laptop's
+    /// time zone changed (Pacific to Turkey, between Nov 17 and Nov 19) every line of every save fell 11 hours after its save and none came back.
+    /// Two walls compare as instants when both say their offset, and otherwise by the clocks as written: a line is only ever compared with the
+    /// note of the save its own session made, so both were written by one session on one computer, in one time zone.
+    /// </summary>
+    internal struct WallTime
+    {
+        /// <summary>The clock time as written, never turned into another zone.</summary>
+        public DateTime Clock;
+        /// <summary>Its offset from UTC, when the record says one.</summary>
+        public TimeSpan? Offset;
+        /// <summary>The text as the record wrote it (a note's history passes it on unchanged).</summary>
+        public string Written;
+
+        public static WallTime? Parse(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            s = s.Trim();
+            if (!DateTime.TryParse(s, Text.Inv, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime dt)) return null;
+            if (dt.Kind == DateTimeKind.Unspecified) return new WallTime { Clock = dt, Written = s };
+            if (DateTimeOffset.TryParse(s, Text.Inv, System.Globalization.DateTimeStyles.None, out DateTimeOffset o)) return new WallTime { Clock = o.DateTime, Offset = o.Offset, Written = s };
+            return new WallTime { Clock = dt, Written = s };
+        }
+
+        /// <summary>At or before another: as instants when both say their offset, else by the clocks as written.</summary>
+        public bool AtOrBefore(WallTime other)
+            => Offset.HasValue && other.Offset.HasValue ? Clock - Offset.Value <= other.Clock - other.Offset.Value : Clock <= other.Clock;
+
+        /// <summary>For ordering saves: the instant when the offset is known, else the clock as written.</summary>
+        public DateTime SortKey => Offset.HasValue ? Clock - Offset.Value : Clock;
+
+        /// <summary>Now, as a note writes it since 0.21.5: the clock with its offset ("2026-11-20 10:06:55.123+03:00"; a space, not a T, as before).</summary>
+        public static string Now() => DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fffzzz", Text.Inv);
     }
 
     /// <summary>
@@ -45,23 +83,42 @@ namespace BannerlordAgents
         }
 
         /// <summary>
-        /// The same for a line of the lieutenant's conversation (0.11.1): many are written with the clock stopped, so a step's save
-        /// is told by its wall clock when the note has one (a line said after a save, in the same paused hour, is not that save's).
+        /// The same for a line of the lieutenant's conversation (0.11.1): many are written with the clock stopped, so a line said in its save's
+        /// own in-game hour is told by the wall clock when the note has one (a line said after a save, in the same paused hour, is not that
+        /// save's). Since 0.21.5 the in-game hour decides every other line, since a session's clock only runs forward: a line of an earlier
+        /// hour than its save is the save's, of a later hour is not, whatever the computer's clock said (on Nov 19 its time zone moved 11
+        /// hours and every line fell after its save); and the walls compare as WallTime does. wall is the line's time as written.
         /// </summary>
-        public bool HoldsLine(string load, double hours, DateTime? wall)
+        public bool HoldsLine(string load, double hours, string wall) => HoldsLine(load, hours, wall, out _);
+
+        /// <summary>The same, and whether the line's wall clock disagreed with its in-game hour about its save (a computer clock moved; the hour was taken).</summary>
+        public bool HoldsLine(string load, double hours, string wall, out bool clockOff)
         {
+            clockOff = false;
             if (!string.IsNullOrEmpty(load) && load == Load) return true;
+            WallTime? w = null;
+            bool parsed = false;
             foreach (HistoryStep s in Before)
             {
                 if (!Same(s.Load, load)) continue;
-                if (s.Wall.HasValue && wall.HasValue) { if (wall.Value <= s.Wall.Value) return true; }
-                else if (double.IsNaN(s.Until) || hours <= s.Until + 0.01) return true;
+                // by the in-game hour: before the save's hour, after it, or (null) its very hour, or not known
+                bool? byHour = double.IsNaN(s.Until) || double.IsNaN(hours) ? (bool?)null : hours < s.Until - SameHour ? true : hours > s.Until + SameHour ? false : (bool?)null;
+                bool? byWall = null;
+                if (s.Wall.HasValue)
+                {
+                    if (!parsed) { w = WallTime.Parse(wall); parsed = true; }
+                    if (w.HasValue) byWall = w.Value.AtOrBefore(s.Wall.Value);
+                }
+                if (byHour.HasValue && byWall.HasValue && byHour.Value != byWall.Value) clockOff = true;
+                if (byHour ?? byWall ?? (double.IsNaN(s.Until) || hours <= s.Until + SameHour)) return true;
             }
             return false;
         }
 
-        private static DateTime? Wall(JToken t)
-            => t != null && DateTime.TryParse((string)t, Text.Inv, System.Globalization.DateTimeStyles.None, out DateTime w) ? w : (DateTime?)null;
+        /// <summary>How near its save's hour a line counts as said in that very hour (in-game hours, as before 0.21.5).</summary>
+        private const double SameHour = 0.01;
+
+        private static WallTime? Wall(JToken t) => t == null || t.Type == JTokenType.Null ? (WallTime?)null : WallTime.Parse((string)t);
 
         private static bool Same(string a, string b) => string.IsNullOrEmpty(a) ? string.IsNullOrEmpty(b) : a == b;
 
@@ -119,8 +176,9 @@ namespace BannerlordAgents
         public object NoteFor(string save, double hours) => new
         {
             Type = "save", Save = save, Load = Label, Hours = hours, Date = Text.When(hours),
-            Before = Before.Select(s => new { s.Load, Until = double.IsNaN(s.Until) ? (double?)null : s.Until, Wall = s.Wall?.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv) }).ToList(),
-            Wall = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv)
+            // each step's wall as its note wrote it; this save's with its offset from UTC (0.21.5)
+            Before = Before.Select(s => new { s.Load, Until = double.IsNaN(s.Until) ? (double?)null : s.Until, Wall = s.Wall?.Written }).ToList(),
+            Wall = WallTime.Now()
         };
 
         /// <summary>The history for a war room (poke.json): this session and the steps before it.</summary>
@@ -142,7 +200,7 @@ namespace BannerlordAgents
                     while ((line = sr.ReadLine()) != null)
                     {
                         if (line.Trim().Length == 0) continue;
-                        try { if (JToken.Parse(line) is JObject o) list.Add(o); }
+                        try { list.Add(Json.Raw(line)); }   // walls as written (0.21.5)
                         catch (Newtonsoft.Json.JsonException) { }   // a line half-written when the game closed
                     }
                 }

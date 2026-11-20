@@ -116,6 +116,17 @@ namespace BannerlordAgents
 
         /// <summary>Reads back what Line wrote (the test run's run.json).</summary>
         public static T Read<T>(string text) => JsonConvert.DeserializeObject<T>(text, Options);
+
+        /// <summary>
+        /// One line read back as it was written (0.21.5): a string that looks like a time stays the string. Newtonsoft's default turns an ISO time
+        /// ("2026-11-17T21:49:12.07-08:00") into a DateTime in this computer's time zone and gives it back as "11/18/2026 08:49:12", so the offset it
+        /// was written with and the fractions of a second were lost. Throws a JsonException for a line that is not a whole object.
+        /// </summary>
+        public static Newtonsoft.Json.Linq.JObject Raw(string line)
+        {
+            using (var r = new JsonTextReader(new StringReader(line)) { DateParseHandling = DateParseHandling.None })
+                return Newtonsoft.Json.Linq.JObject.Load(r);
+        }
     }
 
     /// <summary>

@@ -56,7 +56,8 @@ namespace BannerlordAgents
                     });
                 }
             }
-            talks = talks.OrderByDescending(t => t.Wall ?? "", StringComparer.Ordinal).ToList();
+            // newest first by the wall clock (0.21.5: as an instant when the note says its offset, so saves made in another time zone sort right)
+            talks = talks.OrderByDescending(t => WallTime.Parse(t.Wall)?.SortKey ?? DateTime.MinValue).ThenByDescending(t => t.Wall ?? "", StringComparer.Ordinal).ToList();
             bool many = talks.Select(t => t.Campaign).Distinct().Count() > 1 || talks.Any(t => t.Campaign != campaign);
             string folder = Path.Combine(channelDir, Folder);
             Directory.CreateDirectory(folder);
@@ -96,7 +97,8 @@ namespace BannerlordAgents
             return name;
         }
 
+        /// <summary>The save's wall clock as its note wrote it (0.21.5: never turned into this computer's time zone).</summary>
         private static string Clock(string wall)
-            => DateTime.TryParse(wall, Text.Inv, System.Globalization.DateTimeStyles.None, out DateTime w) ? w.ToString("MMM d, yyyy HH:mm", Text.Inv) + " by the clock" : "when, not known";
+            => WallTime.Parse(wall) is WallTime w ? w.Clock.ToString("MMM d, yyyy HH:mm", Text.Inv) + " by the clock" : "when, not known";
     }
 }
