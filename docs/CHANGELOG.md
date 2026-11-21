@@ -2888,7 +2888,7 @@ avmesh.bin`):
 
 ## Saturday, November 21
 
-### 17:19 · War room 0.20.1, dashboard 0.10.1 and module 0.22.1: the files test's fixes, the memory tidy and a leaner way-finder · commit COMMIT
+### 17:19 · War room 0.20.1, dashboard 0.10.1 and module 0.22.1: the files test's fixes, the memory tidy and a leaner way-finder · commit 923ba57
 - **Why:** the first test of the realm's files (run 20261120-2108-A) showed four small faults, and the same night the game's memory reached 24.5 GB with the laptop at 59.6 GB (the run before crashed at 33 GB, laptop 66.4 of 67 GB, making a texture). I looked into every cause I could reach.
 - **The files test's fixes (war room 0.20.1, dashboard 0.10.1):**
   - **False changes on the first front page after a load** (`Room.ViewFor`, `ViewStaleness`, `Shelf` `NoView`): the game writes the realm's view file at the end of each hour's work, after that hour's wakes, so the first build after a load read the previous session's view and the next build flagged the difference ("Hiltbolt: food 6 → 1 days"). A view of another load, or more than two in-game hours older than the book, is now asked of the game afresh; still stale, the build goes without it, says so on the shelf, and the next build with a view starts its facts afresh.
