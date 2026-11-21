@@ -31,6 +31,7 @@ namespace SmokeTest
             if (args.Length > 0 && args[0] == "--spin") return Spin();
             if (args.Length > 1 && args[0] == "--library") return ExportLibrary(args[1]);
             if (args.Length > 0 && args[0] == "--perf") return Perf(args);
+            if (args.Length > 2 && args[0] == "--waysdump") return WaysDump(args);
             if (args.Length > 0 && args[0] == "--coverage") return Coverage(args);
             if (args.Length > 1 && args[0] == "--wake-check") return WakeCheck(args);
             if (args.Length > 0 && args[0] == "--newspokes") return NewsPokes(args);
@@ -2281,6 +2282,8 @@ namespace SmokeTest
         {
             public int Hours;
             public readonly List<double> Orders = new List<double>(), Reports = new List<double>();
+            /// <summary>Memory handed out by each hour's two parts, MB (module 0.22.1).</summary>
+            public readonly List<double> OrdersMb = new List<double>(), ReportsMb = new List<double>();
             public readonly Dictionary<string, double> Parts = new Dictionary<string, double>();
             public long LookupsWritten, LookupsUnchanged;
         }
@@ -2323,6 +2326,8 @@ namespace SmokeTest
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int PerfMain(string root, string folder, double budget, string waysDir = null, bool check = false)
         {
+            // module 0.22.1: what the helper's hour allocates (the speed test's thread is the only one working, so the domain's count is the helper's)
+            AppDomain.MonitoringIsEnabled = true;
             Diag.StartLaunch();
             Cpu.Detect();
             if (waysDir != null) { Ways.Load(waysDir); Console.WriteLine("ways: " + Ways.Status); }
@@ -2340,6 +2345,10 @@ namespace SmokeTest
                               + " ms; report round: median " + Median(r.Reports).ToString("0.0", inv) + " ms, most " + r.Reports.Max().ToString("0.0", inv) + " ms");
             Console.WriteLine("the whole hour: median " + Median(total).ToString("0.0", inv) + " ms, 95th of a hundred " + p95.ToString("0.0", inv) + " ms, most " + total.Max().ToString("0.0", inv) + " ms; budget " + budget.ToString("0", inv) + " ms");
             Console.WriteLine("by part, over all hours: " + string.Join("; ", r.Parts.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value.ToString("0", inv) + " ms")));
+            if (r.OrdersMb.Count > 0)
+                Console.WriteLine("memory handed out per hour (all of it garbage within the hour or the next): orders and look median " + Median(r.OrdersMb).ToString("0.0", inv) + " MB, report round median "
+                                  + Median(r.ReportsMb).ToString("0.0", inv) + " MB, most " + r.OrdersMb.Zip(r.ReportsMb, (a, b) => a + b).Max().ToString("0", inv) + " MB; all hours " + (r.OrdersMb.Sum() + r.ReportsMb.Sum()).ToString("0", inv) + " MB");
+            if (Brain.PartMb.Count > 0) Console.WriteLine("memory handed out by part, over all hours: " + string.Join("; ", Brain.PartMb.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value.ToString("0", inv) + " MB")));
             Console.WriteLine("look-up files written " + r.LookupsWritten + ", left alone unchanged " + r.LookupsUnchanged);
             if (waysDir != null)
                 Console.WriteLine("game's ways: asked " + Ways.Asked + ", worked out " + Ways.Worked + " (" + Ways.WorkedMs.ToString("0", inv) + " ms, "
@@ -2384,14 +2393,18 @@ namespace SmokeTest
                 if (placed) Cpu.MakeCurrentThreadBackground();
                 foreach (Snapshot s in hours)
                 {
+                    long a0 = AppDomain.MonitoringIsEnabled ? AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize : 0;
                     long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                     if (placed) Cpu.SetCurrentThreadUrgent(true);
                     Brain.Decide(s);
                     if (placed) Cpu.SetCurrentThreadUrgent(false);
                     long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    long a1 = AppDomain.MonitoringIsEnabled ? AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize : 0;
                     for (Action a = Brain.NextStep(); a != null; a = Brain.NextStep()) a();
                     Files.FlushAll();
                     long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    long a2 = AppDomain.MonitoringIsEnabled ? AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize : 0;
+                    if (AppDomain.MonitoringIsEnabled) { r.OrdersMb.Add((a1 - a0) / 1048576.0); r.ReportsMb.Add((a2 - a1) / 1048576.0); }
                     double orders = (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency, reports = (t2 - t1) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                     r.Hours++;
                     r.Orders.Add(orders);

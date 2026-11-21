@@ -58,8 +58,29 @@ namespace BannerlordAgents.WarRoom
         /// A conversation keeps the instructions it began with; when they change, its next message tells what changed, and this moves on.
         /// </summary>
         public string ToldHash;
-        /// <summary>Wakes by in-game day (the day's number), for "wakes today".</summary>
-        public Dictionary<string, int> WakesByDay = new Dictionary<string, int>(StringComparer.Ordinal);
+        /// <summary>
+        /// The in-game hour of each wake, the newest 400 (war room 0.20.1; until then wakes were counted by day, Nov 20: a new conversation was told "39 wakes today"
+        /// counting the wakes of my earlier loads of that same day). "Wakes today" counts this in-game day's up to the hour asked; a load drops those after the loaded
+        /// hour, since they did not happen in this game.
+        /// </summary>
+        public List<double> WakeHours = new List<double>();
+
+        public int WakesOn(double hours)
+        {
+            if (double.IsNaN(hours) || WakeHours == null) return 0;
+            double day = Math.Floor(hours / 24);
+            return WakeHours.Count(h => Math.Floor(h / 24) == day && h <= hours + 1e-6);
+        }
+
+        public void AddWake(double hours)
+        {
+            if (double.IsNaN(hours)) return;
+            WakeHours.Add(hours);
+            if (WakeHours.Count > 400) WakeHours.RemoveRange(0, WakeHours.Count - 400);
+        }
+
+        /// <summary>At a load: the wakes after the loaded hour did not happen in this game. Returns how many were dropped.</summary>
+        public int ForgetWakesAfter(double hours) => double.IsNaN(hours) || WakeHours == null ? 0 : WakeHours.RemoveAll(h => h > hours + 1e-6);
         /// <summary>How this conversation learns the war (war room 0.20): "report" (null in conversations begun before) or "files"; a conversation of the other kind is not carried on.</summary>
         public string Context;
 
@@ -77,7 +98,7 @@ namespace BannerlordAgents.WarRoom
             t.SentAt ??= new Dictionary<string, double>(StringComparer.Ordinal);
             t.Static ??= new HashSet<string>(StringComparer.Ordinal);
             t.OwnTools ??= new List<string>();
-            t.WakesByDay ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            t.WakeHours ??= new List<double>();
             t.Past ??= new List<string>();
             return t;
         }
@@ -238,7 +259,7 @@ namespace BannerlordAgents.WarRoom
             Static = o.Static ?? new HashSet<string>(StringComparer.Ordinal);
             OwnTools = o.OwnTools ?? new List<string>();
             ToldHash = o.ToldHash;
-            WakesByDay = o.WakesByDay ?? new Dictionary<string, int>(StringComparer.Ordinal);
+            WakeHours = o.WakeHours != null ? new List<double>(o.WakeHours) : new List<double>();
             ForkFrom = ForkAt = null;
             SinceCheckpoint = false;
         }
@@ -339,14 +360,14 @@ namespace BannerlordAgents.WarRoom
             if (opening) { _talk.Sent.Clear(); _talk.SentAt.Clear(); _talk.Static.Clear(); }
             object[] mark = _talk.Mark();
             var sb = new StringBuilder();
-            string day = DayKey(meta?.Hours ?? _pokeHours);
-            _talk.WakesByDay.TryGetValue(day, out int today);
+            double wakeHours = meta?.Hours ?? _pokeHours;
+            int today = _talk.WakesOn(wakeHours);
             if (_c.Files)
             {
-                // a files agent (war room 0.20): its files built from this wake's book, and its message only what woke it
-                _talk.WakesByDay[day] = today + 1;
+                // a files agent (war room 0.20): its files built from this wake's book, and its message only what woke it; its shelf counts this wake among today's
+                _wakesTodayForShelf = today + 1;
                 BuildShelf(meta, BookFor(meta, number) ?? NewestBook(meta, number), pokeText, why: why);
-                _talk.WakesByDay[day] = today;
+                _wakesTodayForShelf = -1;
                 if (opening) sb.Append(FilesOpening());
                 string fnotes = Join(carried, InstructionsNote());
                 if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes.TrimEnd()).AppendLine();
@@ -398,8 +419,7 @@ namespace BannerlordAgents.WarRoom
                     _reviewWanted = (end > 0 ? line.Substring(0, end) : line).Trim().TrimStart('-', ' ');
                     break;
                 }
-            _talk.WakesByDay[day] = today + 1;
-            if (_talk.WakesByDay.Count > 30) foreach (string k in _talk.WakesByDay.Keys.OrderBy(k => k.Length).ThenBy(k => k, StringComparer.Ordinal).Take(_talk.WakesByDay.Count - 30).ToList()) _talk.WakesByDay.Remove(k);
+            _talk.AddWake(wakeHours);
             _talk.Wakes++;
             _talk.Number = number;
             _talk.Save();
@@ -960,6 +980,8 @@ namespace BannerlordAgents.WarRoom
                 Say("Memory of campaign " + campaign + ": " + _mem.Dir + (_talk.Started ? "; its conversation holds " + _talk.Tokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens" : "; no conversation yet") + ".");
             }
             if (meta == null || string.IsNullOrEmpty(meta.LoadId) || meta.LoadId == _mem.LoadId) return null;
+            int dropped = _talk.ForgetWakesAfter(meta.LoadedAt);
+            if (dropped > 0) Say("Memory: " + dropped + " wake" + (dropped == 1 ? "" : "s") + " after the loaded hour (" + meta.LoadedAtDate + ") no longer count among the day's wakes.");
             // 0.18.10: the agent's own copies of every conversation this campaign's memory names; 0.18.9: the earlier conversations this save's history holds, kept word for word (a handover's copy not made yet is made now)
             KeptTalk.KeepAll(_mem.Dir, _talk, out _, Say);
             PastTalk.Mend(_mem.Dir, Say);
@@ -1368,7 +1390,7 @@ namespace BannerlordAgents.WarRoom
                 orders = answer?["orders"] is JsonArray a ? a.Count : 0, watches = Count(answer, "watch"), review_in = answer?["review_in"]?.ToString(), denied = r.Denied, folder, written = answer != null,
                 run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, system_hash = _talk.SystemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
                 tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters"), message_chars = messageChars,
-                briefing_chars = briefingChars, situation_chars = situationChars, wakes_today = _talk.WakesByDay.TryGetValue(DayKey(meta?.Hours ?? _pokeHours), out int wt) ? wt : 0,
+                briefing_chars = briefingChars, situation_chars = situationChars, wakes_today = _talk.WakesOn(meta?.Hours ?? _pokeHours),
                 // a files agent (war room 0.20): how long its files took to build, what they flagged, and what it read
                 context = ContextMode, shelf_ms = _c.Files ? Math.Round(_lastShelfMs, 1) : (double?)null, shelf_changes = _c.Files ? _lastShelfChanges : (int?)null,
                 pages_read = _c.Files ? _lastReads.reads : (int?)null, read_steps = _c.Files ? _lastReads.steps : (int?)null, opens = _c.Files ? _lastReads.opens : (int?)null,

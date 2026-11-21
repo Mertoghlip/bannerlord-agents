@@ -105,10 +105,10 @@ namespace BannerlordAgents.WarRoom
             talk.SessionId = "s1";
             talk.Started = true;
             talk.Tokens = 123456;
-            talk.WakesByDay["41"] = 3;
+            foreach (double wh in new[] { 41 * 24 + 5.0, 41 * 24 + 6.0, 41 * 24 + 7.0 }) talk.AddWake(wh);
             talk.Save();
             Talk back = Talk.Load(mem.Dir);
-            Check(back.SessionId == "s1" && back.Started && back.Tokens == 123456 && back.WakesByDay["41"] == 3 && back.Sent.Count > 0 && back.Static.Count > 0 && double.IsNaN(back.NextReviewHours),
+            Check(back.SessionId == "s1" && back.Started && back.Tokens == 123456 && back.WakesOn(41 * 24 + 8) == 3 && back.Sent.Count > 0 && back.Static.Count > 0 && double.IsNaN(back.NextReviewHours),
                   "the conversation's state is written and read back");
             object[] mark = talk.Mark();
             talk.Sent["NEW"] = "x";

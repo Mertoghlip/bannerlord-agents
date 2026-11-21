@@ -21,6 +21,8 @@ namespace BannerlordAgents.WarRoom
     internal sealed class ShelfInput
     {
         public JsonObject Book, View;
+        /// <summary>Why the realm's view file was left out of this build (another load's, or hours older than the book), or null (war room 0.20.1).</summary>
+        public string ViewStale;
         /// <summary>The newest report texts there are (a wake's poke text; a review's situation report and briefing): their sections fill the watches, the clock and the like.</summary>
         public string PokeText, ReportText, CouncilText;
         public int Poke = -1;
@@ -126,6 +128,8 @@ namespace BannerlordAgents.WarRoom
             public List<string> FormerHoldings { get; set; } = new List<string>();
             public List<string> LastWrites { get; set; } = new List<string>();
             public int FiredPoke { get; set; } = -1;
+            /// <summary>The last build went without the view file (war room 0.20.1): the next build with one is a new start for the facts, not their changes.</summary>
+            public bool NoView { get; set; }
         }
 
         private static readonly JsonSerializerOptions Opts = new JsonSerializerOptions { WriteIndented = false, IncludeFields = true, NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals };
@@ -191,6 +195,9 @@ namespace BannerlordAgents.WarRoom
                     _s = new ShelfState { Campaign = x.Campaign ?? "", LoadId = x.LoadId ?? "" };
                     try { if (File.Exists(_changesFile)) File.Delete(_changesFile); } catch (IOException) { }
                 }
+                // the view's facts were missing from the last build: this one starts them afresh rather than flag them all as changes
+                bool newStart = fresh || _s.NoView && x.View != null;
+                _s.NoView = x.View == null;
                 _s.Hours = x.Hours;
                 _s.Date = x.Date ?? "";
                 TakeSections(x);
@@ -213,20 +220,20 @@ namespace BannerlordAgents.WarRoom
                 foreach (Fact f in facts)
                 {
                     now[f.Key] = f.Value;
-                    if (fresh) continue;
+                    if (newStart) continue;
                     _s.Facts.TryGetValue(f.Key, out string old);
                     if (old == f.Value) continue;
                     string said = f.Say(old, f.Value);
                     if (said != null) changes.Add(Change(f.Page, said, f.Weight, x));
                 }
-                if (!fresh)
+                if (!newStart)
                     foreach (KeyValuePair<string, string> kv in _s.Facts)
                     {
                         if (now.ContainsKey(kv.Key) || !kv.Key.EndsWith(":here", StringComparison.Ordinal)) continue;
                         string said = Gone(kv.Key, kv.Value);
                         if (said != null) changes.Add(Change(GonePage(kv.Key), said, kv.Key.StartsWith("holding:", StringComparison.Ordinal) || kv.Key.StartsWith("lord:", StringComparison.Ordinal) ? 3 : 2, x));
                     }
-                if (!fresh) changes.AddRange(extra);
+                if (!newStart) changes.AddRange(extra);
                 _s.Facts = now;
                 foreach (ShelfChange c in changes)
                 {
@@ -1104,6 +1111,7 @@ namespace BannerlordAgents.WarRoom
             sh.AppendLine("# Shelf: " + x.RealmName + ", as of " + x.Date + (x.Poke >= 0 ? " (wake #" + x.Poke + ")" : ""));
             if (_s.Sections.TryGetValue("THE CLOCK", out string lag) && lag.Length > 0) sh.AppendLine(lag);
             sh.AppendLine("Wakes this in-game day: " + x.WakesToday + " (keep to about " + x.WakeBudget + "). Next strategy review: " + (x.NextReview.Length > 0 ? x.NextReview : "none set") + ".");
+            if (x.View == null) sh.AppendLine("The map of this hour could not be had for these files, so the holdings' food and the enemies near them are missing until the next build.");
             sh.AppendLine();
             sh.AppendLine("New to you since you last read each page (the weightiest first; every change is on its folder's changes page and at the top of its page):");
             foreach (string file in Files)

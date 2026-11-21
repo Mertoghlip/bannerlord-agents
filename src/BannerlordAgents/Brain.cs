@@ -577,11 +577,23 @@ namespace BannerlordAgents
             catch (Exception e) { Diag.Error(what, e); }
         }
 
+        /// <summary>
+        /// Memory handed out by each part, MB, summed over the launch: kept only when the domain's monitoring is on, which only the speed test turns on
+        /// (0.22.1: the helper's hour turned out to hand out about 460 MB; the game never turns it on).
+        /// </summary>
+        public static readonly Dictionary<string, double> PartMb = new Dictionary<string, double>();
+
         private static void Timed(Dictionary<string, double> ms, string part, Action a)
         {
             long t = Stopwatch.GetTimestamp();
+            bool count = AppDomain.MonitoringIsEnabled;
+            long a0 = count ? AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize : 0;
             try { a(); }
-            finally { ms[part] = (ms.TryGetValue(part, out double before) ? before : 0) + Took(t); }
+            finally
+            {
+                ms[part] = (ms.TryGetValue(part, out double before) ? before : 0) + Took(t);
+                if (count) lock (PartMb) PartMb[part] = (PartMb.TryGetValue(part, out double mb) ? mb : 0) + (AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize - a0) / 1048576.0;
+            }
         }
 
         private static double Took(long since) => (Stopwatch.GetTimestamp() - since) * 1000.0 / Stopwatch.Frequency;

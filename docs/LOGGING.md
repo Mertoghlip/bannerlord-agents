@@ -234,7 +234,7 @@ On my laptop the records folder has lived on the second disk since Oct 28 (the r
 | `story.log` | the readable story of this launch; alarms start with `!!` |
 | `trace.jsonl` | everything, one record per line (capped at 200 MB a launch) |
 | `lords.log` | what the game's AI did with the watched realm's lords, and why |
-| `health.csv` | one row a minute |
+| `health.csv` | one row a minute; since 0.22.1 also the working set, the scripting heap, the process's graphics memory on the card and shared (Windows' "GPU Process Memory" counters, read on a pool thread) and the memory tidies with what they freed (docs/ENGINE-NOTES.md, "Memory on the campaign map") |
 | `summary.txt` | the totals, every 10 minutes and at the end |
 | `errors.log` | full traces of the first errors of each kind |
 | `blackbox-*.txt`, `freeze-*.txt`, `crash-*.txt`, `watchdog.log` | only when something goes wrong |

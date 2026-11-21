@@ -234,6 +234,13 @@ namespace BannerlordAgents.Common
         /// </summary>
         public int CornerMask;
 
+        /// <summary>
+        /// Which corners are closed for this question on one mesh, worked out once (module 0.22.1: until then the question's key was rebuilt, a sorted list and a
+        /// string, at every corner asked, thousands a way; a way searched handed out about a third of a megabyte). Swapped in whole, so threads never see half of it.
+        /// </summary>
+        internal sealed class Corners { public NavMesh Mesh; public int Count; public bool[] Set; }
+        internal Corners ClosedCorners;
+
         public static NavQuery Party(NavMesh m)
         {
             var q = new NavQuery { Excluded = new HashSet<int>(m?.PartyExcluded ?? new int[0]), CostTo0 = m?.PartyCostTo0 ?? 0, CostTo1 = m?.PartyCostTo1 ?? 0 };
@@ -254,13 +261,29 @@ namespace BannerlordAgents.Common
     {
         /// <summary>
         /// The copy's version: a proof counts only for the version it checked, so a changed copy is proven again (2: the engine's own corner bits; 3: the engine's own
-        /// straightening, its line test and its pass over the way, read from +0x4E8080, +0x4F8BC0 and +0x51C3F0).
+        /// straightening, its line test and its pass over the way, read from +0x4E8080, +0x4F8BC0 and +0x51C3F0; 4, module 0.22.1: the same search keeping its arrays
+        /// and each question's closed corners from one way to the next, 5,000 ways on the real mesh the same to the last digit, a twenty-fifth of the memory).
         /// </summary>
-        public const int Version = 3;
+        public const int Version = 4;
 
         private const float ShrinkBoth = 0.49f, ShrinkOne = 0.99f, CostScale = 0.5f, ShrinkLine = 0.4f;
 
         private struct Node { public int Face; public float G, F, X, Y; }
+
+        // the search's own marks, kept for the next search on the same thread and mesh (module 0.22.1: each search had made two arrays the size of the whole mesh and
+        // a heap of its own): a face is open when its mark is the search's generation, closed at the generation + 1, unseen below it
+        private sealed class Scratch { public int[] Parent, Mark; public int Gen; public readonly List<Node> Heap = new List<Node>(); }
+        [ThreadStatic] private static Dictionary<NavMesh, Scratch> _scratch;
+
+        private static Scratch ScratchFor(NavMesh m)
+        {
+            if (_scratch == null) _scratch = new Dictionary<NavMesh, Scratch>();
+            if (!_scratch.TryGetValue(m, out Scratch k) || k.Mark.Length != m.Faces) _scratch[m] = k = new Scratch { Parent = new int[m.Faces], Mark = new int[m.Faces] };
+            k.Gen += 2;
+            if (k.Gen >= int.MaxValue - 4) { Array.Clear(k.Mark, 0, k.Mark.Length); k.Gen = 2; }
+            k.Heap.Clear();
+            return k;
+        }
 
         /// <summary>The way from one point to another as the engine would plan it: its corners after the start, the end last; null when there is none.</summary>
         public static List<float[]> Path(NavMesh m, float sx, float sy, float ex, float ey, NavQuery q)
@@ -288,15 +311,15 @@ namespace BannerlordAgents.Common
         public static List<int> Search(NavMesh m, int s, int t, float sx, float sy, float ex, float ey, NavQuery q)
         {
             int n = m.Faces;
-            var parent = new int[n];
-            var stamp = new byte[n];   // 0 unseen, 1 open, 2 closed
-            for (int i = 0; i < n; i++) parent[i] = -1;
-            var heap = new List<Node>();
+            Scratch k0 = ScratchFor(m);
+            int[] parent = k0.Parent, mark = k0.Mark;
+            int gen = k0.Gen;
+            List<Node> heap = k0.Heap;
             byte goalRegion = m.Region(m.FGroup[t]);
             parent[s] = s;
-            stamp[s] = 1;
+            mark[s] = gen;
             HeapPush(heap, new Node { Face = s, G = 0, F = Dist(sx, sy, ex, ey), X = sx, Y = sy });
-            while (stamp[t] == 0)
+            while (mark[t] < gen)
             {
                 if (heap.Count == 0) return null;
                 Node cur = HeapPop(heap);
@@ -308,7 +331,7 @@ namespace BannerlordAgents.Common
                     if (i == skip) continue;
                     int nb = m.FNbr[f * NavMesh.MaxCorners + i];
                     if (nb < 0) continue;
-                    Try(m, q, heap, parent, stamp, cur, nb, m.FEdge[f * NavMesh.MaxCorners + i], ex, ey, goalRegion);
+                    Try(m, q, heap, parent, mark, gen, cur, nb, m.FEdge[f * NavMesh.MaxCorners + i], ex, ey, goalRegion);
                 }
                 if (m.FLinkStart != null && f + 1 < m.FLinkStart.Length)
                     for (int k = m.FLinkStart[f]; k < m.FLinkStart[f + 1]; k++)
@@ -318,9 +341,9 @@ namespace BannerlordAgents.Common
                         int e = (m.FFlags[f] & 4) != 0 ? m.FSpecialEdge[f] : -1;
                         if (!((m.FFlags[f] & 4) != 0 && (m.FFlags[nb] & 4) != 0 && e >= 0)) e = m.FSpecialEdge[nb];
                         if (e < 0) continue;
-                        Try(m, q, heap, parent, stamp, cur, nb, e, ex, ey, goalRegion);
+                        Try(m, q, heap, parent, mark, gen, cur, nb, e, ex, ey, goalRegion);
                     }
-                stamp[f] = 2;
+                mark[f] = gen + 1;
             }
             var corridor = new List<int>();
             for (int f = t; ; f = parent[f])
@@ -356,14 +379,14 @@ namespace BannerlordAgents.Common
             return (fl & 1) != 0 && (fl & 2) == 0;
         }
 
-        private static void Try(NavMesh m, NavQuery q, List<Node> heap, int[] parent, byte[] stamp, Node cur, int nb, int edge, float ex, float ey, byte goalRegion)
+        private static void Try(NavMesh m, NavQuery q, List<Node> heap, int[] parent, int[] mark, int gen, Node cur, int nb, int edge, float ex, float ey, byte goalRegion)
         {
             if (m.FOneWay[nb] != 0)
             {
                 int entry = OneWayIndex(m, nb);
                 if (entry < 0 || m.FEdge[nb * NavMesh.MaxCorners + entry] != edge) return;
             }
-            if (!Open(m, q, nb) || stamp[nb] != 0) return;
+            if (!Open(m, q, nb) || mark[nb] >= gen) return;
             Portal(m, q, edge, out float ax, out float ay, out float bx, out float by, out float dx, out float dy, out float len);
             // the crossing: the portal's point nearest the current node's point
             float t = (cur.X - ax) * dx + (cur.Y - ay) * dy;
@@ -377,7 +400,7 @@ namespace BannerlordAgents.Common
             float f = Dist(px, py, ex, ey) + g;
             if (goalRegion != rTo) f += rTo != 0 ? q.CostTo1 : q.CostTo0;
             parent[nb] = cur.Face;
-            stamp[nb] = 1;
+            mark[nb] = gen;
             HeapPush(heap, new Node { Face = nb, G = g, F = f, X = px, Y = py });
         }
 
@@ -406,6 +429,8 @@ namespace BannerlordAgents.Common
         private static bool Boundary(NavMesh m, NavQuery q, int v)
         {
             if (q.CornerMask != 0) return (m.VFlags[v] & q.CornerMask) != 0;
+            NavQuery.Corners c = q.ClosedCorners;
+            if (c != null && ReferenceEquals(c.Mesh, m) && c.Count == q.Excluded.Count) return c.Set[v];
             bool[] set;
             string key = string.Join(",", SortedExcluded(q));
             lock (BoundaryCache)
@@ -423,6 +448,7 @@ namespace BannerlordAgents.Common
                     byQ[key] = set;
                 }
             }
+            q.ClosedCorners = new NavQuery.Corners { Mesh = m, Count = q.Excluded.Count, Set = set };
             return set[v];
         }
 

@@ -93,6 +93,7 @@ namespace BannerlordAgents
             MapExport.Frame();
             NavSetup.Frame();
             PlayerBattles.Frame();
+            MemoryTidy.Frame();
         }
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)

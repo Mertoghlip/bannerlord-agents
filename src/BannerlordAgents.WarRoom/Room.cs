@@ -1463,6 +1463,38 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>
+        /// A text's first JSON object that never closes, closed where the text ends (war room 0.20.1): the brackets still open are added, when the text does not end
+        /// inside a string. Null when every object closes or none begins.
+        /// </summary>
+        internal static string CloseOpen(string text)
+        {
+            int depth = 0, start = -1;
+            bool inString = false, escape = false;
+            var open = new Stack<char>();
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (inString)
+                {
+                    if (escape) escape = false;
+                    else if (c == '\\') escape = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+                if (c == '"' && depth > 0) { inString = true; continue; }
+                if (c == '{' || c == '[' && depth > 0) { if (depth == 0) start = i; depth++; open.Push(c == '{' ? '}' : ']'); }
+                else if ((c == '}' || c == ']') && depth > 0)
+                {
+                    depth--;
+                    open.Pop();
+                    if (depth == 0) start = -1;
+                }
+            }
+            if (start < 0 || depth == 0 || inString) return null;
+            return Room.EscapeBreaks(text.Substring(start).TrimEnd() + string.Concat(open));
+        }
+
+        /// <summary>
         /// The answer's orders into orders\poke-N.json (a council's: poke-N-council.json), swapped in whole for the bridge to read; since
         /// 0.13 with its tools, diplomatic acts and letters, and the folder of the call that wrote it (the episode index names it).
         /// </summary>

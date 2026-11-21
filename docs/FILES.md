@@ -116,7 +116,11 @@ In quiet moments, once a whole in-game day has passed that it has not written, t
 - the turning points;
 - what worked and failed of the realm's orders.
 
-Its input is the realm's record and its own last pages, with the plan for context only. The first time it writes only the last two days. Its instructions are `chronicler-files.md` in the agent's folder, or the built-in ones.
+Its input is the realm's record and its own last pages, with the plan for context only. The first time it writes only the last two days. Its instructions are `chronicler-files.md` in the agent's folder, or the built-in ones. Since war room 0.20.1 an answer cut short of its last closing bracket is mended and kept (`Room.ChroniclerPages`; Nov 20 Dol Guldur's was thrown away once and written again five minutes later).
+
+**Since war room 0.20.1 (Nov 21):**
+- **The view file must be of this load** and no more than two in-game hours older than the book (`Room.ViewFor`). The game writes it at the end of each hour's work, after that hour's wakes, so the first wake after a load found the previous session's, and the next build flagged false changes ("Hiltbolt: food 6 → 1 days"). A stale one is asked of the game afresh; still stale, the build goes without it, the shelf says the holdings' food and nearby enemies are missing, and the next build with a view starts its facts afresh instead of flagging them.
+- **Wakes today** count the wakes of this in-game day up to the hour, by each wake's hour (`Talk.WakeHours`); a load drops those after the loaded hour. They had been counted by day, so a new conversation was told "39 wakes today, keep to about 12", counting my earlier loads of the same day.
 
 ## Measures for the test
 

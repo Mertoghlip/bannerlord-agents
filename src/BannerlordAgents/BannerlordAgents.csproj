@@ -8,7 +8,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>BannerlordAgents</AssemblyName>
     <RootNamespace>BannerlordAgents</RootNamespace>
-    <Version>0.22.0</Version>
+    <Version>0.22.1</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModuleId>BannerlordAgents</ModuleId>
     <ModuleStage>$(RepoRoot)build\Modules\$(ModuleId)</ModuleStage>
@@ -57,6 +57,8 @@
     <Reference Include="TaleWorlds.InputSystem" HintPath="$(GameBin)\TaleWorlds.InputSystem.dll" Private="false" />
     <Reference Include="TaleWorlds.DotNet" HintPath="$(GameBin)\TaleWorlds.DotNet.dll" Private="false" />
     <Reference Include="TaleWorlds.Engine" HintPath="$(GameBin)\TaleWorlds.Engine.dll" Private="false" />
+    <!-- the memory tidy (0.22.1): the game's picture cache, let go of as the game does at screen changes -->
+    <Reference Include="TaleWorlds.MountAndBlade.View" HintPath="$(BannerlordDir)\Modules\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.View.dll" Private="false" />
     <Reference Include="TaleWorlds.SaveSystem" HintPath="$(GameBin)\TaleWorlds.SaveSystem.dll" Private="false" />
     <Reference Include="TaleWorlds.ObjectSystem" HintPath="$(GameBin)\TaleWorlds.ObjectSystem.dll" Private="false" />
     <Reference Include="TaleWorlds.Localization" HintPath="$(GameBin)\TaleWorlds.Localization.dll" Private="false" />

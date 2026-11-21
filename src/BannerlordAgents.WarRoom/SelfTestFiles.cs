@@ -99,6 +99,39 @@ namespace BannerlordAgents.WarRoom
             m.Restore(new List<KeyValuePair<string, double>> { new KeyValuePair<string, double>("load1", 110) }, 110);
             Check(m.Pages.TryGetValue("plan/the-plan", out PageRec back) && back.Text == "Hold Moria." && m.Pages.ContainsKey("intelligence/aragorn-the-king"),
                   "a load puts back the pages of its save's history, as it does the notes");
+
+            // war room 0.20.1: the view file only of this load and hour; a build without it, then one with it, flags no changes
+            JsonObject View(string load, double hours) => (JsonObject)JsonNode.Parse(@"{""load_id"": """ + load + @""", ""hours"": " + hours.ToString(System.Globalization.CultureInfo.InvariantCulture) + @", ""holdings"": [], ""own"": []}");
+            Check(Room.ViewStaleness(View("load1", 2200), "load1", 2200) == null && Room.ViewStaleness(View("load1", 2199), "load1", 2200) == null
+                  && Room.ViewStaleness(View("load0", 2200), "load1", 2200) != null && Room.ViewStaleness(View("load1", 2190), "load1", 2200) != null && Room.ViewStaleness(null, "load1", 2200) != null,
+                  "a view file of another load, or hours older than the book, does not serve a build");
+            string channel3 = Path.Combine(root, "files-channel-view");
+            try { Directory.Delete(channel3, true); } catch (DirectoryNotFoundException) { }
+            var shelf3 = new Shelf(channel3);
+            ShelfInput a = Input(Book(300, 20, "defend", false), 7, ""); a.View = null;
+            int v1 = shelf3.Build(a);
+            ShelfInput b = Input(Book(150, 2, "patrol", false), 8, ""); b.View = View("load1", 2200);
+            int v2 = shelf3.Build(b);
+            ShelfInput c3 = Input(Book(300, 20, "defend", false), 9, ""); c3.View = View("load1", 2200);
+            int v3 = shelf3.Build(c3);
+            Check(v1 == 0 && v2 == 0 && v3 > 0 && File.ReadAllText(Path.Combine(channel3, Shelf.DirName, "shelf.md")).Contains("Wakes this in-game day"),
+                  "after a build without the view, the next one with it starts afresh, and the one after flags changes again (" + v1 + ", " + v2 + ", " + v3 + ")");
+
+            // war room 0.20.1: wakes counted by their hours; a load drops those after its hour
+            var talk = new Talk();
+            foreach (double h in new[] { 2160.0, 2165, 2170, 2175, 2190 }) talk.AddWake(h);
+            int before = talk.WakesOn(2183), dropped = talk.ForgetWakesAfter(2166), after = talk.WakesOn(2183);
+            Check(before == 4 && dropped == 3 && after == 2 && talk.WakesOn(2190) == 0 && talk.WakesOn(2140) == 0,
+                  "wakes today count this day's wakes up to the hour, and a load forgets the wakes after it (" + before + ", " + dropped + ", " + after + ")");
+
+            // war room 0.20.1: a chronicler's answer missing its last bracket is mended and kept
+            string cut = @"{""days"": {""Autumn 3, 1087"": ""Aragorn laid siege to Imnagath.""}, ""the_war_so_far"": ""The war began."", ""turning_points"": ""- Autumn 3: Imnagath besieged."", ""our_orders"": ""None worked.""";
+            Dictionary<string, string> mendedPages = Room.ChroniclerPages(cut, out bool wasMended);
+            Dictionary<string, string> inside = Room.ChroniclerPages(@"{""days"": {""Autumn 3, 1087"": ""A day."", ""the_war_so_far"": ""So far."", ""turning_points"": ""- one"", ""our_orders"": ""none""", out bool m2);
+            Dictionary<string, string> whole = Room.ChroniclerPages(cut + "}", out bool m3);
+            Check(wasMended && mendedPages.Count == 4 && mendedPages["day-Autumn 3, 1087"] == "Aragorn laid siege to Imnagath." && mendedPages["our-orders-worked-and-failed"] == "None worked."
+                  && m2 && inside.Count == 4 && inside["the-war-so-far"] == "So far." && !inside.ContainsKey("day-the_war_so_far") && !m3 && whole.Count == 4,
+                  "a chronicler's answer cut short of its last bracket is mended and kept, its pages in their places (" + mendedPages.Count + ", " + inside.Count + ", " + whole.Count + ")");
         }
     }
 }

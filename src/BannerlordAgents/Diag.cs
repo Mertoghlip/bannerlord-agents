@@ -545,6 +545,47 @@ namespace BannerlordAgents
         // ---------- health, once a minute (the helper) ----------
 
         private static long _gc0, _gc1, _gc2, _frames, _ticks, _helperCpuMs = -1, _lastAnswers, _lastPokes;
+        /// <summary>The memory tidies of this launch and the memory they gave back, MB (MemoryTidy, 0.22.1).</summary>
+        public static int TidyCount;
+        public static long TidyFreedMb;
+        // the graphics card's memory of this process (0.22.1): read on a pool thread, since the counters can take a second to open; -1 until known
+        private static long _gpuDedicatedMb = -1, _gpuSharedMb = -1;
+        private static int _gpuReading;
+        private static bool _gpuGone;
+        private static System.Collections.Generic.List<PerformanceCounter> _gpuDed, _gpuShared;
+        private static DateTime _gpuNamesAt = DateTime.MinValue;
+
+        /// <summary>
+        /// The process's graphics memory, from Windows' "GPU Process Memory" counters (dedicated: on the card; shared: in system memory for the card), summed over
+        /// the adapters; started on a pool thread so the helper never waits on it, read by the next health row. Gone for the launch when the counters are missing.
+        /// </summary>
+        private static void ReadGpuSoon()
+        {
+            if (_gpuGone || Interlocked.Exchange(ref _gpuReading, 1) == 1) return;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    if (_gpuDed == null || (DateTime.Now - _gpuNamesAt).TotalMinutes >= 10)
+                    {
+                        if (!PerformanceCounterCategory.Exists("GPU Process Memory")) { _gpuGone = true; return; }
+                        string prefix = "pid_" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "_";
+                        var names = new PerformanceCounterCategory("GPU Process Memory").GetInstanceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+                        foreach (PerformanceCounter c in (_gpuDed ?? new List<PerformanceCounter>()).Concat(_gpuShared ?? new List<PerformanceCounter>())) c.Dispose();
+                        _gpuDed = names.Select(n => new PerformanceCounter("GPU Process Memory", "Dedicated Usage", n, true)).ToList();
+                        _gpuShared = names.Select(n => new PerformanceCounter("GPU Process Memory", "Shared Usage", n, true)).ToList();
+                        _gpuNamesAt = DateTime.Now;
+                    }
+                    double ded = 0, shared = 0;
+                    foreach (PerformanceCounter c in _gpuDed) ded += c.NextValue();
+                    foreach (PerformanceCounter c in _gpuShared) shared += c.NextValue();
+                    _gpuDedicatedMb = (long)(ded / (1024 * 1024));
+                    _gpuSharedMb = (long)(shared / (1024 * 1024));
+                }
+                catch (Exception e) { _gpuGone = true; Swallowed("graphics memory counters (left out of health.csv for this launch)", e); }
+                finally { Interlocked.Exchange(ref _gpuReading, 0); }
+            });
+        }
 
         public static void Health()
         {
@@ -573,13 +614,16 @@ namespace BannerlordAgents
                 long cpu = Cpu.ThreadCpuMs();
                 long helperMs = _helperCpuMs < 0 || cpu < 0 ? 0 : cpu - _helperCpuMs;
                 _helperCpuMs = cpu;
-                long privateMb = 0, threads = 0, handles = 0;
+                long privateMb = 0, threads = 0, handles = 0, workingMb = 0;
                 using (Process p = Process.GetCurrentProcess())
                 {
                     privateMb = p.PrivateMemorySize64 / (1024 * 1024);
+                    workingMb = p.WorkingSet64 / (1024 * 1024);
                     threads = p.Threads.Count;
                     handles = p.HandleCount;
                 }
+                long heapMb = GC.GetTotalMemory(false) / (1024 * 1024);
+                ReadGpuSoon();
                 double eff = Background.EfficientShare;
                 long answers = AgentChannel.AnswerFiles, pokes = Brain.PokesWatched;
                 string row = string.Join(",", new[]
@@ -596,7 +640,9 @@ namespace BannerlordAgents
                     Alarms.Values.Sum(a => a.Count).ToString(inv), Errors.Values.Sum(x => x.Count).ToString(inv),
                     (gc0 - _gc0).ToString(inv), (gc1 - _gc1).ToString(inv), (gc2 - _gc2).ToString(inv),
                     privateMb.ToString(inv), threads.ToString(inv), handles.ToString(inv), Files.OpenCount.ToString(inv), Names.Count.ToString(inv),
-                    (_traceBytes / (1024.0 * 1024.0)).ToString("0.0", inv)
+                    (_traceBytes / (1024.0 * 1024.0)).ToString("0.0", inv),
+                    workingMb.ToString(inv), heapMb.ToString(inv), _gpuDedicatedMb < 0 ? "" : _gpuDedicatedMb.ToString(inv), _gpuSharedMb < 0 ? "" : _gpuSharedMb.ToString(inv),
+                    TidyCount.ToString(inv), TidyFreedMb.ToString(inv)
                 });
                 _gc0 = gc0; _gc1 = gc1; _gc2 = gc2; _frames = frames; _ticks = ticks2; _lastAnswers = answers; _lastPokes = pokes;
                 lock (WriteGate)
@@ -606,7 +652,8 @@ namespace BannerlordAgents
                     if (fresh)
                         w.WriteLine("time,game_hours,state,speed,clock_running,window,frames,campaign_ticks,our_ms_on_game_thread,top_hooks_ms,slowest_call_ms,slowest_call,"
                                     + "helper_jobs_total,helper_queued,helper_slowest_job_ms,helper_cpu_ms,helper_on_efficiency_cores,orders_held,pokes,answers,"
-                                    + "waiting_for_answer_s,alarms_total,errors_total,gc0,gc1,gc2,private_mb,threads,handles,open_files,names_cached,trace_mb");
+                                    + "waiting_for_answer_s,alarms_total,errors_total,gc0,gc1,gc2,private_mb,threads,handles,open_files,names_cached,trace_mb,"
+                                    + "working_set_mb,scripting_heap_mb,gpu_dedicated_mb,gpu_shared_mb,memory_tidies,memory_tidy_freed_mb");
                     w.WriteLine(row);
                     w.Flush();
                 }

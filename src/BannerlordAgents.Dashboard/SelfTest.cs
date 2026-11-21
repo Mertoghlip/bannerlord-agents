@@ -134,6 +134,10 @@ namespace BannerlordAgents.Dashboard
             Check(got.Count == 5 && got[4].Kind == "carried", "a line finished later is read on the next look (" + got.Count + ")");
             LoadInfo l1 = store.Load("camp", "L1");
             Check(l1.Ends.TryGetValue("pokes_orcs.jsonl", out long e1) && e1 == p0, "a load's lines end where the next load's begin");
+            // a files agent's council (war room 0.20): no orders and no plan line, its plan a page it wrote
+            var filesAnswer = JsonNode.Parse("{\"orders\":[],\"pages\":[{\"page\":\"notes/lessons\",\"text\":\"# lessons\\n\\nStorm early.\"},{\"page\":\"plan/the-plan\",\"text\":\"# the plan (Autumn 11)\\n\\nHold Glad Thaw.\",\"why\":\"x\"}]}") as JsonObject;
+            List<string> writes = LogReader.PageWrites(filesAnswer, out string planPage);
+            Check(writes.Count == 2 && writes[1] == "plan/the-plan" && planPage == "Hold Glad Thaw.", "a files council shows the plan page it wrote and its page writes (" + string.Join(", ", writes) + "; " + planPage + ")");
         }
 
         /// <summary>Whole runs played back (0.10): the line a run kept across its loads, an hour's light copy, the run's news.</summary>

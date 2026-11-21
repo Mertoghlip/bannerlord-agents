@@ -176,10 +176,34 @@ namespace BannerlordAgents.Dashboard
                     if (ol.Target != null) e.Ids.Add(ol.Target);
                     if (ol.At != null) e.Places.Add(ol.At);
                 }
-            e.Plan = Str(answer?["plan"]) ?? Str(answer?["note"]);
+            List<string> writes = PageWrites(answer, out string planPage);
+            e.Plan = Str(answer?["plan"]) ?? Str(answer?["note"]) ?? planPage;
             e.Text = (kind == "council" ? "Council of war: " : "Answered: ") + e.Orders.Count + (e.Orders.Count == 1 ? " order" : " orders")
-                     + (double.IsNaN(e.Seconds) ? "" : " in " + Math.Round(e.Seconds) + " s");
+                     + (double.IsNaN(e.Seconds) ? "" : " in " + Math.Round(e.Seconds) + " s")
+                     + (writes.Count > 0 ? "; wrote " + string.Join(", ", writes) : "");
             return e;
+        }
+
+        /// <summary>
+        /// A files agent's page writes (war room 0.20: its plan, notes and intelligence are pages it writes, answer.json's "pages"), by name, and its plan page's text
+        /// without its heading (dashboard 0.10.1, Nov 21: a files council that rewrote its plan and gave no orders showed as an empty council).
+        /// </summary>
+        internal static List<string> PageWrites(JsonObject answer, out string plan)
+        {
+            plan = null;
+            var names = new List<string>();
+            if (answer?["pages"] is not JsonArray pages) return names;
+            foreach (JsonNode n in pages)
+            {
+                if (n is not JsonObject w || Str(w["page"]) is not string page) continue;
+                if (!names.Contains(page)) names.Add(page);
+                string text = Str(w["text"]);
+                if (text == null || !page.StartsWith("plan/", StringComparison.Ordinal) || plan != null && page != "plan/the-plan") continue;
+                string t = text.Replace("\r", "").Trim();
+                if (t.StartsWith("#", StringComparison.Ordinal)) { int nl = t.IndexOf('\n'); t = nl < 0 ? "" : t.Substring(nl + 1).Trim(); }
+                if (t.Length > 0) plan = t;
+            }
+            return names;
         }
 
         private static LogEntry Order(string line, string realm)

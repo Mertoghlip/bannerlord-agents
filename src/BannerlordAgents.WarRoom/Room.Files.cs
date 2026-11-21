@@ -17,6 +17,8 @@ namespace BannerlordAgents.WarRoom
         private (int reads, int steps, int opens, List<string> pages) _lastReads = (0, 0, 0, new List<string>());
         private double _lastShelfMs;
         private int _lastShelfChanges;
+        /// <summary>During a wake's build: today's wakes with this one counted (its shelf says so); -1 otherwise.</summary>
+        private int _wakesTodayForShelf = -1;
 
         internal string ContextMode => _c.Files ? "files" : "report";
         internal Shelf ShelfNow => _shelf;
@@ -73,12 +75,15 @@ namespace BannerlordAgents.WarRoom
             if (book == null && _shelf.Pages.Count > 0) return _shelf;   // nothing new to build from: the last build stands
             string campaign = meta?.Campaign ?? _mem.Campaign;
             string realm = meta?.Realm ?? (string)book?["realm"] ?? "";
+            string loadId = meta?.LoadId ?? _mem.LoadId;
+            double bookHours = book?["hours"] is JsonValue bhv && bhv.TryGetValue(out double bh0) ? bh0 : meta?.Hours ?? double.NaN;
+            JsonObject view = ViewFor(campaign, realm, loadId, bookHours, out string stale);
             var x = new ShelfInput
             {
-                Book = book, View = ReadJsonFile(Path.Combine(RouteTool.DefaultRoot(), "live", campaign ?? "unknown", "view_" + realm + ".json")),
+                Book = book, View = view, ViewStale = stale,
                 PokeText = pokeText, ReportText = reportText, CouncilText = councilText, Poke = meta?.Number ?? -1,
                 Campaign = campaign, LoadId = meta?.LoadId ?? _mem.LoadId, RealmName = meta?.RealmName ?? (string)book?["realm_name"] ?? realm,
-                Date = (string)book?["date"] ?? meta?.Date ?? "", Hours = book?["hours"] is JsonValue hv && hv.TryGetValue(out double bh) ? bh : meta?.Hours ?? double.NaN,
+                Date = (string)book?["date"] ?? meta?.Date ?? "", Hours = bookHours,
                 Chronicle = Memory.ReadChronicle(_c.ChannelDir), AgentPages = _mem.PagesNow(),
                 ToolsText = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "", OwnToolsManual = TemplateSection("## Writing your own tools"), CheckManual = TemplateSection("## Checking a tool"),
                 Why = why ?? "", Fate = fate, WakeBudget = _c.WakeBudget, WriteNotes = _lastWriteNotes.ToList(),
@@ -86,7 +91,7 @@ namespace BannerlordAgents.WarRoom
             };
             _mem.View(out string story, out _, out string storyDate, out _, out _);
             if (story.StartsWith("HANDOVER", StringComparison.Ordinal)) { x.Handover = story; x.HandoverDate = storyDate; }
-            if (_talk != null) { _talk.WakesByDay.TryGetValue(DayKey(x.Hours), out int today); x.WakesToday = today; }
+            if (_talk != null) x.WakesToday = _wakesTodayForShelf >= 0 ? _wakesTodayForShelf : _talk.WakesOn(x.Hours);
             try { _lastShelfChanges = _shelf.Build(x); }
             catch (Exception e) when (e is IOException || e is JsonException || e is InvalidOperationException || e is UnauthorizedAccessException)
             {
@@ -96,6 +101,39 @@ namespace BannerlordAgents.WarRoom
             _lastWriteNotes.Clear();
             if (_shelf.LastBuildMs > 3000) Say("The realm's files took " + (_shelf.LastBuildMs / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " s to build.");
             return _shelf;
+        }
+
+        /// <summary>
+        /// The realm's view file for a build (war room 0.20.1): only one of this load, no more than two in-game hours older than the book. The game writes it at the end of
+        /// each hour's work, after that hour's wakes, so the first wake after a load found the previous session's (Nov 20: its first front page flagged "Hiltbolt: food 6 → 1
+        /// days", the 6 from the session before). A stale one is asked of the game afresh (the fresh book writes the view too); still stale, the build goes without it and
+        /// says why (stale), and the shelf takes its next build with a view as a new start rather than flag the view's facts as changes.
+        /// </summary>
+        private JsonObject ViewFor(string campaign, string realm, string loadId, double bookHours, out string stale)
+        {
+            string path = Path.Combine(RouteTool.DefaultRoot(), "live", campaign ?? "unknown", "view_" + realm + ".json");
+            JsonObject v = ReadJsonFile(path);
+            stale = ViewStaleness(v, loadId, bookHours);
+            if (stale == null) return v;
+            if (FreshNow() != null)
+            {
+                v = ReadJsonFile(path);
+                stale = ViewStaleness(v, loadId, bookHours);
+                if (stale == null) return v;
+            }
+            Say("The realm's files were built without the map view: " + stale + ".");
+            return null;
+        }
+
+        /// <summary>Why a view file cannot serve a build of this load and hour, or null when it can.</summary>
+        internal static string ViewStaleness(JsonObject v, string loadId, double bookHours)
+        {
+            if (v == null) return "no view file";
+            string vl = (string)v["load_id"] ?? "";
+            if (!string.IsNullOrEmpty(loadId) && vl.Length > 0 && vl != loadId) return "the view file is of another load (" + vl + ")";
+            double vh = v["hours"] is JsonValue hv && hv.TryGetValue(out double h) ? h : double.NaN;
+            if (!double.IsNaN(bookHours) && !double.IsNaN(vh) && vh < bookHours - 2) return "the view file is " + (bookHours - vh).ToString("0", CultureInfo.InvariantCulture) + " in-game hours older than the book";
+            return null;
         }
 
         /// <summary>Before an open: the game's newest hour, and the shelf built again from it when it is newer than the last build.</summary>
@@ -294,6 +332,39 @@ namespace BannerlordAgents.WarRoom
             return last > 0 && date.Substring(last + 2).Contains(':') ? date.Substring(0, last) : date ?? "";
         }
 
+        /// <summary>
+        /// The chronicler's pages from its answer: the last whole JSON object with "days", else the answer's one object closed where it ends (war room 0.20.1, Nov 20:
+        /// Dol Guldur's chronicler once wrote every page and left off the last closing bracket; the answer was thrown away and the days written again five minutes later).
+        /// A page the answer put inside "days" by the same slip is taken as the page it is.
+        /// </summary>
+        internal static Dictionary<string, string> ChroniclerPages(string text, out bool mended)
+        {
+            mended = false;
+            var written = new Dictionary<string, string>(StringComparer.Ordinal);
+            var candidates = Objects(text ?? "").Reverse().ToList();
+            string closed = CloseOpen(text ?? "");
+            if (closed != null) candidates.Add(closed);
+            foreach (string candidate in candidates)
+            {
+                try
+                {
+                    if (JsonNode.Parse(candidate) is not JsonObject o || o["days"] is not JsonObject dj) continue;
+                    var top = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (string k in new[] { "the_war_so_far", "turning_points", "our_orders" })
+                        if ((o[k] ?? dj[k])?.ToString() is string v && v.Trim().Length > 0) top[k] = v;
+                    foreach (KeyValuePair<string, JsonNode> kv in dj)
+                        if (!top.ContainsKey(kv.Key) && kv.Value is JsonValue && (kv.Value.ToString() ?? "").Trim().Length > 0) written["day-" + kv.Key] = kv.Value.ToString();
+                    if (top.TryGetValue("the_war_so_far", out string ws)) written["the-war-so-far"] = ws;
+                    if (top.TryGetValue("turning_points", out string tps)) written["turning-points"] = tps;
+                    if (top.TryGetValue("our_orders", out string ord)) written["our-orders-worked-and-failed"] = ord;
+                    mended = ReferenceEquals(candidate, closed);
+                    break;
+                }
+                catch (JsonException) { written.Clear(); }
+            }
+            return written;
+        }
+
         /// <summary>The chronicler's call: its pages as they stand, the ruler's plan for context, and the record of the days due; its new pages kept in the memory.</summary>
         internal bool WriteChronicle(Memory m, List<List<ChronicleLine>> days, CancellationToken cancel = default)
         {
@@ -331,20 +402,9 @@ namespace BannerlordAgents.WarRoom
             var written = new Dictionary<string, string>(StringComparer.Ordinal);
             if (r.Ok)
             {
-                foreach (string candidate in Objects(r.Text).Reverse())
-                {
-                    try
-                    {
-                        if (JsonNode.Parse(candidate) is not JsonObject o || o["days"] is not JsonObject dj) continue;
-                        foreach (KeyValuePair<string, JsonNode> kv in dj) if ((kv.Value?.ToString() ?? "").Trim().Length > 0) written["day-" + kv.Key] = kv.Value.ToString();
-                        if (o["the_war_so_far"]?.ToString() is string ws && ws.Trim().Length > 0) written["the-war-so-far"] = ws;
-                        if (o["turning_points"]?.ToString() is string tps && tps.Trim().Length > 0) written["turning-points"] = tps;
-                        if (o["our_orders"]?.ToString() is string ord && ord.Trim().Length > 0) written["our-orders-worked-and-failed"] = ord;
-                        break;
-                    }
-                    catch (JsonException) { }
-                }
+                written = ChroniclerPages(r.Text, out bool mended);
                 if (written.Count == 0) problem = "no pages in its answer";
+                else if (mended) Say("Chronicle: its answer lacked a closing bracket; mended and kept.");
             }
             bool kept = false;
             if (written.Count > 0)

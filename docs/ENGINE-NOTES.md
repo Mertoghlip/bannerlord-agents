@@ -77,6 +77,14 @@ Read in the decompiled 1.4.8 source (`C:\BannerlordArchive\refsrc\TW148`) and ch
 - **A storm the player fights in person** (`CampaignMission.OpenSiegeMissionWithDeployment`): only built, working engines in spots go into the battle (`GetPreparedAndActiveSiegeEngines`), a stretch at 0 is a breach men walk through, and every ram and tower is broken after it. A thrown stone's hit damages everyone within 1.2 m of it, within 2.8 m and half as hard again for a big burst (`Mission.MissileAreaDamageCallback`, the burst's size chosen inside the engine).
 - **The player's siege screen** builds, moves to reserve and scraps by the same container calls, for a side he leads (the game gives it the strategy Custom, which holds).
 
+## Memory on the campaign map (1.4.8; read Nov 21 for 0.22.1)
+
+- The game lets go of the engine's resources no longer in use (`Utilities.ClearOldResourcesAndObjects`) and of its unused portrait and banner pictures (`ThumbnailCacheManager.Current.ClearUnusedCache`, in TaleWorlds.MountAndBlade.View.dll of the Native module) only in `GameStateScreenManager.OnPushState`/`OnPopState`, for a game state that is not a menu: a battle or scene, the inventory, party, clan or banner screen. `MissionState` also calls the first when a mission ends. Nothing calls either on the campaign map.
+- So the game's reserved (private, committed) memory climbs for as long as one stays on the map. Nov 20 (TAOM's `[MemSample]`/`[MemStation]` lines, every 30 s and at each screen): 14 to 24 GB in an hour of a test run, about 0.3 GB a real minute with the clock running, while the working set stayed at 7 to 9 GB and the managed heap (`heapMB`) under 1.3 GB. Leaving the banner screen took it from 20.7 to 15.7 GB at once; leaving a battle, 21.7 to 13.8.
+- The game's ordinary full collections (gen 2, about one a minute on the map) free none of it: across 30 sessions of health.csv, a map minute with one grows about as much as one without. The big drops all came with a burst of 6 to 8 collections in one minute, at a screen change.
+- Most of the gap between reserved memory and working set is probably the graphics card's (Windows charges a process's video memory to its commit); module 0.22.1's health.csv logs the process's graphics memory (`gpu_dedicated_mb`, `gpu_shared_mb`) to tell.
+- Our module creates no engine objects, pictures or models (its only visuals are the lieutenant's window). Since 0.22.1 `MemoryTidy` makes the game's two calls on the map once the reserved memory has grown `memory_tidy_mb` since its low point (1,500 while the clock stands, `memory_tidy_running_mb` 3,000 while it runs), at most every 3 minutes, and logs what each freed (`memory/tidy`).
+
 ## The campaign map's way-finder (TaleWorlds.Native.dll 1.4.8; read Nov 18 to 20 for 0.21.0 and 0.21.1)
 
 The full reading, with addresses, is in docs/PLAN-ways.md ("Phase 2 notes"); the copy is `src/Common/NavCopy.cs`.
