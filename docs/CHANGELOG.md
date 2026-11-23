@@ -2914,7 +2914,7 @@ avmesh.bin`):
 
 ## Monday, November 23
 
-### 08:58 · Module 0.23.0: the autopilot, for C1 and C2 with nobody at the game · commit (follows)
+### 08:58 · Module 0.23.0: the autopilot, for C1 and C2 with nobody at the game · commit 7ceb8fc
 - **Why:** Nov 22: I want the capability for you to launch the game, launch the test start save, switch my character to a wanderer and move into a safe settlement, start waiting there at normal speed, create the save for the playerless save, and do everything else needed (pausing, saving to the test save, quitting) so I can run those tests fully autonomously. Nov 23: build it for C1 and C2 first, without starting either; normal speed; on a crash, note it, gather all needed files for a fix and wait for my answer; pause and wait for the usage limit's reset; unknown pop-ups answered no / cancel.
 - **What I found first (Nov 22):**
   - The game starts straight to its main menu with `Bannerlord.BLSE.Standalone.exe /singleplayer _MODULES_*...*_MODULES_` (48 s, no pop-up; trial launch 19:25-19:30).
