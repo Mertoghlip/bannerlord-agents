@@ -61,6 +61,7 @@ namespace BannerlordAgents
             Perf.ResetCapture();
             Recruitment.Reset();
             Calendar.Capture();
+            Autopilot.OnLoad();
             long t = Perf.Now();
             int warmed = Names.WarmUp();
             double warmMs = Perf.Ms(t);
@@ -320,6 +321,9 @@ namespace BannerlordAgents
 
         private void OnHourlyTick()
         {
+            // the autopilot's hour (0.23.0): incidents held back, the stand-in's town, the run's own save; whatever the bridge's switch
+            try { Autopilot.Hourly(); }
+            catch (Exception e) { Diag.Error("the autopilot's hour", e); }
             if (!Bridge.Running || !Settings.Bridge) return;
             long t = Perf.Now();
             Watchdog.Doing = "hourly copy";
@@ -365,6 +369,7 @@ namespace BannerlordAgents
         private void OnTick(float dt)
         {
             if (Bridge.Running) Watchdog.CampaignBeat(CampaignTime.Now.ToHours);
+            Autopilot.CampaignTick();
             Perf.OnTick();
             long t = Perf.Now();
             Watchdog.Doing = "per-tick work";
@@ -461,6 +466,7 @@ namespace BannerlordAgents
         private void OnSaveOver(bool saved, string name) => Guard("save take-back", () =>
         {
             Orders.TakeBackAfterSave(saved, name);
+            Autopilot.SaveOver(saved, name);
             Wages.TakeBackAfterSave();
             if (saved) Run.OnSaved(name);
             // the orders in force written down for this save, so a load of it carries them on (0.13.5, CarryOn)

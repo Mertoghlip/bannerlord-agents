@@ -57,7 +57,7 @@ namespace BannerlordAgents
             _trueSightFlagged = _cheatFlagged = false;
             RunState open = RunFiles.ReadOpen();
             string wall = Now();
-            if (!string.IsNullOrEmpty(save) && string.Equals(save.Trim(), Settings.RunSave, StringComparison.OrdinalIgnoreCase))
+            if (Settings.IsRunSave(save))
             {
                 if (open != null && open.Status == "running")
                 {
@@ -203,6 +203,14 @@ namespace BannerlordAgents
             // the run's bundle, for the dataset builder (0.13, C5): packed by Runs.exe beside the game, once the files are flushed
             RunFiles.StartBundle(_run.Id);
             string name = "TEST END " + _run.Arm + " " + _run.Id;
+            // nobody at the game (the autopilot, 0.23.0): the end save is made without asking
+            if (Autopilot.On)
+            {
+                Campaign.Current.TimeControlMode = CampaignTimeControlMode.Stop;
+                Autopilot.RunEnded(name);
+                Say("Test run " + _run.Arm + " is over: day " + _run.Days + " reached. The game is paused; the autopilot saves it as " + name + ".");
+                return;
+            }
             try
             {
                 Campaign.Current.TimeControlMode = CampaignTimeControlMode.Stop;

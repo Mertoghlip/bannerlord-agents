@@ -148,37 +148,74 @@ namespace BannerlordAgents
         /// <summary>Free wanderers in towns at peace with your kingdom and outside the run's realms, the quietest first.</summary>
         private static List<Pick> Candidates(Kingdom mine)
         {
-            var runRealms = new HashSet<string>(StringComparer.Ordinal) { mine.StringId };
-            foreach (string r in Run.Current?.Rivals ?? Settings.RunRivals.ToList()) runRealms.Add(r);
-            List<Settlement> forts = Settlement.All.Where(s => s != null && s.IsFortification && s.MapFaction != null).ToList();
-            List<MobileParty> lords = MobileParty.AllLordParties.Where(p => p != null && p.IsActive && p.MapFaction != null).ToList();
+            var quiet = new Quiet(mine);
             var picks = new List<Pick>();
             foreach (Hero h in Hero.AllAliveHeroes)
             {
                 if (h == null || !h.IsWanderer || h.Clan != null || h.CompanionOf != null || h.PartyBelongedTo != null || h.IsPrisoner || h.IsChild || h.IsDisabled) continue;
                 Settlement town = h.CurrentSettlement;
-                if (town == null || !town.IsTown || town.IsUnderSiege) continue;
+                if (!quiet.Allowed(town)) continue;
+                float best = quiet.Distance(town, out string nearest);
+                picks.Add(new Pick { Hero = h, Town = town, Quiet = best, Nearest = nearest });
+            }
+            return picks.OrderByDescending(p => p.Quiet).ThenBy(p => Names.Hero(p.Hero)).ToList();
+        }
+
+        /// <summary>
+        /// Towns a stand-in may wait in, the quietest first (the autopilot, 0.23.0: where he goes when his own town is besieged or his kingdom goes to war with
+        /// its owner). The same rule as the wanderer's town: not your kingdom's nor a rival's, at peace with your kingdom, not besieged; quiet = far from every
+        /// castle, town and lord of anyone at war with your kingdom or with the town's owner.
+        /// </summary>
+        public static List<Settlement> QuietTowns(Kingdom mine)
+        {
+            var quiet = new Quiet(mine);
+            return Settlement.All.Where(quiet.Allowed).Select(s => new { s, d = quiet.Distance(s, out _) }).OrderByDescending(x => x.d).ThenBy(x => x.s.StringId, StringComparer.Ordinal).Select(x => x.s).ToList();
+        }
+
+        private sealed class Quiet
+        {
+            private readonly Kingdom _mine;
+            private readonly HashSet<string> _runRealms = new HashSet<string>(StringComparer.Ordinal);
+            private readonly List<Settlement> _forts;
+            private readonly List<MobileParty> _lords;
+
+            public Quiet(Kingdom mine)
+            {
+                _mine = mine;
+                _runRealms.Add(mine.StringId);
+                foreach (string r in Run.Current?.Rivals ?? Settings.RunRivals.ToList()) _runRealms.Add(r);
+                _forts = Settlement.All.Where(s => s != null && s.IsFortification && s.MapFaction != null).ToList();
+                _lords = MobileParty.AllLordParties.Where(p => p != null && p.IsActive && p.MapFaction != null).ToList();
+            }
+
+            public bool Allowed(Settlement town)
+            {
+                if (town == null || !town.IsTown || town.IsUnderSiege) return false;
                 IFaction owner = town.MapFaction;
-                if (owner == null || runRealms.Contains(owner.StringId) || FactionManager.IsAtWarAgainstFaction(owner, mine)) continue;
-                bool Hostile(IFaction f) => f != owner && f != null && (FactionManager.IsAtWarAgainstFaction(f, owner) || FactionManager.IsAtWarAgainstFaction(f, mine));
+                return owner != null && !_runRealms.Contains(owner.StringId) && !FactionManager.IsAtWarAgainstFaction(owner, _mine);
+            }
+
+            public float Distance(Settlement town, out string nearest)
+            {
+                IFaction owner = town.MapFaction;
+                bool Hostile(IFaction f) => f != owner && f != null && (FactionManager.IsAtWarAgainstFaction(f, owner) || FactionManager.IsAtWarAgainstFaction(f, _mine));
                 float best = float.MaxValue;
-                string nearest = null;
+                nearest = null;
                 var at = town.Position.ToVec2();
-                foreach (Settlement s in forts)
+                foreach (Settlement s in _forts)
                 {
                     if (!Hostile(s.MapFaction)) continue;
                     float d = s.Position.ToVec2().Distance(at);
                     if (d < best) { best = d; nearest = Names.Settlement(s) + " (" + Names.Faction(s.MapFaction) + ")"; }
                 }
-                foreach (MobileParty p in lords)
+                foreach (MobileParty p in _lords)
                 {
                     if (!Hostile(p.MapFaction)) continue;
                     float d = p.Position.ToVec2().Distance(at);
                     if (d < best) { best = d; nearest = Names.Party(p) + " (" + Names.Faction(p.MapFaction) + ")"; }
                 }
-                picks.Add(new Pick { Hero = h, Town = town, Quiet = best, Nearest = nearest });
+                return best;
             }
-            return picks.OrderByDescending(p => p.Quiet).ThenBy(p => Names.Hero(p.Hero)).ToList();
         }
 
         /// <summary>Your kingdom's lords with a Party AI Controls order (or queue), your own character among them.</summary>

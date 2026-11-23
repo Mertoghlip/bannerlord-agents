@@ -2911,3 +2911,51 @@ avmesh.bin`):
   - **War room self-test, 250 checks** (4 new: a stale view, a build without the view then with it, wakes by hour and a load, a chronicler's answer mended). **Dashboard self-test, 31 checks** (1 new). **Smoke test, 635 checks.** RefCheck: 896 member references, missing 0 (with the Native module's folder). `dotnet build-server shutdown` run.
 - **Installed** with the game closed (17:17): module 0.22.1 (`BannerlordAgents.dll` SHA-256 9D17A1A8...), war room 0.20.1, dashboard 0.10.1. The war rooms, dashboard and archive keeper were stopped for the builds and started again at 17:18.
 - **To see it:** the next session's health.csv tells whether the reserved memory is the graphics card's; each tidy's line in the story says what it freed. If a tidy while the clock runs stutters, raise `memory_tidy_running_mb`.
+
+## Monday, November 23
+
+### 08:58 · Module 0.23.0: the autopilot, for C1 and C2 with nobody at the game · commit (follows)
+- **Why:** Nov 22: I want the capability for you to launch the game, launch the test start save, switch my character to a wanderer and move into a safe settlement, start waiting there at normal speed, create the save for the playerless save, and do everything else needed (pausing, saving to the test save, quitting) so I can run those tests fully autonomously. Nov 23: build it for C1 and C2 first, without starting either; normal speed; on a crash, note it, gather all needed files for a fix and wait for my answer; pause and wait for the usage limit's reset; unknown pop-ups answered no / cancel.
+- **What I found first (Nov 22):**
+  - The game starts straight to its main menu with `Bannerlord.BLSE.Standalone.exe /singleplayer _MODULES_*...*_MODULES_` (48 s, no pop-up; trial launch 19:25-19:30).
+  - It loads a save by name the way the main menu's Continue does. A save made with other mod versions first raises a "Module Mismatch" question.
+  - The game's autosave is off (`AutoSaveInterval=-1`): a crash would lose the run.
+  - Since game version 1.3, waiting in a town starts an "incident" one hour in seven, at least 8 to 15 days apart. It is a choice screen that stops the clock.
+  - Every wait starts at fast-forward (`GameMenu.StartWait`). A load restores a save's wait menu with the clock stopped.
+  - The laptop slept 3 hours in run 20261025-2103-C1.
+  - The war rooms' usage-limit failure reads "You've hit your session limit · resets 10:50pm (America/Los_Angeles)".
+  - The C: drive had 9.7 GB free.
+- **What changed (docs/AUTOPILOT.md):**
+  - **The module's autopilot** (`Autopilot.cs`): a command box in `%LOCALAPPDATA%\BannerlordAgents\autopilot`:
+    - one command per file: load, playerless, wait, speed, pause, resume, save, check, console, move, selftest, menu, quit;
+    - a status file every 2 s and an events file;
+    - keepers that work only while `on.json` names the game's own process:
+      - pop-ups pressed as a click does (no / cancel by default, notices and full-screen pictures closed, each logged with its text);
+      - incidents held back;
+      - the wait kept up at normal speed;
+      - the stand-in moved to the quietest other town when his town is besieged or at war with his kingdom;
+      - the run's own save every in-game day;
+      - the run's TEST END save made without the question.
+  - **`run_save` may name several saves** separated by `;` (`Settings.IsRunSave`). `Playerless.QuietTowns` shares the wanderer pick's rule.
+  - **`scripts/autopilot.ps1`** has three jobs: `-MakePlayerless`, `-DryRun`, `-Arm C1|C2`. It:
+    - starts the game the way the launcher does and keeps the laptop awake while it runs;
+    - restarts from the run's own save above 20,000 MB;
+    - pauses on the usage limit until the reset, converted to the laptop's time, or until a call works;
+    - on a crash or freeze, gathers the files into `D:\BannerlordAgents\crashes` (with a full dump while the game is still up). It holds on the +0x6013cc fault until I answer and restarts from the run's newest own save after any other crash, twice at most.
+- **Checks:**
+  - **Smoke test** all passed; RefCheck: 948 member references, missing 0 (with the SandBox and Native folders). The usage-limit reset times read right (10:50pm Pacific = 09:50 here; a dated weekly reset; a time zone it does not know falls back to the first call that works).
+  - **The playerless save, made by the script** (08:44-08:46, every agent off, no model call): `TEST START DGG MERGE` loaded in 50 s, the Module Mismatch question answered, the switch made (Marzuk ibn-Zayak in Damudûr, Aragorn's party to the game's AI, Party AI Controls' refill off for 2 lords), saved as `TEST START DGG MERGE PLAYERLESS` (same in-game hour, Summer 21, 1087, 16:00), quit in 10 s.
+  - **The dry run** (08:46-08:55, every agent off, no run readied):
+    - the pop-up self-test: the question answered no, the notice closed, the list cancelled;
+    - the wait at normal speed: 36.8 in-game hours in 4 real minutes, as expected at `map_speed` 0.5;
+    - pause, with the clock still for 6 s, then resume;
+    - the stand-in moved to Naxar Dâl and put back to waiting by the keeper;
+    - saved, quit, started again (36 s to the menu), reloaded in the wait menu, waiting again at normal speed;
+    - no error in the four launches' logs.
+- **Installed** with the game closed (08:41): module 0.23.0 (`BannerlordAgents.dll` SHA-256 5493098c...).
+- **Outside the repository:**
+  - `settings.txt` `run_save = TEST START DGG MERGE; TEST START DGG MERGE PLAYERLESS`.
+  - New saves `TEST START DGG MERGE PLAYERLESS` and `AUTOPILOT DRY RUN`.
+  - Two setup-only run records with no clock run: `20261123-0843` (left armed by the first try, which stopped on a script fault, since fixed) and `20261123-0845` (stopped by the dry run, since the playerless save was made while it was being set up; the save job now sets `run_save` aside instead).
+  - The agents' modes were switched off for each job and put back (orcs, Dol Guldur and the lieutenant live, the kingdom's agent off).
+- **Not started:** C1 and C2. Each is `autopilot.ps1 -Arm C1` (or `C2`) and takes at least 2 h 40 min at normal speed.

@@ -117,6 +117,16 @@ namespace BannerlordAgents
         /// numbers for, and the kingdom whose commander is tested (empty: the player's realm when the run's save is loaded).
         /// </summary>
         public static string RunSave = "TEST START";
+        /// <summary>
+        /// Whether a save is one a run starts from (0.23.0: run_save may name several, separated by ";", so my own runs' start save and the playerless one
+        /// made from it both ready a run).
+        /// </summary>
+        public static bool IsRunSave(string save)
+        {
+            if (string.IsNullOrWhiteSpace(save)) return false;
+            string s = save.Trim();
+            return RunSave.Split(';').Any(x => string.Equals(x.Trim(), s, StringComparison.OrdinalIgnoreCase));
+        }
         public static int RunDays = 60;
         public static List<string> RunRivals = new List<string> { "mistymountainorcs", "dolguldur" };
         public static string RunKingdom = "";
@@ -277,7 +287,7 @@ namespace BannerlordAgents
                 sb.AppendLine("# the helper's speed test (docs/LOGGING.md): hourly copies of the world each launch saves for SmokeTest --perf, from this many in-game hours into a load (0 hours: none)");
                 sb.AppendLine("perf_record_hours = " + PerfRecordHours.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("perf_record_after = " + PerfRecordAfter.ToString(CultureInfo.InvariantCulture));
-                sb.AppendLine("# test runs (docs/RUNS.md): the save a run starts from, its length in in-game days, the rival realms it keeps numbers for, and the kingdom tested (empty: yours at the save)");
+                sb.AppendLine("# test runs (docs/RUNS.md): the saves a run starts from (several separated by ;), its length in in-game days, the rival realms it keeps numbers for, and the kingdom tested (empty: yours at the save)");
                 sb.AppendLine("run_save = " + RunSave);
                 sb.AppendLine("run_days = " + RunDays.ToString(CultureInfo.InvariantCulture));
                 sb.AppendLine("run_rivals = " + string.Join("; ", RunRivals));

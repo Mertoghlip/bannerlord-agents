@@ -121,7 +121,7 @@ namespace BannerlordAgents
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool K32GetProcessMemoryInfo(IntPtr process, out ProcessMemoryCounters counters, uint size);
 
         /// <summary>The game's reserved (private, committed) memory and its working set, in MB.</summary>
-        private static bool Memory(out long privateMb, out long workingSetMb)
+        internal static bool Memory(out long privateMb, out long workingSetMb)
         {
             privateMb = workingSetMb = 0;
             var c = new ProcessMemoryCounters { cb = CountersSize };
