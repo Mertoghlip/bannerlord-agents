@@ -33,13 +33,21 @@
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -Arm C1
 #>
 param(
-    [ValidateSet('C1', 'C2')][string]$Arm,
+    [ValidateSet('C0', 'C1', 'C2')][string]$Arm,
     # Nov 24: the rival realms' agents fully off for a C2 run, not shadow (their continuous conversations stay as the arm A run left them)
     [switch]$RivalsOff,
     # Nov 24: with -Arm, carry the running run on from its own save (TEST AUTO <arm>) instead of starting a new one; no arm change
     [switch]$Resume,
     [switch]$MakePlayerless,
     [switch]$DryRun,
+    # Nov 24: the storm-at-reload diagnosis: every agent off, loads -ReproFrom, runs the clock at fast-forward until a game-AI storm is under way, saves it
+    # as AUTOPILOT STORM REPRO, restarts, loads it and watches (module 0.24.5's AI probe logs each storming leader's decisions to the session's trace)
+    [switch]$StormRepro,
+    [string]$ReproFrom = 'TEST AUTO C2',
+    [int]$ReproMinutes = 25,
+    [int]$ReproWatchSeconds = 150,
+    # only a storm by this realm counts (empty: any); the breaks were seen only in Dol Guldur's storms
+    [string]$ReproRealm = '',
     [string]$From = 'TEST START DGG MERGE',
     [string]$Start = 'TEST START DGG MERGE PLAYERLESS',
     [int]$MemoryRestartMb = 20000,
@@ -53,11 +61,15 @@ Set-StrictMode -Version 2
 $utf8 = New-Object System.Text.UTF8Encoding $false
 try { [Console]::OutputEncoding = $utf8 } catch { }   # town names like Damudur (with its accent)
 
-$jobs = @(@($Arm, $(if ($MakePlayerless) { 'make' }), $(if ($DryRun) { 'dry' })) | Where-Object { $_ })
+$jobs = @()
+if ($Arm) { $jobs += $Arm }
+if ($MakePlayerless) { $jobs += 'make' }
+if ($DryRun) { $jobs += 'dry' }
+if ($StormRepro) { $jobs += 'repro' }
 $script:GamePid = 0
 $script:LaunchedAt = Get-Date
 $script:copiedList = @()
-if ($jobs.Count -ne 1) { [Console]::Out.WriteLine('Choose one: -MakePlayerless, -DryRun or -Arm C1|C2.'); exit 2 }
+if ($jobs.Count -ne 1) { [Console]::Out.WriteLine('Choose one: -MakePlayerless, -DryRun, -StormRepro or -Arm C0|C1|C2.'); exit 2 }
 
 # ---------------------------------------------------------------- places
 
@@ -212,8 +224,8 @@ function Must([string]$line, [int]$seconds = 120) {
     return $r
 }
 
-function Write-Plan([bool]$wait, [string]$saveName, [string]$note) {
-    $plan = @{ pid = $script:GamePid; wait = $wait; speed = 'play'; save_name = $saveName; save_hours = $SaveHours; playerless = $true; note = $note }
+function Write-Plan([bool]$wait, [string]$saveName, [string]$note, [string]$speed = 'play') {
+    $plan = @{ pid = $script:GamePid; wait = $wait; speed = $speed; save_name = $saveName; save_hours = $SaveHours; playerless = $true; note = $note }
     $tmp = $PlanFile + '.tmp'
     [System.IO.File]::WriteAllText($tmp, ($plan | ConvertTo-Json -Compress), $utf8)
     Move-Item $tmp $PlanFile -Force
@@ -472,6 +484,59 @@ function Dry-Run {
     Say 'Dry run done.'
 }
 
+function Storm-Repro {
+    if (-not (Save-Exists $ReproFrom)) { throw "No save named '$ReproFrom'." }
+    $modes = Get-Modes
+    $runSave = Get-Setting 'run_save'
+    Say "Storm repro: every agent off and run_save set aside; loads $ReproFrom, fast-forward until a game-AI storm is under way, then save, restart, load and watch."
+    All-Off
+    Set-Setting 'run_save' '(storm repro: none)'
+    $name = 'AUTOPILOT STORM REPRO'
+    function Storms { $r = Send 'console agents.storms' 60; return ([string](Prop $r 'answer')) }
+    try {
+        Start-Game
+        Write-Plan $false $null 'storm repro'
+        [void](Must ("load " + $ReproFrom) 900)
+        Write-Plan $true $null 'storm repro' 'fast'
+        Start-Sleep -Seconds 3
+        [void](Must 'wait')
+        [void](Must 'speed fast')
+        $deadline = (Get-Date).AddMinutes($ReproMinutes)
+        $found = @()
+        while ((Get-Date) -lt $deadline) {
+            $found = @((Storms) -split "`n" | Where-Object { $_ -like 'STORM *' -and (-not $ReproRealm -or $_ -match ('^STORM \S+ \([^)]*\) by \S+ \(' + [regex]::Escape($ReproRealm) + '\)')) })
+            if ($found.Count -gt 0) { break }
+            Start-Sleep -Seconds 3
+        }
+        if ($found.Count -eq 0) { throw "No storm within $ReproMinutes minutes." }
+        [void](Must 'pause')
+        Say "  storms under way: $($found -join ' | ')"
+        [void](Must ("save " + $name) 300)
+        Say "  at the save: $((Storms) -replace "`n", ' | ')"
+        Quit-Game
+        Start-Game
+        Write-Plan $false $null 'storm repro, after the restart'
+        [void](Must ("load " + $name) 900)
+        Say "  after the load: $((Storms) -replace "`n", ' | ')"
+        Write-Plan $true $null 'storm repro, after the restart'
+        [void](Must 'wait')
+        for ($i = 1; $i -le 5; $i++) {
+            Start-Sleep -Seconds ([int]($ReproWatchSeconds / 5))
+            $s = Read-Status
+            Say "  $([int]($i * $ReproWatchSeconds / 5)) s after the load ($(Prop $s 'date')): $((Storms) -replace "`n", ' | ')"
+        }
+        Quit-Game
+    }
+    finally {
+        Clear-Plan
+        if (Game-Alive) { Quit-Game }
+        Set-Setting 'run_save' $runSave
+        Set-Modes $modes
+        Say 'run_save and the agents put back as they were.'
+    }
+    Say 'Storm repro done: the AI probe lines (kind aiprobe) are in the two newest session folders under logs\sessions.'
+}
+
 function Begin-Run([string]$load, [bool]$fresh) {
     Start-Game
     Write-Plan $false $null "run $Arm, setting up"
@@ -565,6 +630,7 @@ Stay-Awake
 try {
     if ($MakePlayerless) { Make-Playerless }
     elseif ($DryRun) { Dry-Run }
+    elseif ($StormRepro) { Storm-Repro }
     else {
         if ($Resume) {
             # Nov 24: carry a running run on from its own save (after a stop, e.g. to give it more days); the arm stays as its start set it

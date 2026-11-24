@@ -112,6 +112,10 @@ namespace BannerlordAgents
             }
         });
 
+        // Nov 24: the sieges and storms under way, for the storm-at-reload diagnosis (AiProbe)
+        [CommandLineFunctionality.CommandLineArgumentFunction("storms", "agents")]
+        public static string StormsCmd(List<string> args) => Cmd("storms", args, AiProbe.Storms);
+
         [CommandLineFunctionality.CommandLineArgumentFunction("health", "agents")]
         public static string Health(List<string> args) => Cmd("health", args, Diag.HealthText);
 

@@ -71,6 +71,56 @@ namespace SmokeTest
             Check(ToolDef.Functions.ContainsKey("camp_strength") && Library.Get("besiege") != null, "camp_strength is a function of the order language");
             Runner.Ended(9243, "test over");
             Runner.Reset();
+            SiegeSideTests(moves);
+        }
+
+        /// <summary>
+        /// Module 0.24.5 (Nov 24, run 20261124-1840-C2, day 64: thirteen lords sent to besiege Goblin Town each weighed the relief against camp_strength, which
+        /// before any camp stood was the lord himself, so each lifted the siege alone, "944% of your camp's 207", and the strike never began): the besiege order
+        /// weighs the side at the siege, the lords camped there or this siege's lords within 6 of the place if more, never lords farther off.
+        /// </summary>
+        private static void SiegeSideTests(List<KeyValuePair<int, Move>> moves)
+        {
+            Runner.Reset();
+            string StateOf(int id) => Runner.All().FirstOrDefault(t => t.Id == id)?.State;
+            PartyRow Orc(string id, string name, float strength, float x, float y) => new PartyRow
+            {
+                Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "orcs", Kind = "lord", Men = (int)(strength / 2), SizeLimit = 1000, Strength = strength, Speed = 5, FoodDays = 10,
+                X = x, Y = y, Doing = "Hold", Spottable = true, Gold = 5000
+            };
+            var a = Orc("sa1", "Kisha", 800, 172, 103);       // two lords of the same siege near the castle, no camp yet
+            var b = Orc("sa2", "Gaín", 1200, 168, 104);
+            var far = Orc("sa3", "Val", 3000, 200, 140);      // a third far off, not counted
+            var relief = new PartyRow { Id = "p_sr1", Leader = "lord_sr1", Name = "Lurzok", Faction = "player_k", Kind = "lord", Men = 750, Strength = 1500, Speed = 4, X = 182, Y = 100,
+                                        Doing = "DefendSettlement", TargetSettlement = "castle_men", Spottable = true };
+            Snapshot World(double h) => ToolWorld(h, a, b, far, relief);
+            double h0 = 72000;
+            Diag.Hours = h0;
+            Brain.OnHour(World(h0));
+            ToolOrder Order(PartyRow p, PartyRow mate)
+            {
+                var o = new ToolOrder { Tool = "besiege", Lord = p.Leader, LordName = p.Name, Party = p.Id, At = "castle_men", Realm = "orcs" };
+                o.Lords.Add(mate.Id);
+                o.Settings["withdraw_on_relief"] = 1.0;
+                o.Settings["relief_radius"] = 30;
+                o.Settings["wait_hours"] = 1;
+                o.Settings["relief_hours"] = 12;
+                o.Settings["storm"] = 2;
+                return o;
+            }
+            Runner.Start(9251, Order(a, b));
+            Runner.Start(9252, Order(b, a));
+            Runner.Start(9253, Order(far, a));
+            for (int i = 1; i <= 4; i++) { Diag.Hours = h0 + i; Brain.OnHour(World(h0 + i)); }
+            World w = Runner.WorldFor(World(h0 + 4));
+            IScope sc = ScopeFor(9251, w);
+            double side = Math.Max(Expr.Number(sc?.Call("camp_strength", new object[] { "castle_men" })), Expr.Number(sc?.Call("mates_strength", new object[] { "castle_men", 6.0 })));
+            bool stays = StateOf(9251) == "siege" && StateOf(9252) == "siege";
+            Check(stays && Math.Abs(side - 2000) < 1 && !moves.Any(m => (m.Key == 9251 || m.Key == 9252) && m.Value.Verb == "enter"),
+                  "before the camp stands, lords of one siege near the place weigh a relief together: 1,500 against their 2,000, not against each alone (side " + ToolDef.Num(side)
+                  + ", " + StateOf(9251) + ", " + StateOf(9252) + "); a lord of it far off is not counted");
+            for (int id = 9251; id <= 9253; id++) Runner.Ended(id, "test over");
+            Runner.Reset();
         }
     }
 }

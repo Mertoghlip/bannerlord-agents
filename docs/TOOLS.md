@@ -553,6 +553,13 @@ Nov 24, run 20261124-1400-C2: two of the kingdom's agent's worst losses came fro
   - The relieve order's description and the instructions' "How battles are joined" say so.
 - Checks: `SmokeTest` `Camp0243.cs` (the camp counted alone, the garrison beside a relief, the withdraw at 1.0); `WarRoom selftest` (the storm turned at the relief's hour, 90 hours alone against 24.5 with it; the battle odds with a lord inside and one outside).
 
+## The side at a siege (since 0.24.5)
+
+Nov 24, run 20261124-1840-C2, day 64: thirteen lords sent to besiege Goblin Town each weighed the relief against `camp_strength`, which before any camp stood was the lord himself; each lifted the siege alone ("944% of your camp's 207") and the strike never began.
+
+- The besiege order's relief call-back, `withdraw_on_relief` and `storm_on_relief` weigh against `max(camp_strength(at), mates_strength(at, 6))`: the lords camped there, or this siege's lords (every unfinished besiege order at the place, and the lords the order names) within 6 of it if they are more. Lords farther off are never counted, so the Lasgalor case of 0.24.3 still holds. Its messages say "your side's N at the siege".
+- Check: `SmokeTest` `Camp0243.cs` `SiegeSideTests` (two lords near, no camp yet, a relief of 1,500 against their 2,000: both stay; a third far off not counted).
+
 ## Testing by hand
 
 - `agents.tools` lists the library and says whether every tool passed the checker. `agents.tools defend` shows one tool.

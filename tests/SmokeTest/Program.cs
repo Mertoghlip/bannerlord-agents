@@ -1011,7 +1011,7 @@ namespace SmokeTest
             Check(Calls() == 0, "two lords coming to the relief, strength 1,800, under 0.8 of the besieger's 3,400: no call yet (a lord far off and not heading there is not counted)");
             var beregond = Lord("ber2", "Beregond", 200, 100, 1000, "GoToSettlement");
             Brain.OnHour(Sieged(7205, nag, near, faramir, idle, beregond));
-            Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against your camp's 3,400 (the lords camped there now"),
+            Check(Calls() == 1 && Notices().Contains("A relief is coming to Fornost: 3 enemy lords and armies within 15 of it or heading for it, strength 2,800 together, against your side's 3,400 at the siege (the lords camped there"),
                   "a third lord makes 2,800, above 0.8 of its strength: besiege calls back, counting lords, not only armies");
             Check(Notices().Contains("Nearest first: Imrahil, strength 900, 4.0 away") && System.Text.RegularExpressions.Regex.IsMatch(Notices(), @"Faramir, strength 900, 60\.0 away \(could be there in about \d+ hours\), defending Fornost"),
                   "and names them nearest first, with what each is doing (those heading for it count from any distance)");
@@ -1397,7 +1397,7 @@ namespace SmokeTest
             var relief = new[] { Coming("rl1", "Khamul", 195, 1500), Coming("rl2", "Lurgha", 200, 1300), Coming("rl3", "Hlakum", 205, 1355) };
             Brain.OnHour(Camp(7801, camp.Concat(relief).ToArray()));
             Brain.OnHour(Camp(7802, camp.Concat(relief).ToArray()));
-            Check(!new[] { "Imak", "Tali", "Thalion", "Gorli" }.Any(n => Notices().Contains(n + " lifts the siege")) && Notices().Contains("against your camp's 6,000 (the lords camped there now"),
+            Check(!new[] { "Imak", "Tali", "Thalion", "Gorli" }.Any(n => Notices().Contains(n + " lifts the siege")) && Notices().Contains("against your side's 6,000 at the siege (the lords camped there"),
                   "a relief of 4,155 against four lords camped in the siege (6,000 together, each 1,500): nobody lifts the siege");
             for (int i = 0; i < camp.Length; i++) Runner.Ended(1401 + i, "test over");
             var single = Camped("cmp5", "Valkava", 101);

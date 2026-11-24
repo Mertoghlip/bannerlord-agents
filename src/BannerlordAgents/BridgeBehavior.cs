@@ -246,6 +246,8 @@ namespace BannerlordAgents
         public override void RegisterEvents()
         {
             CampaignEvents.OnSessionLaunchedEvent.AddNonSerializedListener(this, OnSessionLaunched);
+            // 0.24.5: the realms' lists of enemies rebuilt once the load has finished (WarLists): a stale one left an army storming at the save with no target
+            CampaignEvents.OnGameLoadFinishedEvent.AddNonSerializedListener(this, () => Guard("enemy lists at load", WarLists.AtLoad));
             CampaignEvents.HourlyTickEvent.AddNonSerializedListener(this, OnHourlyTick);
             CampaignEvents.DailyTickEvent.AddNonSerializedListener(this, OnDailyTick);
             CampaignEvents.DailyTickClanEvent.AddNonSerializedListener(this, OnDailyClan);
@@ -392,6 +394,7 @@ namespace BannerlordAgents
 
         private void OnDailyTick()
         {
+            Guard("enemy lists", WarLists.Daily);
             Guard("daily line", () =>
             {
                 DateTime now = DateTime.Now;

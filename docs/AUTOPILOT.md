@@ -11,7 +11,10 @@ Two halves:
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -MakePlayerless   # once
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -DryRun           # proves it, starts no run
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -Arm C1           # or -Arm C2
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -Arm C1           # or -Arm C2, -Arm C0 (the control)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -Arm C2 -Resume   # carries a running run on from TEST AUTO C2
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -StormRepro -ReproRealm dolguldur
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\overnight.ps1                   # C2, C1, C0 one after another, 200 days each
 ```
 
 - **`-MakePlayerless`** loads `TEST START DGG MERGE` (`-From`) and makes the playerless switch (`agents.run playerless go`) with the clock stopped. It saves the result as `TEST START DGG MERGE PLAYERLESS` (`-Start`), quits, and adds that name to `run_save`. Every agent is switched off while it works and switched back afterwards, so it makes no model calls. It refuses if the playerless save exists already, so every arm starts from the same switch. The in-game hour is the same as the merge save's, since the clock never runs.
@@ -27,6 +30,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -Arm C
   - a restart from that save when the game holds more than `-MemoryRestartMb` (20,000);
   - a pause on the usage limit until it resets;
   - the run's end: the module saves `TEST END <arm> <run>`, and the script quits the game.
+- **`-Arm C2 -Resume`** (Nov 24) loads the running run's own save (`TEST AUTO <arm>`) and minds it to its end, with no arm change and no new run; a run's length is its run.json's `days`, changed only with the game closed.
+- **`-StormRepro`** (Nov 24, the storm-at-reload diagnosis): every agent off and `run_save` set aside; loads `-ReproFrom` (`TEST AUTO C2`), runs at fast-forward until a storm by `-ReproRealm` (any when empty) is under way (`agents.storms`), saves it as `AUTOPILOT STORM REPRO`, restarts, loads it and watches `-ReproWatchSeconds`, logging the storms; the module's AI probe writes each storming leader's decisions (kind `aiprobe`) to the session traces.
+- **`scripts\overnight.ps1`** (Nov 24) runs the playerless arms one after another (`-Arms`, default C2, C1, C0; `-Days`, default 200), each with its arm set, the war rooms restarted and those the arm does not use stopped, `run_days` set, and the control's `map_speed` at `-ControlMapSpeed` (1, double the usual 0.5). It goes on only when a run finished (code 0), logs to `runs\overnight.log`, and puts `map_speed` and `run_days` back at the end.
 - **Stopping it cleanly:** create `%LOCALAPPDATA%\BannerlordAgents\autopilot\stop.txt`. The script saves the run, quits the game and ends with code 4.
 - **Exit codes:**
   - 0: done.

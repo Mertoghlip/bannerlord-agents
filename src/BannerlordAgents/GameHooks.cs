@@ -494,8 +494,14 @@ namespace BannerlordAgents
 
     internal static class ThinkPatch
     {
-        private static void Prefix(MobileParty mobileParty, out Reasons.Before __state) => __state = Reasons.Before_(mobileParty);
-        private static void Postfix(MobileParty mobileParty, Reasons.Before __state) => Reasons.After(mobileParty, __state);
+        // Nov 24: the AI probe (AiProbe) rides the same decision step: army leaders storming or besieging, of any realm
+        internal struct State { public Reasons.Before R; public AiProbe.Before P; }
+        private static void Prefix(MobileParty mobileParty, out State __state) => __state = new State { R = Reasons.Before_(mobileParty), P = AiProbe.Capture(mobileParty) };
+        private static void Postfix(MobileParty mobileParty, State __state)
+        {
+            Reasons.After(mobileParty, __state.R);
+            AiProbe.After(mobileParty, __state.P);
+        }
     }
 
     /// <summary>
