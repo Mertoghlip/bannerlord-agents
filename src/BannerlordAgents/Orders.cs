@@ -744,7 +744,16 @@ namespace BannerlordAgents
                 foreach (JProperty sp in set.Properties())
                     if (sp.Value.Type == JTokenType.Integer || sp.Value.Type == JTokenType.Float) h.Settings[sp.Name] = (double)sp.Value;
             LordTours.Drop(party);   // off TFAOMFixes' recruiting trip, as at any order's start
-            Apply(h);
+            // 0.24.2: held with the game's AI off but left on the move the save had (the runner gives the tool's own move on the first hour). Until 0.24.1 he
+            // was set to hold here, and the game's very next siege tick throws out any besieger not set to besiege (BesiegerCamp.CheckBesiegerPartiesAndMakeThemLeave):
+            // every siege of ours broke at a load and began again from nothing (Nov 24, run 20261124-1037-C2: Hollin Gate reset at each memory restart from day 9).
+            Witness.Ours = true;
+            try
+            {
+                party.Ai.SetDoNotMakeNewDecisions(true);
+                Toggled.Add(party);
+            }
+            finally { Witness.Ours = false; }
             Active.Add(h);
             AfterRelease.RemoveAll(r => r.Party == party);
             Changed();

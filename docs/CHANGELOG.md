@@ -3020,3 +3020,15 @@ avmesh.bin`):
 - **Outside the repository:** `human_player = none` in the three realm agents' warroom.txt (arm C2).
 - **The first try's end:** I closed the game at 10:28. The autopilot cannot tell a closing by hand from a crash: it gathered the files (`D:\BannerlordAgents\crashes\20261124-102817-25968`) and restarted from `TEST AUTO C2`. That game closed during its load at 10:29, and the script ended with code 2. The new start abandons run 20261124-1024-C2.
 - **Started again** at 10:37: `autopilot.ps1 -Arm C2 -RivalsOff`, war rooms started after the arm was set (each reads warroom.txt only when it starts), the Orcs' and Dol Guldur's stopped.
+
+### 12:10 · Module 0.24.2: sieges survive a load; C2 started over · commit (next)
+- **What I found:** in run 20261124-1037-C2 Górli's siege of Hollin Gate (from day 9) never stormed. Each memory restart (every 25 to 40 minutes, about 8 to 9 in-game days) broke it at the load, and a new siege began from nothing. The trace at the 11:44 load: `SetMoveModeHold` <- `BesiegerCamp.RemoveSiegePartyInternal` <- `set_BesiegerCamp` <- `CheckBesiegerPartiesAndMakeThemLeave` <- `SiegeEvent.Tick`.
+  - `Orders.Resume` (an order carried on from the save, 0.13.5) set each lord to hold until the runner's first hour gave the tool's own move.
+  - The game's first siege tick takes any besieger not set to besiege out of its camp (docs/ENGINE-NOTES.md).
+  - The camp's followers left with their leader, and the siege ended.
+  - The same broke Gárjan's siege of Nanduhirion at my reload in arm A this morning.
+  - The game's own sieges were not affected.
+- **Fixed:** `Orders.Resume` holds the lord with the game's AI off but leaves the move the save had; the runner gives the tool's move on the first hour, as before.
+- **Checks:** smoke test, war room and dashboard self-tests all passed (the load path needs the game, so the check is the first memory restart of the new run); RefCheck missing 0.
+- **Installed** with the game closed (12:08): module 0.24.2 (`BannerlordAgents.dll` SHA-256 6fb4ffd21c4fac3c...).
+- **The run:** stopped cleanly at 12:06 (`stop.txt`; saved, quit, code 4) at about day 26: about 15 enemy lords taken, Sirannon taken, Imnagath lost, and Hollin Gate never stormed. Started over at 12:09 with the same arm (`-Arm C2 -RivalsOff`, no human player); the new start abandons 20261124-1037-C2.
