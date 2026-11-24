@@ -3084,7 +3084,7 @@ avmesh.bin`):
 - **What:** `scripts/autopilot.ps1 -Arm C1|C2 -Resume` loads the running run's own save (TEST AUTO <arm>) and minds it to its end, with no arm change and no new run (before, the script could only start a run from TEST START).
 - Nothing else changed: module 0.24.3 and war room 0.20.4 stay installed; the agent is never told the run's length.
 
-### 23:05 · Run 20261124-1840-C2 paused at day 85; module 0.24.4 and war room 0.20.6 installed; arm A on the facts-only instructions for the Orcs and Dol Guldur · commit (this one)
+### 23:05 · Run 20261124-1840-C2 paused at day 85; module 0.24.4 and war room 0.20.6 installed; arm A on the facts-only instructions for the Orcs and Dol Guldur · commit 2cbc247
 - **Why:** I want to play against Dol Guldur and the Orcs with the toned-down instructions (game facts and the order interface, no doctrine) to see how they behave against me. The C2 run waits.
 - **The C2 run paused (outside the repository):** stop.txt at day 85 (22:59; the autopilot saved TEST AUTO C2 and closed the game). `runs\current.txt` set aside as `current.txt.bak-20261124-C2-paused`, since loading a run save marks an open run abandoned; to carry it on, put that file back and run `autopilot.ps1 -Arm C2 -Resume` (the arm must be C2 again first).
 - **Installed** with the game closed (23:03): module 0.24.4 (`BannerlordAgents.dll` SHA-256 67bd288767df424e...) and war room 0.20.6, the 20:22 entry's changes (the granary sentence, the siege screen's pooled food, the holding food line, the siege lines on the agents' pages, relieve's wording). Smoke test, war room self-test and dashboard self-test all passed; RefCheck: 955 game member references, missing 0.
