@@ -3078,7 +3078,7 @@ avmesh.bin`):
 - **Checks:** smoke test all passed (the holding line before and during a siege); war room self-test all passed, built beside the running war room (the siege on the besieger's page and under the place, the pooled days). The siege screen is game-only: checked at the first siege after install.
 - **Not installed:** the run under way keeps module 0.24.3 and war room 0.20.4. These go in once it has ended, with the facts-only switch.
 
-### 21:23 · Run 20261124-1840-C2 extended from 60 to 120 days; the autopilot's -Resume · commit (this one)
+### 21:23 · Run 20261124-1840-C2 extended from 60 to 120 days; the autopilot's -Resume · commit 3264504
 - **Why:** I want to see how the kingdom's agent carries on past day 60 (on day 54 it had lost Aragorn's army at Torech Emel and was sending six lords back there while Lorgath besieged Lasgalor).
 - **How:** a run's length is fixed in its run.json (`days`) when it begins, and a carried-on load reads it from there; the game holds it in memory while it runs. So: stop.txt at day 54 (21:22: the autopilot saved TEST AUTO C2 and closed the game), run.json's `days` 60 → 120 with the game closed (outside the repository: `%LOCALAPPDATA%\BannerlordAgents\runs\20261124-1840-C2\run.json`), then the autopilot carried the run on from TEST AUTO C2.
 - **What:** `scripts/autopilot.ps1 -Arm C1|C2 -Resume` loads the running run's own save (TEST AUTO <arm>) and minds it to its end, with no arm change and no new run (before, the script could only start a run from TEST START).
