@@ -3006,7 +3006,7 @@ avmesh.bin`):
 - **A harness fault:** at 09:27 Dol Guldur's review gave six gold gifts (395,000 in all), and its next wake, 16 s later and before the receipts, gave the same six again; all twelve were carried out. A gift that repeats one just carried out should be refused. Not fixed yet.
 - **My gift orders through the lieutenant** were refused three times: the gift order never takes from or gives to the human player.
 
-### 10:40 · Module 0.24.1, war room 0.20.2: no human player in the C runs; C2 started again · commit (next)
+### 10:40 · Module 0.24.1, war room 0.20.2: no human player in the C runs; C2 started again · commit 8b58286
 - **What went wrong (run 20261124-1024-C2, 10:24-10:28):** the kingdom's agent wrote in its plan: "Aragorn is the human player and his army is left to him." Nobody plays a C run in person. Two inputs misled it:
   - the report told it "You, Marzuk ibn-Zayak, are the human player" (YOUR OWN BATTLES, THE HUMAN PLAYER'S), because the stand-in is the player's character and stands in its realm;
   - its instructions' "## The human player" describes an enemy lord commanded in person.
