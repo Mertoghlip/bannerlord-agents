@@ -80,7 +80,7 @@ namespace BannerlordAgents
         private static readonly HashSet<string> RealmKinds = new HashSet<string>
         {
             "war", "peace", "alliance", "alliance_ended", "call_to_war", "call_to_war_ended", "peace_offer", "proposal", "decided",
-            "vote", "offer", "offer_settled", "vote_settled", "vote_closing"
+            "vote", "offer", "offer_settled", "vote_settled", "vote_closing", "clan_free"
         };
         private static readonly Regex Ids = new Regex(@"\[([^\]\s]+)\]", RegexOptions.Compiled);
 

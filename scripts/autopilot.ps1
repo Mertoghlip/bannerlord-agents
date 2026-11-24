@@ -16,7 +16,7 @@
   Three jobs:
     -MakePlayerless   once: loads -From (TEST START DGG MERGE), makes the playerless switch with the clock stopped, saves it as -Start, quits, and adds
                       -Start to run_save so loading it readies a run. Every agent is switched off for it and switched back after (no model calls).
-    -Arm C1|C2        a run: sets the arm, loads -Start, checks the run would be that arm, puts the stand-in to waiting at normal speed (the run begins),
+    -Arm C1|C2        (-RivalsOff: the rivals' agents off, not shadow, in C2) a run: sets the arm, loads -Start, checks the run would be that arm, puts the stand-in to waiting at normal speed (the run begins),
                       and minds it to day 60: the run's own save every in-game day (TEST AUTO <arm>), a restart at -MemoryRestartMb, a pause on the
                       usage limit until it resets, a restart after a crash or freeze (twice at most), the TEST END save, the quit.
     -DryRun           proves the machinery without readying a run (run_save set aside for it, every agent off): loads -Start, the pop-up self-test,
@@ -33,6 +33,8 @@
 #>
 param(
     [ValidateSet('C1', 'C2')][string]$Arm,
+    # Nov 24: the rival realms' agents fully off for a C2 run, not shadow (their continuous conversations stay as the arm A run left them)
+    [switch]$RivalsOff,
     [switch]$MakePlayerless,
     [switch]$DryRun,
     [string]$From = 'TEST START DGG MERGE',
@@ -563,7 +565,8 @@ try {
     else {
         if (-not (Save-Exists $Start)) { throw "No save named '$Start': make it first (-MakePlayerless)." }
         if (@(Run-Saves) -notcontains $Start) { throw "run_save does not name '$Start' (it is: $(Get-Setting 'run_save'))." }
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'arm.ps1') -Arm $Arm | ForEach-Object { Say "  arm: $_" }
+        $armArgs = @('-Arm', $Arm); if ($RivalsOff) { $armArgs += '-RivalsOff' }
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'arm.ps1') @armArgs | ForEach-Object { Say "  arm: $_" }
         Begin-Run $Start $true
         Say "Run $Arm begun: the stand-in waits at normal speed. Minding it to its end."
         $code = Mind-Run

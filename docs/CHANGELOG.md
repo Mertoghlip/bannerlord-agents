@@ -2959,3 +2959,49 @@ avmesh.bin`):
   - Two setup-only run records with no clock run: `20261123-0843` (left armed by the first try, which stopped on a script fault, since fixed) and `20261123-0845` (stopped by the dry run, since the playerless save was made while it was being set up; the save job now sets `run_save` aside instead).
   - The agents' modes were switched off for each job and put back (orcs, Dol Guldur and the lieutenant live, the kingdom's agent off).
 - **Not started:** C1 and C2. Each is `autopilot.ps1 -Arm C1` (or `C2`) and takes at least 2 h 40 min at normal speed.
+
+### 17:56 · The arm A run reopened after the autopilot's first try closed it
+- **What happened:** the first try of the playerless save job (08:42-08:43, before it set `run_save` aside) loaded `TEST START DGG MERGE`. That is the start save of the arm A run `20261120-2108-A`, which was open at day 11 with its own save `TEST A2`. Loading a run's start save ends the open run, so the arm A run was marked abandoned at 08:43:26. At 17:44 I loaded `TEST A2` to carry on arm A, and since the run was no longer open the game kept no run for it.
+- **Fixed by hand, outside the repository** (`%LOCALAPPDATA%\BannerlordAgents\runs`): in `20261120-2108-A\run.json` the status went back to running, the end time and the abandoned mark came out, and the Nov 20 stretch ends at its real close (22:29:59). `current.txt` names that run again; it named the stopped `20261123-0845`. Backups: `run.json.bak-20261123-abandoned`, `current.txt.bak-20261123`. `Runs.exe status` shows the run running, 11 of 60 days done. A load of `TEST A2` carries it on at day 12.
+- **Still open:** `autopilot.ps1 -Arm C1|C2` loads a run save as well, so it would end an arm A run left open. It should refuse while another run is open, unless told otherwise.
+
+### 19:36 · What fills the game's memory, read live (no change to the game)
+- **Why:** my game held 21 to 25 GB an hour after the storm of Caras Laerolin, and the tidy's low point kept rising.
+- **How:** read-only, beside the running game (process 23632). The address space was mapped twice (`memscan` in the session scratchpad: every reservation's size, commit, protection and a few sampled pages; residency from the working-set query, no page touched). The managed heap was counted and traced with new modes of `C:\BannerlordArchive\tools\HeapLists` (outside this repository): `--types`, `--roots`, `--statics`, `--scenes`, `--distinct`. Each pauses the game for 3 to 34 s while it reads. Output in `%LOCALAPPDATA%\BannerlordAgents\memscan`.
+- **Found** (details in `docs/ENGINE-NOTES.md`, "Memory on the campaign map"):
+  - about 6.5 GB of untouched ~32 MB blocks that follow the graphics card's memory;
+  - the engine's mimalloc segments, 6.7 GB;
+  - the whole last battle kept alive by TFAOMFixes, DismembermentPlus and the game's own ladder scripts;
+  - a per-frame decal wrapper churn in the map's tracks and siege circles;
+  - our `MapExport._scene` static, to clear at campaign end.
+
+## Tuesday, November 24
+
+### 10:20 · Module 0.24.0: Dol Guldur takes in clans that lost their realm · commit (next)
+- **Why:** I take landless clans of the free peoples into my kingdom by talking to their leaders. Dol Guldur should be able to do the same for clans of the orcish peoples, Gundabad and the Misty Mountain Orcs. Only clans with no realm at all, never one still serving a realm (the Orcs' own landless clans stay theirs while their realm stands), and Dol Guldur only.
+- **What (docs/DIPLOMACY.md, "Taking in clans that lost their realm"):**
+  - a new diplomatic act, `take_in` (clan): the clan joins the realm as a vassal clan with all its lords (`ChangeKingdomAction.ApplyByJoinToKingdom`), and its leader gains 5 relation with the ruler;
+  - my own terms: no realm, no lands, a landed house, its leader alive, not at war with the realm, its leader's relation with the ruler 0 or more;
+  - who may: a realm whose agent folder's `agent.txt` names peoples in `take_in`;
+  - DIPLOMACY says what the act does and lists each such clan of its peoples, strongest first, with its leader's relation and whether it would come ("none" when there is none);
+  - a clan of its peoples leaving its realm for none sends a `clan_free` notice, which wakes even a self-waking agent.
+  - Written as our own code; nothing is taken from TFAOMFixes' take-in.
+- **The game's rules behind it (docs/ENGINE-NOTES.md):** a realm that loses its last holding is ended by the game; every clan leaves it for none, and a clan with no realm and no lands is destroyed 28 days later unless it joins a realm or gains a holding. The game's own daily look may lead it into a random realm first, about one day in five. So the act matters once the Misty Mountain Orcs lose their last holding.
+- **Checks:** smoke test all passed, seven new checks among them. War room and dashboard self-tests passed. RefCheck: 951 member references, missing 0.
+- **Installed** with the game closed (10:20): module 0.24.0 (`BannerlordAgents.dll` SHA-256 a8b6ae0425a0a5cb...).
+- **Outside the repository:** `dolguldur-war-council\agent.txt` gains `take_in = gundabad, mistymountainorcs` (backup `agent.txt.bak-20261124-before-take-in`). The agents' instructions are unchanged; the act is explained where the agent reads its diplomacy.
+- **No clan qualifies yet:** all ten Gundabad clans are in Dol Guldur since I folded Gundabad into it on Nov 16, and the Orcs' clans are still in their realm.
+
+### 10:23 · The C2 run started by the autopilot; the arm A run set aside
+- **What:** `autopilot.ps1 -Arm C2 -RivalsOff`: the kingdom's agent rules my kingdom against the game's AI, the stand-in waits at normal speed, from `TEST START DGG MERGE PLAYERLESS`.
+  - **The rivals' agents fully off, not shadow:** the Orcs' and Dol Guldur's continuous conversations stay as the arm A run left them. A shadow agent answering C2's world would have written that world into them. `autopilot.ps1` gains `-RivalsOff`, passed on to `arm.ps1`. Their war rooms are stopped for the run as well.
+  - **The arm A run set aside:** `20261120-2108-A` was open at day 30 (its save `TEST A2`, Winter 9). Loading a run save ends the open run (Nov 23), so `runs\current.txt` was taken away before the start (backup `current.txt.bak-20261124-runA-set-aside`). The arm A run's own `run.json` still says running.
+- **To carry arm A on afterwards:** put `current.txt` back from that backup, `arm.ps1 -Arm A`, start the Orcs' and Dol Guldur's war rooms, and load `TEST A2`.
+
+### 10:25 · What arm A showed today, days 18 to 30 (no change)
+- **I took Nanduhirion (Winter 2, 21 Orc lords captured), Caradhras' siege and Hollin Gate (Winter 9).** The Orcs gave up each northern holding rather than lose their lords. Their Winter 8 plan reads: keep the lords whole, hold the south, give up the north's walls rather than its lords.
+- **Dol Guldur kept about 22,000 of its 48,000 strength around quiet holdings,** with about 26,000 of mine near its threatened ones. Its own plan says to avoid my gathered host. It sent beaten and freed lords home to rebuild and never called them back. The Gundabad lords stayed where they joined. It picked off lone lords of mine with pairs of its own (Galadriel, Baranthir).
+- **"One siege at a time"** is Dol Guldur's own rule, written on its lessons page on Nov 20 after three sieges at once all drew my relief. It held it back from Caras Laerolin (180 garrison) once I left Mirkwood, with about 5,000 of my lords within a day.
+- **A self-waking agent can miss an opening:** Dol Guldur woke once while I marched from Mirkwood to Hollin Gate. Its alarms watch me coming, not leaving.
+- **A harness fault:** at 09:27 Dol Guldur's review gave six gold gifts (395,000 in all), and its next wake, 16 s later and before the receipts, gave the same six again; all twelve were carried out. A gift that repeats one just carried out should be refused. Not fixed yet.
+- **My gift orders through the lieutenant** were refused three times: the gift order never takes from or gives to the human player.

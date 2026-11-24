@@ -138,8 +138,11 @@ namespace BannerlordAgents
             }
         }
 
-        /// <summary>News that wakes a self-waking agent at once beside the locked rules (0.18): a war or a peace of its realm's, and an offer, which is accepted by itself if left unanswered.</summary>
-        public static readonly HashSet<string> SelfAlways = new HashSet<string>(StringComparer.Ordinal) { "war", "peace", "offer" };
+        /// <summary>
+        /// News that wakes a self-waking agent at once beside the locked rules (0.18): a war or a peace of its realm's, and an offer, which is accepted by itself if left
+        /// unanswered; since 0.24 a clan of its peoples that lost its realm ("clan_free"), which the game ends in 28 days and another realm may take in first.
+        /// </summary>
+        public static readonly HashSet<string> SelfAlways = new HashSet<string>(StringComparer.Ordinal) { "war", "peace", "offer", "clan_free" };
 
         /// <summary>
         /// A line for an agent that sets its own wakes (0.18, wake = self; Sort has run first): the locked rules keep their lane; its watches' lines, their check-ins,

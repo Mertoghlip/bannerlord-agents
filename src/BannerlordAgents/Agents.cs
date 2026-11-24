@@ -40,6 +40,11 @@ namespace BannerlordAgents
         public string Wake = "rule";
         public bool WakeRule => (Wake == "rule" || Wake == "self") && On && !IsLieutenant;
         public bool WakeSelf => Wake == "self" && On && !IsLieutenant;
+        /// <summary>
+        /// The peoples (culture ids) whose clans the realm may take in once they have lost their realm and their lands (0.24, agent.txt's "take_in", comma-separated;
+        /// Dol Guldur: gundabad, mistymountainorcs), as I take in landless clans of the free peoples. Empty: none.
+        /// </summary>
+        public readonly List<string> TakeIn = new List<string>();
         /// <summary>What was wrong with the folder, for the self-check (null: nothing).</summary>
         public string Problem;
 
@@ -68,6 +73,10 @@ namespace BannerlordAgents
                             case "kind": c.Kind = kv.Value.Trim().ToLowerInvariant() == "lieutenant" ? "lieutenant" : "realm"; break;
                             case "news": c.News = NewsMode(kv.Value); break;
                             case "wake": c.Wake = WakeMode(kv.Value); break;
+                            case "take_in":
+                                foreach (string p in kv.Value.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries))
+                                    if (!c.TakeIn.Contains(p.Trim().ToLowerInvariant())) c.TakeIn.Add(p.Trim().ToLowerInvariant());
+                                break;
                         }
             }
             catch (Exception e) { c.Problem = "agent.txt could not be read: " + e.Message; }

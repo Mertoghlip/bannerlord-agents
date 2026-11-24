@@ -512,7 +512,7 @@ namespace BannerlordAgents
         private void OnBattleStarted(MapEvent me, PartyBase attacker, PartyBase defender) => Guard("battle", () => { Notices.OnBattleStarted(me, attacker, defender); Recorder.OnBattleStarted(me, attacker, defender); Run.OnBattleStarted(me); PlayerBattles.OnStarted(me); });
         private void OnBattleEnded(MapEvent me) => Guard("battle notice", () => { Notices.OnBattleEnded(me); Run.OnBattleEnded(me); BattleForOutcomes(me); PlayerBattles.OnEnded(me); BattleEnds.OnEnded(me); });
         private void OnClanChangedKingdom(Clan clan, Kingdom from, Kingdom to, TaleWorlds.CampaignSystem.Actions.ChangeKingdomAction.ChangeKingdomActionDetail detail, bool notify)
-            => Guard("clan moved", () => { Run.OnClanChangedKingdom(clan, from, to); Recorder.OnClanChangedKingdom(clan, from, to, detail); });
+            => Guard("clan moved", () => { Run.OnClanChangedKingdom(clan, from, to); Recorder.OnClanChangedKingdom(clan, from, to, detail); Diplomacy.OnClanChangedKingdom(clan, from, to); });
         private void OnPrisonerTaken(PartyBase capturer, Hero h) => Guard("prisoner notice", () =>
         {
             Notices.OnPrisonerTaken(capturer, h);

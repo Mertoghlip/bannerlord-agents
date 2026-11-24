@@ -21,6 +21,7 @@ An agent that rules a realm makes its diplomacy by the game's own rules and cost
 | `propose_expel` | `clan` | ExpelClanFromKingdomDecision |
 | `hire_mercenary` | `clan` | `ChangeKingdomAction.ApplyByJoinFactionAsMercenary` with the game's award, only if the clan values the game's offer above 0 (`MercenaryJoinKingdomBarterable`) |
 | `release_mercenary` | `clan` | `ApplyByLeaveKingdomAsMercenary`, once its contract allows (`ShouldStayInKingdomUntil`) |
+| `take_in` (0.24) | `clan` | `ChangeKingdomAction.ApplyByJoinToKingdom`: a clan of the realm's peoples (agent.txt's `take_in`) that has lost its realm and its lands joins as a vassal clan with all its lords, if it is not at war with the realm and its leader's relation with the ruler is 0 or more; the leader then gains 5 with the ruler |
 | `vote` | `vote`, `option`, `weight` (slight, strong, full) | the ruler's clan's support in a held vote |
 | `decide` | `vote`, `option` | settles a held vote at once, as ruler |
 | `accept_peace`, `decline_peace` (and `_alliance`, `_call`, `_trade`) | `offer` or `with` | answers a held offer |
@@ -28,6 +29,16 @@ An agent that rules a realm makes its diplomacy by the game's own rules and cost
 - **A proposal** is the game's own vote in the realm, the ruler's clan its proposer at the game's influence price (`GetInfluenceCost`), settled at once: the ruler's clan supports it fully, the other clans vote as the game has them vote, and the outcome they support most stands. `"overrule": true` decides it the agent's way even against them, at the game's price for overruling. The game's own conditions are checked first (`IsAllowed`, `CanMakeDecision`).
 - **Checked twice:** on the helper, against the realm's screens as last copied (`DiploRules.Check`, which needs no game: the act known, the stance it needs, the War of the Ring, the influence, the vote or offer open, the clan in the realm or for hire); refused there with the reason, or checked only in shadow mode. Then on the game's thread against a fresh copy and the game's own conditions, and carried out.
 - **Receipts:** each act gets a line in `receipts.log` ("diplomacy 1 (propose_peace dale): APPLIED. proposed (100 influence): Make Peace With Dale; the clans voted at once and decided: Yes."), the orders' record, the episode index and the diplomacy book.
+
+## Taking in clans that lost their realm (0.24)
+
+I take landless clans of the free peoples into my kingdom by talking to their leaders (TFAOMFixes' take-in: a clan with no lands, not at war with me, its leader's relation with me 0 or more). Dol Guldur gets the same for the orcish peoples, as its own act, written here and never borrowed from that mod:
+- **Who may:** a realm whose agent folder's `agent.txt` names peoples in `take_in` (Dol Guldur: `take_in = gundabad, mistymountainorcs`). No other realm's agent has it (Nov 24: Dol Guldur only).
+- **Which clans:** only clans with no realm at all, never one still serving a realm (Nov 24: the Misty Mountain Orcs' own landless clans stay theirs while their realm stands). In no realm, no settlement, a landed house (not bandits, a minor faction or mercenaries), its leader alive (`Diplomacy.Landless`).
+- **Terms:** not at war with the realm, and its leader's relation with the ruler 0 or more (`Diplomacy.TakeInRefusal`); my own terms.
+- **When such clans appear (the game, 1.4.8):** a realm that loses its last holding is ended by the game (`FactionDiscontinuationCampaignBehavior.DiscontinueKingdom`): every clan leaves it for none (`ChangeKingdomAction.ApplyByLeaveByKingdomDestruction`), then the realm is destroyed; a clan with no realm and no lands is ended 28 days later (`DestroyClanAction`) unless it joins a realm or gains a holding. Meanwhile the game's own daily look may lead it into some realm (`DiplomaticBartersBehavior`, never the player's).
+- **What the agent sees:** DIPLOMACY says what take_in does and lists each such clan of its peoples, strongest first, with its people, lords, strength, its leader's relation with the ruler and whether it would come (`DiploRules.TakeInLine`), "none" when there is none. A clan of its peoples leaving its realm for none sends a `clan_free` notice, which wakes even a self-waking agent (`WakeRules.SelfAlways`).
+- **After:** the clan's lords follow the game's AI until the agent orders them, as when I folded Gundabad into Dol Guldur (`agents.annex`, Nov 16).
 
 ## The agent's say in its realm's votes
 

@@ -467,6 +467,23 @@ namespace BannerlordAgents
                     Book("mercenary_released", null, null, k, new { clan = c.StringId });
                     return Names.Faction(c) + " has left your service";
                 }
+                case "take_in":
+                {
+                    List<string> peoples = Agents.Of(k.StringId)?.Config?.TakeIn;
+                    Clan c = Clan.All.FirstOrDefault(x => x.StringId == target);
+                    if (peoples == null || peoples.Count == 0) return "your realm does not take in clans that have lost their realm";
+                    if (!Landless(c, peoples)) return (c != null ? Names.Faction(c) : "that clan") + " is no longer a clan of your peoples with no realm and no lands";
+                    string no = TakeInRefusal(c, k);
+                    if (no != null) return Names.Faction(c) + " will not come now: " + no;
+                    int lords = c.Heroes.Count(x => x.IsLord && x.IsAlive);
+                    float strength = c.CurrentTotalStrength;
+                    ChangeKingdomAction.ApplyByJoinToKingdom(c, k, default(CampaignTime), true);
+                    if (k.Leader != null && c.Leader != null && TakeInRelation != 0) ChangeRelationAction.ApplyRelationChangeBetweenHeroes(k.Leader, c.Leader, TakeInRelation, false);
+                    status = "applied";
+                    Book("clan_taken_in", null, null, k, new { clan = c.StringId, culture = c.Culture?.StringId, lords, strength = (int)strength });
+                    return Names.Faction(c) + " rides under your banner from now on, a vassal clan of " + Names.Faction(k) + ": " + lords + " lords, strength " + Text.N((int)strength)
+                           + "; its lords follow the game's AI until you order them";
+                }
                 case "vote":
                 case "decide":
                 {
@@ -532,6 +549,55 @@ namespace BannerlordAgents
             Proposed.Remove(d);
             Decisions.Remove(d);
             return "proposed (" + cost + " influence): " + d.GetGeneralTitle() + "; the clans voted at once and " + came;
+        }
+
+        // ---------- taking in clans that lost their realm (0.24) ----------
+
+        /// <summary>The relation a clan's leader gains with the ruler who takes it in (as I gain with the leaders I take in).</summary>
+        public const int TakeInRelation = 5;
+
+        /// <summary>
+        /// A clan of one of these peoples that has lost its realm and its lands: no realm, no settlement, a landed house (not bandits, a minor faction or
+        /// mercenaries), its leader alive, never the player's. The game makes such clans when it ends a realm that lost its last holding (each clan leaves it,
+        /// FactionDiscontinuationCampaignBehavior.DiscontinueKingdom) and ends each of them 28 days later unless it joins a realm or gains a holding.
+        /// </summary>
+        internal static bool Landless(Clan c, ICollection<string> peoples) =>
+            c != null && !c.IsEliminated && c.Kingdom == null && c != Clan.PlayerClan && !c.IsBanditFaction && !c.IsMinorFaction && !c.IsClanTypeMercenary && !c.IsUnderMercenaryService
+            && c.Settlements.Count == 0 && c.Culture != null && peoples.Contains(c.Culture.StringId) && c.Leader != null && c.Leader.IsAlive;
+
+        /// <summary>Why a landless clan would not join this realm now (null: it would): at war with it, or its leader dislikes the ruler. My own terms for taking clans in.</summary>
+        internal static string TakeInRefusal(Clan c, Kingdom k)
+        {
+            if (c.IsAtWarWith(k)) return "it is at war with you";
+            int rel = k.Leader != null ? c.Leader.GetRelation(k.Leader) : 0;
+            return rel < 0 ? "its leader dislikes your ruler (relation " + rel + ")" : null;
+        }
+
+        /// <summary>A people's name as the game gives it (gundabad: Gundabad), else its id.</summary>
+        internal static string PeopleName(string id)
+        {
+            try { return TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObject<CultureObject>(id)?.Name?.ToString() ?? id; }
+            catch { return id; }
+        }
+
+        /// <summary>
+        /// A clan left its realm for none (the game's event): if it is now a landless clan of the peoples a realm's agent may take in, that agent hears of it at once
+        /// (a "clan_free" notice wakes even a self-waking agent: the game ends such a clan in 28 days, and another realm may take it in first).
+        /// </summary>
+        public static void OnClanChangedKingdom(Clan clan, Kingdom from, Kingdom to)
+        {
+            if (clan == null || to != null) return;
+            foreach (RealmAgent agent in Agents.All)
+            {
+                if (agent?.Config == null || agent.Config.TakeIn.Count == 0 || !agent.Config.On || !Landless(clan, agent.Config.TakeIn)) continue;
+                Kingdom k = Bridge.SeatOf(agent.Realm);
+                if (k == null || k.IsEliminated) continue;
+                string no = TakeInRefusal(clan, k);
+                Notices.Diplomacy(k, "clan_free", Names.Faction(clan) + " (" + PeopleName(clan.Culture.StringId) + ") has lost its realm" + (from != null ? ", " + Names.Faction(from) + "," : "") + " and has no lands: "
+                                                  + clan.Heroes.Count(h => h.IsLord && h.IsAlive) + " lords, strength " + Text.N((int)clan.CurrentTotalStrength) + ". "
+                                                  + (no == null ? "It would come if you take it in (take_in, DIPLOMACY)" : "It will not come to you now: " + no)
+                                                  + "; the game ends a clan with no realm and no lands 28 days after it lost its realm, and another realm may take it in first.");
+            }
         }
 
         private static string Plain(KingdomDecision d) => d is MakePeaceKingdomDecision ? "peace between these realms is not allowed by the game's rules now"
@@ -611,6 +677,20 @@ namespace BannerlordAgents
             {
                 if (c == null || c.IsEliminated || c.Kingdom != null || !c.IsMinorFaction || c.IsBanditFaction || c == Clan.PlayerClan || c.Leader == null || c.WarPartyComponents.Count == 0 || c.IsAtWarWith(k)) continue;
                 v.ForHire.Add(new DiploClan { Id = c.StringId, Name = Names.Faction(c), Strength = c.CurrentTotalStrength, Lords = c.Heroes.Count(h => h.IsAlive) });
+            }
+            List<string> peoples = Agents.Of(k.StringId)?.Config?.TakeIn;
+            if (peoples != null && peoples.Count > 0)
+            {
+                v.TakeInPeoples = string.Join(", ", peoples.Select(PeopleName));
+                foreach (Clan c in Clan.All)
+                {
+                    if (!Landless(c, peoples)) continue;
+                    v.Landless.Add(new DiploClan
+                    {
+                        Id = c.StringId, Name = Names.Faction(c), Strength = c.CurrentTotalStrength, Lords = c.Heroes.Count(h => h.IsLord && h.IsAlive), People = PeopleName(c.Culture.StringId),
+                        Leader = Names.Hero(c.Leader), Relation = k.Leader != null ? c.Leader.GetRelation(k.Leader) : 0, Refusal = TakeInRefusal(c, k)
+                    });
+                }
             }
             foreach (PolicyObject p in PolicyObject.All)
                 if (p != null && m.KingdomDecisionPermissionModel.IsPolicyDecisionAllowed(p)) v.Policies.Add(new DiploPolicy { Id = p.StringId, Name = p.Name?.ToString() ?? p.StringId, Active = k.ActivePolicies.Contains(p) });

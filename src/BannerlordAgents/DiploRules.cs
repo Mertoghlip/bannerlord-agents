@@ -61,6 +61,12 @@ namespace BannerlordAgents
         /// <summary>The realm's own clans, and mercenary clans in no realm (for hire).</summary>
         public readonly List<DiploClan> Clans = new List<DiploClan>();
         public readonly List<DiploClan> ForHire = new List<DiploClan>();
+        /// <summary>
+        /// The peoples whose clans the realm may take in (0.24, agent.txt's take_in), in plain names; null: it may take in none. A clan of them that has lost its
+        /// realm and its lands joins as a vassal clan by take_in (Landless lists them, each with why it would not come, if it would not).
+        /// </summary>
+        public string TakeInPeoples;
+        public readonly List<DiploClan> Landless = new List<DiploClan>();
         public readonly List<DiploPolicy> Policies = new List<DiploPolicy>();
         /// <summary>Supporting a vote: slightly, strongly, fully, in influence.</summary>
         public int Slight = 20, Strong = 60, Full = 150;
@@ -107,6 +113,9 @@ namespace BannerlordAgents
         public int Fiefs, Lords, Award;
         public float Strength;
         public double ContractUntil = double.NaN;
+        /// <summary>A landless clan that may be taken in (0.24): its people, its leader, his relation with the ruler, and why it would not come now (null: it would).</summary>
+        public string People, Leader, Refusal;
+        public int Relation;
     }
 
     internal sealed class DiploPolicy
@@ -124,7 +133,7 @@ namespace BannerlordAgents
     {
         public static readonly string[] Acts =
         {
-            "propose_war", "propose_peace", "propose_alliance", "call_to_war", "propose_trade", "propose_policy", "propose_expel", "hire_mercenary", "release_mercenary",
+            "propose_war", "propose_peace", "propose_alliance", "call_to_war", "propose_trade", "propose_policy", "propose_expel", "hire_mercenary", "release_mercenary", "take_in",
             "vote", "decide", "accept_peace", "decline_peace", "accept_alliance", "decline_alliance", "accept_call", "decline_call", "accept_trade", "decline_trade"
         };
 
@@ -241,6 +250,15 @@ namespace BannerlordAgents
                     target = c.Id;
                     return null;
                 }
+                case "take_in":
+                {
+                    if (v.TakeInPeoples == null) return "your realm does not take in clans that have lost their realm";
+                    DiploClan c = ClanOf(v.Landless, a.Clan);
+                    if (c == null) return ClanOf(v.Clans, a.Clan) != null ? a.Clan + " is in your realm already"
+                        : "no clan of the " + v.TakeInPeoples + " peoples with no realm and no lands is called '" + a.Clan + "' (DIPLOMACY lists those you may take in)";
+                    target = c.Id;
+                    return c.Refusal != null ? c.Name + " will not come now: " + c.Refusal : null;
+                }
                 case "vote":
                 case "decide":
                 {
@@ -313,7 +331,7 @@ namespace BannerlordAgents
                 yield return o.From;
                 yield return o.Against;
             }
-            foreach (DiploClan c in v.Clans.Concat(v.ForHire)) yield return c.Id;
+            foreach (DiploClan c in v.Clans.Concat(v.ForHire).Concat(v.Landless)) yield return c.Id;
             foreach (DiploPolicy p in v.Policies) yield return p.Id;
         }
 
@@ -352,11 +370,26 @@ namespace BannerlordAgents
                                                                                                                + (c.Award > 0 ? ", paid " + c.Award + " a day per influence point" : "") + (!double.IsNaN(c.ContractUntil) && c.ContractUntil > now ? ", bound until " + when(c.ContractUntil) : ""))) + ".");
             if (v.ForHire.Count > 0) lines.Add("Mercenary clans for hire, in no realm (hire_mercenary; each judges your offer by the game's own terms): " + string.Join("; ", v.ForHire.OrderByDescending(c => c.Strength).Take(12)
                                                     .Select(c => c.Name + " [" + c.Id + "], strength " + Text.N((int)c.Strength))) + (v.ForHire.Count > 12 ? "; and " + (v.ForHire.Count - 12) + " smaller" : "") + ".");
+            if (v.TakeInPeoples != null) lines.Add(TakeInLine(v));
             List<DiploPolicy> on = v.Policies.Where(p => p.Active).ToList(), off = v.Policies.Where(p => !p.Active).ToList();
             if (v.Policies.Count > 0)
                 lines.Add("Policies in force: " + (on.Count > 0 ? string.Join(", ", on.Select(p => p.Name + " [" + p.Id + "]")) : "none") + ". Others the game has (propose_policy): "
                           + string.Join(", ", off.Select(p => p.Name + " [" + p.Id + "]")) + ".");
             return lines;
+        }
+
+        /// <summary>
+        /// The clans the realm may take in (0.24): what take_in does and on what terms, then each clan of its peoples with no realm and no lands, strongest
+        /// first, with whether it would come. Said even when there is none, so the realm knows it may.
+        /// </summary>
+        public static string TakeInLine(DiploView v)
+        {
+            string now = v.Landless.Count == 0 ? "none"
+                : string.Join("; ", v.Landless.OrderByDescending(c => c.Strength).Select(c => c.Name + " [" + c.Id + "] (" + c.People + "), " + c.Lords + " lords, strength " + Text.N((int)c.Strength)
+                                                                                       + ", its leader " + c.Leader + " at relation " + c.Relation + " with your ruler: " + (c.Refusal == null ? "would come" : "will not come now, " + c.Refusal)));
+            return "Clans of the " + v.TakeInPeoples + " peoples that have lost their realm and their lands, which you may take in as vassal clans (take_in, clan): one not at war with you, whose leader "
+                   + "does not dislike your ruler (relation 0 or more), joins your realm at once with all its lords, who then follow the game's AI until you order them; until you take it in, the "
+                   + "game may lead it into another realm. Now: " + now + ".";
         }
 
         /// <summary>OPEN VOTES AND OFFERS: each vote of the realm with its options and their support, your vote, when it closes and what deciding costs; each offer made to it.</summary>

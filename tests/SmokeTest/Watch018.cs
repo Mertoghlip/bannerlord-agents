@@ -95,6 +95,7 @@ namespace SmokeTest
                   && Self("letter", "A letter.", urgent: true) == WakeRules.Now && Self("first_look", "First look.") == WakeRules.Now, "the locked wakes still wake a self-waking agent");
             Check(Self("war", "Gondor declared war on Misty Mountain Orcs.") == WakeRules.Now && Self("offer", "Gondor offers peace.") == WakeRules.Now && Self("watch", "Your watch.") == WakeRules.Now && Self("check_in", "Check-in.") == WakeRules.Now,
                   "and so do war, peace, offers, its watches and their check-ins");
+            Check(Self("clan_free", "Vargrim (Misty Mountain Orcs) has lost its realm and has no lands.") == WakeRules.Now, "and (0.24) a clan of its peoples that lost its realm, which the game ends in 28 days");
             Check(Self("raided", "Orc Village is being raided.") == WakeRules.Digest && Self("enemy_in_view", "Enemy army in view: X.") == WakeRules.Digest && Self("letter", "A letter.") == WakeRules.Digest
                   && Self("tool", "Naglur gave up the chase of Thalion.", "p_other", follows) == WakeRules.Digest, "every other line rides the next wake, an enemy army in view and a raid too");
             Check(Self("tool", "Naglur gave up the chase of Thalion.", "p_naglur", follows) == WakeRules.Now && Self("order_ended", "The order \"Naglur engage\" ended.", "p_naglur", follows) == WakeRules.Now,

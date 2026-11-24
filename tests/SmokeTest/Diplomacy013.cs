@@ -71,6 +71,31 @@ namespace SmokeTest
             Check(Why("{\"act\": \"hire_mercenary\", \"clan\": \"clan_hill\"}") == null && Why("{\"act\": \"hire_mercenary\", \"clan\": \"clan_wolf\"}").Contains("serves your realm already")
                   && Why("{\"act\": \"release_mercenary\", \"clan\": \"clan_wolf\"}") == null && Why("{\"act\": \"release_mercenary\", \"clan\": \"clan_bolg\"}").Contains("no clan serving your realm for pay"),
                   "mercenaries: one for hire is hired, one in your pay let go");
+            // 0.24: clans that lost their realm, taken in by a realm whose agent.txt names their peoples
+            Check(Why("{\"act\": \"take_in\", \"clan\": \"clan_vargrim\"}").Contains("does not take in clans") && !DiploRules.Diplomacy(v, 1000, h => "then").Any(l => l.Contains("take_in")),
+                  "a realm whose agent names no peoples takes in no clan, and its DIPLOMACY says nothing of it");
+            v.TakeInPeoples = "Gundabad, Misty Mountain Orcs";
+            v.Landless.Add(new DiploClan { Id = "clan_vargrim", Name = "Vargrim", People = "Misty Mountain Orcs", Lords = 24, Strength = 94, Leader = "Gorvak", Relation = 3 });
+            v.Landless.Add(new DiploClan { Id = "clan_skarn", Name = "Skarnak", People = "Gundabad", Lords = 22, Strength = 812, Leader = "Uzbad", Relation = -12, Refusal = "its leader dislikes your ruler (relation -12)" });
+            Check(Why("{\"act\": \"take_in\", \"clan\": \"clan_vargrim\"}") == null && Why("{\"act\": \"take_in\", \"clan\": \"Vargrim\"}") == null
+                  && Why("{\"act\": \"take_in\", \"clan\": \"clan_skarn\"}").Contains("will not come now: its leader dislikes your ruler")
+                  && Why("{\"act\": \"take_in\", \"clan\": \"clan_bolg\"}").Contains("in your realm already")
+                  && Why("{\"act\": \"take_in\", \"clan\": \"clan_nobody\"}").Contains("no clan of the Gundabad, Misty Mountain Orcs peoples with no realm and no lands"),
+                  "take_in: a landless clan of the realm's peoples that would come is taken in, by id or name; one whose leader dislikes the ruler is refused with why; a clan of the realm or none is said so");
+            string takeLine = DiploRules.TakeInLine(v);
+            Check(takeLine.Contains("take_in") && takeLine.Contains("Skarnak [clan_skarn] (Gundabad), 22 lords, strength 812, its leader Uzbad at relation -12 with your ruler: will not come now")
+                  && takeLine.Contains("Vargrim [clan_vargrim] (Misty Mountain Orcs), 24 lords, strength 94, its leader Gorvak at relation 3 with your ruler: would come")
+                  && takeLine.IndexOf("Skarnak", StringComparison.Ordinal) < takeLine.IndexOf("Vargrim [", StringComparison.Ordinal)
+                  && DiploRules.Diplomacy(v, 1000, h => "then").Any(l => l.StartsWith("Clans of the Gundabad, Misty Mountain Orcs peoples", StringComparison.Ordinal)) && DiploRules.Ids(v).Contains("clan_skarn"),
+                  "DIPLOMACY lists the clans a realm may take in, strongest first, each with its leader's relation and whether it would come, and the fog check allows their ids: " + takeLine);
+            v.Landless.Clear();
+            Check(DiploRules.TakeInLine(v).EndsWith("Now: none.", StringComparison.Ordinal), "with none to take in now, DIPLOMACY still says the realm may");
+            v.TakeInPeoples = null;
+            string takeDir = Path.Combine(root, "takein_agent");
+            Directory.CreateDirectory(takeDir);
+            File.WriteAllText(Path.Combine(takeDir, "agent.txt"), "realm = dolguldur\nmode = live\ntake_in = gundabad, MistyMountainOrcs; gundabad\n");
+            AgentConfig takeCfg = AgentConfig.Read(takeDir);
+            Check(takeCfg.TakeIn.SequenceEqual(new[] { "gundabad", "mistymountainorcs" }) && AgentConfig.Read(agentDir).TakeIn.Count == 0, "agent.txt's take_in is read as its peoples' ids, once each; a folder without it takes in none");
             Check(Why("{\"act\": \"vote\", \"vote\": \"v3\", \"option\": \"no\", \"weight\": \"strong\"}") == null && Why("{\"act\": \"vote\", \"vote\": \"v3\", \"option\": \"2\"}") == null
                   && Why("{\"act\": \"vote\", \"vote\": \"v9\", \"option\": \"yes\"}").Contains("no vote v9 is open") && Why("{\"act\": \"vote\", \"vote\": \"v3\", \"option\": \"maybe\"}").Contains("its options: 1 Yes, 2 No")
                   && Why("{\"act\": \"decide\", \"vote\": \"v3\", \"option\": \"no\"}") == null,
