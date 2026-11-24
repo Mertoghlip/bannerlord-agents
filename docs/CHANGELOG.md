@@ -2977,7 +2977,7 @@ avmesh.bin`):
 
 ## Tuesday, November 24
 
-### 10:20 · Module 0.24.0: Dol Guldur takes in clans that lost their realm · commit (next)
+### 10:20 · Module 0.24.0: Dol Guldur takes in clans that lost their realm · commit 3ec31cb
 - **Why:** I take landless clans of the free peoples into my kingdom by talking to their leaders. Dol Guldur should be able to do the same for clans of the orcish peoples, Gundabad and the Misty Mountain Orcs. Only clans with no realm at all, never one still serving a realm (the Orcs' own landless clans stay theirs while their realm stands), and Dol Guldur only.
 - **What (docs/DIPLOMACY.md, "Taking in clans that lost their realm"):**
   - a new diplomatic act, `take_in` (clan): the clan joins the realm as a vassal clan with all its lords (`ChangeKingdomAction.ApplyByJoinToKingdom`), and its leader gains 5 relation with the ruler;
