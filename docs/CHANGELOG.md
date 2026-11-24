@@ -3045,7 +3045,7 @@ avmesh.bin`):
 - **Checks:** war room self-test all passed (new: every changed line is still in the templates, and a files agent nobody plays in person is never pointed at a human player; the shelf without the record); smoke test all passed. No module change: nothing installed into the game.
 - **The run:** C2 started over with this setup (`-Arm C2 -RivalsOff`, no human player).
 
-### 18:37 · Module 0.24.3, war room 0.20.4: siege camps weighed as they stand; relief battles fought outside the walls · commit (next)
+### 18:37 · Module 0.24.3, war room 0.20.4: siege camps weighed as they stand; relief battles fought outside the walls · commit 2f7f18e
 - **Why:** the root-cause study of run 20261124-1400-C2 (reports, not tracked) found two flaws in our own orders and reckonings behind the kingdom's agent's two worst losses:
   - **Lasgalor (day 53, 6 lords):** the besiege order weighed every relief against "your side's" strength, which counted the lords due within 8 hours (5,900) while only Girda's 1,600 was in the camp. Its withdraw bar of 1.0 never fired; the garrison came out with the Dol Guldur lords gathered there, and the camp could not leave the fight.
   - **Goblin Town (day 34, 25 lords):** the instructions said a relief arriving during a storm "joins the defenders", and the battle odds counted our lords outside a besieged place as defenders behind its walls. In the game a relief fights the camp outside the walls, and a relief joining a storm turns the storm itself into a battle outside the walls (`MapEvent`, `SiegeOutside`; the walls count only for `Siege`). Gaín's army and the garrison fell in the open.
