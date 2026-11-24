@@ -50,6 +50,10 @@ param(
     # memory = continuous in warroom.txt); -FreshCalls puts the agent back on a fresh call per poke (wake = rule, memory = written)
     [switch]$Continuous,
     [switch]$FreshCalls,
+    # which instructions (Nov 24, docs/FACTS-ONLY.md): doctrine (agent\*.template.md) or facts (agentacts-only\*.template.md: the game's facts and the
+    # interface, no doctrine). Given, it puts that set's three instruction files in over the folder's own (each old one kept beside it, the realm's title and
+    # opening line carried over) and sets warroom.txt's chances_page (off for facts, on for doctrine).
+    [ValidateSet('', 'doctrine', 'facts')][string]$Instructions = '',
     [string]$RealmTitle = '',
     [string]$RealmLine = '',
     [string]$SettingsFrom = 'C:\Users\karab\Projects\orc-war-council\warroom.txt',
@@ -157,6 +161,35 @@ if (-not (Test-Path $wr)) {
     [System.IO.File]::WriteAllLines($wr, [string[]]$wl, $utf8)
     Write-Host "War room settings: $wr (from $SettingsFrom; logs in $logs)" -ForegroundColor Green
 } else { Write-Host "Kept the folder's own warroom.txt." }
+
+# the doctrine or the facts-only instructions (Nov 24): that set's three files in, the realm's own title and opening line carried over, chances_page set
+if ($Instructions) {
+    $from = $(if ($Instructions -eq 'facts') { Join-Path $template 'facts-only' } else { $template })
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmm'
+    $titleRx = [regex]'(?m)^# War council of .*$'
+    $lineRx = [regex]'(You are the war council of |You command )([^\r\n]*?), in a live campaign'
+    foreach ($pair in @(@('warroom-system.template.md', 'warroom-system.md'), @('warroom-continuous.template.md', 'warroom-continuous.md'), @('warroom-files.template.md', 'warroom-files.md'))) {
+        $to = Join-Path $Workspace $pair[1]
+        $new = [System.IO.File]::ReadAllText((Join-Path $from $pair[0]), $utf8)
+        if (Test-Path $to) {
+            $old = [System.IO.File]::ReadAllText($to, $utf8)
+            $t = $titleRx.Match($old)
+            if ($t.Success) { $keep = $t.Value; $new = $titleRx.Replace($new, { param($m) $keep }, 1) }
+            $l = $lineRx.Match($old)
+            if ($l.Success) { $realmLine = $l.Groups[2].Value; $new = $lineRx.Replace($new, { param($m) $m.Groups[1].Value + $realmLine + ', in a live campaign' }, 1) }
+            Copy-Item $to ($to + '.bak-' + $stamp + '-before-' + $Instructions) -Force
+        }
+        [System.IO.File]::WriteAllText($to, $new, $utf8)
+        Write-Host "Installed $($pair[1]) from the $Instructions instructions." -ForegroundColor Green
+    }
+    $chances = $(if ($Instructions -eq 'facts') { 'off' } else { 'on' })
+    $wl = @([System.IO.File]::ReadAllLines($wr, $utf8))
+    $hit = $false
+    for ($i = 0; $i -lt $wl.Count; $i++) { if ($wl[$i] -match '^\s*chances_page\s*=') { $wl[$i] = "chances_page = $chances"; $hit = $true } }
+    if (-not $hit) { $wl += "chances_page = $chances" }
+    [System.IO.File]::WriteAllLines($wr, [string[]]$wl, $utf8)
+    Write-Host "warroom.txt: chances_page = $chances (restart the war room: it reads warroom.txt only when it starts)." -ForegroundColor Green
+}
 
 # a continuous agent, or back to fresh calls (0.18): the memory line of warroom.txt, the old file kept beside it
 if ($Continuous -or $FreshCalls) {

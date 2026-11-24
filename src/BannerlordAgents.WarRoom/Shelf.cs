@@ -100,6 +100,8 @@ namespace BannerlordAgents.WarRoom
 
         /// <summary>Nobody plays in person (warroom.txt human_player = none, war room 0.20.3): the human player's record is no page of the shelf.</summary>
         public bool NoHumanPlayer { get; set; }
+        /// <summary>chances_page = off in warroom.txt (war room 0.20.5): the shelf keeps no "chances to strike" page.</summary>
+        public bool NoChancesPage { get; set; }
 
         public Shelf(string channelDir)
         {
@@ -893,8 +895,11 @@ namespace BannerlordAgents.WarRoom
                 pages["intelligence/human-player-record"] = new Page { Title = "The human player's record", Desc = "kept by the game: his battles and who won", Body = human.Length > 0 ? human : "Not known yet in this game session." };
                 facts.Add(new Fact { Key = "human", Value = Hash(Regex.Replace(human, @"\d+ (hours?|days?) ago", "")), Page = "intelligence/human-player-record", Weight = 2, Say = (o, n) => o != null ? "the human player's record changed" : null });
             }
-            string chances = _s.Sections.TryGetValue("CHANCES TO STRIKE", out string ch) ? ch : "";
-            pages["intelligence/chances-to-strike"] = new Page { Title = "Chances to strike", Desc = "kept by the game: lone enemy lords under strength 700 your lords could beat", Body = chances.Length > 0 ? chances : "None found at the last wake." };
+            if (!NoChancesPage)
+            {
+                string chances = _s.Sections.TryGetValue("CHANCES TO STRIKE", out string ch) ? ch : "";
+                pages["intelligence/chances-to-strike"] = new Page { Title = "Chances to strike", Desc = "kept by the game: lone enemy lords under strength 700 your lords could beat", Body = chances.Length > 0 ? chances : "None found at the last wake." };
+            }
             // the smaller enemy parties come into view, in one line
             if (!fresh && quiet > 0) extra.Add(Change("intelligence/sightings", quiet + " smaller enemy part" + (quiet == 1 ? "y" : "ies") + " came into view", 1, x));
         }

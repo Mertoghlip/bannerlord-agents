@@ -337,12 +337,32 @@ namespace BannerlordAgents.WarRoom
                 string[] texts = layers.Select(l => File.ReadAllText(Path.Combine(agentDir, l)).Replace("\r", "")).ToArray();
                 string filesFull = Room.Overlay(Room.Overlay(texts[0], texts[1]), texts[2]);
                 string filesNone = Room.NoHumanPlayer(filesFull);
-                var unused = Room.NoHumanEdits.Where(e => !texts.Any(t => t.Contains(e.from))).Select(e => e.from).ToList();
+                string factsLayer = Path.Combine(agentDir, "facts-only", "warroom-system.template.md");
+                string[] corpus = File.Exists(factsLayer) ? texts.Append(File.ReadAllText(factsLayer).Replace("\r", "")).ToArray() : texts;
+                var unused = Room.NoHumanEdits.Where(e => !corpus.Any(t => t.Contains(e.from))).Select(e => e.from).ToList();
                 var left = Room.NoHumanEdits.Where(e => filesNone.Contains(e.from)).Select(e => e.from).ToList();
                 Check(unused.Count == 0, "every line the no-human-player instructions change is still in the templates" + (unused.Count > 0 ? ": not found " + string.Join(" / ", unused) : ""));
                 Check(left.Count == 0 && filesNone.Contains("## No human player") && !filesNone.Contains("## The human player") && !filesNone.Contains("human-player-record") && !filesNone.Contains("THE HUMAN PLAYER")
                       && filesNone.Contains("3. **The enemy's main armies**") && filesNone.Contains("4. **Chances to strike**") && filesNone.Contains("yours, an ally's or an enemy's,") && filesNone.Contains(" (as the game closes) to write your handover"),
                       "a files agent nobody plays against in person is never pointed at a human player: its attention, its handover's hour, what it copies, its files" + (left.Count > 0 ? ": still there " + string.Join(" / ", left) : ""));
+            }
+            // war room 0.20.5 (Nov 24): the facts-only instructions, as a files agent reads them: game facts and the interface, no doctrine
+            string factsDir = Path.Combine(agentDir, "facts-only");
+            if (layers.All(l => File.Exists(Path.Combine(factsDir, l))))
+            {
+                string[] ft = layers.Select(l => File.ReadAllText(Path.Combine(factsDir, l)).Replace("\r", "")).ToArray();
+                string facts =Room.Overlay(Room.Overlay(ft[0], ft[1]), ft[2]);
+                string factsNone = Room.NoHumanPlayer(facts);
+                string[] gone = { "## Who you are", "## Doctrine", "principle", "## Where your attention goes", "## Command through orders", "## Following your own orders", "## Learning from what happens",
+                                  "Worth copying", "chances-to-strike", "Vegetius", "Strategikon", "great captains" };
+                var still = gone.Where(g => facts.IndexOf(g, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                Check(still.Count == 0 && facts.Contains("## What the game does") && facts.Contains("more than twice the camp's strength") && facts.Contains("Your notes carry over between conversations; what you keep in them is up to you.")
+                      && facts.Contains("## Your goal") && facts.Contains("## How battles are joined") && facts.Contains("orders/writing-your-own") && !facts.Contains("\"circuit\"")
+                      && ft[0].Contains("\"circuit\"") && facts.Length < 50000,
+                      "the facts-only instructions hold the game's facts and the interface, with no persona, principle, priority or advice, the tools manual on its Orders page, " + facts.Length.ToString("N0") + " characters"
+                      + (still.Count > 0 ? ": still there " + string.Join(" / ", still) : ""));
+                Check(factsNone.Contains("## No human player") && !factsNone.Contains("## The human player") && !factsNone.Contains("human-player-record") && facts.Contains("a quarter stronger than his own"),
+                      "with nobody playing in person the facts-only instructions say so, and with the human player they keep only his measured facts");
             }
             RouteTool.WriteRules(data, c.ChannelDir);
             Check(File.Exists(Path.Combine(c.ChannelDir, "marching.txt")) && File.ReadAllText(Path.Combine(c.ChannelDir, "marching.txt")).StartsWith("HOW MARCHING WORKS"), "marching.txt is written for the agent to read");

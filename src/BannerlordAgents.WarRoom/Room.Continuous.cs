@@ -575,7 +575,7 @@ namespace BannerlordAgents.WarRoom
                 ChannelDir = _c.ChannelDir, BookPath = NewestBook(meta, number), ChronicleDir = _c.ChannelDir, Notes = NotesNow, BookOnly = !_talk.Routes, Refresh = FreshNow,
                 PastMem = _talk.PastTool ? _mem.Dir : null, PastIds = _talk.Past,
                 // a files agent's questions on its files (war room 0.20), offered from its conversation's start
-                Shelf = _c.Files ? _shelf ??= new Shelf(_c.ChannelDir) { NoHumanPlayer = !_c.HumanPlayer } : null, ShelfRefresh = _c.Files ? FilesRefresh : null, HistoryMem = _c.Files ? _mem.Dir : null
+                Shelf = _c.Files ? _shelf ??= new Shelf(_c.ChannelDir) { NoHumanPlayer = !_c.HumanPlayer, NoChancesPage = !_c.ChancesPage } : null, ShelfRefresh = _c.Files ? FilesRefresh : null, HistoryMem = _c.Files ? _mem.Dir : null
             };
         }
 

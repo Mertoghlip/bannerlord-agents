@@ -100,6 +100,11 @@ namespace BannerlordAgents.WarRoom
         /// the instructions' "## The human player" gives way to a short "## No human player" and their other mentions of him go (Room.NoHumanPlayer).
         /// </summary>
         public bool HumanPlayer = true;
+        /// <summary>
+        /// War room 0.20.5 (Nov 24, the facts-only test): with chances_page = off the files keep no "chances to strike" page (lone enemy lords our doctrine's rule
+        /// picks out as easy prey), so an agent on facts-only instructions finds its targets itself.
+        /// </summary>
+        public bool ChancesPage = true;
         /// <summary>A files agent's instructions: each "## " section of it takes the place of the same section, over warroom-continuous.md.</summary>
         public string FilesTemplate => Path.Combine(AgentDir, "warroom-files.md");
 
@@ -170,6 +175,7 @@ namespace BannerlordAgents.WarRoom
                     case "wake_budget": if (int.TryParse(v, out int wb) && wb > 0) c.WakeBudget = wb; break;
                     case "context": if (v == "report" || v == "files") c.Context = v; break;
                     case "human_player": c.HumanPlayer = !(v == "none" || v == "off" || v == "no" || v == "false"); break;
+                    case "chances_page": c.ChancesPage = !(v == "none" || v == "off" || v == "no" || v == "false"); break;
                     case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
                     case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
                     case "story_model": c.StoryModel = v; break;

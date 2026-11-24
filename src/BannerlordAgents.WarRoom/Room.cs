@@ -1385,6 +1385,7 @@ namespace BannerlordAgents.WarRoom
             (" (while a battle of the human player's holds the clock still, or as the game closes)", " (as the game closes)"),
             ("Watch your enemies and the human player for this most of all", "Watch your enemies for this most of all"),
             ("enemy-holdings, human-player-record and chances-to-strike", "enemy-holdings and chances-to-strike"),
+            ("enemy-holdings and human-player-record, kept by the game", "enemy-holdings, kept by the game"),   // the facts-only instructions (war room 0.20.5)
             ("YOUR ENEMY, THE HUMAN PLAYER is intelligence/human-player-record; ", ""),
             ("; for the human player, your record of battles with him, the bar you judge him by and how sure you are of it, and his habits", ""),
         };

@@ -1,7 +1,7 @@
 {
   "tool": "relieve",
   "kind": "army",
-  "about": "Breaks a siege of one of your castles or towns: it waits where it is until strong enough, then strikes the besiegers. The garrison and any of your lords inside sally out to join the battle only when they and the relief together are more than 1.5 times the besiegers' strength (the game's rule; militia never sally), so the strength it weighs counts them only then. Its battle is fought outside the walls, against the whole camp, by the field rules (the walls help nobody), and nobody leaves it once it has begun. If a storm is being fought when it arrives, it joins the defenders, and that turns the storm into the same battle outside the walls: the garrison loses its walls too. Best with an army, for example gather, then relieve.",
+  "about": "Breaks a siege of one of your castles or towns: it waits where it is until strong enough, then strikes the besiegers. The garrison and any of your lords inside sally out to join the battle only when they and the relief together are more than 1.5 times the besiegers' strength (the game's rule; militia never sally), so the strength it weighs counts them only then. Its battle is fought outside the walls, against the whole camp, by the field rules (the walls help nobody), and nobody leaves it once it has begun. If a storm is being fought when it arrives, it joins the defenders, and that turns the storm into the same battle outside the walls: the garrison loses its walls too.",
   "calls_back": "it strikes, it is still too weak to strike, the siege ends, or the holding falls",
   "at": "own_fort",
   "settings": {

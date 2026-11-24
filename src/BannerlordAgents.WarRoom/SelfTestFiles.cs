@@ -124,6 +124,14 @@ namespace BannerlordAgents.WarRoom
             Check(File.Exists(Path.Combine(dir, "intelligence", "human-player-record.md")) && !File.Exists(Path.Combine(channel4, Shelf.DirName, "intelligence", "human-player-record.md"))
                   && File.Exists(Path.Combine(channel4, Shelf.DirName, "intelligence", "chances-to-strike.md")) && !File.ReadAllText(Path.Combine(channel4, Shelf.DirName, "shelf.md")).Contains("human player"),
                   "with nobody playing in person the shelf keeps no human player's record");
+            // war room 0.20.5: chances_page = off keeps no "chances to strike" page
+            string channel5 = Path.Combine(root, "files-channel-nochances");
+            try { Directory.Delete(channel5, true); } catch (DirectoryNotFoundException) { }
+            var shelf5 = new Shelf(channel5) { NoChancesPage = true };
+            shelf5.Build(Input(Book(300, 20, "defend", false), 7, ""));
+            Check(File.Exists(Path.Combine(dir, "intelligence", "chances-to-strike.md")) && !File.Exists(Path.Combine(channel5, Shelf.DirName, "intelligence", "chances-to-strike.md"))
+                  && File.Exists(Path.Combine(channel5, Shelf.DirName, "intelligence", "sightings.md")),
+                  "with chances_page = off the shelf keeps no chances-to-strike page");
 
             // war room 0.20.1: wakes counted by their hours; a load drops those after its hour
             var talk = new Talk();
