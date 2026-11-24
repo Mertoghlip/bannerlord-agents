@@ -3021,7 +3021,7 @@ avmesh.bin`):
 - **The first try's end:** I closed the game at 10:28. The autopilot cannot tell a closing by hand from a crash: it gathered the files (`D:\BannerlordAgents\crashes\20261124-102817-25968`) and restarted from `TEST AUTO C2`. That game closed during its load at 10:29, and the script ended with code 2. The new start abandons run 20261124-1024-C2.
 - **Started again** at 10:37: `autopilot.ps1 -Arm C2 -RivalsOff`, war rooms started after the arm was set (each reads warroom.txt only when it starts), the Orcs' and Dol Guldur's stopped.
 
-### 12:10 · Module 0.24.2: sieges survive a load; C2 started over · commit (next)
+### 12:10 · Module 0.24.2: sieges survive a load; C2 started over · commit 2d974b8
 - **What I found:** in run 20261124-1037-C2 Górli's siege of Hollin Gate (from day 9) never stormed. Each memory restart (every 25 to 40 minutes, about 8 to 9 in-game days) broke it at the load, and a new siege began from nothing. The trace at the 11:44 load: `SetMoveModeHold` <- `BesiegerCamp.RemoveSiegePartyInternal` <- `set_BesiegerCamp` <- `CheckBesiegerPartiesAndMakeThemLeave` <- `SiegeEvent.Tick`.
   - `Orders.Resume` (an order carried on from the save, 0.13.5) set each lord to hold until the runner's first hour gave the tool's own move.
   - The game's first siege tick takes any besieger not set to besiege out of its camp (docs/ENGINE-NOTES.md).
