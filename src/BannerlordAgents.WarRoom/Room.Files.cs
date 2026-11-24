@@ -70,7 +70,7 @@ namespace BannerlordAgents.WarRoom
         internal Shelf BuildShelf(PokeMeta meta, string bookPath, string pokeText, string reportText = null, string councilText = null, string why = "", string fate = null)
         {
             if (!_c.Files || _mem == null) return null;
-            _shelf ??= new Shelf(_c.ChannelDir);
+            _shelf ??= new Shelf(_c.ChannelDir) { NoHumanPlayer = !_c.HumanPlayer };
             JsonObject book = ReadJsonFile(bookPath);
             if (book == null && _shelf.Pages.Count > 0) return _shelf;   // nothing new to build from: the last build stands
             string campaign = meta?.Campaign ?? _mem.Campaign;
@@ -226,7 +226,7 @@ namespace BannerlordAgents.WarRoom
             EnsureMemory(meta);
             _talk ??= Talk.Load(_mem.Dir);
             Directory.CreateDirectory(outDir);
-            _shelf = new Shelf(outDir);
+            _shelf = new Shelf(outDir) { NoHumanPlayer = !_c.HumanPlayer };
             string pokeText = ReadShared(Path.Combine(_c.ChannelDir, "poke.txt")) ?? "";
             string book = BookFor(meta, meta.Number) ?? NewestBook(meta, meta.Number);
             bool was = _c.Files;

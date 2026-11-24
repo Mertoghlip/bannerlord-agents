@@ -116,6 +116,14 @@ namespace BannerlordAgents.WarRoom
             int v3 = shelf3.Build(c3);
             Check(v1 == 0 && v2 == 0 && v3 > 0 && File.ReadAllText(Path.Combine(channel3, Shelf.DirName, "shelf.md")).Contains("Wakes this in-game day"),
                   "after a build without the view, the next one with it starts afresh, and the one after flags changes again (" + v1 + ", " + v2 + ", " + v3 + ")");
+            // war room 0.20.3: nobody plays in person, so the human player's record is no page
+            string channel4 = Path.Combine(root, "files-channel-nohuman");
+            try { Directory.Delete(channel4, true); } catch (DirectoryNotFoundException) { }
+            var shelf4 = new Shelf(channel4) { NoHumanPlayer = true };
+            shelf4.Build(Input(Book(300, 20, "defend", false), 7, ""));
+            Check(File.Exists(Path.Combine(dir, "intelligence", "human-player-record.md")) && !File.Exists(Path.Combine(channel4, Shelf.DirName, "intelligence", "human-player-record.md"))
+                  && File.Exists(Path.Combine(channel4, Shelf.DirName, "intelligence", "chances-to-strike.md")) && !File.ReadAllText(Path.Combine(channel4, Shelf.DirName, "shelf.md")).Contains("human player"),
+                  "with nobody playing in person the shelf keeps no human player's record");
 
             // war room 0.20.1: wakes counted by their hours; a load drops those after its hour
             var talk = new Talk();

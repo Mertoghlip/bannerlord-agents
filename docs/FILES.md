@@ -2,6 +2,8 @@
 
 Since war room 0.20 and module 0.22.0 (Nov 20). A continuous agent whose `warroom.txt` says `context = files` no longer gets the war in its messages. It keeps a shelf of files about its own realm, its own thinking and the war's history, and reads the pages it needs. Each message says only what woke it. `context = report` (the default) keeps the reports, so both setups can be run side by side.
 
+The Orcs and Dol Guldur run on files since Nov 20, 20:32, and the kingdom's agent since Nov 24 (war room 0.20.3; it had been on fresh calls and reports), so every realm agent of a test runs the same way. In a test nobody plays in person (`human_player = none`, the C arms), the instructions' lines about the human player change (`Room.NoHumanEdits`) and the shelf keeps no human player's record.
+
 ## Why
 
 Until 0.20 each agent got two big things:

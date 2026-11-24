@@ -308,6 +308,21 @@ namespace BannerlordAgents.WarRoom
             Check(!none.Contains("the human player") && none.Contains("## No human player") && none.Contains("your ruler's party takes your orders like any other") && none.Contains("## How battles are joined")
                   && none.Contains("The game's own rules:") && none.Contains("in one line.") && none.IndexOf("## No human player", StringComparison.Ordinal) < none.IndexOf("## How battles are joined", StringComparison.Ordinal),
                   "with human_player = none the instructions say nobody plays in person and no longer speak of a human player: " + none.Replace("\n", " | "));
+            // war room 0.20.3: a files agent's whole instructions (the kingdom's in the C runs), from the templates as installed
+            string agentDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "agent");
+            string[] layers = { "warroom-system.template.md", "warroom-continuous.template.md", "warroom-files.template.md" };
+            if (layers.All(l => File.Exists(Path.Combine(agentDir, l))))
+            {
+                string[] texts = layers.Select(l => File.ReadAllText(Path.Combine(agentDir, l)).Replace("\r", "")).ToArray();
+                string filesFull = Room.Overlay(Room.Overlay(texts[0], texts[1]), texts[2]);
+                string filesNone = Room.NoHumanPlayer(filesFull);
+                var unused = Room.NoHumanEdits.Where(e => !texts.Any(t => t.Contains(e.from))).Select(e => e.from).ToList();
+                var left = Room.NoHumanEdits.Where(e => filesNone.Contains(e.from)).Select(e => e.from).ToList();
+                Check(unused.Count == 0, "every line the no-human-player instructions change is still in the templates" + (unused.Count > 0 ? ": not found " + string.Join(" / ", unused) : ""));
+                Check(left.Count == 0 && filesNone.Contains("## No human player") && !filesNone.Contains("## The human player") && !filesNone.Contains("human-player-record") && !filesNone.Contains("THE HUMAN PLAYER")
+                      && filesNone.Contains("3. **The enemy's main armies**") && filesNone.Contains("4. **Chances to strike**") && filesNone.Contains("yours, an ally's or an enemy's,") && filesNone.Contains(" (as the game closes) to write your handover"),
+                      "a files agent nobody plays against in person is never pointed at a human player: its attention, its handover's hour, what it copies, its files" + (left.Count > 0 ? ": still there " + string.Join(" / ", left) : ""));
+            }
             RouteTool.WriteRules(data, c.ChannelDir);
             Check(File.Exists(Path.Combine(c.ChannelDir, "marching.txt")) && File.ReadAllText(Path.Combine(c.ChannelDir, "marching.txt")).StartsWith("HOW MARCHING WORKS"), "marching.txt is written for the agent to read");
         }

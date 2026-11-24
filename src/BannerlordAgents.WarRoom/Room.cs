@@ -1364,13 +1364,30 @@ namespace BannerlordAgents.WarRoom
         internal static string NoHumanPlayer(string template)
         {
             template = ReplaceSection(template, "## The human player", NoHumanSection);
-            foreach (string s in new[]
-            {
-                " (the human player's, up to five sentences: The human player)", " (the human player's own battles are the exception, above)",
-                ", an enemy's or the human player's", " or the human player's"
-            }) template = template.Replace(s, "");
+            foreach ((string from, string to) in NoHumanEdits) template = template.Replace(from, to);
             return template;
         }
+
+        /// <summary>
+        /// The lines that point at the human player, and what each becomes when nobody plays in person. War room 0.20.3 (Nov 24) adds those of the continuous and files
+        /// instructions (the kingdom's agent became a files agent): where its attention goes, when its handover is asked for, what it watches for moves worth copying, and
+        /// its files' human player's record, which the shelf no longer keeps then. The rules' "in the human player's battles" lines stay: they never apply, and the section
+        /// above says so.
+        /// </summary>
+        internal static readonly (string from, string to)[] NoHumanEdits =
+        {
+            (" (the human player's, up to five sentences: The human player)", ""),
+            (" (the human player's own battles are the exception, above)", ""),
+            (", an enemy's or the human player's", " or an enemy's"),
+            (" or the human player's", ""),
+            ("What did your enemies, your allies and the human player do that worked?", "What did your enemies and your allies do that worked?"),
+            ("3. **The human player**: where he is, where he is going, and what he can reach.", "3. **The enemy's main armies**: where they are, where they are going, and what they can reach."),
+            (" (while a battle of the human player's holds the clock still, or as the game closes)", " (as the game closes)"),
+            ("Watch your enemies and the human player for this most of all", "Watch your enemies for this most of all"),
+            ("enemy-holdings, human-player-record and chances-to-strike", "enemy-holdings and chances-to-strike"),
+            ("YOUR ENEMY, THE HUMAN PLAYER is intelligence/human-player-record; ", ""),
+            ("; for the human player, your record of battles with him, the bar you judge him by and how sure you are of it, and his habits", ""),
+        };
 
         internal const string NoHumanSection =
             "## No human player\n\n"
