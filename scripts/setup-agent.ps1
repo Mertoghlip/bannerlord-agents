@@ -108,7 +108,9 @@ if (-not $Wake) { $Wake = $(if ($had['wake']) { $had['wake'] } else { 'rule' }) 
     '# a news wake''s report: full (the whole report, as before), shadow (the whole report sent, the news report written beside it) or theatre (the news, its clock and what bears on it; the rest by asking)',
     "news = $News",
     '# what wakes the agent: rule (the wake rule sorts each line of news first: some wakes it now, some waits, some rides its next call), all (every line wakes it) or self (its own watches and check-ins, and the locked wakes)',
-    "wake = $Wake"), $utf8)
+    "wake = $Wake") + @(
+    # Nov 24: the folder's other settings (Dol Guldur's take_in, 0.24.0) are kept as they were; this script used to drop them
+    $had.Keys | Where-Object { $_ -notin 'realm', 'mode', 'lords', 'channel', 'kind', 'news', 'wake' } | Sort-Object | ForEach-Object { "$_ = $($had[$_])" }), $utf8)
 Write-Host "agent.txt: kind $Kind, realm $Realm, mode $Mode, lords $Lords, channel $channelName, news $News, wake $Wake" -ForegroundColor Green
 
 $channel = Join-Path $Workspace $channelName
