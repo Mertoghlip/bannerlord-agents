@@ -935,6 +935,33 @@ namespace BannerlordAgents.Tools
         /// <summary>The game's bar for the defenders to sally out beside a relief force (SallyOutPowerRatioForHelpingReliefForce).</summary>
         public const double SallyRatio = 1.5;
 
+        /// <summary>
+        /// Module 0.24.3: the lords of the realm and its allies camped in a siege of the place now (not those still on their way): what a sally from the walls or a
+        /// relief's attack comes against. 0 when none is camped there.
+        /// </summary>
+        public double CampStrength(string place)
+        {
+            double sum = 0;
+            if (place == null) return 0;
+            foreach (PartyRow r in S.Parties)
+                if (r.Kind == "lord" && !r.Attached && r.Besieging == place && (Own(r) || (Ally(r.Faction) && Visible(r)))) sum += StrengthOf(r);
+            return sum;
+        }
+
+        /// <summary>
+        /// Module 0.24.3: who could come out against a camp of ours at an enemy castle or town: its garrison as the realm sees it and the enemy lords the realm
+        /// sees inside it (militia never sally). The game sends them out beside a relief once they and it are more than SallyRatio times the camp, and without
+        /// one once they and the enemy lords near the camp are more than twice it (SallyOutsCampaignBehavior).
+        /// </summary>
+        public double SallyStrength(SettlementRow h)
+        {
+            if (h == null || !IsFort(h) || h.Faction == Realm || Ally(h.Faction)) return 0;
+            double sum = Math.Max(0, h.GarrisonStrength);
+            foreach (PartyRow r in S.Parties)
+                if (r.InSettlement == h.Id && r.Kind == "lord" && !r.Attached && HostileFaction(r.Faction) && Visible(r)) sum += StrengthOf(r);
+            return sum;
+        }
+
         /// <summary>Nearest castle or town of the realm or an ally, not under siege, to a place.</summary>
         public SettlementRow NearestFort(string from, Func<SettlementRow, bool> extra = null)
         {
@@ -1298,7 +1325,7 @@ namespace BannerlordAgents.Tools
             sb.Append(string.Join("; ", c.Comers.OrderBy(x => x.At).Take(6).Select(x => Name(x.Id) + " (strength " + Text.N((int)Math.Round(x.Strength)) + ") about " + Text.When(Hours + x.At)
                                                                                         + " (" + Common.MarchClock.Basis(x.March) + ")")));
             if (c.Comers.Count > 6) sb.Append("; and " + (c.Comers.Count - 6) + " more");
-            sb.Append(". Joining the defenders as each arrives, they would " + (c.Won ? "leave your besiegers about " + Math.Round(c.LeftShare * 100) + "% of their men" : "turn the storm") + ".");
+            sb.Append(". Joining the defenders as each arrives, they would " + (c.Won ? "leave your besiegers about " + Math.Round(c.LeftShare * 100) + "% of their men" : "turn the storm") + "; the first to join turns the storm into a battle outside the walls, where the walls no longer count for the defenders.");
             return sb.ToString();
         }
 

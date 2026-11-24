@@ -31,6 +31,8 @@ namespace BannerlordAgents.Common
         public string Winner, How;
         public double AttackerLossPerHour, DefenderLossPerHour;
         public int AttackersLeft, DefendersLeft;
+        /// <summary>A storm a relief joined: the hour from the start at which it became a battle outside the walls (NaN: it never did).</summary>
+        public double OutsideAt = double.NaN;
     }
 
     /// <summary>
@@ -48,6 +50,9 @@ namespace BannerlordAgents.Common
     ///   men) loses 3 morale; a side led by a party routs at 0; in a field battle, after 8 rounds a side at morale 20 or less
     ///   that lost the last 4 may retreat (chance 0.2 a round at middling valour), then is pursued 4 rounds without striking
     ///   back, and nothing is captured.
+    /// - A storm that a party from outside joins on the defenders' side (a relief) becomes a battle outside the walls (MapEvent.AddInvolvedParty:
+    ///   a siege assault joined by a defender not inside the settlement turns SiegeOutside; the combat model weighs the walls only for Siege):
+    ///   from that hour two rounds an hour, each side's strikes by the field rule, the walls no longer counting for anyone, the garrison included.
     /// </summary>
     public static class GameBattle
     {
@@ -99,6 +104,8 @@ namespace BannerlordAgents.Common
                 {
                     BattleJoiner j = pending[0];
                     pending.RemoveAt(0);
+                    // a relief joining a storm's defenders from outside turns it into a battle outside the walls (war room 0.20.4 / module 0.24.3)
+                    if (storm && !j.Attackers && j.Men > 0) { storm = false; perHour = 2; o.OutsideAt = t; }
                     float jp = j.Power > 0 ? j.Power : j.Attackers ? (float)pA : (float)pD;
                     if (j.Attackers) { pA = A + j.Men > 0 ? (pA * A + jp * j.Men) / (A + j.Men) : pA; A += j.Men; }
                     else { pD = D + j.Men > 0 ? (pD * D + jp * j.Men) / (D + j.Men) : pD; D += j.Men; }

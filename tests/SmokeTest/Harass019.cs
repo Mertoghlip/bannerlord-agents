@@ -250,6 +250,7 @@ namespace SmokeTest
             EscapeTests();
             NavCopyTests();
             RefugeTests();
+            CampStrengthTests(moves);
             Runner.MoveSink = keptMove;
             Runner.ReleaseSink = keptRelease;
         }

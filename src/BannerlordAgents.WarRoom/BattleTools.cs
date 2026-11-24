@@ -27,7 +27,8 @@ namespace BannerlordAgents.WarRoom
             ["description"] = "How a battle would go and how long it would last, by the game's own battle rules: your lords or armies against enemies your report shows, in the open, "
                               + "or storming a castle or town (with how long the siege camp's preparations would take first). It gives each side's blows a round, the losses an hour, "
                               + "who wins, how (all down, morale broken, or a retreat), in how long, and with how many left; the enemy's morale you cannot see, so it is run low, "
-                              + "middling and high. Lords seen marching to that place join their side as they arrive.",
+                              + "middling and high. Lords seen marching to that place join their side as they arrive. Only lords inside a castle or town defend behind its walls: "
+                              + "a relief from outside that joins a storm turns it into a battle outside the walls, where the walls no longer count for anyone, the garrison included.",
             ["inputSchema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -35,7 +36,7 @@ namespace BannerlordAgents.WarRoom
                 {
                     ["ours"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Ids in [brackets] of your lords or armies who would fight together." },
                     ["theirs"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Ids of enemy lords or armies your report shows (leave empty for a storm of a castle or town with no lord outside)." },
-                    ["at"] = new JsonObject { ["type"] = "string", ["description"] = "Optional: a castle or town. An enemy one: your lords storm it. One of yours: their lords storm it, your lords and its garrison defending." }
+                    ["at"] = new JsonObject { ["type"] = "string", ["description"] = "Optional: a castle or town. An enemy one: your lords storm it. One of yours: their lords storm it; those of your lords inside it defend with its garrison behind the walls, those outside come as a relief, and the first to join turns the storm into a battle outside the walls." }
                 },
                 ["required"] = new JsonArray("ours")
             }
@@ -66,6 +67,8 @@ namespace BannerlordAgents.WarRoom
             public string Id, Name;
             public double Men, Strength;
             public float Morale = -1, Tactics;
+            /// <summary>Where it stands and its pace (0.20.4: a lord of ours outside a place under storm comes as a relief).</summary>
+            public double X, Y, Pace;
         }
 
         public string Odds(JsonObject args)
@@ -88,7 +91,8 @@ namespace BannerlordAgents.WarRoom
                 if (o == null) { lines.Add("(" + q + ": no lord or army of yours by that id.)"); continue; }
                 double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 double str = F(o["army_strength"]) > 0 ? F(o["army_strength"]) : F(o["strength"]);
-                ours.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = str, Morale = o["morale"] is JsonValue ? F(o["morale"]) : -1, Tactics = F(o["tactics"]) });
+                ours.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = str, Morale = o["morale"] is JsonValue ? F(o["morale"]) : -1, Tactics = F(o["tactics"]),
+                                     X = F(o["x"]), Y = F(o["y"]), Pace = F(o["pace"]) });
                 if (InPerson(o)) human = true;
             }
             var theirs = new List<Force>();
@@ -125,26 +129,49 @@ namespace BannerlordAgents.WarRoom
                 // your lords inside it already and the lords you name, who would shelter there
                 double defMen = Math.Max(0, garrison) + Math.Max(0, militia);
                 double defStr = F(place["defence"]);
-                if (!weStorm) { defMen += ours.Sum(f => f.Men); defStr += ours.Sum(f => f.Strength); }
+                // war room 0.20.4: only your lords inside the place defend behind its walls; one outside comes as a relief, and the first to join the storm turns it
+                // into a battle outside the walls (the game's MapEvent.AddInvolvedParty), where the walls count for nobody (Nov 24: Gaín's relief of Goblin Town)
+                var inside = new List<Force>();
+                var outside = new List<(Force F, double At)>();
+                if (!weStorm)
+                {
+                    double px = F(place["x"]), py = F(place["y"]);
+                    foreach (Force f in ours)
+                    {
+                        double d = Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py));
+                        if (d <= 1.5) inside.Add(f);
+                        else outside.Add((f, d / (f.Pace > 0 ? f.Pace : 2.8)));
+                    }
+                    defMen += inside.Sum(f => f.Men);
+                    defStr += inside.Sum(f => f.Strength);
+                }
                 BattleSide besiegers = weStorm ? mine : Side(theirs, false);
                 var walls = new BattleSide { Men = defMen, Power = defMen > 0 ? (float)(defStr / defMen) : 1f, Advantage = 1f, Morale = weStorm ? 50 : mine.Morale, Walls = true };
                 int level = Math.Max(1, I(place["wall_level"]));
                 float worth = (float)((4.0 + level) / (1 + 0.25 + 0.16));   // the walls' worth once the first engine, a ram, is built
                 besiegers.Advantage -= 0.1f;                               // the game's siege attackers' -0.1
                 bool town = Str(place["kind"]) == "town";
-                BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, worth, besiegers, walls, !weStorm, Joiners(view, atQ, now, weStorm));
+                List<BattleJoiner> js = Joiners(view, atQ, now, weStorm);
+                foreach ((Force f, double at) in outside) js.Add(new BattleJoiner { Attackers = false, Men = f.Men, At = at, Power = f.Men > 0 ? (float)(f.Strength / f.Men) : 0 });
+                BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, worth, besiegers, walls, !weStorm, js);
                 BattleOutcome o = runs[1];
                 double prep = 24.0 * 48 / Math.Sqrt(Math.Max(1, besiegers.Men)), ram = 24.0 * 12 / Math.Sqrt(Math.Max(1, besiegers.Men));
                 GameBattle.StrikesPerRound(true, town, worth, besiegers.Men, walls.Men, out double sA, out double sD);
                 lines.Insert(0, "BATTLE ODDS: " + (weStorm ? Names(ours) + " storming " : Names(theirs) + " storming your ") + Str(place["name"]) + " [" + atQ + "]");
                 lines.Add("- Besiegers: " + Words.N(besiegers.Men) + " men, strength " + Words.N(besiegers.Men * besiegers.Power) + "; defenders: " + Words.N(walls.Men) + " (garrison " + Math.Max(0, garrison)
-                          + ", militia " + Math.Max(0, militia) + (weStorm ? "" : ", and your lords with them") + "), strength " + Words.N(walls.Men * walls.Power) + ", behind walls of level " + level + ".");
+                          + ", militia " + Math.Max(0, militia) + (weStorm || inside.Count == 0 ? "" : ", and your lords inside: " + Names(inside)) + "), strength " + Words.N(walls.Men * walls.Power) + ", behind walls of level " + level + ".");
+                if (outside.Count > 0)
+                    lines.Add("- Outside the walls: " + Names(outside.Select(x => x.F).ToList()) + ". They come as a relief, the first in about " + Words.N(Math.Max(1, Math.Round(outside.Min(x => x.At))))
+                              + " hours (in a straight line at its pace; by road it is longer). Only lords already inside defend behind the walls.");
                 lines.Add("- First the camp must finish its preparations, about " + Words.N(prep) + " hours for " + Words.N(besiegers.Men) + " men (48 man-days at the square root of its men a day; "
                           + "an engineer's skill shortens it), then build an engine, a ram about " + Words.N(ram) + " hours more: no storm can come before about " + Words.N(prep + ram) + " hours.");
                 lines.Add("- A storm is one round an hour. The besiegers' blows grow only with the defenders' number: " + sA + " a round now; the defenders strike " + sD + " a round with the walls' worth "
                           + worth.ToString("0.0", CultureInfo.InvariantCulture) + " (once a ram is built; each further engine lowers it). At first the besiegers lose about " + Words.N(o.AttackerLossPerHour)
                           + " men an hour, the defenders about " + Words.N(o.DefenderLossPerHour) + ".");
-                lines.Add("- Run ahead: " + Outcome(o, runs, "the besiegers", "the defenders", "the besiegers'", "the defenders'", besiegers.Men, walls.Men) + ". Nobody can leave a battle once in it.");
+                if (!double.IsNaN(o.OutsideAt))
+                    lines.Add("- About " + Words.N(Math.Max(1, Math.Round(o.OutsideAt))) + " hours in, the first relief joins the defenders from outside: from then the storm is a battle outside the walls, "
+                              + "where the walls no longer count for anyone, the garrison included, and both sides strike two rounds an hour by the field rule.");
+                lines.Add("- Run ahead: " + Outcome(o, runs, "the besiegers", "the defenders", "the besiegers'", "the defenders'", besiegers.Men, walls.Men + outside.Sum(x => x.F.Men)) + ". Nobody can leave a battle once in it.");
                 // what a win would bring in (0.9.4): storming, the defenders who fall; defending, the besiegers who fall
                 if (weStorm && o.Winner == "attackers") lines.Add(TakingsLine(view, walls.Men - o.DefendersLeft));
                 else if (!weStorm && o.Winner == "defenders") lines.Add(TakingsLine(view, besiegers.Men - o.AttackersLeft));

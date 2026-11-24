@@ -2007,13 +2007,18 @@ namespace BannerlordAgents.Tools
                 if (camp != null)
                 {
                     double near = _t.Settings.TryGetValue("relief_radius", out double rr) ? rr : 5;
-                    double ours0 = Num(Call("side_strength", new object[] { camp.Id }));
+                    // module 0.24.3: our side is the camp as it stands (camp_strength), not the lords still on their way; and the garrison and the lords inside
+                    // come out to join the relief once they and it together are more than 1.5 times the camp (the game's sally beside a relief)
+                    bool camped = _w.CampStrength(camp.Id) > 0;
+                    double ours0 = camped ? Num(Call("camp_strength", new object[] { camp.Id })) : Num(Call("side_strength", new object[] { camp.Id }));
+                    double sally = camped ? _w.SallyStrength(camp) : 0;
+                    double With(double relief) => relief > 0 && relief + sally > World.SallyRatio * Math.Max(1, ours0) ? relief + sally : relief;
                     List<World.Comer> coming = _w.ReliefComing(camp.Id, near);
                     double first = coming.Where(c => !double.IsNaN(c.Eta)).Select(c => c.Eta).DefaultIfEmpty(double.NaN).Min();
                     if (coming.Count == 0 || double.IsNaN(first)) return new Fight { Ours = ours0, Odds = 0, Hours = 0, Reach = double.NaN };
-                    double e0 = _w.ReliefWithin(camp.Id, first + 0.01, near);
+                    double e0 = With(_w.ReliefWithin(camp.Id, first + 0.01, near));
                     double hours = BattleHours(e0, ours0);
-                    double mid = _w.ReliefWithin(camp.Id, first + hours / 2, near), end = _w.ReliefWithin(camp.Id, first + hours, near);
+                    double mid = With(_w.ReliefWithin(camp.Id, first + hours / 2, near)), end = With(_w.ReliefWithin(camp.Id, first + hours, near));
                     return new Fight { Reach = first, Hours = hours, Mid = mid, End = end, Ours = ours0, Odds = Math.Max(mid, end) / Math.Max(1, ours0) };
                 }
                 PartyRow f = _w.Party(foe);
@@ -2147,6 +2152,14 @@ namespace BannerlordAgents.Tools
                             if (sh != null && (sh.Gx != 0 || sh.Gy != 0)) { sx = sh.Gx; sy = sh.Gy; }
                             string camp = sh != null && _w.HostileFaction(sh.Faction) ? sh.Id : me.Besieging;
                             return _w.SideStrength(me, sx, sy, JoinHours, camp, Objectives(_t, id == me.Id ? null : id));
+                        }
+                    // module 0.24.3: the lords camped in our (or an ally's) siege of h now; those still on their way are not counted, since a sally from the walls
+                    // or a relief's attack comes against the camp as it stands (Nov 24, run 20261124-1400-C2: Girda's camp of 1,600 was weighed as 5,900 with the lords due)
+                    case "camp_strength":
+                        {
+                            if (me == null) return 0.0;
+                            double camped = _w.CampStrength(Id(a[0]));
+                            return camped > 0 ? camped : World.StrengthOf(me);
                         }
                     case "nearest_enemy": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).FirstOrDefault()?.Id;
                     case "army_near": return _w.EnemiesNear(Id(a[0]), Expr.Number(a[1])).Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;

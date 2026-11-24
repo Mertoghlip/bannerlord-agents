@@ -539,6 +539,20 @@ Oct 28: if the agent wants, it can keep the tool it has written as a one-off ord
 - **Check a tool** (`check_tool`, served beside "ask the way", `ToolCheck.cs`): the game's own checker, linked into the war room (`Tools/Expr.cs`, `Tools/ToolDef.cs`, the library's JSON embedded, Newtonsoft 13.0.1), with each problem's place. With a lord named, the try: the war room writes `orders\toolcheck-request-<id>.json`, the bridge's helper answers `toolcheck-<id>.txt` on its urgent lane from the realm's newest hour (`ToolTry`, `Runner.Try`: the start state's move, each rule with whether it would fire and its names that are none, where the first that fires leads as the runner goes in an hour, what it remembers and calls back; moving no one, recording only the try), and the war room waits up to 10 s. `WarRoom toolcheck --write` is a real short call that writes, checks, fixes and answers with a tool.
 - **The toolbook** (`toolbook.jsonl`) gains every tool written (`tool_written`, its whole definition), its check (`tool_check`, its problems), what became of it (`tool_kept`, `tool_changed`, `tool_unchanged`, `tool_one_off`, `tool_retired`, `tool_refused`, `tool_checked`) and each try (`tool_try`).
 
+## The camp as it stands, and relief battles outside the walls (since 0.24.3)
+
+Nov 24, run 20261124-1400-C2: two of the kingdom's agent's worst losses came from our own reckonings.
+
+- **The camp, not the side.** Girda besieged Lasgalor with 540 men (strength about 1,600) while seven lords harassed around it. The besiege order weighed every relief against `side_strength(at)`, which counts the lords due within `join_hours` (5,900 here), so its withdraw bar of 1.0 never fired while the relief grew past the camp. The garrison then came out with the Dol Guldur lords gathered there, and the camp could not leave the fight. Now:
+  - `camp_strength(h)` (`World.CampStrength`): the lords of the realm and its allies camped in a siege of h now, not those on their way; the lord's own strength when none is camped there.
+  - The besiege order's relief call-back, `withdraw_on_relief` and `storm_on_relief` weigh against it, and its messages say "your camp's N (the lords camped there now)".
+  - `fight_odds` at a camp of ours (`Runner.Weigh`) counts the camp, and adds the garrison and the enemy lords seen inside (`World.SallyStrength`) once they and the relief are more than 1.5 times the camp (the game's sally beside a relief).
+- **Relief battles are fought outside the walls.** The game fights a relief's attack on a camp as `SiegeOutside`, and a storm that a relief joins turns into one (docs/ENGINE-NOTES.md). Our reckonings had kept the walls:
+  - `GameBattle.Run`: in a storm, the first joiner on the defenders' side turns it into a battle outside the walls from its hour (two rounds an hour, the field rule, no walls); `BattleOutcome.OutsideAt` says when. The storm guard (`World.StormReckon`), the report's storm clock (`Forecast.StormNow`) and the battle odds all go through it.
+  - The battle odds of a storm of one of your places count only your lords inside it (within 1.5 of it) as defenders behind the walls; those outside come as a relief at their straight-line hours, and the answer says when the first turns the storm into a battle outside the walls. At Goblin Town the agent had been told its army outside would defend "with the defenders behind walls".
+  - The relieve order's description and the instructions' "How battles are joined" say so.
+- Checks: `SmokeTest` `Camp0243.cs` (the camp counted alone, the garrison beside a relief, the withdraw at 1.0); `WarRoom selftest` (the storm turned at the relief's hour, 90 hours alone against 24.5 with it; the battle odds with a lord inside and one outside).
+
 ## Testing by hand
 
 - `agents.tools` lists the library and says whether every tool passed the checker. `agents.tools defend` shows one tool.

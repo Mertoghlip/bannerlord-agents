@@ -1,3 +1,4 @@
+using BannerlordAgents.Common;
 using System.Text.Json.Nodes;
 
 namespace BannerlordAgents.WarRoom
@@ -295,6 +296,26 @@ namespace BannerlordAgents.WarRoom
             Check(o2 != null && o2.StartsWith("BATTLE ODDS: Bolg [lord_bolg] storming Edoras [castle_e]") && System.Text.RegularExpressions.Regex.IsMatch(o2, @"preparations, about \d+ hours for 300 men")
                   && o2.Contains("grow only with the defenders' number") && o2.Contains("Run ahead:"),
                   "a storm by the game's rules, with the camp's preparation time first: " + o2?.Replace("\n", " | "));
+            // war room 0.20.4: a relief that joins a storm turns it into a battle outside the walls (the game's MapEvent.AddInvolvedParty), for everyone
+            var wallsOnly = GameBattle.Run("siege", false, 3f, new BattleSide { Men = 2000, Power = 2f, Advantage = 0.9f, Morale = 70 }, new BattleSide { Men = 300, Power = 2f, Morale = 50, Walls = true });
+            var withRelief = GameBattle.Run("siege", false, 3f, new BattleSide { Men = 2000, Power = 2f, Advantage = 0.9f, Morale = 70 }, new BattleSide { Men = 300, Power = 2f, Morale = 50, Walls = true },
+                new[] { new BattleJoiner { Attackers = false, Men = 600, At = 5, Power = 2f } });
+            var reinforced = GameBattle.Run("siege", false, 3f, new BattleSide { Men = 2000, Power = 2f, Advantage = 0.9f, Morale = 70 }, new BattleSide { Men = 300, Power = 2f, Morale = 50, Walls = true },
+                new[] { new BattleJoiner { Attackers = true, Men = 600, At = 5, Power = 2f } });
+            Check(double.IsNaN(wallsOnly.OutsideAt) && double.IsNaN(reinforced.OutsideAt) && Math.Abs(withRelief.OutsideAt - 5) < 0.01 && withRelief.Winner == "attackers" && withRelief.Hours < wallsOnly.Hours,
+                  "a relief joining a storm turns it into a battle outside the walls from its hour, and with the walls gone the camp wins sooner; the besiegers' own reinforcements leave it a storm ("
+                  + wallsOnly.Hours + " h alone, " + withRelief.Hours + " h with the relief from hour " + withRelief.OutsideAt + ")");
+            string ownView = File.ReadAllText(Path.Combine(live, "camp5", "view_orcs.json"));
+            File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"),
+                "{\"hours\":1000,\"map\":\"test\",\"own\":[{\"id\":\"p_bolg\",\"lord\":\"lord_bolg\",\"name\":\"Bolg\",\"x\":20,\"y\":29,\"men\":300,\"strength\":400,\"morale\":60,\"tactics\":50,\"pace\":4},"
+                + "{\"id\":\"p_gor\",\"lord\":\"lord_gor\",\"name\":\"Gorbag\",\"x\":40,\"y\":29,\"men\":800,\"strength\":1200,\"morale\":60,\"tactics\":50,\"pace\":4}],"
+                + "\"seen\":[{\"id\":\"p_sc\",\"lord\":\"lord_sc\",\"name\":\"Hirgon\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":3000,\"strength\":6000,\"x\":22,\"y\":29,\"doing\":\"besieging Orc Keep\",\"seen_hours\":1000}],"
+                + "\"holdings\":[{\"id\":\"castle_k\",\"name\":\"Orc Keep\",\"kind\":\"castle\",\"garrison\":150,\"militia\":50,\"defence\":300,\"wall_level\":2,\"x\":20,\"y\":29}]}");
+            string own1 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\",\"lord_gor\"],\"theirs\":[\"lord_sc\"],\"at\":\"castle_k\"}");
+            Check(own1 != null && own1.Contains("your lords inside: Bolg [lord_bolg]") && own1.Contains("Outside the walls: Gorbag [lord_gor]") && own1.Contains("about 5 hours")
+                  && own1.Contains("the storm is a battle outside the walls") && own1.Contains("Only lords already inside defend behind the walls"),
+                  "the battle odds of a storm of your place: lords inside defend behind the walls, a lord outside comes as a relief and turns the storm into a battle outside the walls: " + own1?.Replace("\n", " | "));
+            File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"), ownView);
             string r1 = Ask("roads_in", "{\"to\":\"town_a\",\"hours_out\":3}");
             Check(r1 != null && r1.StartsWith("THE ROADS INTO Aldburg [town_a]") && r1.Contains("Bree (Arnor") && System.Text.RegularExpressions.Regex.IsMatch(r1, @"\[p\d+_\d+\]") && r1.Contains("hours before it reaches the walls"),
                   "the roads into a holding from the enemy's places, with a watch spot and its warning: " + r1?.Replace("\n", " | "));

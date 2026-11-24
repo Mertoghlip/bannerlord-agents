@@ -338,6 +338,8 @@ namespace BannerlordAgents
             BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, adv, att, def, !attackersOurs, js);
             BattleOutcome o = runs[1];
             string coming = js.Count == 0 ? "" : ", counting the " + js.Count + (js.Count == 1 ? " lord" : " lords") + " seen marching to it (" + Text.N((int)js.Sum(j => j.Men)) + " men) as they arrive";
+            // 0.24.3: a relief that joins the defenders turns the storm into a battle outside the walls
+            if (!double.IsNaN(o.OutsideAt)) coming += "; the first relief to join the defenders, about " + Math.Max(1, Math.Round(o.OutsideAt)) + " hours in, turns the storm into a battle outside the walls (the walls no longer count, the garrison's too; two rounds an hour)";
             if (o.Winner == null) return opening + " would not end within 5 days" + coming + ".";
             string how = o.Winner == "attackers"
                 ? "the besiegers would take it with about " + Text.N(o.AttackersLeft) + " of their " + Text.N(g.AttackerMen) + " men left"
