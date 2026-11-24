@@ -25,6 +25,7 @@
   Exit codes: 0 done; 2 could not set up (nothing started, or stopped before the run began); 3 held: a crash that waits for my answer, or something
   the script will not decide alone (its files are in D:\BannerlordAgents\crashes); 4 stopped by stop.txt.
   To stop it cleanly: create %LOCALAPPDATA%\BannerlordAgents\autopilot\stop.txt (it saves the run, quits the game and ends).
+  -Arm C1|C2 -Resume carries a running run on from its own save (TEST AUTO <arm>), e.g. after a stop to give it more days (run.json's "days", with the game closed).
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\autopilot.ps1 -MakePlayerless
@@ -35,6 +36,8 @@ param(
     [ValidateSet('C1', 'C2')][string]$Arm,
     # Nov 24: the rival realms' agents fully off for a C2 run, not shadow (their continuous conversations stay as the arm A run left them)
     [switch]$RivalsOff,
+    # Nov 24: with -Arm, carry the running run on from its own save (TEST AUTO <arm>) instead of starting a new one; no arm change
+    [switch]$Resume,
     [switch]$MakePlayerless,
     [switch]$DryRun,
     [string]$From = 'TEST START DGG MERGE',
@@ -563,12 +566,21 @@ try {
     if ($MakePlayerless) { Make-Playerless }
     elseif ($DryRun) { Dry-Run }
     else {
-        if (-not (Save-Exists $Start)) { throw "No save named '$Start': make it first (-MakePlayerless)." }
-        if (@(Run-Saves) -notcontains $Start) { throw "run_save does not name '$Start' (it is: $(Get-Setting 'run_save'))." }
-        $armArgs = @('-Arm', $Arm); if ($RivalsOff) { $armArgs += '-RivalsOff' }
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'arm.ps1') @armArgs | ForEach-Object { Say "  arm: $_" }
-        Begin-Run $Start $true
-        Say "Run $Arm begun: the stand-in waits at normal speed. Minding it to its end."
+        if ($Resume) {
+            # Nov 24: carry a running run on from its own save (after a stop, e.g. to give it more days); the arm stays as its start set it
+            $from = 'TEST AUTO ' + $Arm
+            if (-not (Save-Exists $from)) { throw "No save named '$from': no run of arm $Arm to carry on." }
+            Begin-Run $from $false
+            Say "Run $Arm carried on from ${from}: the stand-in waits at normal speed. Minding it to its end."
+        }
+        else {
+            if (-not (Save-Exists $Start)) { throw "No save named '$Start': make it first (-MakePlayerless)." }
+            if (@(Run-Saves) -notcontains $Start) { throw "run_save does not name '$Start' (it is: $(Get-Setting 'run_save'))." }
+            $armArgs = @('-Arm', $Arm); if ($RivalsOff) { $armArgs += '-RivalsOff' }
+            & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'arm.ps1') @armArgs | ForEach-Object { Say "  arm: $_" }
+            Begin-Run $Start $true
+            Say "Run $Arm begun: the stand-in waits at normal speed. Minding it to its end."
+        }
         $code = Mind-Run
     }
 }
