@@ -315,6 +315,9 @@ namespace BannerlordAgents
             h.Patch(target, prefix: new HarmonyLib.HarmonyMethod(typeof(SiegeFoodPatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
             SiegeFoodInstalled = Ours(target);
             Parts["siege food"] = "the siege food rule " + (SiegeFoodInstalled ? "attached" : "did not attach") + Others(target) + (Settings.SiegeFood ? "" : " (switched off in settings.txt)");
+            // 0.24.4: the player's siege screen counts the lords' food inside a besieged place, as the rule feeds it
+            try { Parts["siege screen food"] = SiegeFoodScreen.Install(h); }
+            catch (Exception e) { Parts["siege screen food"] = "the siege screen's food could not attach (" + e.GetType().Name + "), so it shows the store alone"; Diag.Swallowed("the siege screen's food hook", e); }
             Log.Line("game hooks: " + Status);
         }
 

@@ -395,6 +395,16 @@ namespace BannerlordAgents.WarRoom
         private static readonly Regex Head = new Regex(@"^- (?:ENEMY |SEEN EARLIER |TRAIL )?(.+?) \[([^\]]+)\]", RegexOptions.Compiled);
         private static readonly Regex Num = new Regex(@"(-?[\d,]+(?:\.\d+)?)", RegexOptions.Compiled);
 
+        /// <summary>The siege food rule's days (the module's SiegeFoodRules.Days): the store lasts alone first, then the lords' leftover feeds everyone, them included.</summary>
+        internal static double PooledDays(double stores, double eats, double lordsFood, double lordsEat)
+        {
+            if (eats <= 0) return double.PositiveInfinity;
+            double alone = Math.Max(0, stores) / eats;
+            if (lordsFood <= 0) return alone;
+            double left = lordsFood - Math.Max(0, lordsEat) * alone;
+            return left <= 0 ? alone : alone + left / (eats + Math.Max(0, lordsEat));
+        }
+
         private static IEnumerable<JsonObject> Items(ShelfInput x, string list) => (x.Book?["lists"]?[list] as JsonArray ?? new JsonArray()).OfType<JsonObject>();
         private static string T(JsonObject item) => ((string)item?["t"] ?? "").Replace("\r", "");
         private static List<string> Ids(JsonObject item) => (item?["ids"] as JsonArray ?? new JsonArray()).Select(n => (string)n).Where(s => s != null).ToList();
@@ -488,6 +498,8 @@ namespace BannerlordAgents.WarRoom
                 body.AppendLine("Given by: " + (order != null ? (order.Contains("Now sheltering") || order.Contains("falls back") || order.Contains("falling back") ? "you; the safety rule has him away from it for now (the order resumes once the danger has passed)" : "you") : "the game's own AI"));
                 body.AppendLine("Region: " + area);
                 if (look != null) body.AppendLine().AppendLine(look);
+                // war room 0.20.6: the siege this lord lays or the fight he is in, with its clock (before, a siege of an enemy place reached no page at all)
+                foreach (JsonObject sg in Items(x, "sieges").Where(sg => Ids(sg).Contains(id))) body.AppendLine().AppendLine((T(sg).Contains("besieged by") ? "Siege: " : "Fight: ") + T(sg).TrimStart('-', ' '));
                 // an army's members, each in a line, from their own pages
                 foreach (string mid in army ? Ids(it).Skip(1).Distinct() : Enumerable.Empty<string>())
                 {
@@ -646,7 +658,13 @@ namespace BannerlordAgents.WarRoom
                 var body = new StringBuilder();
                 body.AppendLine(h.line);
                 body.AppendLine();
-                body.AppendLine("Food: " + (double.IsNaN(days) ? "not known" : days + " days at what it eats now") + (double.IsNaN(foodNow) ? "" : " (" + Fmt(foodNow) + " in store" + (perDay > 0 ? ", eating " + Fmt(perDay) + " a day" : "") + ")") + ".");
+                // war room 0.20.6: once it is besieged, the days count the food its lords inside carry, which then feeds it (the siege food rule); before, the store alone
+                double lordsFood = (double?)ty?["lords_food"] ?? 0, lordsEat = (double?)ty?["lords_eat"] ?? 0;
+                double pooled = besieged && perDay > 0 && lordsFood > 0 && !double.IsNaN(foodNow) ? Math.Floor(PooledDays(foodNow, perDay, lordsFood, lordsEat)) : double.NaN;
+                string foodDays = !double.IsNaN(pooled) && !double.IsNaN(days) && pooled > days
+                    ? "about " + pooled + " days of siege left with the " + Fmt(lordsFood) + " food your lords inside carry (" + days + " on its own store)"
+                    : double.IsNaN(days) ? "not known" : days + " days at what it eats now";
+                body.AppendLine("Food: " + foodDays + (double.IsNaN(foodNow) ? "" : " (" + Fmt(foodNow) + " in store" + (perDay > 0 ? ", eating " + Fmt(perDay) + " a day" : "") + ")") + ".");
                 foreach (JsonObject s in sieges.Where(s => Ids(s).Contains(h.id))) body.AppendLine("Siege: " + T(s).TrimStart('-', ' '));
                 body.AppendLine();
                 body.AppendLine("Lords whose orders are tied to it (" + tied.Count + "), with their march here at their own pace:");
@@ -884,6 +902,8 @@ namespace BannerlordAgents.WarRoom
                 string id = h.Groups[2].Value, name = h.Groups[1].Value;
                 string look = BookPage(x, id);
                 // its look-up, cut to its first lines: your lords soonest, the enemies near it (the muster's running totals are on your own holdings' pages)
+                // war room 0.20.6: a siege of it the realm can see into (its own, above all), with its clock: walls, storm, and food counting the lords inside
+                foreach (JsonObject sg in Items(x, "sieges").Where(sg => Ids(sg).Contains(id) && T(sg).Contains("besieged by"))) holdings.AppendLine("  Siege: " + T(sg).TrimStart('-', ' '));
                 if (look != null) holdings.AppendLine("  " + string.Join("\n  ", look.Split('\n').Skip(1).Where(l => !l.StartsWith("Muster", StringComparison.Ordinal) && !l.StartsWith("- within", StringComparison.Ordinal) && !l.StartsWith("- later", StringComparison.Ordinal)).Take(10)));
                 double? garrison = NumAfter(t, "garrison ");
                 if (garrison != null) facts.Add(new Fact { Key = "enemyholding:" + id + ":garrison", Value = Math.Round(garrison.Value).ToString(CultureInfo.InvariantCulture), Page = "intelligence/enemy-holdings", Weight = 1, Say = (o, n) => Moved(o, n, 0.10, 20) ? name + " (enemy): garrison " + Fmt(D(o)) + " → " + Fmt(D(n)) : null });

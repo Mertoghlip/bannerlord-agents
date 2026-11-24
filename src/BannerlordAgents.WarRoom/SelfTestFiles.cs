@@ -132,6 +132,19 @@ namespace BannerlordAgents.WarRoom
             Check(File.Exists(Path.Combine(dir, "intelligence", "chances-to-strike.md")) && !File.Exists(Path.Combine(channel5, Shelf.DirName, "intelligence", "chances-to-strike.md"))
                   && File.Exists(Path.Combine(channel5, Shelf.DirName, "intelligence", "sightings.md")),
                   "with chances_page = off the shelf keeps no chances-to-strike page");
+            // war room 0.20.6: the realm's own siege of an enemy place, with its clock, on its besieger's page and under that place; a besieged holding's days pool its lords' food
+            string channel6 = Path.Combine(root, "files-channel-oursiege");
+            try { Directory.Delete(channel6, true); } catch (DirectoryNotFoundException) { }
+            JsonObject b6 = Book(300, 20, "defend", false);
+            ((JsonObject)b6["lists"])["sieges"] = JsonNode.Parse("[{\"t\": \"- Hollin Gate [castle_MM6] (castle, Gondor), besieged by Naglur [lord_MM8_1] (Misty Mountain Orcs) since Autumn 1, 1087, 00:00 (24 hours): preparations done. Food lasts about 40.6 days (Summer 10, 1088, 12:00), counting the 3,019 food the lords inside carry, which feeds the place once its store is gone, then a tenth of the garrison falls wounded each day.\", \"area\": \"Moria\", \"ids\": [\"castle_MM6\", \"lord_MM8_1\"]}]");
+            ((JsonArray)b6["lists"]["holdings"]).Add(JsonNode.Parse("{\"t\": \"- ENEMY Hollin Gate [castle_MM6] (castle, Gondor): garrison 294, militia 163; under siege by Naglur (Misty Mountain Orcs).\", \"area\": \"Moria\", \"ids\": [\"castle_MM6\"]}"));
+            var shelf6 = new Shelf(channel6);
+            shelf6.Build(Input(b6, 7, ""));
+            string naglurPage = File.ReadAllText(Path.Combine(channel6, Shelf.DirName, "lords", "naglur.md"));
+            string enemyPage = File.ReadAllText(Path.Combine(channel6, Shelf.DirName, "intelligence", "enemy-holdings.md"));
+            Check(naglurPage.Contains("Siege: Hollin Gate [castle_MM6]") && naglurPage.Contains("Food lasts about 40.6 days") && enemyPage.Contains("  Siege: Hollin Gate [castle_MM6]")
+                  && Math.Abs(Shelf.PooledDays(64, 32, 120, 6) - (2 + 108.0 / 38)) < 1e-9 && Math.Abs(Shelf.PooledDays(64, 32, 0, 0) - 2) < 1e-9,
+                  "the realm's own siege of an enemy place shows on its besieger's page and under that place, with its clock and the food the lords inside carry; a besieged holding's days pool its lords' food as the siege food rule does");
 
             // war room 0.20.1: wakes counted by their hours; a load drops those after its hour
             var talk = new Talk();

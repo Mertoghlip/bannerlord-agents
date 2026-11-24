@@ -35,14 +35,18 @@ namespace SmokeTest
             orc.Food = 64; orc.FoodCap = 450; orc.FoodPerDay = 32;
             View v = Views.Build(s, "orcs", s.WatchedSees, s.HostileToWatched, null);
             string report = Views.Report(v, null);
-            bool line = report.Contains("Orc Castle [castle_orc] (castle): garrison 450 (strength 600), militia 120; food 64 of 450, about 2 days under siege (it eats 32 a day), about 4 with the 120 food your lords inside carry")
-                        && report.Contains("takes what it lacks each day from the food its lords inside carry");
+            // 0.24.4: before a siege the line gives the store alone; once the siege has begun, the days with the lords' food
+            bool line = report.Contains("Orc Castle [castle_orc] (castle): garrison 450 (strength 600), militia 120; food 64 of 450, about 2 days under siege (it eats 32 a day);")
+                        && !report.Contains("120 food your lords inside carry") && report.Contains("takes what it lacks each day from the food its lords inside carry");
+            orc.BesiegedBy = "player_k";
+            string sieged = Views.Report(Views.Build(s, "orcs", s.WatchedSees, s.HostileToWatched, null), null);
+            line = line && sieged.Contains("food 64 of 450, about 4 days of siege left with the 120 food your lords inside carry (2 on its own store; it eats 32 a day)");
             Snapshot bare = ToolWorld(43900);
             SettlementRow orc2 = bare.SettlementById["castle_orc"];
             orc2.Food = 64; orc2.FoodCap = 450; orc2.FoodPerDay = 32;
             string plainReport = Views.Report(Views.Build(bare, "orcs", bare.WatchedSees, bare.HostileToWatched, null), null);
             bool plain = plainReport.Contains("food 64 of 450, about 2 days under siege (it eats 32 a day);") && !plainReport.Contains("food your lords inside carry");
-            Check(line && plain, "the report counts an own castle's lords' food inside: about 4 days with the 120 they carry, against 2 on its store alone, and says nothing more with none inside (" + line + ", " + plain + ")");
+            Check(line && plain, "the report counts an own castle's lords' food inside once the siege has begun: about 4 days with the 120 they carry, against 2 on its store alone; before the siege, and with none inside, the store alone (" + line + ", " + plain + ")");
 
             // the siege clock: the place's food runs out once its store and its lords' leftover are both eaten
             var g = new SiegeRow { Settlement = "castle_orc", Besieger = "p_x", BesiegerFaction = "player_k", StartHours = 43900, Prep = 0.2f, PrepRate = 0.02f, WallLevel = 1, Advantage = 2f, Defenders = 600, Attackers = 1000,

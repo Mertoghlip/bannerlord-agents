@@ -782,11 +782,19 @@ namespace BannerlordAgents
             var line = new StringBuilder("- " + h.Name + " [" + h.Id + "] (" + h.Kind + (string.IsNullOrEmpty(h.Clan) ? "" : " of " + h.Clan) + ")");
             if (h.Kind != "village") line.Append(": garrison " + Text.N(Math.Max(0, h.Garrison)) + (h.GarrisonStrength >= 0 ? " (strength " + Text.N((int)Math.Round(h.GarrisonStrength)) + ")" : "") + ", militia " + Text.N(h.Militia));
             if (h.Food >= 0)
-                line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap)
-                            + (h.FoodPerDay > 0 ? ", about " + Text.N((int)Math.Floor(h.Food / h.FoodPerDay)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)" : "")
-                            + (h.FoodPerDay > 0 && h.LordsFood > 0 && SiegeFoodRules.Days(h.Food, h.FoodPerDay, h.LordsFood, h.LordsEat) > h.Food / h.FoodPerDay + 0.05
-                               ? ", about " + Text.N((int)Math.Floor(SiegeFoodRules.Days(h.Food, h.FoodPerDay, h.LordsFood, h.LordsEat))) + " with the " + Text.N((int)h.LordsFood) + " food your lords inside carry" : "")
-                            + (h.FoodComing != null ? "; food coming: " + h.FoodComing : ""));
+            {
+                // 0.24.4: once the siege has begun, the days count the food the lords inside carry, which then feeds the place (the siege food rule); before it, the store alone
+                bool sieged = h.Status != null && h.Status.StartsWith("under siege", StringComparison.Ordinal);
+                double alone = h.FoodPerDay > 0 ? h.Food / h.FoodPerDay : double.NaN;
+                double pooled = h.FoodPerDay > 0 && h.LordsFood > 0 ? SiegeFoodRules.Days(h.Food, h.FoodPerDay, h.LordsFood, h.LordsEat) : double.NaN;
+                line.Append("; food " + Text.N((int)Math.Floor(h.Food)) + " of " + Text.N((int)h.FoodCap));
+                if (sieged && !double.IsNaN(pooled) && pooled > alone + 0.05)
+                    line.Append(", about " + Text.N((int)Math.Floor(pooled)) + " days of siege left with the " + Text.N((int)h.LordsFood) + " food your lords inside carry (" + Text.N((int)Math.Floor(alone))
+                                + " on its own store; it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)");
+                else if (h.FoodPerDay > 0)
+                    line.Append(", about " + Text.N((int)Math.Floor(alone)) + " days under siege (it eats " + Text.N((int)Math.Ceiling(h.FoodPerDay)) + " a day)");
+                if (h.FoodComing != null) line.Append("; food coming: " + h.FoodComing);
+            }
             if (h.WallLevel > 0)
                 line.Append("; walls level " + h.WallLevel + "; defenders' strength " + Text.N((int)Math.Round(h.Defence))
                             + (h.LordsInside > 0 ? " (" + Text.N((int)Math.Round(h.LordsInside)) + " of it your lords inside)" : "")

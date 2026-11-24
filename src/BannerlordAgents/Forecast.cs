@@ -313,7 +313,11 @@ namespace BannerlordAgents
             sb.Append(" (besiegers " + Text.N((int)Math.Round(g.Attackers)) + " against defenders " + Text.N((int)Math.Round(g.Defenders)) + " times the walls' worth " + g.Advantage.ToString("0.0", Text.Inv) + "). ");
             if (stormNow != null) sb.Append(stormNow).Append(' ');
             if (!double.IsNaN(c.FoodOutAt))
-                sb.Append(c.FoodOutAt <= c.Now + 0.5 ? "The place has no food: a tenth of its garrison falls wounded each day" : "Food lasts about " + HoursText(c.FoodOutAt - c.Now) + " (" + Text.When(c.FoodOutAt) + "), then a tenth of the garrison falls wounded each day");
+                sb.Append(c.FoodOutAt <= c.Now + 0.5 ? "The place has no food: a tenth of its garrison falls wounded each day"
+                          : "Food lasts about " + HoursText(c.FoodOutAt - c.Now) + " (" + Text.When(c.FoodOutAt) + ")"
+                            // 0.24.4: the lords inside feed the place once its store is gone (the siege food rule), so their food is in that count
+                            + (g.LordsFood > 0 && Settings.SiegeFood ? ", counting the " + Text.N((int)g.LordsFood) + " food the lords inside carry, which feeds the place once its store is gone" : "")
+                            + ", then a tenth of the garrison falls wounded each day");
             else sb.Append("Food holds");
             if (!double.IsNaN(c.CohesionOutAt)) sb.Append("; the besieging army holds together about " + HoursText(c.CohesionOutAt - c.Now) + " more");
             return sb.Append('.').ToString();

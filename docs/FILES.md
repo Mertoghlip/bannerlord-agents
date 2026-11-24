@@ -29,6 +29,8 @@ Each file is a folder of the channel's `files\` (`<agent>\warroom\files\`), and 
 
 The places around a holding are worked out once per map: the ways between places never change. They are kept in `files\.rings.json`, and the first build of a load takes about 0.6 s. The enemy around each place is counted from what the realm sees in view now and saw within the last day, by the length of the way over land at speed 2. Both use the way-finder copy the war room already serves for "ask the way".
 
+**Since war room 0.20.6 (Nov 24):** a siege the realm lays at an enemy place, and any fight a lord of ours is in, goes on his page (`Siege:` or `Fight:`) with its clock: walls, storm and the food left, counting the food the lords inside carry. The siege also goes under that place on intelligence/enemy-holdings. Before, a siege of an enemy place reached no page at all, so the agent besieging Hollin Gate wrote "their food is unknown". A besieged holding of the realm's own gives its days with its lords' food (the store alone before a siege).
+
 ## Changes, flagged
 
 Three layers:
