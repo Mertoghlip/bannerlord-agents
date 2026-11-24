@@ -106,7 +106,7 @@ namespace BannerlordAgents
         public static List<string> Lines(Snapshot s, string fid)
         {
             var lines = new List<string>();
-            PartyRow p = s?.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow r) ? r : null;
+            PartyRow p = s?.PlayerParty != null && s.HumanPlays && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow r) ? r : null;
             if (p == null) return lines;
             string who = (p.Name ?? "the player") + " [" + p.Id + "]";
             bool own = p.Faction == fid;
@@ -156,7 +156,7 @@ namespace BannerlordAgents
         /// <summary>The council's section: who he is, the rule, his record, his last battles.</summary>
         public static string Section(Snapshot s, string fid, int last = 8)
         {
-            PartyRow p = s?.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow r) ? r : null;
+            PartyRow p = s?.PlayerParty != null && s.HumanPlays && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow r) ? r : null;
             if (p == null) return null;
             var sb = new System.Text.StringBuilder();
             bool own = p.Faction == fid;

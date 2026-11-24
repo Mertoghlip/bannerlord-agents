@@ -95,6 +95,11 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         public string Context = "report";
         public bool Files => Continuous && string.Equals(Context, "files", StringComparison.OrdinalIgnoreCase);
+        /// <summary>
+        /// A human plays this game in person (war room 0.20.2; warroom.txt's human_player, on unless "none"): with none (the C runs, where a stand-in waits in a town),
+        /// the instructions' "## The human player" gives way to a short "## No human player" and their other mentions of him go (Room.NoHumanPlayer).
+        /// </summary>
+        public bool HumanPlayer = true;
         /// <summary>A files agent's instructions: each "## " section of it takes the place of the same section, over warroom-continuous.md.</summary>
         public string FilesTemplate => Path.Combine(AgentDir, "warroom-files.md");
 
@@ -164,6 +169,7 @@ namespace BannerlordAgents.WarRoom
                     case "compact_hard_tokens": if (long.TryParse(v.Replace(",", "").Replace("_", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out long cht) && cht >= 100_000) c.CompactHardTokens = cht; break;
                     case "wake_budget": if (int.TryParse(v, out int wb) && wb > 0) c.WakeBudget = wb; break;
                     case "context": if (v == "report" || v == "files") c.Context = v; break;
+                    case "human_player": c.HumanPlayer = !(v == "none" || v == "off" || v == "no" || v == "false"); break;
                     case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
                     case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
                     case "story_model": c.StoryModel = v; break;

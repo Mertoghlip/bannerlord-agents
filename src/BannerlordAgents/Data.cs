@@ -392,6 +392,11 @@ namespace BannerlordAgents
         public string Date;
         public bool Night;
         public string PlayerFaction, PlayerParty, Watched;
+        /// <summary>
+        /// A human plays this game in person (0.24.1): false once the playerless switch has put a stand-in in the player's place (the player's hero is no longer
+        /// his clan's leader, as in the C runs). Then nobody is "the human player": no realm's report names one, and no party is marked in person.
+        /// </summary>
+        public bool HumanPlays = true;
         /// <summary>The test run this hour belongs to (RunTags, 0.13): its id and arm; null outside a run.</summary>
         public string Run, Arm;
         /// <summary>

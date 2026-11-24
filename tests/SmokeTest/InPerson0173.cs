@@ -51,6 +51,14 @@ namespace SmokeTest
             string own = Views.Report(vk, new List<Trigger>());
             Check(own.Contains("YOUR OWN BATTLES, THE HUMAN PLAYER'S") && own.Contains("You, Aragorn [main_party], are the human player") && own.Contains("only those in your army or within 3"),
                   "his own realm's report (the lieutenant's) tells him which of his lords fight in his battles");
+            // 0.24.1: a playerless run (a stand-in in the player's place): nobody is the human player, in either realm's report, and nothing is in person
+            s0.HumanPlays = false;
+            string noneEnemy = Views.Report(Views.Build(s0, "orcs", s0.WatchedSees, s0.HostileToWatched, new Brain.Memory()), new List<Trigger>());
+            string noneOwn = Views.Report(Views.Build(s0, "player_k", new Dictionary<string, Sighting>(), s0.HostileToPlayer, new Brain.Memory()), new List<Trigger>());
+            Check(!noneEnemy.Contains("HUMAN PLAYER") && !noneEnemy.Contains("in person") && !noneOwn.Contains("HUMAN PLAYER") && !noneOwn.Contains("are the human player")
+                  && !Runner.WorldFor(s0).InPerson("main_party") && InPerson.Section(s0, "orcs") == null,
+                  "with a stand-in in the player's place nobody is the human player: no report names one, and no party is in person");
+            s0.HumanPlays = true;
 
             // the weighing of a fight with him: his side within the ring of him, ours within the ring of this lord; nobody else, however near in hours
             var w0 = Runner.WorldFor(ToolWorld(67001, Orc("ip1", "Gorbag", 600, 110, 100), Orc("ip2", "Shagrat", 600, 111.5f, 100), Orc("ip3", "Lugdush", 900, 104, 100), ar));

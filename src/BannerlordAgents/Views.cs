@@ -927,7 +927,7 @@ namespace BannerlordAgents
             };
             vp.Toward = Toward(r);
             if (relation == "own") vp.Poor = PurseView.RecruitNote(r);
-            vp.InPerson = s.PlayerParty != null && (r.Id == s.PlayerParty || r.ArmyLeader == s.PlayerParty);
+            vp.InPerson = s.PlayerParty != null && s.HumanPlays && (r.Id == s.PlayerParty || r.ArmyLeader == s.PlayerParty);
             vp.Entrance = r.InSettlement ?? r.Entrance;
             if (r.Kind == "lord")
             {

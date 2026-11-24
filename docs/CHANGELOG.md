@@ -3005,3 +3005,18 @@ avmesh.bin`):
 - **A self-waking agent can miss an opening:** Dol Guldur woke once while I marched from Mirkwood to Hollin Gate. Its alarms watch me coming, not leaving.
 - **A harness fault:** at 09:27 Dol Guldur's review gave six gold gifts (395,000 in all), and its next wake, 16 s later and before the receipts, gave the same six again; all twelve were carried out. A gift that repeats one just carried out should be refused. Not fixed yet.
 - **My gift orders through the lieutenant** were refused three times: the gift order never takes from or gives to the human player.
+
+### 10:40 · Module 0.24.1, war room 0.20.2: no human player in the C runs; C2 started again · commit (next)
+- **What went wrong (run 20261124-1024-C2, 10:24-10:28):** the kingdom's agent wrote in its plan: "Aragorn is the human player and his army is left to him." Nobody plays a C run in person. Two inputs misled it:
+  - the report told it "You, Marzuk ibn-Zayak, are the human player" (YOUR OWN BATTLES, THE HUMAN PLAYER'S), because the stand-in is the player's character and stands in its realm;
+  - its instructions' "## The human player" describes an enemy lord commanded in person.
+  - So it left its own ruler's army of about 7,500 strength unordered.
+- **Fixed:**
+  - **Module 0.24.1:** `Snapshot.HumanPlays` is false once the playerless switch has put a stand-in in the player's place (the player's hero is no longer his clan's leader). Then no report names a human player, no party is marked in person, and the battle rules treat nobody as him (`InPerson.Lines`/`Section`, `Views`, `World.InPerson`).
+  - **War room 0.20.2:** `human_player = none` in warroom.txt replaces "## The human player" with "## No human player". It says nobody plays in person, every lord follows the game's AI or the agent's orders, and the ruler's party takes orders like any other. The other mentions of him go too (`Room.NoHumanPlayer`).
+  - **`arm.ps1`:** writes `human_player = none` for the C arms into the Orcs', Dol Guldur's and the kingdom's warroom.txt, and `on` for A and B where the line is there.
+- **Checks:** smoke test all passed (a new check: with a stand-in, neither realm's report names a human player and nothing is in person); war room self-test all passed (a new check of the no-human instructions); dashboard self-test passed; RefCheck missing 0.
+- **Installed** with the game closed (10:34): module 0.24.1 (`BannerlordAgents.dll` SHA-256 d494886598436ac4...), war room 0.20.2.
+- **Outside the repository:** `human_player = none` in the three realm agents' warroom.txt (arm C2).
+- **The first try's end:** I closed the game at 10:28. The autopilot cannot tell a closing by hand from a crash: it gathered the files (`D:\BannerlordAgents\crashes\20261124-102817-25968`) and restarted from `TEST AUTO C2`. That game closed during its load at 10:29, and the script ended with code 2. The new start abandons run 20261124-1024-C2.
+- **Started again** at 10:37: `autopilot.ps1 -Arm C2 -RivalsOff`, war rooms started after the arm was set (each reads warroom.txt only when it starts), the Orcs' and Dol Guldur's stopped.

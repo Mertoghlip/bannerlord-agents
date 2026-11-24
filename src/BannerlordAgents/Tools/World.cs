@@ -533,7 +533,7 @@ namespace BannerlordAgents.Tools
         /// <summary>Is this the human player's own party, or an army he leads, or a lord marching in it (0.17.3)?</summary>
         public bool InPerson(string id)
         {
-            string pp = S.PlayerParty;
+            string pp = S.HumanPlays ? S.PlayerParty : null;
             if (id == null || pp == null) return false;
             if (id == pp) return true;
             PartyRow r = Party(id);

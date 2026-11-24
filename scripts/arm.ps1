@@ -59,6 +59,21 @@ $modes = [ordered]@{
     'your lieutenant'     = $(if ($Arm -in 'A', 'B') { 'live' } else { 'off' })
     'the kingdom''s agent' = $(if ($Arm -in 'C1', 'C2') { 'live' } elseif ($Arm -eq 'C0' -and $KingdomWatches) { 'shadow' } else { 'off' })
 }
+# Nov 24 (war room 0.20.2): in the C arms nobody plays in person, so the realms' agents get the instructions for a game with no human player
+# (warroom.txt's human_player = none); in A and B he plays (human_player = on, written only where the line is already there)
+function Set-HumanPlayer([string]$folder, [bool]$plays) {
+    $f = Join-Path $folder 'warroom.txt'
+    if (-not (Test-Path $f)) { return }
+    $text = [System.IO.File]::ReadAllText($f, $utf8)
+    $value = if ($plays) { 'on' } else { 'none' }
+    if ($text -match '(?m)^\s*human_player\s*=') { $new = [regex]::Replace($text, '(?m)^(\s*human_player\s*=\s*)\S+', '${1}' + $value) }
+    elseif ($plays) { return }
+    else { $new = $text.TrimEnd() + "`r`n# nobody plays in person in the C arms (arm.ps1, war room 0.20.2)`r`nhuman_player = none`r`n" }
+    if ($new -ne $text) { [System.IO.File]::WriteAllText($f, $new, $utf8) }
+}
+$humanPlays = $Arm -in 'A', 'B'
+foreach ($k in 'Misty Mountain Orcs', 'Dol Guldur', 'the kingdom''s agent') { Set-HumanPlayer $folders[$k] $humanPlays }
+
 $log = Join-Path $env:LOCALAPPDATA 'BannerlordAgents\runs\arms.log'
 New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
 $lines = @()
@@ -70,6 +85,7 @@ foreach ($k in $modes.Keys) {
 [System.IO.File]::AppendAllText($log, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + "  arm $Arm" + $(if ($RivalsOff) { ' (rivals off)' } else { '' }) + ": " + ($lines -join '; ') + "`r`n", $utf8)
 Write-Host "Arm $Arm set:" -ForegroundColor Green
 $lines | ForEach-Object { "  $_" }
+"  the realms' agents: " + $(if ($humanPlays) { 'a human player in the game' } else { 'no human player in the game (human_player = none)' })
 Write-Host ''
 Write-Host 'In the game:' -ForegroundColor Cyan
 "  1. Load TEST START. The message log says 'Test run ready'; the run begins on the first in-game hour the clock runs."

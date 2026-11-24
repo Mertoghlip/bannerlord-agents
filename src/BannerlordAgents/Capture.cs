@@ -42,6 +42,9 @@ namespace BannerlordAgents
                 Date = DateText(),
                 PlayerFaction = player?.StringId,
                 PlayerParty = MobileParty.MainParty?.StringId,
+                // the playerless switch (C runs): the stand-in is a companion of the player's clan, never its leader (0.24.1, Nov 24: the kingdom's agent read
+                // "You, Marzuk ibn-Zayak, are the human player" and took its own ruler Aragorn for one, leaving his army unordered)
+                HumanPlays = Hero.MainHero == null || Clan.PlayerClan?.Leader == null || Clan.PlayerClan.Leader == Hero.MainHero,
                 Watched = watched?.StringId,
                 Wall = DateTime.UtcNow.Ticks,
                 LoadId = Bridge.LoadId,

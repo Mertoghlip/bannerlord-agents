@@ -1231,6 +1231,8 @@ namespace BannerlordAgents.WarRoom
                 template = ReplaceSection(template, "## Checking a tool", null);
             }
             if (_c.Conversation && !_c.Continuous) template = ReplaceSection(template, "## Your memory", ConversationMemory);
+            // nobody plays in person (the C runs, war room 0.20.2): no human player to study, fear or leave alone
+            if (!_c.HumanPlayer) template = NoHumanPlayer(template);
             // a news wake's "## Look-ups" are its questions on the book; anyone else's, the Read tool's files
             if (news || _c.Continuous ? !book : !read) template = ReplaceSection(template, "## Look-ups", null);
             // never promise a tool the call does not have: the model would type tool calls as text instead
@@ -1354,6 +1356,27 @@ namespace BannerlordAgents.WarRoom
             int b = text.IndexOf("\n## ", a + 3, StringComparison.Ordinal);
             return text.Substring(0, a) + (with != null ? with.TrimEnd() + "\n\n" : "") + (b >= 0 ? text.Substring(b + 1) : "");
         }
+
+        /// <summary>
+        /// The instructions for a game nobody plays in person (war room 0.20.2, Nov 24: in a C2 run the kingdom's agent took its own ruler, Aragorn, for the human
+        /// player and left his army unordered): "## The human player" gives way to "## No human player", and the lines that point at him lose those words.
+        /// </summary>
+        internal static string NoHumanPlayer(string template)
+        {
+            template = ReplaceSection(template, "## The human player", NoHumanSection);
+            foreach (string s in new[]
+            {
+                " (the human player's, up to five sentences: The human player)", " (the human player's own battles are the exception, above)",
+                ", an enemy's or the human player's", " or the human player's"
+            }) template = template.Replace(s, "");
+            return template;
+        }
+
+        internal const string NoHumanSection =
+            "## No human player\n\n"
+            + "Nobody plays this game in person. Every lord of every realm, your own ruler and his party among them, is led by the game's own AI or by your orders, and every "
+            + "battle is joined by the game's own rules below. A lord of yours holding no order of yours follows the game's AI until you give him one; your ruler's party "
+            + "takes your orders like any other.\n";
 
         internal static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).Substring(0, 12);
 

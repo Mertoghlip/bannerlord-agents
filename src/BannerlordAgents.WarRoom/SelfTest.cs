@@ -302,6 +302,12 @@ namespace BannerlordAgents.WarRoom
             var room = new Room(c, logs);
             string with = File.ReadAllText(room.SystemFile(true)), without = File.ReadAllText(room.SystemFile(false));
             Check(with.Contains("ask_the_way") && !without.Contains("ask_the_way") && without.Contains("## Rules"), "the instructions speak of the tool only in a call that has it");
+            // war room 0.20.2: a game nobody plays in person (the C runs)
+            string human = "## Orders\n\n- `enemies` notes an enemy, by name, in one line (the human player's, up to five sentences: The human player).\n\n## The human player\n\nOne enemy lord is commanded in person by a human player.\n\n## How battles are joined\n\nThe game's own rules (the human player's own battles are the exception, above):\n- a rule.\n";
+            string none = Room.NoHumanPlayer(human);
+            Check(!none.Contains("the human player") && none.Contains("## No human player") && none.Contains("your ruler's party takes your orders like any other") && none.Contains("## How battles are joined")
+                  && none.Contains("The game's own rules:") && none.Contains("in one line.") && none.IndexOf("## No human player", StringComparison.Ordinal) < none.IndexOf("## How battles are joined", StringComparison.Ordinal),
+                  "with human_player = none the instructions say nobody plays in person and no longer speak of a human player: " + none.Replace("\n", " | "));
             RouteTool.WriteRules(data, c.ChannelDir);
             Check(File.Exists(Path.Combine(c.ChannelDir, "marching.txt")) && File.ReadAllText(Path.Combine(c.ChannelDir, "marching.txt")).StartsWith("HOW MARCHING WORKS"), "marching.txt is written for the agent to read");
         }
