@@ -87,29 +87,15 @@ namespace BannerlordAgents.WarRoom
         public const int HandoverStallSeconds = 300;
 
         /// <summary>
-        /// Past this many characters an answer is taken for a runaway and the call is stopped. It was 16,000 (the longest answer then was under 6,000 characters). Since war room
-        /// 0.20.8 it is the lieutenant's limit: with every lord under an order (0.20.7) a realm agent's strike is a group order per lord, each naming the whole group. Nov 25, run
-        /// 20261125-1331-C2: the kingdom's answer to Lorgath's siege of Imnagath (about 24 muster orders, each naming some 30 lords, then a strike) was stopped at 16,000 four times
-        /// running, about three in-game days, and all of it was lost. The stall rule still catches a call that hangs, and fake tool calls typed as text are still caught at once.
+        /// Whether what a call has written so far is a runaway, and why (null: it is not). Only an answer that types tool calls as text is (Oct 8: a 19,000-character runaway of
+        /// fake tool calls). There is no length limit (since war room 0.20.9, Nov 25): every length limit so far has cost real answers. It was 16,000 characters for a realm agent,
+        /// 48,000 for an answer with tools, pages or a handover, and 150,000 for the lieutenant (0.15.2, after an audit's answer was stopped at 48,000 on its 60th order of 70, twice,
+        /// Nov 6, test A1). Nov 25, run 20261125-1331-C2: the kingdom's answer to Lorgath's siege of Imnagath (about 24 gathering orders, each naming some 30 lords, then a strike) was
+        /// stopped at 16,000 four times running, about three in-game days, and all of it was lost (0.20.8 raised every limit to 150,000; 0.20.9 removed it). A call that hangs is
+        /// still caught by the stall rule.
         /// </summary>
-        public const int RunawayChars = 150000;
-
-        /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8) or pages, and a handover; was 48,000, now the same as any answer's.</summary>
-        public const int RunawayCharsWithTools = 150000;
-
-        /// <summary>
-        /// The same for the lieutenant's answers (0.15.2), which may name every lord of the realm, each with its stops, its company and its next order. Nov 6, test A1: an audit's answer
-        /// was stopped at 48,000 characters on its 60th order of 70, twice, after 16 minutes, and all of it was lost. The stall rule still catches a call that hangs.
-        /// </summary>
-        public const int RunawayCharsLieutenant = 150000;
-
-        /// <summary>The runaway limit for what a call has written so far: raised once it has begun an answer's "tools", and for the lieutenant's answers, which alone say "say" and "carry_out".</summary>
-        internal static int RunawayLimit(string written) => written.Contains("\"say\"") || written.Contains("\"carry_out\"") ? RunawayCharsLieutenant
-                                                            : written.Contains("\"tools\"") || written.Contains("\"propose\"") || written.TrimStart().StartsWith("HANDOVER", StringComparison.Ordinal)
-                                                              // a files agent's pages and handover (war room 0.20)
-                                                              || written.Contains("\"pages\"") || written.Contains("\"handover\"")
-                                                              // a continuous agent's handover (0.18) runs to a few thousand words
-                                                              ? RunawayCharsWithTools : RunawayChars;
+        internal static string RunawayReason(string written) =>
+            written.Contains("<invoke ") || written.Contains("<function_calls>") ? "runaway: it typed tool calls as text" : null;
 
         /// <summary>
         /// One call. With a session id, the conversation is kept: started under that id (resume false) or carried on
@@ -280,12 +266,11 @@ namespace BannerlordAgents.WarRoom
                     if (sw.ElapsedMilliseconds - Interlocked.Read(ref lastEvent) > (stallSeconds > 0 ? stallSeconds : StallSeconds) * 1000L) { stopped = "stalled: nothing came for " + (stallSeconds > 0 ? stallSeconds : StallSeconds) + " s"; break; }
                     lock (events)
                     {
-                        // an answer that types tool calls as text, or runs far past any answer's length, will not end well
-                        string so = written.Length > 0 ? written.ToString() : "";
-                        int limit = RunawayLimit(so);
-                        if (so.Contains("<invoke ") || so.Contains("<function_calls>") || so.Length > limit)
+                        // an answer that types tool calls as text will not end well; no answer is stopped for its length (0.20.9)
+                        string why = written.Length > 0 ? RunawayReason(written.ToString()) : null;
+                        if (why != null)
                         {
-                            stopped = so.Length > limit ? "runaway: over " + limit + " characters written" : "runaway: it typed tool calls as text";
+                            stopped = why;
                             r.Runaway = true;
                             break;
                         }

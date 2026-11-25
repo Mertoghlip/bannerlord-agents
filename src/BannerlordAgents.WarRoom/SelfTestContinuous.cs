@@ -201,7 +201,7 @@ namespace BannerlordAgents.WarRoom
             Config cr = Config.Load(cs.AgentDir);
             Check(cr.Continuous && cr.CompactAtTokens == 400_000 && cr.CompactAtCloseTokens == 250_000 && cr.CompactHardTokens == 300_000 && cr.WakeBudget == 10 && cr.ContinuousModel == "claude-opus-5-5[1m]"
                   && cr.ContinuousThinkingCap == 6000 && cr.EveryLordOrdered && cr.ReviewEveryHours == 24, "a continuous agent's settings are written and read back");
-            Check(Claude.RunawayLimit("HANDOVER, Misty Mountain Orcs") == Claude.RunawayCharsWithTools && Claude.RunawayLimit("{\"poke\": 3") == Claude.RunawayChars, "a handover may run longer than an answer");
+            Check(Claude.RunawayReason("HANDOVER, Misty Mountain Orcs\n" + new string('x', 60000)) == null, "a long handover is not stopped for its length");
             Check(Room.ContinuousEnv["CLAUDE_CODE_PROMPT_CACHE_TTL"] == "1h" && Room.ContinuousEnv["DISABLE_AUTO_COMPACT"] == "1", "every call of a conversation asks for the one-hour cache and no compaction of Claude Code's own");
         }
     }

@@ -419,19 +419,21 @@ namespace BannerlordAgents.WarRoom
                   && m.Contains("WHAT YOUR RULER DID SINCE YOUR LAST ANSWER") && m.Contains("- The ruler declined your proposal of message #5")
                   && m.IndexOf("WHAT YOUR RULER DID", StringComparison.Ordinal) < m.IndexOf("YOUR PROPOSAL WAITING", StringComparison.Ordinal),
                   "the lieutenant's message: the conversation, what became of its orders, what the ruler did with the buttons, the waiting proposal, the realm, then the ruler's words");
-            // 0.15.2: a lieutenant's long answer is not taken for a runaway; a realm agent's limits stay as they were
-            Check(Claude.RunawayLimit("{\"say\":\"Done.\",\"carry_out\":true,\"orders\":[") == Claude.RunawayCharsLieutenant && Claude.RunawayCharsLieutenant > 100000
-                  && Claude.RunawayLimit("{\"poke\":7,\"orders\":[") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\":7,\"tools\":[") == Claude.RunawayCharsWithTools,
-                  "the lieutenant's answers get room for every lord of the realm; a realm agent's limits are unchanged");
-            // 0.20.8 (Nov 25, run 20261125-1331-C2): a realm agent's strike, a group order per lord each naming the whole group, is not taken for a runaway
+            // 0.20.9 (Nov 25, run 20261125-1331-C2): no answer is stopped for its length, a realm agent's strike (a group order per lord, each naming the whole group) or the
+            // lieutenant's; an answer that types tool calls as text still is
             {
                 var group = string.Join(",", Enumerable.Range(1, 36).Select(i => "\"lord_E" + i + "_1\""));
                 var strike = new System.Text.StringBuilder("{\"poke\": 12916,\n \"orders\": [\n");
-                for (int i = 1; i <= 50; i++)
+                for (int i = 1; i <= 500; i++)
                     strike.Append("  {\"lord\": \"lord_E" + i + "_1\", \"do\": \"muster_at\", \"at\": \"castle_village_M5_1\", \"lords\": [" + group + "], \"need\": 0.7, \"max_wait\": 30, \"radius\": 8, "
                                   + "\"then\": {\"do\": \"engage\", \"target\": \"lord_D3_1\", \"give_up_odds\": 3, \"join_hours\": 40}, \"why\": \"gather all, then strike Lorgath's camp\"},\n");
                 string s = strike.ToString();
-                Check(s.Length > 30000 && s.Length < Claude.RunawayLimit(s), "a realm agent's strike with 50 group orders of 36 lords each (" + s.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters) is not stopped as a runaway");
+                Check(s.Length > 300000 && Claude.RunawayReason(s) == null && Claude.RunawayReason("{\"say\":\"Done.\",\"carry_out\":true,\"orders\":[" + s) == null
+                      && Claude.RunawayReason("HANDOVER, Misty Mountain Orcs\n" + s) == null,
+                      "no answer is stopped for its length: a strike of 500 group orders of 36 lords each (" + s.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
+                      + " characters), the lieutenant's answer and a handover");
+                Check(Claude.RunawayReason("{\"poke\": 7, \"orders\": []} <function_calls><invoke name=\"battle_odds\">") != null
+                      && Claude.RunawayReason("<invoke name=\"Read\">") != null, "an answer that types tool calls as text is still stopped at once");
             }
             // 0.15.2: told when its orders wait for the clock, so it does not write them all again
             string waiting = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":8,\"said\":\"go on\",\"orders_waiting\":338,\"answers_waiting\":6}"), history, "REPORT", new List<string>());
@@ -570,7 +572,7 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         /// <summary>
         /// 0.13, "check a tool" (docs/PLAN-0.13.md A4): the game's own checker in the war room, an answer's tool form read, the try asked of a
-        /// stand-in bridge through the channel and the checker's result alone when none answers; and the runaway limit raised for tools.
+        /// stand-in bridge through the channel and the checker's result alone when none answers; and no length limit on an answer that writes tools.
         /// </summary>
         private static void ToolCheckTests(string root)
         {
@@ -622,16 +624,16 @@ namespace BannerlordAgents.WarRoom
             string[] logged = File.ReadAllLines(Path.Combine(root, "check-logs", "routes.jsonl"));
             Check(logged.Count(l => l.Contains("\"tool\":\"check_tool\"")) == 6 && logged.Any(l => l.Contains("\"valid\":false") && l.Contains("next_due takes 3 values")),
                   "every check is logged with the definition, its problems and the answer (" + logged.Length + ")");
-            Check(Claude.RunawayLimit("{\"poke\": 3, \"orders\": []}") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\": 3, \"tools\": [{\"name\":") == Claude.RunawayCharsWithTools,
-                  "the runaway limit is raised for an answer that writes tools (" + Claude.RunawayCharsWithTools + " characters)");
+            Check(Claude.RunawayReason("{\"poke\": 3, \"tools\": [{\"name\": \"watch_home\", \"definition\": " + string.Concat(Enumerable.Repeat(Watch, 400)) + "}]}") == null,
+                  "an answer that writes tools is not stopped for its length");
             // 0.13.5 (Oct 29: the time limit on the lieutenant's thinking removed): a time limit of 0 is none, and the lieutenant's
-            // proposal, which may name every lord of the realm, gets the longer runaway limit
+            // proposal, which may name every lord of the realm, is not stopped for its length (0.20.9: none is)
             string limits = Path.Combine(root, "limits");
             Directory.CreateDirectory(limits);
             File.WriteAllText(Path.Combine(limits, "warroom.txt"), "timeout_seconds = 0\nthinking_cap = 0\n");
             Config none = Config.Load(limits);
-            Check(none.TimeoutSeconds == 0 && none.ThinkingCap == 0 && Claude.RunawayLimit("{\"say\": \"My proposal\", \"propose\": [{\"lord\":") == Claude.RunawayCharsLieutenant && Claude.RunawayLimit("{\"propose\": [{\"lord\":") == Claude.RunawayCharsWithTools,
-                  "a time limit and a thinking cap of 0 are read as none, and a proposal gets the longer runaway limit");
+            Check(none.TimeoutSeconds == 0 && none.ThinkingCap == 0 && Claude.RunawayReason("{\"say\": \"My proposal\", \"propose\": [{\"lord\":" + new string('x', 200000)) == null,
+                  "a time limit and a thinking cap of 0 are read as none, and a long proposal is not stopped");
         }
 
         private static void RecordTests(string root)
