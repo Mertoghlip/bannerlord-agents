@@ -465,6 +465,7 @@ namespace BannerlordAgents.WarRoom
             var index = new StringBuilder();
             var byArea = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
             var noOrder = new StringBuilder();
+            var joiners = new List<string>();
             int armies = 0, forces = 0;
             foreach (JsonObject it in Items(x, "lords"))
             {
@@ -481,16 +482,18 @@ namespace BannerlordAgents.WarRoom
                 string area = (string)it["area"] ?? "elsewhere";
                 string look = BookPage(x, id);
                 orders.TryGetValue(id, out string order);
-                string orderName = order == null ? "none" : FirstClause(order);
+                bool joining = order == null && MarchesToArmy(first);
+                string orderName = order == null ? (joining ? "none: he marches to join an army" : "none") : FirstClause(order);
                 string doing = first;
                 string state = StateOf((order ?? "") + " " + doing);
                 double? men = NumBefore(first, " men"), strength = NumAfter(first, "strength "), ranks = NumAfter(look, "ranks "), food = NumAfter(look, "food for "), gold = NumAfter(look, "gold ");
                 string line = "- " + name + " [" + id + "] (" + slug + "): " + Short(first.Substring(first.IndexOf("]: ", StringComparison.Ordinal) >= 0 ? first.IndexOf("]: ", StringComparison.Ordinal) + 3 : 0), 220)
-                              + (order == null ? " · no order: the game's own AI leads him" : "");
+                              + (order == null ? (joining ? " · no order of his own: he marches to join an army of yours and follows it" : " · no order: the game's own AI leads him") : "");
                 index.AppendLine(line);
                 if (!byArea.TryGetValue(area, out List<string> al)) byArea[area] = al = new List<string>();
                 al.Add(line);
-                if (order == null) noOrder.AppendLine("- " + name + " [" + id + "] (" + slug + "): " + Short(first.Substring(first.IndexOf("]: ", StringComparison.Ordinal) >= 0 ? first.IndexOf("]: ", StringComparison.Ordinal) + 3 : 0), 200));
+                if (joining) joiners.Add(name + " [" + id + "]");
+                else if (order == null) noOrder.AppendLine("- " + name + " [" + id + "] (" + slug + "): " + Short(first.Substring(first.IndexOf("]: ", StringComparison.Ordinal) >= 0 ? first.IndexOf("]: ", StringComparison.Ordinal) + 3 : 0), 200));
                 var body = new StringBuilder();
                 body.AppendLine(t.TrimStart('-', ' ').Trim());
                 body.AppendLine();
@@ -528,7 +531,11 @@ namespace BannerlordAgents.WarRoom
             string held = string.Join("\n", Items(x, "captives").Select(T));
             pages["lords/index"] = new Page { Title = "Your lords and armies", Desc = forces + " in the field, " + armies + " leading armies; one line each, with its page", Body = "Each line: name [id] (its page), then where it is, what it does and its order. A lord marching in an army is named only on its leader's page.\n\n" + index };
             pages["lords/by-front"] = new Page { Title = "Your lords by region", Desc = "the same lines, by the region of your realm each is in", Body = front.ToString() };
-            pages["lords/no-order"] = new Page { Title = "Lords with no order", Desc = "led by the game's own AI until you order them", Body = noOrder.Length > 0 ? noOrder.ToString() : "Every lord in the field holds an order of yours." };
+            // war room 0.20.11: a lord called into one of the realm's armies holds no order of his own while he marches to it; he is not "led by the game's own AI", and an order
+            // of the agent's or the war room's standing order would take him out of the army (run 20261125-2226-C2, Autumn 13: 7 of Náth's 13 lords never came)
+            string notListed = joiners.Count == 0 ? "" : (noOrder.Length > 0 ? "\n" : "") + "Not listed here: " + joiners.Count + (joiners.Count == 1 ? " lord marching" : " lords marching")
+                + " to join an army of yours, who follow it until they reach it; an order of yours would take them out of it: " + string.Join(", ", joiners) + ".";
+            pages["lords/no-order"] = new Page { Title = "Lords with no order", Desc = "led by the game's own AI until you order them", Body = (noOrder.Length > 0 ? noOrder.ToString() : "Every lord in the field holds an order of yours.\n") + notListed };
             pages["lords/held-by-the-enemy"] = new Page { Title = "Your lords held by the enemy", Desc = "your captured lords, by where they are held", Body = held.Length > 0 ? held : "None of your lords is held." };
             pages["lords/order-results"] = new Page { Title = "What became of your orders", Desc = "the game's receipts of your answers and the quieter news since each, newest first", Body = _s.Results.Count > 0 ? string.Join("\n\n", _s.Results) : "Nothing yet in this game session." };
             foreach (JsonObject it in Items(x, "captives"))
@@ -1337,6 +1344,13 @@ namespace BannerlordAgents.WarRoom
             if (!used.Add(s)) { s = slug + "-" + Slug(id); used.Add(s); }
             return s;
         }
+
+        /// <summary>
+        /// A lord's line says he marches to join an army of the realm (the report's ", 3.2 from it" after "following" or "joining" its leader; war room 0.20.11): he follows
+        /// that army, so he is not a lord with no order.
+        /// </summary>
+        internal static bool MarchesToArmy(string line) => line != null && JoinsArmyLine.IsMatch(line);
+        private static readonly Regex JoinsArmyLine = new Regex(@"; (following|joining) [^;]+?, \d+\.\d from it", RegexOptions.CultureInvariant);
 
         private static string Short(string s, int n)
         {

@@ -21,7 +21,8 @@ namespace BannerlordAgents.WarRoom
                 ""lords"": [
                   {""t"": ""- Naglur [lord_MM8_1]: 410 men, strength 576; 4.6 (4.6 by road) from Zog-rod; on the move (your order: defend)."", ""area"": ""Moria"", ""ids"": [""lord_MM8_1""]},
                   {""t"": ""- Ufgrish [lord_MM9_6]: army of 179 men in 8 parties, strength 358; at Starkmoore; holding (your order: gather).\n  - Bolg [lord_MM6_5]: 122 men, strength 199"", ""area"": ""Moria"", ""ids"": [""lord_MM9_6"", ""lord_MM6_5""]}" + (captive ? "" : @",
-                  {""t"": ""- Rashid [CharacterObject_5554]: 76 men, strength 107; near Yonu; on the move."", ""area"": ""Moria"", ""ids"": [""CharacterObject_5554""]}") + @"
+                  {""t"": ""- Rashid [CharacterObject_5554]: 76 men, strength 107; near Yonu; on the move."", ""area"": ""Moria"", ""ids"": [""CharacterObject_5554""]},
+                  {""t"": ""- Gorbag [lord_MM7_2]: 300 men, strength 450; 6.1 from Starkmoore; following Ufgrish, 6.1 from it (about 3 hours)."", ""area"": ""Moria"", ""ids"": [""lord_MM7_2""]}") + @"
                 ],
                 ""holdings"": [
                   {""t"": ""- Eastern Moria [town_MM1] (town of Throgmaw): garrison " + garrison + @" (strength 600), militia 150; food 300 of 650, about 5 days under siege; walls level 3."", ""area"": ""Moria"", ""ids"": [""town_MM1""]},
@@ -52,6 +53,19 @@ namespace BannerlordAgents.WarRoom
                   "the files' first build writes the shelf and a page per lord, army, holding and order, and the agent's plan, and flags nothing (" + first + ")");
             Check(!File.Exists(Path.Combine(dir, "lords", "bolg.md")) && File.ReadAllText(Path.Combine(dir, "lords", "army-ufgrish.md")).Contains("Bolg"),
                   "a lord marching in an army has no page of his own: he is named on his army's page");
+            // war room 0.20.11: a lord marching to join an army of the realm holds no order of his own but is not a lord with no order (run 20261125-2226-C2: the standing
+            // order took 7 of Náth's 13 lords out of his army on their way to it)
+            string noOrderPage = File.ReadAllText(Path.Combine(dir, "lords", "no-order.md"));
+            List<string> unordered = Room.NoOrderLords(channel).Select(l => l.Id).ToList();
+            Check(noOrderPage.Contains("- Rashid [CharacterObject_5554]") && !noOrderPage.Contains("- Gorbag") && noOrderPage.Contains("Not listed here: 1 lord marching to join an army of yours")
+                  && noOrderPage.Contains("Gorbag [lord_MM7_2]") && unordered.Contains("CharacterObject_5554") && !unordered.Contains("lord_MM7_2")
+                  && File.ReadAllText(Path.Combine(dir, "lords", "index.md")).Contains("he marches to join an army of yours and follows it"),
+                  "a lord marching to join an army of yours is not on the no-order list (so neither the standing order nor the digest's demand takes him out of it); it says why ("
+                  + string.Join(", ", unordered) + ")");
+            Check(Shelf.MarchesToArmy("Gorbag [lord_MM7_2]: 300 men, strength 450; 6.1 from Starkmoore; following Khamûl, the Easterling, 6.1 from it (about 3 hours).")
+                  && Shelf.MarchesToArmy("X [a]: 90 men; at Dale; joining Lorgath, 12.0 from it") && !Shelf.MarchesToArmy("X [a]: 90 men; at Dale; following Khamûl, the Easterling.")
+                  && !Shelf.MarchesToArmy("Chinua Hûz [lord_6_23_8]: 1,260 men, strength 2,631; going to Rochthir") && !Shelf.MarchesToArmy("Frar [lord_frar]: 271 men, strength 556; 7.9 from Angloss"),
+                  "a line marches to an army only with \"following\" or \"joining\" its leader and how far from it (names with commas included)");
             string holding = File.ReadAllText(Path.Combine(dir, "settlements", "eastern-moria.md"));
             Check(holding.Contains("Zog-rod") && holding.Contains("Lords whose orders are tied to it (1)") && holding.Contains("within 3 days' march") && holding.Contains("within a day's march"),
                   "a holding's page has its villages, the lords tied to it, and the enemy strength around it within 3 days' and a day's march");
