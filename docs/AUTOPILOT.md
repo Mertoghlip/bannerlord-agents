@@ -27,6 +27,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\overnight.ps1       
   It puts `run_save` and the agents back as they were.
 - **`-Arm C1|C2`** sets the arm with `arm.ps1` and starts the game. It loads the playerless save, which readies the run, and checks the run would be that arm; anything else stops it before the clock runs. Then it puts the stand-in to waiting at normal speed, so the run begins, and minds the run to its end:
   - the run's own save every in-game day (`TEST AUTO <arm>`, made by the module);
+  - since Nov 25, a kept save every `-KeepEveryDays` (5) in-game days, `TEST KEPT <arm> <run> d<day>`, the newest `-KeepSaves` (4) of the run kept: a save of the game's own, so the run counts it as one of its saves and a load of it carries the run on (run 20261125-1457-C2 left nothing from before the battle I wanted to replay); named apart from `TEST AUTO` so a stop or a restart never writes over one;
   - a restart from that save when the game holds more than `-MemoryRestartMb` (20,000);
   - a pause on the usage limit until it resets;
   - the run's end: the module saves `TEST END <arm> <run>`, and the script quits the game.

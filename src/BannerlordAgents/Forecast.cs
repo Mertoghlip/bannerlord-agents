@@ -334,9 +334,11 @@ namespace BannerlordAgents
             if (g == null || g.AttackerMen <= 0) return null;
             float adv = double.IsNaN(advantage) ? g.Advantage : (float)advantage;
             bool town = s.SettlementById.TryGetValue(g.Settlement, out SettlementRow h) && h.Kind == "town";
-            float tactics = attackersOurs && g.Besieger != null && s.PartyById.TryGetValue(g.Besieger, out PartyRow lead) ? lead.Tactics * 0.001f : 0f;
+            // 0.24.7: an enemy camp's leader the realm cannot see gets the median edge of the realm's own lords (UnseenEdge), not none
+            float tactics = attackersOurs && g.Besieger != null && s.PartyById.TryGetValue(g.Besieger, out PartyRow lead) ? lead.Tactics * 0.001f
+                          : !attackersOurs && h != null ? UnseenEdge(s, h.Faction) - 1f : 0f;
             var att = new BattleSide { Men = g.AttackerMen, Power = g.Attackers / Math.Max(1, g.AttackerMen), Advantage = 0.9f + tactics, Morale = g.AttackerMorale };
-            var def = new BattleSide { Men = g.DefenderMen, Power = g.DefenderMen > 0 ? g.Defenders / g.DefenderMen : 1f, Advantage = 1f, Morale = 50, Walls = true };
+            var def = new BattleSide { Men = g.DefenderMen, Power = g.DefenderMen > 0 ? g.Defenders / g.DefenderMen : 1f, Advantage = 1f, Morale = 50, Walls = true, LedByPlace = true };
             var js = (joiners ?? new List<Tuple<bool, int, double>>()).Select(j => new BattleJoiner { Attackers = j.Item1, Men = j.Item2, At = Math.Max(0, j.Item3 - s.Hours) }).ToList();
             if (g.DefenderMen <= 0) return opening + " would take it at once: nobody holds the walls.";
             BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, adv, att, def, !attackersOurs, js);
@@ -448,23 +450,92 @@ namespace BannerlordAgents
             /// <summary>Run ahead at the rates measured in the battle so far (Measured), over this many hours of it.</summary>
             public bool Measured;
             public double MeasuredHours;
+            /// <summary>How hard each side's blows landed against the rules' expectation over the hours measured (1: as expected; module 0.24.7).</summary>
+            public double HitAttackers = 1, HitDefenders = 1;
+        }
+
+        /// <summary>One hour of a battle under way, kept for the measure (module 0.24.7).</summary>
+        private sealed class BattleMark
+        {
+            public double Hours;
+            public string Kind;
+            public BattleSideRow A, D;
+        }
+
+        private static readonly Dictionary<string, List<BattleMark>> Marks = new Dictionary<string, List<BattleMark>>();
+        private static readonly object MarksGate = new object();
+
+        /// <summary>How far back the measure of a battle under way looks, hour by hour (module 0.24.7; it was the whole battle from its start).</summary>
+        public const double MeasureHours = 12;
+
+        private static BattleSideRow CopySide(BattleSideRow r) => new BattleSideRow
+        {
+            Leader = r.Leader, Faction = r.Faction, SettlementLed = r.SettlementLed, Healthy = r.Healthy, Wounded = r.Wounded, Casualties = r.Casualties,
+            StartHealthy = r.StartHealthy, Power = r.Power, Advantage = r.Advantage, Morale = r.Morale
+        };
+
+        /// <summary>Keeps this hour of the battle (once an hour; after a load to an earlier hour its marks start again) and returns its marks of the last MeasureHours.</summary>
+        private static List<BattleMark> MarkHour(BattleRow b, double now)
+        {
+            lock (MarksGate)
+            {
+                string key = b.Key ?? (b.Attackers.Leader ?? b.Settlement ?? "?") + "@" + b.StartHours.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+                if (!Marks.TryGetValue(key, out List<BattleMark> list)) Marks[key] = list = new List<BattleMark>();
+                if (list.Count > 0 && list[list.Count - 1].Hours > now + 0.01) list.Clear();
+                if (list.Count == 0 || now - list[list.Count - 1].Hours >= 0.99) list.Add(new BattleMark { Hours = now, Kind = b.Kind, A = CopySide(b.Attackers), D = CopySide(b.Defenders) });
+                list.RemoveAll(m => now - m.Hours > MeasureHours + 0.5);
+                foreach (string k in Marks.Where(kv => kv.Value.Count == 0 || now - kv.Value[kv.Value.Count - 1].Hours > 24 || kv.Value[kv.Value.Count - 1].Hours > now + 0.01).Select(kv => kv.Key).ToList())
+                    if (k != key) Marks.Remove(k);
+                return list.ToList();
+            }
         }
 
         /// <summary>
-        /// A battle under way run ahead at the rates measured in it so far (0.7.4, after Hollin Gate: by the rules' expectation the
+        /// A battle under way run ahead at the rates measured in it (0.7.4, after Hollin Gate: by the rules' expectation the
         /// orcs would lose 16 men an hour and break in 3.4 days; over the first 22 hours they lost about 7 an hour, kept their
-        /// morale and wore the defenders from 197 down to 65). The battle is run by the rules from its start for the hours it has
-        /// lasted; each side's blows are scaled by what it actually knocked down against what the rules expected (0.2 to 5 times);
-        /// the rest is run ahead with those blows. The other side's morale, which the realm cannot see, is taken as middling in
-        /// both runs, so the measure carries it. Null before two rounds or with too few men fallen to measure.
+        /// morale and wore the defenders from 197 down to 65). Each side's blows are scaled by what it actually knocked down against what
+        /// the rules expected (0.2 to 5 times); the rest is run ahead with those blows. The other side's morale, which the realm cannot see,
+        /// is taken at full (GameBattle.UnseenMorale's headline) in both, so the measure carries it. Null before two rounds or with too few men fallen to measure.
+        /// Since module 0.24.7 (Nov 25) the measure is hour by hour over the last MeasureHours: each kept hour run by the rules from that hour's own men,
+        /// power, advantage, morale and kind for the hour to the next, against the men who fell in it. Before, the battle was run from its start with the
+        /// men it started with and today's kind, so lords who joined later and a storm turned into a battle outside the walls threw the measure off
+        /// (run 20261125-1457-C2's battle at Lasgalor, 863 men growing to 15,900 over a day: its factors swung from 0.49 to 2.27). Until two hours are kept,
+        /// the old measure from the start.
         /// </summary>
         public static BattleClock Measured(BattleRow b, double now, bool? ownAttackers, IEnumerable<Tuple<bool, int, double>> joiners = null, double horizon = 24 * 5)
         {
             if (b?.Attackers == null || b.Defenders == null) return null;
+            List<BattleMark> marks = MarkHour(b, now);
             double ran = now - b.StartHours;
             int perHour = b.Kind == "siege" ? 1 : 2;
             if (ran * perHour < 2 || b.Attackers.StartHealthy <= 0 || b.Defenders.StartHealthy <= 0 || b.Attackers.Healthy <= 0 || b.Defenders.Healthy <= 0) return null;
-            float? mA = ownAttackers == true ? (float?)null : 50f, mD = ownAttackers == false ? (float?)null : 50f;
+            float unseen = GameBattle.UnseenMorale[1];
+            float? mA = ownAttackers == true ? (float?)null : unseen, mD = ownAttackers == false ? (float?)null : unseen;
+            double Clamp(double k) => Math.Max(0.2, Math.Min(5, k));
+            // 0.24.7: hour by hour over the kept hours
+            double hexpA = 0, hexpD = 0, hobsA = 0, hobsD = 0, over = 0;
+            for (int i = 0; i + 1 < marks.Count; i++)
+            {
+                BattleMark m0 = marks[i], m1 = marks[i + 1];
+                double dt = m1.Hours - m0.Hours;
+                if (dt <= 0 || m0.A.Healthy <= 0 || m0.D.Healthy <= 0) continue;
+                BattleOutcome step = GameBattle.Run(m0.Kind, b.Town, b.SettlementAdvantage, SideOf(m0.A, mA, false), SideOf(m0.D, mD, m0.D.SettlementLed), null, dt);
+                hexpA += m0.A.Healthy - step.AttackersLeft;
+                hexpD += m0.D.Healthy - step.DefendersLeft;
+                hobsA += Math.Max(0, m1.A.Casualties - m0.A.Casualties);
+                hobsD += Math.Max(0, m1.D.Casualties - m0.D.Casualties);
+                over += dt;
+            }
+            if (over >= 2 - 0.01 && hexpA >= 2 && hexpD >= 2 && hobsA + hobsD >= 5)
+            {
+                BattleSide ha = SideOf(b.Attackers, mA, false), hd = SideOf(b.Defenders, mD, b.Defenders.SettlementLed);
+                ha.Hit = Clamp(hobsD / hexpD);
+                hd.Hit = Clamp(hobsA / hexpA);
+                BattleOutcome ho = GameBattle.Run(b.Kind, b.Town, b.SettlementAdvantage, ha, hd, Joiners(joiners, now), horizon);
+                var hc = new BattleClock { Now = now, Storm = b.Kind == "siege", Measured = true, MeasuredHours = over, HitAttackers = ha.Hit, HitDefenders = hd.Hit };
+                Fill(hc, ho, now);
+                return hc;
+            }
             BattleSide a0 = SideOf(b.Attackers, mA, false), d0 = SideOf(b.Defenders, mD, b.Defenders.SettlementLed);
             a0.Men = b.Attackers.StartHealthy;
             d0.Men = b.Defenders.StartHealthy;
@@ -472,12 +543,11 @@ namespace BannerlordAgents
             double expA = b.Attackers.StartHealthy - past.AttackersLeft, expD = b.Defenders.StartHealthy - past.DefendersLeft;
             double obsA = b.Attackers.Casualties, obsD = b.Defenders.Casualties;
             if (expA < 2 || expD < 2 || obsA + obsD < 5) return null;
-            double Clamp(double k) => Math.Max(0.2, Math.Min(5, k));
             BattleSide a = SideOf(b.Attackers, mA, false), d = SideOf(b.Defenders, mD, b.Defenders.SettlementLed);
             a.Hit = Clamp(obsD / expD);   // the attackers' blows are what knock the defenders down
             d.Hit = Clamp(obsA / expA);
             BattleOutcome o = GameBattle.Run(b.Kind, b.Town, b.SettlementAdvantage, a, d, Joiners(joiners, now), horizon);
-            var c = new BattleClock { Now = now, Storm = b.Kind == "siege", Measured = true, MeasuredHours = ran };
+            var c = new BattleClock { Now = now, Storm = b.Kind == "siege", Measured = true, MeasuredHours = ran, HitAttackers = a.Hit, HitDefenders = d.Hit };
             Fill(c, o, now);
             return c;
         }
@@ -507,7 +577,19 @@ namespace BannerlordAgents
         }
 
         private static BattleSide SideOf(BattleSideRow r, float? morale, bool walls) =>
-            new BattleSide { Men = r.Healthy, Power = r.Power, Advantage = r.Advantage, Morale = morale ?? r.Morale, Walls = walls };
+            new BattleSide { Men = r.Healthy, Power = r.Power, Advantage = r.Advantage, Morale = morale ?? r.Morale, Walls = walls, LedByPlace = r.SettlementLed };
+
+        /// <summary>
+        /// The advantage an enemy leader the realm cannot see gets (module 0.24.7): 1 + 0.001 x the median Tactics of the realm's own lords. Was none (1), as if
+        /// every enemy army were led by nobody: run 20261125-1457-C2's two lost battles had Dol Guldur's army at 1.33 and the kingdom's side, led by its castle, at 1.00.
+        /// </summary>
+        internal static float UnseenEdge(IEnumerable<int> ownTactics)
+        {
+            List<int> t = (ownTactics ?? Enumerable.Empty<int>()).Where(x => x > 0).OrderBy(x => x).ToList();
+            return t.Count == 0 ? 1f : 1f + 0.001f * t[t.Count / 2];
+        }
+
+        internal static float UnseenEdge(Snapshot s, string realm) => UnseenEdge(s.Parties.Where(r => r.Faction == realm && r.Kind == "lord").Select(r => r.Tactics));
 
         private static List<BattleJoiner> Joiners(IEnumerable<Tuple<bool, int, double>> joiners, double now) =>
             (joiners ?? Enumerable.Empty<Tuple<bool, int, double>>()).Select(j => new BattleJoiner { Attackers = j.Item1, Men = j.Item2, At = Math.Max(0, j.Item3 - now) }).ToList();
@@ -542,7 +624,8 @@ namespace BannerlordAgents
             double morale = ours.Sum(r => (r.Morale >= 0 ? r.Morale : 50) * (r.ArmyMen > 0 ? r.ArmyMen : r.Men)) / men;
             PartyRow lead = ours.OrderByDescending(r => r.ArmyMen > 0 ? r.ArmyMen : r.Men).First();
             mine = new BattleSide { Men = men, Power = (float)(strength / men), Advantage = 1f + 0.001f * lead.Tactics, Morale = (float)morale };
-            var theirs = new BattleSide { Men = enemyMen, Power = (float)(enemyStrength / enemyMen), Advantage = 1f, Morale = 50 };
+            // 0.24.7: the enemy's leader gets the median edge of the lords asked about (UnseenEdge), not none; its morale is run at full and lower (ByUnseenMorale)
+            var theirs = new BattleSide { Men = enemyMen, Power = (float)(enemyStrength / enemyMen), Advantage = UnseenEdge(ours.Select(r => r.Tactics)), Morale = 100 };
             return GameBattle.ByUnseenMorale("field", false, 1f, mine, theirs, false);
         }
 

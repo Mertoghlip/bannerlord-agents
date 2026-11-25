@@ -469,7 +469,7 @@ namespace BannerlordAgents
                 else if (att || def) c = Forecast.BattleByMorale(b, s.Hours, def, joiners, out hours);
                 else
                 {
-                    c = Forecast.Battle(b, s.Hours, joiners, 50f, 50f);
+                    c = Forecast.Battle(b, s.Hours, joiners, Common.GameBattle.UnseenMorale[1], Common.GameBattle.UnseenMorale[1]);
                     hours = double.IsNaN(c.EndsAt) ? "not within 5 days" : "about " + Forecast.HoursText(c.EndsAt - s.Hours);
                 }
                 sb.Append(c.Measured ? "At the rates measured over its " + Forecast.HoursText(c.MeasuredHours) + " so far, the attackers lose about " : "At the game's rates now the attackers lose about ")
@@ -478,7 +478,7 @@ namespace BannerlordAgents
                 if (!double.IsNaN(c.EndsAt))
                     sb.Append(runAhead).Append(", the ").Append(c.Winner).Append(" win")
                       .Append(c.How == "rout" ? " when the other side's morale breaks" : c.How == "retreat" ? " when the other side retreats (it gets away with its lords; nothing is captured)" : " when the other side is all down")
-                      .Append(", in ").Append(hours).Append(" (").Append(Text.When(c.EndsAt)).Append(c.Measured ? "), " : " at middling morale), ")
+                      .Append(", in ").Append(hours).Append(" (").Append(Text.When(c.EndsAt)).Append(c.Measured ? "), " : " with the other side's morale at full), ")
                       .Append(Text.N(c.Winner == "attackers" ? c.AttackersLeft : c.DefendersLeft)).Append(" of them still standing")
                       // what the other side keeps (0.11.6)
                       .Append((c.Winner == "attackers" ? c.DefendersLeft : c.AttackersLeft) > 0 ? " and about " + Text.N(c.Winner == "attackers" ? c.DefendersLeft : c.AttackersLeft) + " of the other side left." : ".");

@@ -54,6 +54,10 @@ param(
     [ValidateSet('play', 'fast')][string]$Speed = 'play',
     [int]$MemoryRestartMb = 20000,
     [int]$SaveHours = 24,
+    # Nov 25: a kept save every so many in-game days (TEST KEPT <arm> <run> d<day>), the newest -KeepSaves of the run kept, so a run can be
+    # rewound (run 20261125-1457-C2: the one run save, overwritten daily, left nothing from before the battle I wanted to replay); 0: none
+    [int]$KeepEveryDays = 5,
+    [int]$KeepSaves = 4,
     [int]$DryMinutes = 4,
     [int]$MaxRestarts = 2,
     [string]$CrashDir = 'D:\BannerlordAgents\crashes'
@@ -200,6 +204,7 @@ function Wait-Status([scriptblock]$test, [int]$seconds, [string]$what) {
 }
 
 $script:Seq = 0
+$script:KeptDay = -1
 function Send([string]$line, [int]$seconds = 120) {
     $script:Seq++
     $name = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $script:Seq.ToString('0000')
@@ -619,6 +624,22 @@ function Mind-Run {
                 Quit-Game
                 Begin-Run $name $false
                 continue
+            }
+            # Nov 25: the kept saves (-KeepEveryDays): a save of the game's own under its own name, so the run counts it as one of its saves
+            # and a load of it carries the run on; named apart from TEST AUTO so a stop or a restart never writes over one
+            if ($KeepEveryDays -gt 0 -and $run -and (Prop $run 'status') -eq 'running' -and -not (Prop $s 'busy') -and -not $script:LimitUntil) {
+                $day = [int](Prop $run 'day')
+                if ($day -gt 0 -and $day % $KeepEveryDays -eq 0 -and $day -ne $script:KeptDay) {
+                    $script:KeptDay = $day
+                    $kname = 'TEST KEPT ' + $Arm + ' ' + $lastRun + ' d' + $day.ToString('000')
+                    try {
+                        $r = Send ("save " + $kname) 300
+                        if ($r.ok) { Say "Kept save: $kname." } else { Say "Kept save FAILED: $kname ($($r.answer))." }
+                        Get-ChildItem -LiteralPath $Saves -Filter ('TEST KEPT ' + $Arm + ' ' + $lastRun + ' d*.sav') | Sort-Object Name -Descending | Select-Object -Skip $KeepSaves |
+                            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Say "  the oldest kept save removed: $($_.Name)" }
+                    }
+                    catch { Say "Kept save FAILED: $kname ($($_.Exception.Message))." }
+                }
             }
         }
         Start-Sleep -Seconds 5

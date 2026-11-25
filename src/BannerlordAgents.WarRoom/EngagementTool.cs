@@ -117,7 +117,8 @@ namespace BannerlordAgents.WarRoom
             BattleSide mine = SideOf(first, true);
             double targetMen = I(qo["army_men"]) > 0 ? I(qo["army_men"]) : I(qo["men"]);
             var target = new Marcher { Men = targetMen, Strength = F(qo["strength"]) };
-            BattleSide enemy = SideOf(new List<Marcher> { target }, false);
+            List<float> tac = own.Select(o => F(o["tactics"])).Where(x => x > 0).OrderBy(x => x).ToList();
+            BattleSide enemy = SideOf(new List<Marcher> { target }, false, tac.Count == 0 ? 1f : 1f + 0.001f * (float)tac[tac.Count / 2]);
             List<BattleJoiner> ourJoiners = ours.Skip(first.Count).Select(x => Joiner(x, true, begins)).ToList();
             BattleOutcome[] alone = GameBattle.ByUnseenMorale("field", false, 1f, mine, enemy, false, ourJoiners);
             BattleOutcome[] all = GameBattle.ByUnseenMorale("field", false, 1f, mine, enemy, false, ourJoiners.Concat(theirs.Select(x => Joiner(x, false, begins))).ToList());
@@ -167,13 +168,14 @@ namespace BannerlordAgents.WarRoom
             return string.Join("\n", lines);
         }
 
-        /// <summary>A side from the marchers on it: men, strength, morale (yours as known, theirs middling) and the first one's Tactics.</summary>
-        private static BattleSide SideOf(List<Marcher> fs, bool known)
+        /// <summary>A side from the marchers on it: men, strength, morale (yours as known, theirs at full) and the first one's Tactics (theirs: the realm's own lords' median, 0.20.10).</summary>
+        private static BattleSide SideOf(List<Marcher> fs, bool known, float unseenEdge = 1f)
         {
             double men = fs.Sum(f => f.Men), str = fs.Sum(f => f.Strength);
-            double morale = known ? fs.Sum(f => (f.Morale >= 0 ? f.Morale : 50) * f.Men) / Math.Max(1, men) : 50;
+            double morale = known ? fs.Sum(f => (f.Morale >= 0 ? f.Morale : 50) * f.Men) / Math.Max(1, men) : 100;
             Marcher lead = fs.OrderByDescending(f => f.Men).FirstOrDefault();
-            return new BattleSide { Men = men, Power = men > 0 ? (float)(str / men) : 1f, Advantage = 1f + (known && lead != null ? 0.001f * lead.Tactics : 0f), Morale = (float)morale };
+            // war room 0.20.10: the enemy's leader is taken to be as skilled as the realm's own lords (the median of their Tactics), not led by nobody
+            return new BattleSide { Men = men, Power = men > 0 ? (float)(str / men) : 1f, Advantage = known ? 1f + (lead != null ? 0.001f * lead.Tactics : 0f) : unseenEdge, Morale = (float)morale };
         }
 
         /// <summary>A marcher joining the fight: on your side (the attackers) or theirs, at the hour after its start it gets there.</summary>

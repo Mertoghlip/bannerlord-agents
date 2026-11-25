@@ -60,6 +60,11 @@ namespace BannerlordAgents
         public float Morale = -1f;
         public int Tactics;
         /// <summary>
+        /// Lords: the leader's captain bonus to his troops' strength (Hero.PowerModifier, cached by the game; module 0.24.7). The party's strength counts it; in a
+        /// battle every troop takes its side leader's bonus instead, so lords fighting under a holding (a relief of a storm) fight without it.
+        /// </summary>
+        public float Captain;
+        /// <summary>
         /// Lords (0.19, the battle facts): the hour the game's slowdown after a battle ends (MobileParty.DisorganizedUntilTime while IsDisorganized; NaN when
         /// not slowed); the hour its last battle since the load ended and whether its side retreated (BattleEnds, at MapEventEnded; NaN when none is known);
         /// and the game's own aggressiveness (MobileParty.Aggressiveness, 0.9 + 0.1 Valor - 0.05 Mercy for a lord; -1 unknown), for the quick-reaction mirror.

@@ -143,7 +143,9 @@ namespace BannerlordAgents
                 r.Id, Lord = r.Leader, Name = r.Name ?? r.Id, r.X, r.Y, r.Men, r.ArmyMen, Strength = r.ArmyStrength > 0 ? r.ArmyStrength : r.Strength,
                 Pace = r.Speed, r.FinalSpeed, March = MarchOf(s, r), Doing = Views.Doing(s, r), r.InSettlement, r.Route, r.Tx, r.Ty,
                 // for the "battle odds" question (0.7.4): its morale and its leader's Tactics, and an army's whole strength
-                r.Morale, r.Tactics, r.ArmyStrength, r.Wounded
+                r.Morale, r.Tactics, r.ArmyStrength, r.Wounded,
+                // 0.24.7: the leader's captain bonus (in a battle under a holding his troops fight without it)
+                r.Captain
             }).ToList();
             Files.Overwrite(Path.Combine(Root, Safe(s.Campaign), "view_" + Safe(fid) + ".json"), Json.Line(new
             {
@@ -156,8 +158,52 @@ namespace BannerlordAgents
                 // the marching rules in force, for the "ask the way" tool (GamePace, 0.7.3): the speed model, each people's bonuses, the scout perks' values
                 s.SpeedModel, s.CultureSpeeds, s.CultureNames, s.PerkValues,
                 // what the realm's own won battles brought in, for the "battle odds" question's takings (0.9.4)
-                Takings = Takings.For(fid), TakingsEnough = Takings.Enough
+                Takings = Takings.For(fid), TakingsEnough = Takings.Enough,
+                // 0.24.7 (Nov 25): the realm's own battles under way, with what was measured in them, for the "battle odds" question (run 20261125-1457-C2:
+                // the question re-reckoned a fresh battle for lords two days into one and kept saying they would win as they lost)
+                Battles = OwnBattles(s, fid)
             }));
+        }
+
+        /// <summary>
+        /// The realm's own battles under way (module 0.24.7): place, kind, hours in, which side is the realm's and who leads each (a holding leads a
+        /// storm's defenders, and still leads them once a relief has turned it into a battle outside the walls), each side's men standing and fallen,
+        /// its mean troop power in the battle, the realm's own side's advantage and morale, and the rates measured over the last hours (Forecast.Measured).
+        /// The other side's morale is not shown: the realm cannot see it.
+        /// </summary>
+        private static List<object> OwnBattles(Snapshot s, string fid)
+        {
+            var list = new List<object>();
+            if (s.Battles == null) return list;
+            string NameOf(string party) => party != null && s.PartyById.TryGetValue(party, out PartyRow p) ? p.Name ?? party : party;
+            foreach (BattleRow b in s.Battles)
+            {
+                if (b?.Attackers == null || b.Defenders == null) continue;
+                bool att = b.Attackers.Faction == fid, def = !att && b.Defenders.Faction == fid;
+                if (!att && !def) continue;
+                if (b.Kind == "raid" && b.Defenders.Healthy <= 0) continue;
+                BattleSideRow us = att ? b.Attackers : b.Defenders, them = att ? b.Defenders : b.Attackers;
+                string place = b.Settlement != null && s.SettlementById.TryGetValue(b.Settlement, out SettlementRow h) ? h.Name : null;
+                Forecast.BattleClock c = null;
+                try { c = Forecast.Measured(b, s.Hours, att); }
+                catch (Exception e) { Diag.Swallowed("measuring a battle for the view", e); }
+                bool youWin = c?.Winner != null && (c.Winner == "attackers") == att;
+                list.Add(new
+                {
+                    b.Key, b.Kind, Place = b.Settlement, PlaceName = place, b.Town, b.X, b.Y, Started = Math.Round(b.StartHours, 2), HoursIn = Math.Round(s.Hours - b.StartHours, 1),
+                    Ours = att ? "attackers" : "defenders", WallsWorth = b.SettlementAdvantage,
+                    Us = new { us.Healthy, us.Wounded, us.Casualties, us.Power, us.Advantage, us.Morale, LedBy = us.SettlementLed ? place ?? "the holding" : NameOf(us.Leader), us.SettlementLed, us.Parties },
+                    Them = new { them.Healthy, them.Casualties, them.Power, them.Advantage, LedBy = them.SettlementLed ? place ?? "the holding" : NameOf(them.Leader), them.SettlementLed, them.Parties },
+                    Measured = c == null || !c.Measured ? null : new
+                    {
+                        Hours = Math.Round(c.MeasuredHours, 1), HitUs = Math.Round(att ? c.HitAttackers : c.HitDefenders, 3), HitThem = Math.Round(att ? c.HitDefenders : c.HitAttackers, 3),
+                        LossUs = Math.Round(att ? c.AttackerLossPerHour : c.DefenderLossPerHour), LossThem = Math.Round(att ? c.DefenderLossPerHour : c.AttackerLossPerHour),
+                        Winner = c.Winner == null ? null : youWin ? "you" : "they", c.How, EndsIn = double.IsNaN(c.EndsAt) ? (double?)null : Math.Round(c.EndsAt - s.Hours, 1),
+                        UsLeft = att ? c.AttackersLeft : c.DefendersLeft, ThemLeft = att ? c.DefendersLeft : c.AttackersLeft
+                    }
+                });
+            }
+            return list;
         }
 
         /// <summary>The castles and towns of each realm at war with this one, by realm name: who owns which place the map shows anyone.</summary>

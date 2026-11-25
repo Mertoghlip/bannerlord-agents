@@ -376,7 +376,7 @@ namespace BannerlordAgents
             if (p.IsLordParty)
             {
                 r.Morale = (float)Math.Round(p.Morale, 1);
-                if (leader != null) r.Tactics = leader.GetSkillValue(DefaultSkills.Tactics);
+                if (leader != null) { r.Tactics = leader.GetSkillValue(DefaultSkills.Tactics); r.Captain = (float)Math.Round(leader.PowerModifier, 3); }
                 // the battle facts (0.19): fields only, no new sums (the slowdown's end, the game's aggressiveness, the last battle's end kept at MapEventEnded)
                 if (p.IsDisorganized) r.DisorganizedUntil = Math.Round(p.DisorganizedUntilTime.ToHours, 2);
                 r.Aggressiveness = (float)Math.Round(p.Aggressiveness, 3);

@@ -147,8 +147,12 @@ namespace BannerlordAgents.Tools
 
         /// <summary>
         /// The guards on an agent's own tool (0.13, docs/PLAN-0.13.md A5; to be confirmed in testing): at most CallBacksPerDay call-backs an
-        /// in-game day (the rest are held and summed in one when the day is out); stopped when it takes over SlowMs of the helper's time
-        /// an hour for SlowHoursToStop hours running. A tool changes state at most 3 times an hour (Rules), as ours do.
+        /// in-game day (the rest are held and summed in one when the day is out); stopped when its own rules take over SlowMs of the helper's
+        /// time an hour for SlowHoursToStop hours running. A tool changes state at most 3 times an hour (Rules), as ours do.
+        /// Since 0.24.7 (Nov 25) only the tool's own part is timed: its starting values, its rules and the moves they choose (Step's own time),
+        /// never the safety, relief, supply, stall and close-in rules and the move's issue that every order runs, ours as much as the agent's.
+        /// Run 20261125-1457-C2: plain_engage, one state with the rule gone(target), was stopped at about 10 ms an hour, and a 30-lord muster at
+        /// 40 to 80 ms, though their own rules are a few straight-line distances; the time was the built-in safety work around them.
         /// </summary>
         public const int CallBacksPerDay = 6, SlowHoursToStop = 3;
         public static double SlowMs = 5;
@@ -532,20 +536,21 @@ namespace BannerlordAgents.Tools
             if (agent.Tools.Values.Any(t => t.Def.Name == "recruit" && !t.Finished)) Threats.Publish(w);
             foreach (ToolInstance t in agent.Tools.Values.ToList())
             {
-                long began = Stopwatch.GetTimestamp();
                 // 0.21.0: the order's own judgement of enemies seen more than a day ago (unseen_floor 0 trusts their last pace)
                 w.TrustLastPace = t.Settings.TryGetValue("unseen_floor", out double uf) && uf <= 0;
-                try { Step(t, w); }
+                long own = 0;
+                try { own = Step(t, w); }
                 catch (Exception e)
                 {
                     Diag.Count("tool:errors");
                     Diag.Error("running " + t.Def.Name + " for " + t.Order.LordName, e);
                 }
-                if (t.Def.Own) Timed(t, w, (Stopwatch.GetTimestamp() - began) * 1000.0 / Stopwatch.Frequency);
+                // 0.24.7: only the tool's own rules are timed (see SlowMs)
+                if (t.Def.Own) Timed(t, w, own * 1000.0 / Stopwatch.Frequency);
             }
         }
 
-        /// <summary>An agent's own tool's hour, timed (A5): over SlowMs for SlowHoursToStop hours running, it is stopped, the lord let go and the agent told why.</summary>
+        /// <summary>An agent's own tool's hour, timed (A5): its own rules over SlowMs for SlowHoursToStop hours running, it is stopped, the lord let go and the agent told why.</summary>
         private static void Timed(ToolInstance t, World w, double ms)
         {
             t.LastMs = ms;
@@ -554,10 +559,10 @@ namespace BannerlordAgents.Tools
             if (t.SlowHours < SlowHoursToStop) return;
             t.Finished = true;
             Diag.Count("tool:own stopped, too slow");
-            Diag.Alarm("tool_slow", t.Order.LordName + "'s " + t.Def.Name + " (" + t.Def.Author + "'s own tool) took over " + ToolDef.Num(SlowMs) + " ms an hour for " + SlowHoursToStop
+            Diag.Alarm("tool_slow", t.Order.LordName + "'s " + t.Def.Name + " (" + t.Def.Author + "'s own tool) took over " + ToolDef.Num(SlowMs) + " ms an hour in its own rules for " + SlowHoursToStop
                                     + " hours running (" + ToolDef.Num(Math.Round(ms, 1)) + " ms the last), so it was stopped.");
-            Tell(t, t.Order.LordName + "'s " + t.Def.Name + " took over " + ToolDef.Num(SlowMs) + " ms of the game's helper each hour for " + SlowHoursToStop + " hours running ("
-                    + ToolDef.Num(Math.Round(ms, 1)) + " ms the last), so it was stopped and " + t.Order.LordName + " was let go to the game's own AI. Make it lighter (fewer rules, fewer look-ups over the whole map each hour), check it again and give the order anew.", w);
+            Tell(t, t.Order.LordName + "'s " + t.Def.Name + " took over " + ToolDef.Num(SlowMs) + " ms of the game's helper each hour in its own rules for " + SlowHoursToStop + " hours running ("
+                    + ToolDef.Num(Math.Round(ms, 1)) + " ms the last), so it was stopped and " + t.Order.LordName + " was let go to the game's own AI. Make its rules lighter (fewer rules, fewer look-ups over the whole map each hour), check it again and give the order anew.", w);
             ReleaseSink(t.Id, "its tool " + t.Def.Name + " was stopped: it took too long each hour");
         }
 
@@ -566,10 +571,12 @@ namespace BannerlordAgents.Tools
 
         public static World WorldFor(Snapshot s) => new World(s, s.Watched, s.WatchedSees, Brain.Get(s.Watched).LastSeen);
 
-        private static void Step(ToolInstance t, World w)
+        /// <summary>A tool's hour. Returns the time (Stopwatch ticks) of the tool's own part: its starting values, its rules and the moves they choose (0.24.7).</summary>
+        private static long Step(ToolInstance t, World w)
         {
             PartyRow me = w.Party(t.Order.Party);
-            if (me == null || me.Attached) return;   // gone (the game's thread ends the order and tells us), or marching in another's army
+            if (me == null || me.Attached) return 0;   // gone (the game's thread ends the order and tells us), or marching in another's army
+            long own = 0, mark;
             // 0.24.6 (Nov 25): held in a raid the game began, the order cannot move him until it ends: said once (run 20261125-0020-C2: Val stuck 37 hours, caught)
             if (me.Raiding == null) t.RaidTold = false;
             else if (!t.RaidTold && !(t.HasCurrent && t.Current.Verb == "raid") && w.Hours - t.Started >= 3)
@@ -584,14 +591,17 @@ namespace BannerlordAgents.Tools
             if (t.Memory.TryGetValue("target", out object mt)) RememberName(mt as string, w);
             if (!t.Entered)
             {
+                mark = Stopwatch.GetTimestamp();
                 foreach (var kv in t.Def.Init) t.Memory[kv.Key] = kv.Value.Eval(scope);
                 Enter(t, t.Def.Start, scope, w);
+                own += Stopwatch.GetTimestamp() - mark;
                 Log(t, "start", t.Def.Start, null);
             }
             // the rules run in the hour a tool starts too, so a first step that decides at once (go in, or stop close) does;
             // riding to relieve a lord in a fight comes before both (0.13.15)
             if (!Relief(t, me, w, scope) && !Safety(t, me, w, scope) && !Supply(t, me, w, scope) && !t.Finished)
             {
+                mark = Stopwatch.GetTimestamp();
                 Rules(t, scope, w);
                 // a shadow follows its target: its point is worked out again every hour (sent only when it moved)
                 if (!t.Finished && t.Shelter == null && t.SupplyAt == null && t.Def.States.TryGetValue(t.State, out StateDef live) && live.Do?.Verb == "shadow")
@@ -599,6 +609,7 @@ namespace BannerlordAgents.Tools
                     t.Pending = Resolve(t, live.Do, scope, w);
                     t.HasPending = true;
                 }
+                own += Stopwatch.GetTimestamp() - mark;
                 if (!t.Finished && t.Shelter == null && t.SupplyAt == null) Stalled(t, me, w, scope);
                 // an attack on the human player closes in and strikes together (0.17.3)
                 if (!t.Finished && t.Shelter == null && t.SupplyAt == null && t.ReliefOf == null) CloseIn(t, me, w, scope);
@@ -606,6 +617,7 @@ namespace BannerlordAgents.Tools
             Issue(t, w);
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t, w));
             if (t.Settings.ContainsKey("engines")) DrillSink(t.Order.Party, DrillRuleOf(t));
+            return own;
         }
 
         /// <summary>
@@ -1190,7 +1202,7 @@ namespace BannerlordAgents.Tools
         /// <summary>The battle clock's hours left, at most cap (also when it would not end within its five days); own: whose morale the realm sees (null: neither side's).</summary>
         private static double Clock(BattleRow b, World w, bool? own, List<Tuple<bool, int, double>> joiners, double cap)
         {
-            Forecast.BattleClock c = Forecast.Measured(b, w.Hours, own, joiners) ?? Forecast.Battle(b, w.Hours, joiners, 50f, 50f);
+            Forecast.BattleClock c = Forecast.Measured(b, w.Hours, own, joiners) ?? Forecast.Battle(b, w.Hours, joiners, Common.GameBattle.UnseenMorale[1], Common.GameBattle.UnseenMorale[1]);
             return double.IsNaN(c.EndsAt) ? cap : Math.Min(cap, c.EndsAt - w.Hours);
         }
 

@@ -11,7 +11,7 @@ namespace BannerlordAgents.WarRoom
     /// - battle_odds: how a battle would go and how long it would last, by the game's own battle rules (Common.GameBattle), between
     ///   lords of the realm and enemies it has seen, in the open or storming a castle or town (with the camp's preparation time
     ///   first), from the realm's own view file only: its own lords' men, strength, morale and Tactics; the enemy's men and
-    ///   strength as seen; an enemy place's defenders where the realm's eyes reach; the enemy's morale run low, middling, high.
+    ///   strength as seen; an enemy place's defenders where the realm's eyes reach; the enemy's morale run at full and lower, its leader as skilled as the realm's own (0.20.10).
     /// - roads_in: the roads into a holding from the castles and towns of the realms at war with the realm (who holds which place
     ///   the map shows anyone), found as the game finds ways: where they come together, a spot on each some hours out where a
     ///   watch gives warning, and which places feed it.
@@ -26,11 +26,13 @@ namespace BannerlordAgents.WarRoom
             ["name"] = OddsName,
             ["description"] = "How a battle would go and how long it would last, by the game's own battle rules: your lords or armies against enemies your report shows, in the open, "
                               + "or storming a castle or town (with how long the siege camp's preparations would take first). It gives each side's blows a round, the losses an hour, "
-                              + "who wins, how (all down, morale broken, or a retreat), in how long, and with how many left; the enemy's morale you cannot see, so it is run low, "
-                              + "middling and high. Lords seen marching to that place join their side as they arrive (each counted once). Only lords inside a castle or town defend behind its walls: "
-                              + "a relief from outside that joins a storm turns it into a battle outside the walls, where the walls no longer count for anyone, the garrison included. "
-                              + "With how = strike and at one of your castles or towns under siege, it reckons your named lords, gathered, striking the siege camp together in the open, "
-                              + "the garrison coming out beside them by the game's rule; the muster question says who can be there by when.",
+                              + "who wins, how (all down, morale broken, or a retreat, which only a battle in the open has), in how long, and with how many left; the enemy's morale you cannot see, "
+                              + "so it is run at full and lower, and its leader is taken to be as skilled as your lords. Lords seen marching to that place join their side as they arrive (each counted once). "
+                              + "Only lords inside a castle or town defend behind its walls: a relief from outside that joins a storm turns it into a battle outside the walls, where the walls no longer count "
+                              + "for anyone, the garrison included; the place still leads that side, so it has no leader's edge and the lords' own captain bonuses do not count. "
+                              + "With how = strike and at one of your castles or towns under siege while the camp is not storming, it reckons your named lords, gathered, striking the siege camp together, "
+                              + "led by the first of them to arrive, the garrison coming out beside them by the game's rule; the muster question says who can be there by when. "
+                              + "When lords you name are already in a battle, or one is under way at the place, it runs that battle on from now at the rates measured in it, the other lords you name joining as they arrive.",
             ["inputSchema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -134,6 +136,21 @@ namespace BannerlordAgents.WarRoom
             public float Morale = -1, Tactics;
             /// <summary>Where it stands and its pace (0.20.4: a lord of ours outside a place under storm comes as a relief).</summary>
             public double X, Y, Pace;
+            /// <summary>Its leader's captain bonus in its strength (war room 0.20.10): under a holding's lead the troops fight without it.</summary>
+            public float Captain;
+            public string PartyId;
+            /// <summary>Its strength without its own leader's captain bonus, as when it fights under a holding.</summary>
+            public double UnderPlace => Captain > 0 ? Strength / (1 + Captain) : Strength;
+        }
+
+        /// <summary>
+        /// The advantage of an enemy leader the realm cannot see (war room 0.20.10, Nov 25): 1 + 0.001 x the median Tactics of the realm's own lords.
+        /// Was 1, none, as if every enemy army were led by nobody: in run 20261125-1457-C2's two lost battles Dol Guldur's army fought at 1.33.
+        /// </summary>
+        private static float UnseenEdge(JsonObject view)
+        {
+            List<float> t = (view["own"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().Select(o => F(o["tactics"])).Where(x => x > 0).OrderBy(x => x).ToList();
+            return t.Count == 0 ? 1f : 1f + 0.001f * (float)t[t.Count / 2];
         }
 
         public string Odds(JsonObject args)
@@ -162,7 +179,7 @@ namespace BannerlordAgents.WarRoom
                 double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 double str = F(o["army_strength"]) > 0 ? F(o["army_strength"]) : F(o["strength"]);
                 ours.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = str, Morale = o["morale"] is JsonValue ? F(o["morale"]) : -1, Tactics = F(o["tactics"]),
-                                     X = F(o["x"]), Y = F(o["y"]), Pace = F(o["pace"]) });
+                                     X = F(o["x"]), Y = F(o["y"]), Pace = F(o["pace"]), Captain = F(o["captain"]), PartyId = Str(o["id"]) });
                 if (Str(o["id"]) != null) counted.Add(Str(o["id"]));
                 if (Str(o["lord"]) != null) counted.Add(Str(o["lord"]));
                 if (InPerson(o)) human = true;
@@ -184,13 +201,19 @@ namespace BannerlordAgents.WarRoom
             JsonObject enemyPlace = atQ == null ? null : (view["frontier"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().FirstOrDefault(h => Eq(Str(h["id"]), atQ));
             JsonObject ownPlace = atQ == null ? null : (view["holdings"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().FirstOrDefault(h => Eq(Str(h["id"]), atQ));
             if (atQ != null && enemyPlace == null && ownPlace == null) lines.Add("(" + atQ + ": not a castle or town of yours, nor an enemy one near your lands; reckoned as a battle in the open.)");
-            BattleSide Side(List<Force> fs, bool known)
+            float unseenEdge = UnseenEdge(view);
+            // war room 0.20.10: the enemy's side gets its unseen leader's edge (UnseenEdge), and its morale is run at full and lower (GameBattle.ByUnseenMorale)
+            BattleSide Side(List<Force> fs, bool known, Force lead = null)
             {
                 double men = fs.Sum(f => f.Men), str = fs.Sum(f => f.Strength);
-                double morale = known ? fs.Sum(f => (f.Morale >= 0 ? f.Morale : 50) * f.Men) / Math.Max(1, men) : 50;
-                Force lead = fs.OrderByDescending(f => f.Men).FirstOrDefault();
-                return new BattleSide { Men = men, Power = men > 0 ? (float)(str / men) : 1f, Advantage = 1f + (known && lead != null ? 0.001f * lead.Tactics : 0f), Morale = (float)morale };
+                double morale = known ? fs.Sum(f => (f.Morale >= 0 ? f.Morale : 50) * f.Men) / Math.Max(1, men) : 100;
+                lead = lead ?? fs.OrderByDescending(f => f.Men).FirstOrDefault();
+                return new BattleSide { Men = men, Power = men > 0 ? (float)(str / men) : 1f, Advantage = known ? 1f + (lead != null ? 0.001f * lead.Tactics : 0f) : unseenEdge, Morale = (float)morale };
             }
+            // war room 0.20.10 (Nov 25): a battle the realm's lords are already in, or one under way at the place asked about, is run on from now, as measured
+            // (run 20261125-1457-C2: two days into the battle at Lasgalor the question re-reckoned a fresh one from the named lords and kept saying they would win)
+            JsonObject under = UnderWay(view, ours, atQ);
+            if (under != null) return UnderWayOdds(view, under, ours, now, unseenEdge, lines, human, oursQ, theirsQ, atQ);
             string Names(List<Force> fs) => fs.Count == 0 ? "none" : string.Join(", ", fs.Select(f => f.Name + " [" + f.Id + "]"));
             BattleSide mine = Side(ours, true);
             if (strike && (ownPlace == null || theirs.Count == 0))
@@ -204,17 +227,20 @@ namespace BannerlordAgents.WarRoom
                 var strikers = ours.Except(inside).ToList();
                 if (strikers.Count == 0) return string.Join("\n", lines.Append("Name at least one lord of yours outside " + Str(ownPlace["name"]) + " to strike its siege camp."));
                 double gMen = Math.Max(0, I(ownPlace["garrison"])) + Math.Max(0, I(ownPlace["militia"])) + inside.Sum(f => f.Men);
-                double gStr = Math.Max(0, F(ownPlace["defence"])) + inside.Sum(f => f.Strength);
+                double gStr = Math.Max(0, F(ownPlace["defence"])) + inside.Sum(f => f.UnderPlace);
                 double campStr = theirs.Sum(f => f.Strength), strikeStr = strikers.Sum(f => f.Strength);
                 bool sally = strikeStr + gStr > 1.5 * campStr;
                 var side = new List<Force>(strikers);
                 if (sally && gMen > 0) side.Add(new Force { Id = atQ, Name = "the garrison" + (inside.Count > 0 ? " and " + Names(inside) : ""), Men = gMen, Strength = gStr, Morale = 50 });
-                BattleSide us = Side(side, true);
+                // war room 0.20.10: the strike is led by the first of yours to reach the camp (the game's side leader is the party that begins the battle), not the biggest
+                Force first = strikers.OrderBy(f => Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) / (f.Pace > 0 ? f.Pace : 2.8)).First();
+                BattleSide us = Side(side, true, first);
                 BattleSide camp = Side(theirs, false);
                 // enemies seen marching to the place join the camp as they arrive; others of the realm's side (allies) join yours
                 List<BattleJoiner> sj = Joiners(view, atQ, now, false, counted, out List<string> sjNames);
                 foreach (BattleJoiner j in sj) j.Attackers = !j.Attackers;
-                BattleOutcome[] sruns = GameBattle.ByUnseenMorale("field", false, 1f, us, camp, false, sj);
+                // war room 0.20.10: a battle outside the walls (the game's SiegeOutside): no retreat for either side, unlike the open field
+                BattleOutcome[] sruns = GameBattle.ByUnseenMorale("siege_outside", false, 1f, us, camp, false, sj);
                 BattleOutcome so = sruns[1];
                 GameBattle.StrikesPerRound(false, false, 1f, us.Men, camp.Men, out double ssA, out double ssD);
                 double usTot = us.Men + sj.Where(j => j.Attackers).Sum(j => j.Men), campTot = camp.Men + sj.Where(j => !j.Attackers).Sum(j => j.Men);
@@ -225,10 +251,13 @@ namespace BannerlordAgents.WarRoom
                 if (sjNames.Count > 0) lines.Add("- Also marching there, joining as they arrive: " + string.Join(", ", sjNames) + ".");
                 lines.Add("- In the open: two rounds an hour, each side's blows growing with its own men: yours " + ssA + " a round, the camp's " + ssD + ". At first you lose about "
                           + Words.N(so.AttackerLossPerHour) + " men an hour, the camp about " + Words.N(so.DefenderLossPerHour) + ".");
-                lines.Add("- Run ahead: " + Outcome(so, sruns, "you", "the besiegers", "your", "the besiegers'", usTot, campTot) + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat.");
+                lines.Add("- Led by " + first.Name + ", the first of yours to reach the camp (a side's leader is the party that begins its battle; his Tactics give your side its edge). The camp's leader is taken to be as skilled as your lords.");
+                lines.Add("- Run ahead: " + Outcome(so, sruns, "you", "the besiegers", "your", "the besiegers'", usTot, campTot) + ". Nobody can leave a battle once in it, and in a battle outside the walls neither side can retreat: it ends when one side is down or breaks.");
                 if (so.AttackersLeft > usTot + 0.5 || so.DefendersLeft > campTot + 0.5) lines.Add("- (These numbers do not add up: more men left than came. Do not rely on this forecast.)");
                 if (so.Winner == "attackers") lines.Add(TakingsLine(view, camp.Men - so.DefendersLeft));
-                lines.Add("- This reckons your lords already gathered at the camp. Lords marching one by one arrive and fight one by one: gather them first (the muster question says who can be where by when).");
+                lines.Add("- This reckons your lords already gathered and striking together while the camp is not storming. Once the camp storms the place, a strike together cannot happen: "
+                          + "each lord who comes joins the defenders under the castle as he arrives, with no leader's edge and none of his own captain's bonus (ask again then: it reckons that). "
+                          + "Lords marching one by one arrive and fight one by one: gather them first (the muster question says who can be where by when).");
                 if (human) lines.Add(HumanNote);
                 Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, how = "strike", ours = oursQ, theirs = theirsQ, place = atQ, lines });
                 return string.Join("\n", lines);
@@ -257,16 +286,17 @@ namespace BannerlordAgents.WarRoom
                         else outside.Add((f, d / (f.Pace > 0 ? f.Pace : 2.8)));
                     }
                     defMen += inside.Sum(f => f.Men);
-                    defStr += inside.Sum(f => f.Strength);
+                    defStr += inside.Sum(f => f.UnderPlace);
                 }
                 BattleSide besiegers = weStorm ? mine : Side(theirs, false);
-                var walls = new BattleSide { Men = defMen, Power = defMen > 0 ? (float)(defStr / defMen) : 1f, Advantage = 1f, Morale = weStorm ? 50 : mine.Morale, Walls = true };
+                var walls = new BattleSide { Men = defMen, Power = defMen > 0 ? (float)(defStr / defMen) : 1f, Advantage = 1f, Morale = weStorm ? 50 : mine.Morale, Walls = true, LedByPlace = true };
                 int level = Math.Max(1, I(place["wall_level"]));
                 float worth = (float)((4.0 + level) / (1 + 0.25 + 0.16));   // the walls' worth once the first engine, a ram, is built
                 besiegers.Advantage -= 0.1f;                               // the game's siege attackers' -0.1
                 bool town = Str(place["kind"]) == "town";
                 List<BattleJoiner> js = Joiners(view, atQ, now, weStorm, counted, out List<string> jsNames);
-                foreach ((Force f, double at) in outside) js.Add(new BattleJoiner { Attackers = false, Men = f.Men, At = at, Power = f.Men > 0 ? (float)(f.Strength / f.Men) : 0 });
+                // war room 0.20.10: lords who come to relieve it fight under the place: their own captain's bonus does not count, and they bring their own morale
+                foreach ((Force f, double at) in outside) js.Add(new BattleJoiner { Attackers = false, Men = f.Men, At = at, Power = f.Men > 0 ? (float)(f.UnderPlace / f.Men) : 0, Morale = f.Morale });
                 double aTot = besiegers.Men + js.Where(j => j.Attackers).Sum(j => j.Men), dTot = walls.Men + js.Where(j => !j.Attackers).Sum(j => j.Men);
                 BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, worth, besiegers, walls, !weStorm, js);
                 BattleOutcome o = runs[1];
@@ -287,6 +317,8 @@ namespace BannerlordAgents.WarRoom
                     lines.Add("- About " + Words.N(Math.Max(1, Math.Round(o.OutsideAt))) + " hours in, the first relief joins the defenders from outside: from then the storm is a battle outside the walls, "
                               + "where the walls no longer count for anyone, the garrison included, and both sides strike two rounds an hour by the field rule.");
                 if (jsNames.Count > 0) lines.Add("- Also marching there, joining their side as they arrive: " + string.Join(", ", jsNames) + ".");
+                if (!weStorm && (inside.Count > 0 || outside.Count > 0))
+                    lines.Add("- The place leads its defenders, before and after a relief joins: your lords inside and those who come fight under it, with no leader's edge (their side's advantage is 1) and none of their own captain's bonus. The besiegers' leader is taken to be as skilled as your lords.");
                 lines.Add("- Run ahead: " + Outcome(o, runs, "the besiegers", "the defenders", "the besiegers'", "the defenders'", aTot, dTot) + ". Nobody can leave a battle once in it.");
                 if (o.AttackersLeft > aTot + 0.5 || o.DefendersLeft > dTot + 0.5) lines.Add("- (These numbers do not add up: more men left than came. Do not rely on this forecast.)");
                 if (!weStorm && theirs.Count > 0 && ours.Count > 0)
@@ -306,7 +338,7 @@ namespace BannerlordAgents.WarRoom
                 lines.Add("- Yours: " + Words.N(mine.Men) + " men, strength " + Words.N(mine.Men * mine.Power) + ", morale " + Words.N(mine.Morale) + "; theirs: " + Words.N(enemy.Men) + " men, strength "
                           + Words.N(enemy.Men * enemy.Power) + ", morale not known to you.");
                 lines.Add("- In the open: two rounds an hour, each side's blows growing with its own men: yours " + sA + " a round, theirs " + sD + ". At first you lose about "
-                          + Words.N(o.AttackerLossPerHour) + " men an hour, they about " + Words.N(o.DefenderLossPerHour) + ".");
+                          + Words.N(o.AttackerLossPerHour) + " men an hour, they about " + Words.N(o.DefenderLossPerHour) + ". Their leader is taken to be as skilled as yours, their morale at full.");
                 lines.Add("- Run ahead: " + Outcome(o, runs, "you", "they", "your", "their", mine.Men, enemy.Men) + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat.");
                 if (o.Winner == "attackers") lines.Add(TakingsLine(view, enemy.Men - o.DefendersLeft));
             }
@@ -315,6 +347,83 @@ namespace BannerlordAgents.WarRoom
             Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, ours = oursQ, theirs = theirsQ, place = atQ, lines });
             return string.Join("\n", lines);
         }
+
+        /// <summary>The realm's battle under way (view "battles", module 0.24.7) that one of the named lords is in, or at the place asked about; null when none.</summary>
+        private static JsonObject UnderWay(JsonObject view, List<Force> ours, string atQ)
+        {
+            var battles = (view["battles"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().ToList();
+            foreach (JsonObject b in battles)
+            {
+                var parties = ((b["us"] as JsonObject)?["parties"] as JsonArray ?? new JsonArray()).Select(Str).ToList();
+                if (ours.Any(f => (f.PartyId != null && parties.Any(p => Eq(p, f.PartyId))) || parties.Any(p => Eq(p, f.Id)))) return b;
+            }
+            return atQ == null ? null : battles.FirstOrDefault(b => Eq(Str(b["place"]), atQ));
+        }
+
+        /// <summary>
+        /// A battle under way run on from now (war room 0.20.10): each side's men standing and mean power in the battle, your side's advantage and morale as they are,
+        /// the other side's leader taken as skilled as your lords and its morale at full; each side's blows scaled by what they knocked down over the last hours against
+        /// the rules' expectation (the module's measure, Forecast.Measured); the named lords not yet in it joining your side as they arrive (under the place, without
+        /// their captain's bonus, when a holding leads your side).
+        /// </summary>
+        private string UnderWayOdds(JsonObject view, JsonObject b, List<Force> ours, double now, float unseenEdge, List<string> lines, bool human, List<string> oursQ, List<string> theirsQ, string atQ)
+        {
+            JsonObject us = b["us"] as JsonObject ?? new JsonObject(), them = b["them"] as JsonObject ?? new JsonObject(), m = b["measured"] as JsonObject;
+            bool weAttack = Str(b["ours"]) == "attackers";
+            string kind = Str(b["kind"]) ?? "field";
+            bool storm = kind == "siege", ledByPlace = us["settlement_led"] is JsonValue && (bool)us["settlement_led"];
+            string place = Str(b["place_name"]);
+            var parties = (us["parties"] as JsonArray ?? new JsonArray()).Select(Str).ToList();
+            var inIt = ours.Where(f => (f.PartyId != null && parties.Any(p => Eq(p, f.PartyId))) || parties.Any(p => Eq(p, f.Id))).ToList();
+            var coming = ours.Except(inIt).ToList();
+            double bx = F(b["x"]), by = F(b["y"]);
+            var mine = new BattleSide { Men = I(us["healthy"]), Power = Math.Max(0.01f, (float)F(us["power"])), Advantage = Math.Max(0.1f, (float)F(us["advantage"])), Morale = (float)F(us["morale"]), Walls = !weAttack && ledByPlace && storm, LedByPlace = ledByPlace };
+            var theirs = new BattleSide { Men = I(them["healthy"]), Power = Math.Max(0.01f, (float)F(them["power"])), Advantage = unseenEdge - (storm && !weAttack ? 0.1f : 0f), Morale = 100, LedByPlace = them["settlement_led"] is JsonValue && (bool)them["settlement_led"] };
+            if (theirs.LedByPlace) { theirs.Advantage = 1f; theirs.Walls = storm && weAttack; }
+            // measured with the advantage the battle shows their side (the measure's own base), so its rates carry over; never shown to the agent
+            else if (m != null && F(them["advantage"]) > 0) theirs.Advantage = (float)F(them["advantage"]);
+            double hitUs = m != null ? F(m["hit_us"]) : 1, hitThem = m != null ? F(m["hit_them"]) : 1;
+            if (hitUs > 0) mine.Hit = hitUs;
+            if (hitThem > 0) theirs.Hit = hitThem;
+            var js = new List<BattleJoiner>();
+            foreach (Force f in coming)
+            {
+                double hours = Math.Sqrt((f.X - bx) * (f.X - bx) + (f.Y - by) * (f.Y - by)) / (f.Pace > 0 ? f.Pace : 2.8);
+                double str = ledByPlace ? f.UnderPlace : f.Strength;
+                js.Add(new BattleJoiner { Attackers = weAttack, Men = f.Men, At = hours, Power = f.Men > 0 ? (float)(str / f.Men) : 0, Morale = f.Morale });
+            }
+            BattleSide att = weAttack ? mine : theirs, def = weAttack ? theirs : mine;
+            bool town = b["town"] is JsonValue && b["town"].ToString() == "true";
+            float worth = Math.Max(1f, (float)F(b["walls_worth"]));
+            BattleOutcome[] runs = GameBattle.ByUnseenMorale(kind, town, worth, att, def, !weAttack, js);
+            BattleOutcome o = m != null ? GameBattle.Run(kind, town, worth, Copy(att), Copy(def), js) : runs[1];
+            double aTot = att.Men + js.Where(j => j.Attackers).Sum(j => j.Men), dTot = def.Men + js.Where(j => !j.Attackers).Sum(j => j.Men);
+            string kindWords = kind == "siege" ? "a storm of the walls" : kind == "siege_outside" ? "a battle outside the walls" : kind == "sally" ? "a sally" : kind == "raid" ? "a raid" : "a battle in the open";
+            lines.Insert(0, "BATTLE ODDS: a battle already under way" + (place != null ? " at " + place + (Str(b["place"]) != null ? " [" + Str(b["place"]) + "]" : "") : "") + ", " + kindWords + ", "
+                            + Words.N(Math.Max(0, F(b["hours_in"]))) + " hours in" + (inIt.Count > 0 ? "; in it: " + string.Join(", ", inIt.Select(f => f.Name + " [" + f.Id + "]")) : ""));
+            lines.Add("- Your side is led by " + (Str(us["led_by"]) ?? "?") + (ledByPlace ? " (a holding: no leader's edge, and your lords in it fight without their own captain's bonus; a side led by a holding never breaks)" : "")
+                      + "; theirs by " + (Str(them["led_by"]) ?? "?") + ".");
+            lines.Add("- Standing now: yours " + Words.N(mine.Men) + " men (strength in this battle about " + Words.N(mine.Men * mine.Power) + ", morale " + Words.N(mine.Morale) + "), " + Words.N(I(us["casualties"])) + " fallen so far; theirs "
+                      + Words.N(theirs.Men) + " men (strength about " + Words.N(theirs.Men * theirs.Power) + "), " + Words.N(I(them["casualties"])) + " fallen so far.");
+            if (m != null)
+                lines.Add("- Measured over its last " + Words.N(F(m["hours"])) + " hours, your side's blows landed " + Pct(hitUs) + " and theirs " + Pct(hitThem) + " of what the game's rules expect with their leader as skilled as yours and their morale at full; the run ahead keeps those rates.");
+            else
+                lines.Add("- Too early to measure: run by the game's rules with their leader as skilled as yours and their morale at full or lower.");
+            if (coming.Count > 0)
+                lines.Add("- Joining your side as they arrive (in a straight line at each one's pace; by road it is longer): " + string.Join("; ", coming.Select((f, i) => f.Name + " in about " + Words.N(Math.Max(1, Math.Round(js[i].At))) + " hours")) + "."
+                          + (storm && !weAttack ? " The first to join turns the storm into a battle outside the walls; the place still leads your side." : ""));
+            lines.Add("- First hour: you lose about " + Words.N(weAttack ? o.AttackerLossPerHour : o.DefenderLossPerHour) + " men, they about " + Words.N(weAttack ? o.DefenderLossPerHour : o.AttackerLossPerHour) + ".");
+            string outcome = Outcome(o, m != null ? new[] { o, o, o } : runs, weAttack ? "you" : "they", weAttack ? "they" : "you", weAttack ? "your" : "their", weAttack ? "their" : "your", aTot, dTot);
+            lines.Add("- Run ahead from now: " + outcome + ". Lords already in a battle cannot leave it; lords not yet in it can still keep out.");
+            if (o.AttackersLeft > aTot + 0.5 || o.DefendersLeft > dTot + 0.5) lines.Add("- (These numbers do not add up: more men left than came. Do not rely on this forecast.)");
+            if (human) lines.Add(HumanNote);
+            Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, how = "under way", ours = oursQ, theirs = theirsQ, place = atQ, battle = Str(b["key"]), lines });
+            return string.Join("\n", lines);
+        }
+
+        private static string Pct(double k) => Words.N(Math.Round(k * 100)) + "%";
+
+        private static BattleSide Copy(BattleSide s) => new BattleSide { Men = s.Men, Power = s.Power, Advantage = s.Advantage, Morale = s.Morale, Walls = s.Walls, LedByPlace = s.LedByPlace, Hit = s.Hit };
 
         /// <summary>
         /// What a win would bring in (0.9.4): the enemy's fallen, times what each fallen man left the realm in its own won battles on
