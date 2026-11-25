@@ -423,6 +423,16 @@ namespace BannerlordAgents.WarRoom
             Check(Claude.RunawayLimit("{\"say\":\"Done.\",\"carry_out\":true,\"orders\":[") == Claude.RunawayCharsLieutenant && Claude.RunawayCharsLieutenant > 100000
                   && Claude.RunawayLimit("{\"poke\":7,\"orders\":[") == Claude.RunawayChars && Claude.RunawayLimit("{\"poke\":7,\"tools\":[") == Claude.RunawayCharsWithTools,
                   "the lieutenant's answers get room for every lord of the realm; a realm agent's limits are unchanged");
+            // 0.20.8 (Nov 25, run 20261125-1331-C2): a realm agent's strike, a group order per lord each naming the whole group, is not taken for a runaway
+            {
+                var group = string.Join(",", Enumerable.Range(1, 36).Select(i => "\"lord_E" + i + "_1\""));
+                var strike = new System.Text.StringBuilder("{\"poke\": 12916,\n \"orders\": [\n");
+                for (int i = 1; i <= 50; i++)
+                    strike.Append("  {\"lord\": \"lord_E" + i + "_1\", \"do\": \"muster_at\", \"at\": \"castle_village_M5_1\", \"lords\": [" + group + "], \"need\": 0.7, \"max_wait\": 30, \"radius\": 8, "
+                                  + "\"then\": {\"do\": \"engage\", \"target\": \"lord_D3_1\", \"give_up_odds\": 3, \"join_hours\": 40}, \"why\": \"gather all, then strike Lorgath's camp\"},\n");
+                string s = strike.ToString();
+                Check(s.Length > 30000 && s.Length < Claude.RunawayLimit(s), "a realm agent's strike with 50 group orders of 36 lords each (" + s.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters) is not stopped as a runaway");
+            }
             // 0.15.2: told when its orders wait for the clock, so it does not write them all again
             string waiting = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":8,\"said\":\"go on\",\"orders_waiting\":338,\"answers_waiting\":6}"), history, "REPORT", new List<string>());
             string oneWaiting = LieutenantRoom.Message((JsonObject)JsonNode.Parse("{\"number\":8,\"said\":\"go on\",\"orders_waiting\":1,\"answers_waiting\":1}"), history, "REPORT", new List<string>());

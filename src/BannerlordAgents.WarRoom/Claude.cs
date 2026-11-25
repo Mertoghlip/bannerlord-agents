@@ -86,11 +86,16 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         public const int HandoverStallSeconds = 300;
 
-        /// <summary>No answer is this long (the longest so far was under 6,000 characters); past it, the call is stopped.</summary>
-        public const int RunawayChars = 16000;
+        /// <summary>
+        /// Past this many characters an answer is taken for a runaway and the call is stopped. It was 16,000 (the longest answer then was under 6,000 characters). Since war room
+        /// 0.20.8 it is the lieutenant's limit: with every lord under an order (0.20.7) a realm agent's strike is a group order per lord, each naming the whole group. Nov 25, run
+        /// 20261125-1331-C2: the kingdom's answer to Lorgath's siege of Imnagath (about 24 muster orders, each naming some 30 lords, then a strike) was stopped at 16,000 four times
+        /// running, about three in-game days, and all of it was lost. The stall rule still catches a call that hangs, and fake tool calls typed as text are still caught at once.
+        /// </summary>
+        public const int RunawayChars = 150000;
 
-        /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8): each tool's definition is long, so it may run longer; and (0.13.5) for the lieutenant's proposal, which may name every lord of the realm (Oct 29: 64 orders in about 6,000 characters).</summary>
-        public const int RunawayCharsWithTools = 48000;
+        /// <summary>The same for an answer that writes tools of its own (0.13, docs/PLAN-0.13.md A8) or pages, and a handover; was 48,000, now the same as any answer's.</summary>
+        public const int RunawayCharsWithTools = 150000;
 
         /// <summary>
         /// The same for the lieutenant's answers (0.15.2), which may name every lord of the realm, each with its stops, its company and its next order. Nov 6, test A1: an audit's answer
