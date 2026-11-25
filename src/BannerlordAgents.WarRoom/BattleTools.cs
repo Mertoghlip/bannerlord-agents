@@ -212,7 +212,7 @@ namespace BannerlordAgents.WarRoom
             }
             // war room 0.20.10 (Nov 25): a battle the realm's lords are already in, or one under way at the place asked about, is run on from now, as measured
             // (run 20261125-1457-C2: two days into the battle at Lasgalor the question re-reckoned a fresh one from the named lords and kept saying they would win)
-            JsonObject under = UnderWay(view, ours, atQ);
+            JsonObject under = UnderWay(view, ours, theirs, atQ);
             if (under != null) return UnderWayOdds(view, under, ours, now, unseenEdge, lines, human, oursQ, theirsQ, atQ);
             string Names(List<Force> fs) => fs.Count == 0 ? "none" : string.Join(", ", fs.Select(f => f.Name + " [" + f.Id + "]"));
             BattleSide mine = Side(ours, true);
@@ -348,16 +348,24 @@ namespace BannerlordAgents.WarRoom
             return string.Join("\n", lines);
         }
 
-        /// <summary>The realm's battle under way (view "battles", module 0.24.7) that one of the named lords is in, or at the place asked about; null when none.</summary>
-        private static JsonObject UnderWay(JsonObject view, List<Force> ours, string atQ)
+        /// <summary>
+        /// The realm's battle under way (view "battles", module 0.24.7) that the question is about; null when none: the one at the place asked about; else, with enemies
+        /// named, one they fight in (war room 0.21.1: a named lord of yours in a skirmish elsewhere no longer takes the question over; in run 20261125-2341-C2 six of the
+        /// agent's twelve questions about Lorgath's army, each naming 30 to 45 lords, came back as forecasts of small fights with raiders); else one a named lord is in.
+        /// </summary>
+        private static JsonObject UnderWay(JsonObject view, List<Force> ours, List<Force> theirs, string atQ)
         {
             var battles = (view["battles"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().ToList();
-            foreach (JsonObject b in battles)
+            List<string> Parties(JsonObject b, string side) => ((b[side] as JsonObject)?["parties"] as JsonArray ?? new JsonArray()).Select(Str).Where(p => p != null).ToList();
+            bool In(List<string> parties, Force f) => (f.PartyId != null && parties.Any(p => Eq(p, f.PartyId))) || parties.Any(p => Eq(p, f.Id));
+            if (atQ != null)
             {
-                var parties = ((b["us"] as JsonObject)?["parties"] as JsonArray ?? new JsonArray()).Select(Str).ToList();
-                if (ours.Any(f => (f.PartyId != null && parties.Any(p => Eq(p, f.PartyId))) || parties.Any(p => Eq(p, f.Id)))) return b;
+                JsonObject there = battles.FirstOrDefault(b => Eq(Str(b["place"]), atQ));
+                if (there != null) return there;
             }
-            return atQ == null ? null : battles.FirstOrDefault(b => Eq(Str(b["place"]), atQ));
+            if (theirs != null && theirs.Count > 0)
+                return battles.FirstOrDefault(b => theirs.Any(f => In(Parties(b, "them"), f) || Eq(Str((b["them"] as JsonObject)?["led_by"]), f.Name)));
+            return battles.FirstOrDefault(b => ours.Any(f => In(Parties(b, "us"), f)));
         }
 
         /// <summary>

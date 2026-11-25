@@ -351,7 +351,20 @@ namespace BannerlordAgents.WarRoom
             string uw1 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\"],\"theirs\":[\"lord_lg\"]}");
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"), LasgalorView(",\"measured\":{\"hours\":12,\"hit_us\":0.97,\"hit_them\":1.21,\"loss_us\":152,\"loss_them\":104}"));
             string uw2 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\",\"lord_gor\"],\"theirs\":[\"lord_lg\"]}");
+            // war room 0.21.1: a named lord in a skirmish elsewhere does not take over a question about a named enemy (run 20261125-2341-C2: six questions about Lorgath
+            // came back as forecasts of small fights with raiders); asked about that skirmish alone, it is still run on
+            string skirmish = LasgalorView("").Replace("\"doing\":\"fighting\"", "\"doing\":\"marching\"")
+                .Replace("\"kind\":\"siege_outside\",\"place\":\"castle_k\",\"place_name\":\"Orc Keep\"", "\"kind\":\"field\",\"place\":null,\"place_name\":null")
+                .Replace("\"led_by\":\"Orc Keep\",\"settlement_led\":true,\"parties\":[\"p_bolg\",\"castle_k\"]", "\"led_by\":\"Gorbag\",\"settlement_led\":false,\"parties\":[\"p_gor\"]")
+                .Replace("\"led_by\":\"Lorgath\",\"settlement_led\":false,\"parties\":[\"p_lg\"]", "\"led_by\":\"Looters\",\"settlement_led\":false,\"parties\":[\"p_looters\"]");
+            File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"), skirmish);
+            string uw3 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\",\"lord_gor\"],\"theirs\":[\"lord_lg\"]}");
+            string uw4 = Ask("battle_odds", "{\"ours\":[\"lord_gor\"]}");
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"), keptView);
+            Check(uw3 != null && !uw3.Contains("already under way") && uw3.Contains("against Lorgath [lord_lg]") && uw4 != null && uw4.StartsWith("BATTLE ODDS: a battle already under way")
+                  && uw4.Contains("Gorbag [lord_gor]"),
+                  "a question about a named enemy is not taken over by a skirmish one of the named lords is in elsewhere; asked about that lord alone, his skirmish is run on: "
+                  + uw3?.Split('\n')[0] + " | " + uw4?.Split('\n')[0]);
             Check(uw1 != null && uw1.StartsWith("BATTLE ODDS: a battle already under way at Orc Keep [castle_k], a battle outside the walls, 129 hours in; in it: Bolg [lord_bolg]")
                   && uw1.Contains("Your side is led by Orc Keep (a holding") && uw1.Contains("Run ahead from now: they win") && uw1.Contains("Too early to measure") && !uw1.Contains("you win"),
                   "a battle under way is run on from now, not reckoned afresh: Lasgalor two days in, the kingdom under its castle against Lorgath, by the rules alone: Dol Guldur wins: " + uw1?.Replace("\n", " | "));
