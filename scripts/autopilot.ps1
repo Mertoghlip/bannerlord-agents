@@ -604,7 +604,9 @@ function Mind-Run {
         }
         if ($s -and (Prop $s 'pid') -eq $script:GamePid) {
             Mind-Limit
-            $mem = [int](Prop $s 'memory_mb')
+            # Nov 25: read as a decimal (one reading of 13,440,071,089, in bytes, stopped the C0 run with an Int32 overflow); a reading that large is bytes
+            $mem = [double](Prop $s 'memory_mb')
+            if ($mem -gt 1000000) { $mem = [math]::Round($mem / 1MB) }
             if ($mem -gt $MemoryRestartMb -and $run -and (Prop $run 'status') -eq 'running' -and -not (Prop $s 'busy') -and -not $script:LimitUntil) {
                 $memoryRestarts++
                 $name = 'TEST AUTO ' + $Arm
