@@ -3188,7 +3188,7 @@ avmesh.bin`):
 - **Run 20261125-2318-C2** stopped by stop.txt at day 4 (23:32, overnight.ps1 code 4); its records stay, and loading the test start marks it abandoned. docs/WARROOM.md updated.
 - **The restart:** `overnight.ps1 -Arms C2 -Days 200` at 23:40, war room 0.21.0, module 0.24.7, the rivals' agents off.
 
-### 00:59 (Nov 26) · War room 0.21.1: a question about a named enemy is no longer answered with a skirmish elsewhere (mid-run, the clock held)
+### 00:59 (Nov 26) · War room 0.21.1 (16b753f): a question about a named enemy is no longer answered with a skirmish elsewhere (mid-run, the clock held)
 - **Why:** since 0.20.10 `battle_odds` ran on any battle under way that one of the named lords was in. In run 20261125-2341-C2 the agent asked about Lorgath's army naming 30 to 45 lords, and one of them was usually in a small fight somewhere: six of its twelve questions about Lorgath came back as forecasts of skirmishes with raiders (review #13071 on Autumn 15: four in a row, Oropherion against Hrakgar, Nár against the Corsairs, Durin and Yachana against Mirkwood Stalkers; wake #13081 on Autumn 21: two more). It kept asking and got real answers (21.7k in the open loses to his 23.3k; 42 lords striking his camp at Goblin Town win with about 11,500 left), but lost calls and time.
 - **`BattleTools.UnderWay`:** the battle under way at the place asked about comes first; else, with enemies named in `theirs`, only a battle they fight in (by party or leader); else, as before, one a named lord is in.
 - **Self-test:** a named lord in a skirmish elsewhere does not take over a question about a named enemy; asked about that lord alone, his skirmish is still run on. `WarRoom selftest`: all checks passed.
