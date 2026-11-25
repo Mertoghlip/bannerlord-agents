@@ -370,10 +370,10 @@ namespace BannerlordAgents.WarRoom
                 BuildShelf(meta, BookFor(meta, number) ?? NewestBook(meta, number), pokeText, why: why);
                 _wakesTodayForShelf = -1;
                 if (opening) sb.Append(FilesOpening());
-                string fnotes = Join(Join(carried, TakeLordsNote()), InstructionsNote());
+                string fnotes = Join(carried, InstructionsNote());
                 if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes.TrimEnd()).AppendLine();
                 sb.Append(FilesWake(number, why));
-                // war room 0.20.7: a conversation's first answer is a review too: its digest, and its lords with no order enforced after it
+                // war room 0.20.7: a conversation's first answer is a review too: its digest, and its lords with no order put to it again after it (0.21.0)
                 if (opening) { openingUnordered = _c.EveryLordOrdered ? NoOrderLords(_c.ChannelDir) : null; sb.AppendLine().Append(ReviewDigest()); }
             }
             else
@@ -409,11 +409,11 @@ namespace BannerlordAgents.WarRoom
                 changed = Remember(answer, number, when, meta);
                 AfterContinuous(answer, meta?.Hours ?? _pokeHours, opening);
                 File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-                // war room 0.20.7: every lord under an order: after the first answer as after a review, after a wake the standing order for lords newly without one
+                // war room 0.21.0: lords still without an order wake the agent, after the first answer as after a review, and after a wake those not asked about in the last day
                 if (_c.Files)
                 {
-                    if (opening) EnforceAfterReview(number, answer, meta, openingUnordered, "opening");
-                    else StandingAfterWake(number, answer, meta?.Hours ?? _pokeHours);
+                    if (opening) AskAfterReview(number, answer, meta, openingUnordered, "opening");
+                    else AskAfterWake(number, answer, meta);
                 }
             }
             // a big event calls a strategy review at once (council_after; not the first look, whose report is the whole realm already): kept in 0.18.2's agent-set reviews
@@ -1112,10 +1112,10 @@ namespace BannerlordAgents.WarRoom
             {
                 // a files agent's review (war room 0.20): its files built from the newest hour, and its message only that it sits and why
                 BuildShelf(meta, FreshNow() ?? NewestBook(meta, number), null, situation, briefing, fate: fate);
-                string fnotes = Join(TakeLordsNote(), InstructionsNote());
+                string fnotes = InstructionsNote();
                 if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes).AppendLine();
                 sb.Append(FilesReview(number, why));
-                // war room 0.20.7: the review's digest (the money, the lords with no order, the question), and its lords with no order enforced after its answer
+                // war room 0.20.7: the review's digest (the money, the lords with no order, the question); its lords still with no order put to it again after its answer (0.21.0)
                 _reviewUnordered = _c.EveryLordOrdered ? NoOrderLords(_c.ChannelDir) : null;
                 sb.AppendLine().Append(ReviewDigest());
                 return ReviewCall(sb.ToString().Replace("\r\n", "\n"), why, meta, number, mark, began, briefing.Length, situation.Length);
@@ -1165,7 +1165,7 @@ namespace BannerlordAgents.WarRoom
             }
             List<Unordered> unordered = _reviewUnordered;
             _reviewUnordered = null;
-            if (answer != null && unordered != null) EnforceAfterReview(number, answer, meta, unordered, "review");
+            if (answer != null && unordered != null) AskAfterReview(number, answer, meta, unordered, "review");
             _talk.Save();
             _mem.Save();
             _talk.Checkpoint(_lastUuid, meta.Hours, meta.Date, meta.LoadId ?? _mem.LoadId);

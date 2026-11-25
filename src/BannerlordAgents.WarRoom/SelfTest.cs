@@ -358,7 +358,7 @@ namespace BannerlordAgents.WarRoom
             Check(uw2 != null && uw2.Contains("Measured over its last 12 hours, your side's blows landed 97% and theirs 121%") && uw2.Contains("Run ahead from now: they win")
                   && uw2.Contains("Joining your side as they arrive") && uw2.Contains("Gorbag in about 10 hours") && System.Text.RegularExpressions.Regex.IsMatch(uw2, @"First hour: you lose about 1[0-9]{2} men, they about [0-9]{2,3}"),
                   "a battle under way, measured: its last hours' rates carry on, a named lord not in it joins as he arrives, and Dol Guldur wins: " + uw2?.Replace("\n", " | "));
-            // war room 0.20.7: every lord under an order: the lords with no order read from the files, the lords an answer orders, the standing order, and the review's question
+            // war room 0.20.7: every lord under an order: the lords with no order read from the files, the lords an answer orders, and the review's question
             string lordsDir = Path.Combine(root, "every-lord", Shelf.DirName, "lords");
             Directory.CreateDirectory(lordsDir);
             File.WriteAllText(Path.Combine(lordsDir, "no-order.md"), "# Lords with no order\nAs of Summer 1.\n\n- Frar [lord_frar] (frar): 271 men, strength 556; 7.9 from Angloss\n- Chinua Hûz [lord_6_23_8] (chinua-huz): 1,260 men, strength 2,631; going to Rochthir\n");
@@ -367,16 +367,21 @@ namespace BannerlordAgents.WarRoom
             var standView = (JsonObject)JsonNode.Parse("{\"own\":[{\"lord\":\"lord_frar\",\"x\":10,\"y\":10,\"men\":271,\"strength\":556},{\"lord\":\"lord_6_23_8\",\"x\":10,\"y\":10,\"men\":1260,\"strength\":2631}],"
                 + "\"holdings\":[{\"id\":\"castle_front\",\"kind\":\"castle\",\"x\":12,\"y\":10,\"threat_men\":1500,\"threat_distance\":10},{\"id\":\"castle_back\",\"kind\":\"castle\",\"x\":20,\"y\":10,\"threat_men\":0,\"threat_distance\":0},{\"id\":\"village_x\",\"kind\":\"village\",\"x\":10,\"y\":11}],"
                 + "\"seen\":[{\"id\":\"p_lg\",\"lord\":\"lord_lg\",\"name\":\"Lorgath\",\"faction_name\":\"Dol Guldur\",\"relation\":\"enemy\",\"army_parties\":26,\"army_men\":11478,\"strength\":25271,\"x\":14,\"y\":10,\"doing\":\"besieging Front Keep\"}]}");
-            var standing = Room.StandingOrders(noOrd, standView);
+            // war room 0.21.0: lords with no order wake the agent, which decides; nobody else orders them, and a lord ordered after the list was made is not asked about
+            string lordsAsk = Room.LordsQuestion(41, noOrd, "after your answer to wake #41");
+            var wall = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase) { ["lord_frar"] = noOrd[0].AsOf.AddSeconds(5), ["lord_6_23_8"] = noOrd[1].AsOf.AddMinutes(-10) };
             string question = Room.ArmyQuestion(standView);
             Check(noOrd.Count == 2 && noOrd[0].Id == "lord_frar" && noOrd[0].Men == 271 && noOrd[1].Men == 1260
                   && ordered.SetEquals(new[] { "lord_a", "lord_b", "lord_c", "lord_d" })
-                  && standing.Count == 2 && (string)standing[0]["at"] == "castle_back" && (string)standing[1]["at"] == "castle_front" && (string)standing[0]["do"] == "defend"
+                  && lordsAsk.StartsWith("LORDS WITH NO ORDER OF YOURS (after your answer to wake #41): 2 lords hold no order of yours, so the game's own AI leads them, and nobody else will order them:")
+                  && lordsAsk.Contains("- Frar [lord_frar]: 271 men, strength 556; 7.9 from Angloss") && lordsAsk.Contains("or leave him to the game's AI") && lordsAsk.Contains("\"poke\": 41")
+                  && Room.OrderedSince(noOrd[0], wall) && !Room.OrderedSince(noOrd[1], wall)
                   && question.Contains("THE QUESTION, at every review") && question.Contains("Lorgath [lord_lg] (Dol Guldur): 26 parties, 11,478 men, strength 25,271")
                   && question.Contains("within 24 hours strength 0 (2 lords and armies)") == false && question.Contains("(2 lords and armies)"),
-                  "every lord under an order: the lords with no order read from the files, the lords an answer's orders name (group and follow-on orders too), the standing order "
-                  + "(a weak lord to a calm holding further back, a strong one to the nearest), and the review's question with each enemy army and what could gather against it: "
-                  + string.Join(", ", noOrd.Select(n => n.Id + "/" + n.Men)) + " | " + string.Join(",", ordered) + " | " + standing.ToJsonString() + " | " + question.Replace("\n", " | "));
+                  "every lord under an order: the lords with no order read from the files, the lords an answer's orders name (group and follow-on orders too), the message that wakes "
+                  + "the agent about them (each with where he is, its choice to order or leave him), a lord ordered after the list was made not asked about, and the review's question "
+                  + "with each enemy army and what could gather against it: " + string.Join(", ", noOrd.Select(n => n.Id + "/" + n.Men)) + " | " + string.Join(",", ordered) + " | "
+                  + lordsAsk.Replace("\n", " | ") + " | " + question.Replace("\n", " | "));
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"), ownView);
             string r1 = Ask("roads_in", "{\"to\":\"town_a\",\"hours_out\":3}");
             Check(r1 != null && r1.StartsWith("THE ROADS INTO Aldburg [town_a]") && r1.Contains("Bree (Arnor") && System.Text.RegularExpressions.Regex.IsMatch(r1, @"\[p\d+_\d+\]") && r1.Contains("hours before it reaches the walls"),

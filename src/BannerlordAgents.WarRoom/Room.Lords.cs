@@ -9,42 +9,53 @@ namespace BannerlordAgents.WarRoom
     /// <summary>
     /// War room 0.20.7 (Nov 25, after run 20261125-0020-C2: the agent ordered at most a quarter of its lords, 94% of the 392 captures were of lords the game's AI was
     /// leading, it stopped reading its pages and set reviews four to seven days apart, and never once weighed gathering its strength against Dol Guldur's grand army
-    /// with the right numbers). My rules since: every lord must be under an order of the agent's, it reviews its lords every day to take back control of each, it holds
+    /// with the right numbers). My rules since: every lord should be under an order of the agent's, it reviews its lords every day to take back control of each, it holds
     /// a strategy review every day, its review brings the money, and it always asks whether it can gather enough to beat each enemy army where it stands.
     /// - A files agent's review (and the first answer of a conversation) opens with a digest from its files: the realm in sum, the money, every lord with no order, what
     ///   became of its orders, its captive lords, and the question with each enemy army in view and the strength the realm could gather where it stands.
-    /// - After a review's answer, the lords it left without an order are asked for again (twice at most); any still left get the war room's standing order (defend the
-    ///   nearest holding of the realm, a weak lord one well back from any threat), and the agent is told at its next message.
-    /// - After a wake's answer, a lord newly without an order (freed, his order ended, new) gets the standing order at once, so none is led by the game's AI between
-    ///   reviews. A lord the agent ordered in the last 12 in-game hours is left alone (his order may still be on its way).
+    /// War room 0.21.0 (Nov 25, after run 20261125-2318-C2): the war room never orders a lord itself. Its standing order (0.20.7 to 0.20.11: defend the nearest holding)
+    /// overwrote the agent's own new orders five seconds after they landed, from a list made before they did (Ask's siege of Nanduhirion became "guard Rivendell"), and
+    /// in run 20261125-2226-C2 took lords marching to join an army out of it. Now a lord found without an order wakes the agent, and the agent decides what becomes of him:
+    /// - After a wake's answer, the lords still without an order that it was not asked about in the last in-game day are put to it at once, in the same conversation.
+    /// - After a review's answer (and a conversation's first answer), the lords its digest listed that it left without an order are put to it once more.
+    /// - Whatever it answers stands: an order given like any other, or the lord left to the game's own AI. Left lords are listed again at the next review.
+    /// - A lord the agent ordered after the list was made (or within two minutes before, while the game may not yet have taken the order) or in the last 12 in-game hours
+    ///   is not asked about: his order may not show yet. Lords marching to join an army of the realm are not on the list (Shelf.MarchesToArmy, 0.20.11).
     /// </summary>
     internal sealed partial class Room
     {
         internal sealed class Unordered
         {
-            public string Id, Name;
+            public string Id, Name, Line;
             public int Men;
+            /// <summary>When the no-order page he was read from was written (UTC).</summary>
+            public DateTime AsOf;
         }
 
-        /// <summary>When the agent last ordered each lord (in-game hours), and when the war room last gave him its standing order.</summary>
+        /// <summary>When the agent last ordered each lord: in-game hours of the call, and the wall clock (UTC) when the war room wrote the order.</summary>
         private readonly Dictionary<string, double> _orderedAt = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, double> _standingAt = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-        /// <summary>What the agent is told at its next message: the standing orders given since its last answer.</summary>
-        private string _lordsNote;
+        private readonly Dictionary<string, DateTime> _orderedWall = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>When each lord was last put to the agent as having no order (in-game hours).</summary>
+        private readonly Dictionary<string, double> _askedAt = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         /// <summary>The realm's view file of the last build of its files (the digest's question reads it).</summary>
         private JsonObject _lastView;
-        /// <summary>The lords with no order as the review's digest listed them (enforced after its answer).</summary>
+        /// <summary>The lords with no order as the review's digest listed them (put to the agent again after its answer).</summary>
         private List<Unordered> _reviewUnordered;
 
         internal const double OrderGraceHours = 12;
-        internal const int WeakMen = 300;
+        /// <summary>A lord the agent was asked about and left is not asked about again after a wake for this long (the daily review lists him again).</summary>
+        internal const double AskAgainHours = 24;
+        /// <summary>An order written this long before the no-order page may not have reached the game when the page's hour was copied.</summary>
+        internal static readonly TimeSpan OrderLandMargin = TimeSpan.FromMinutes(2);
 
         /// <summary>The lords with no order, from the files' lords/no-order page (the game's own list, as of the last build).</summary>
         internal static List<Unordered> NoOrderLords(string channelDir)
         {
             var list = new List<Unordered>();
-            string text = ReadShared(Path.Combine(channelDir, Shelf.DirName, "lords", "no-order.md"));
+            string path = Path.Combine(channelDir, Shelf.DirName, "lords", "no-order.md");
+            string text = ReadShared(path);
             if (text == null) return list;
+            DateTime asOf = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.UtcNow;
             foreach (string raw in text.Split('\n'))
             {
                 string line = raw.TrimEnd('\r');
@@ -52,7 +63,8 @@ namespace BannerlordAgents.WarRoom
                 Match m = Regex.Match(line, @"^- (.+?) \[([^\]]+)\]");
                 if (!m.Success) continue;
                 Match men = Regex.Match(line, @"(\d[\d,]*) men");
-                list.Add(new Unordered { Name = m.Groups[1].Value, Id = m.Groups[2].Value,
+                int c = line.IndexOf("): ", StringComparison.Ordinal);
+                list.Add(new Unordered { Name = m.Groups[1].Value, Id = m.Groups[2].Value, AsOf = asOf, Line = c > 0 ? line.Substring(c + 3).Trim() : "",
                                          Men = men.Success ? int.Parse(men.Groups[1].Value.Replace(",", ""), CultureInfo.InvariantCulture) : 0 });
             }
             return list;
@@ -74,118 +86,84 @@ namespace BannerlordAgents.WarRoom
             return set;
         }
 
+        /// <summary>Notes the lords an answer orders, right after its orders were written: the call's in-game hour and the wall clock.</summary>
         private void NoteOrdered(JsonObject answer, double hours)
         {
-            if (answer == null || double.IsNaN(hours)) return;
-            foreach (string id in OrderedIn(answer)) _orderedAt[id] = hours;
+            if (answer == null) return;
+            DateTime now = DateTime.UtcNow;
+            foreach (string id in OrderedIn(answer))
+            {
+                _orderedWall[id] = now;
+                if (!double.IsNaN(hours)) _orderedAt[id] = hours;
+            }
         }
+
+        /// <summary>The agent ordered this lord after his no-order page was written, or so shortly before it that the game may not have taken the order yet.</summary>
+        internal static bool OrderedSince(Unordered l, IReadOnlyDictionary<string, DateTime> wall) => wall.TryGetValue(l.Id, out DateTime w) && w >= l.AsOf - OrderLandMargin;
 
         private List<Unordered> StillUnordered(IEnumerable<Unordered> lords, ISet<string> answered, double hours) =>
-            lords.Where(l => !answered.Contains(l.Id) && !(_orderedAt.TryGetValue(l.Id, out double h) && !double.IsNaN(hours) && hours - h < OrderGraceHours)).ToList();
+            lords.Where(l => !answered.Contains(l.Id) && !OrderedSince(l, _orderedWall)
+                             && !(_orderedAt.TryGetValue(l.Id, out double h) && !double.IsNaN(hours) && hours - h < OrderGraceHours)).ToList();
 
-        /// <summary>
-        /// The war room's standing order for lords with none: defend the nearest castle or town of the realm; for a weak lord (under 300 men) the nearest one well back
-        /// from any threat, if not much farther. Lords not in the view (not in the field) are left out.
-        /// </summary>
-        internal static JsonArray StandingOrders(IEnumerable<Unordered> lords, JsonObject view)
-        {
-            var orders = new JsonArray();
-            var own = (view?["own"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().ToList();
-            var holds = (view?["holdings"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
-                .Where(h => (string)h["kind"] == "castle" || (string)h["kind"] == "town").ToList();
-            if (holds.Count == 0) return orders;
-            double Z(JsonNode n) { double v = Num(n); return double.IsNaN(v) ? 0 : v; }
-            bool Calm(JsonObject h, double far, double many) => Z(h["threat_men"]) <= 0 || Z(h["threat_distance"]) >= far || Z(h["threat_men"]) < many;
-            foreach (Unordered l in lords)
-            {
-                JsonObject me = own.FirstOrDefault(o => string.Equals((string)o["lord"], l.Id, StringComparison.OrdinalIgnoreCase) || string.Equals((string)o["id"], l.Id, StringComparison.OrdinalIgnoreCase));
-                if (me == null) continue;
-                double x = Z(me["x"]), y = Z(me["y"]);
-                double D(JsonObject h) => Math.Sqrt((Z(h["x"]) - x) * (Z(h["x"]) - x) + (Z(h["y"]) - y) * (Z(h["y"]) - y));
-                var near = holds.OrderBy(D).ToList();
-                bool weak = l.Men < WeakMen;
-                JsonObject pick = near.FirstOrDefault(h => (weak ? Calm(h, 40, 1) : Calm(h, 20, 2000)) && D(h) <= 3 * D(near[0]) + 20) ?? near[0];
-                orders.Add(new JsonObject
-                {
-                    ["lord"] = l.Id, ["do"] = "defend", ["at"] = (string)pick["id"],
-                    ["why"] = "standing order from the war room: he had no order of yours; your own order replaces it"
-                });
-            }
-            return orders;
-        }
-
-        /// <summary>Gives the standing order to these lords (their file in the orders folder), keeps the note for the agent's next message, and says who.</summary>
-        private void GiveStanding(int number, List<Unordered> lords, double hours, string when)
-        {
-            JsonArray orders = StandingOrders(lords, _lastView);
-            if (orders.Count == 0) return;
-            WriteOrders(number, new JsonObject { ["orders"] = orders }, "standing");
-            var named = new List<string>();
-            foreach (JsonObject o in orders.OfType<JsonObject>())
-            {
-                string id = (string)o["lord"];
-                if (!double.IsNaN(hours)) _standingAt[id] = hours;
-                named.Add((lords.FirstOrDefault(l => l.Id == id)?.Name ?? id) + " [" + id + "] at " + (string)o["at"]);
-            }
-            string note = "STANDING ORDERS FROM THE WAR ROOM (" + when + "): every lord must hold an order of yours, and these had none, so each now defends the nearest castle or town of yours "
-                          + "(a weak lord one well back from any threat) until you give him your own: " + string.Join("; ", named) + ".";
-            _lordsNote = _lordsNote == null ? note : _lordsNote + "\n" + note;
-            Say("Standing orders for " + orders.Count + " lord" + (orders.Count == 1 ? "" : "s") + " with no order: " + string.Join("; ", named) + ".");
-        }
-
-        /// <summary>The note on standing orders for the agent's next message, once.</summary>
-        private string TakeLordsNote()
-        {
-            string n = _lordsNote;
-            _lordsNote = null;
-            return n;
-        }
-
-        /// <summary>After a wake's answer: the lords on the no-order page that this answer did not order, nor a recent one, get the standing order at once.</summary>
-        private void StandingAfterWake(int number, JsonObject answer, double hours)
+        /// <summary>After a wake's answer: the lords on the no-order page that this answer did not order, nor a recent one, and that were not put to it in the last day, wake it.</summary>
+        private void AskAfterWake(int number, JsonObject answer, PokeMeta meta)
         {
             if (!_c.Files || !_c.EveryLordOrdered || answer == null) return;
+            double hours = meta?.Hours ?? _pokeHours;
             NoteOrdered(answer, hours);
             var left = StillUnordered(NoOrderLords(_c.ChannelDir), OrderedIn(answer), hours)
-                .Where(l => !(_standingAt.TryGetValue(l.Id, out double s) && !double.IsNaN(hours) && hours - s < OrderGraceHours)).ToList();
-            if (left.Count > 0) GiveStanding(number, left, hours, "after your answer to wake #" + number);
+                .Where(l => !(_askedAt.TryGetValue(l.Id, out double a) && !double.IsNaN(hours) && hours - a < AskAgainHours)).ToList();
+            if (left.Count > 0) AskAboutLords(number, left, meta, "wake", "after your answer to wake #" + number);
         }
 
-        /// <summary>
-        /// After a review's answer: the lords its digest listed with no order that it left so, asked for again (twice at most) in the same conversation; any still left
-        /// get the standing order.
-        /// </summary>
-        private void EnforceAfterReview(int number, JsonObject answer, PokeMeta meta, List<Unordered> atReview, string call)
+        /// <summary>After a review's answer (or a conversation's first): the lords its digest listed with no order that it left so wake it once more.</summary>
+        private void AskAfterReview(int number, JsonObject answer, PokeMeta meta, List<Unordered> atReview, string call)
         {
             if (atReview == null || answer == null) return;
             double hours = meta?.Hours ?? _pokeHours;
             NoteOrdered(answer, hours);
-            var answered = OrderedIn(answer);
-            List<Unordered> missing = StillUnordered(atReview, answered, hours);
-            for (int round = 1; round <= 2 && missing.Count > 0; round++)
+            List<Unordered> missing = StillUnordered(atReview, OrderedIn(answer), hours);
+            if (missing.Count > 0) AskAboutLords(number, missing, meta, call, "after your " + (call == "opening" ? "first answer" : "review"));
+        }
+
+        /// <summary>The message that wakes the agent about lords with no order: each one with where he is and what he does, and that the choice is its own.</summary>
+        internal static string LordsQuestion(int number, List<Unordered> lords, string when)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("LORDS WITH NO ORDER OF YOURS (" + when + "): " + lords.Count + (lords.Count == 1 ? " lord holds" : " lords hold") + " no order of yours, so the game's own AI leads "
+                          + (lords.Count == 1 ? "him" : "them") + ", and nobody else will order " + (lords.Count == 1 ? "him" : "them") + ":");
+            foreach (Unordered l in lords)
+                sb.AppendLine("- " + l.Name + " [" + l.Id + "]: " + (string.IsNullOrWhiteSpace(l.Line) ? l.Men.ToString("N0", CultureInfo.InvariantCulture) + " men" : l.Line));
+            sb.Append("Decide what becomes of each: give him an order (a group order may cover several: name them in its lords), or leave him to the game's AI. "
+                      + "Reply with ONLY one JSON object that says \"poke\": " + number + " and holds your orders for them; an answer with no orders leaves them all to the game's AI.");
+            return sb.ToString();
+        }
+
+        /// <summary>Wakes the agent about lords with no order, in the same conversation: its answer's orders are given like any other; the lords it leaves stay with the game's AI.</summary>
+        private void AskAboutLords(int number, List<Unordered> lords, PokeMeta meta, string call, string when)
+        {
+            double hours = meta?.Hours ?? _pokeHours;
+            if (!double.IsNaN(hours)) foreach (Unordered l in lords) _askedAt[l.Id] = hours;
+            string ask = LordsQuestion(number, lords, when);
+            DateTime began = DateTime.Now;
+            CallResult r = Converse(ask, call + "-lords", number, _c.ContinuousTimeoutSeconds, meta, out string folder, out bool stall);
+            JsonObject more = null;
+            string problem = r.Ok ? Extract(r.Text, number, out more) : r.Error;
+            int given = 0;
+            if (more != null)
             {
-                string ask = "EVERY LORD MUST HOLD AN ORDER OF YOURS. These " + missing.Count + " still have none, so the game's own AI leads them: "
-                             + string.Join("; ", missing.Select(l => l.Name + " [" + l.Id + "] (" + l.Men.ToString("N0", CultureInfo.InvariantCulture) + " men)"))
-                             + ". Give each of them an order now (a group order may cover several: name them in its lords). Reply with ONLY one JSON object that says \"poke\": " + number + " and holds those orders.";
-                DateTime began = DateTime.Now;
-                CallResult r = Converse(ask, call + "-lords", number, _c.ContinuousTimeoutSeconds, meta, out string folder, out bool stall);
-                JsonObject more = null;
-                string problem = r.Ok ? Extract(r.Text, number, out more) : r.Error;
-                if (more != null)
-                {
-                    more["kind"] = "council";
-                    WriteOrders(number, more, "lords" + round, folder);
-                    Remember(more, number, meta?.Date, meta);
-                    File.WriteAllText(Path.Combine(folder, "answer.json"), more.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-                    NoteOrdered(more, hours);
-                    foreach (string id in OrderedIn(more)) answered.Add(id);
-                }
-                _talk.Save();
-                LogCall("council", call + "-lords", r, number, meta?.Date, meta, folder, more, problem, false, stall, (DateTime.Now - began).TotalSeconds, ask.Length, false, "lords with no order");
-                if (more == null) break;
-                missing = StillUnordered(atReview, answered, hours);
+                more["kind"] = "council";
+                WriteOrders(number, more, "lords", folder);
+                Remember(more, number, meta?.Date, meta);
+                File.WriteAllText(Path.Combine(folder, "answer.json"), more.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                NoteOrdered(more, hours);
+                HashSet<string> named = OrderedIn(more);
+                given = lords.Count(l => named.Contains(l.Id));
             }
-            if (missing.Count > 0) GiveStanding(number, missing, hours, "after your review of " + (meta?.Date ?? "now"));
+            _talk.Save();
+            LogCall("council", call + "-lords", r, number, meta?.Date, meta, folder, more, problem, false, stall, (DateTime.Now - began).TotalSeconds, ask.Length, false, "lords with no order");
+            Say("Lords with no order put to the agent (" + when + "): " + lords.Count + "; it ordered " + given + (more == null ? " (its answer could not be read: " + problem + ")" : "")
+                + ", the rest stay with the game's own AI: " + string.Join("; ", lords.Select(l => l.Name + " [" + l.Id + "]")) + ".");
         }
 
         /// <summary>
@@ -207,7 +185,8 @@ namespace BannerlordAgents.WarRoom
             if (_c.EveryLordOrdered)
             {
                 List<Unordered> none = NoOrderLords(_c.ChannelDir);
-                sb.AppendLine("LORDS WITH NO ORDER (" + none.Count + "; lords/no-order): every lord must hold an order of yours; give each one an order in this answer (a group order may cover several)."
+                sb.AppendLine("LORDS WITH NO ORDER (" + none.Count + "; lords/no-order): the game's own AI leads them until you order them, and nobody else will: give each one an order in this answer "
+                              + "(a group order may cover several), unless you mean to leave him to the game's AI."
                               + (none.Count == 0 ? " Every lord holds one now." : ""));
                 foreach (Unordered l in none) sb.AppendLine("- " + l.Name + " [" + l.Id + "]: " + l.Men.ToString("N0", CultureInfo.InvariantCulture) + " men");
             }
