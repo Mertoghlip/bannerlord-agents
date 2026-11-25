@@ -3131,7 +3131,7 @@ avmesh.bin`):
 - **`scripts/autopilot.ps1`:** the memory figure is read as a decimal, and a reading over a million is taken as bytes.
 - **Installed** with the game closed (11:08): module 0.24.6 (`BannerlordAgents.dll` SHA-256 5043a3d979788777...), war room 0.20.7. Smoke test, war room self-test and dashboard self-test all passed; RefCheck: 976 references, missing 0.
 
-### 11:57 (Nov 25) · The control run at the game's fast-forward: autopilot -Speed, overnight -ControlSpeed and -Resume · commit (this one)
+### 11:57 (Nov 25) · The control run at the game's fast-forward: autopilot -Speed, overnight -ControlSpeed and -Resume · commit 3ea2c4d
 - **Why:** I asked for the control (every realm on the game's AI) at the fastest speed possible. It ran on play with map_speed 1, about 1.6 real minutes an in-game day.
 - **`scripts/autopilot.ps1 -Speed play|fast`:** the clock the keepers hold for a run; after each wait starts the speed is set outright (the wait can start before the game has read the plan's speed, which left the first try on play).
 - **`scripts/overnight.ps1`:** `-ControlSpeed` (fast by default) for C0, and `-Resume` to carry the first arm's running run on from its own save.
