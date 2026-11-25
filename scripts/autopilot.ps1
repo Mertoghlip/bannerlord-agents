@@ -50,6 +50,8 @@ param(
     [string]$ReproRealm = '',
     [string]$From = 'TEST START DGG MERGE',
     [string]$Start = 'TEST START DGG MERGE PLAYERLESS',
+    # Nov 25: the clock a run is kept at: play (normal) or fast (the game's fast-forward), e.g. for the control with no agents
+    [ValidateSet('play', 'fast')][string]$Speed = 'play',
     [int]$MemoryRestartMb = 20000,
     [int]$SaveHours = 24,
     [int]$DryMinutes = 4,
@@ -549,8 +551,10 @@ function Begin-Run([string]$load, [bool]$fresh) {
         if ($c.answer -notmatch ('would be ' + $Arm + '\b')) { throw "The run would not be ${Arm}: $(($c.answer -split "`n")[0])" }
     }
     elseif (-not $run -or (Prop $run 'status') -ne 'running') { throw "Loading $load did not carry the run on." }
-    Write-Plan $true ("TEST AUTO " + $Arm) "run $Arm"
+    Write-Plan $true ("TEST AUTO " + $Arm) "run $Arm" $Speed
     [void](Must 'wait' 60)
+    # Nov 25: the wait can start before the game has read the plan's speed, so a speed other than play is set outright
+    if ($Speed -ne 'play') { [void](Must ('speed ' + $Speed) 60) }
 }
 
 function Mind-Run {

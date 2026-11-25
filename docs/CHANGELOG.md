@@ -3130,3 +3130,9 @@ avmesh.bin`):
 - **Why:** the control run (20261125-0933-C0) stopped at day 62 at 11:04: the autopilot read one memory figure of 13,440,071,089 (bytes, not MB) into a 32-bit number and threw. The game was saved (TEST AUTO C0) and closed through the command box. With the game closed I installed the 11:20 entry's versions. Of them only the ruling clan's upkeep matters to a run with every agent off, and it changes the kingdom's money under the game's AI too, so the control has to have it from day 1 to match the next agent runs: it starts again from TEST START DGG MERGE PLAYERLESS (the day-62 run is kept, marked abandoned when the new one is readied).
 - **`scripts/autopilot.ps1`:** the memory figure is read as a decimal, and a reading over a million is taken as bytes.
 - **Installed** with the game closed (11:08): module 0.24.6 (`BannerlordAgents.dll` SHA-256 5043a3d979788777...), war room 0.20.7. Smoke test, war room self-test and dashboard self-test all passed; RefCheck: 976 references, missing 0.
+
+### 11:57 (Nov 25) · The control run at the game's fast-forward: autopilot -Speed, overnight -ControlSpeed and -Resume · commit (this one)
+- **Why:** I asked for the control (every realm on the game's AI) at the fastest speed possible. It ran on play with map_speed 1, about 1.6 real minutes an in-game day.
+- **`scripts/autopilot.ps1 -Speed play|fast`:** the clock the keepers hold for a run; after each wait starts the speed is set outright (the wait can start before the game has read the plan's speed, which left the first try on play).
+- **`scripts/overnight.ps1`:** `-ControlSpeed` (fast by default) for C0, and `-Resume` to carry the first arm's running run on from its own save.
+- **The run:** 20261125-1120-C0 stopped by stop.txt at day 20 and carried on at fast-forward (map_speed 1): about 31 real seconds an in-game day.

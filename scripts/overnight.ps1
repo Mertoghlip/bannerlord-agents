@@ -20,7 +20,11 @@
 param(
     [string[]]$Arms = @('C2', 'C1', 'C0'),
     [int]$Days = 200,
-    [string]$ControlMapSpeed = '1'
+    [string]$ControlMapSpeed = '1',
+    # Nov 25: the control's clock: fast (the game's fast-forward, on top of map_speed) or play
+    [ValidateSet('play', 'fast')][string]$ControlSpeed = 'fast',
+    # Nov 25: carry the first arm's running run on from its own save (TEST AUTO <arm>) instead of starting it anew
+    [switch]$Resume
 )
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -74,8 +78,11 @@ try {
         if ($rivalsOff) { Stop-WarRoom $Orcs; Stop-WarRoom $DolGuldur }
         if ($arm -eq 'C0') { Stop-WarRoom $Kingdom }
         Stop-WarRoom $Lieutenant
-        Say "  autopilot.ps1 -Arm $arm$(if ($rivalsOff) { ' -RivalsOff' }) starts"
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'autopilot.ps1') @armArgs | ForEach-Object { Say "  | $_" }
+        Say "  autopilot.ps1 -Arm $arm$(if ($rivalsOff) { ' -RivalsOff' })$(if ($arm -eq 'C0') { ' -Speed ' + $ControlSpeed })$(if ($Resume -and $arm -eq $Arms[0]) { ' -Resume' }) starts"
+        $apArgs = @($armArgs)
+        if ($arm -eq 'C0') { $apArgs += @('-Speed', $ControlSpeed) }
+        if ($Resume -and $arm -eq $Arms[0]) { $apArgs += '-Resume' }
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'autopilot.ps1') @apArgs | ForEach-Object { Say "  | $_" }
         $code = $LASTEXITCODE
         Say "=== $arm ended: autopilot code $code ($(switch ($code) { 0 { 'done' } 2 { 'could not set up' } 3 { 'held: a crash or something it will not decide alone' } 4 { 'stopped by stop.txt' } default { 'unknown' } }))"
         if ($code -ne 0) { Say 'The chain stops here.'; break }
