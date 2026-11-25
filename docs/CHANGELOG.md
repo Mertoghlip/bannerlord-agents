@@ -3147,7 +3147,7 @@ avmesh.bin`):
 - **Self-test:** a strike of 50 group orders of 36 lords each (36,120 characters) is not stopped as a runaway. `WarRoom selftest`: all checks passed.
 - **How, mid-run:** the game's clock held through the autopilot's command box (pause 14:20:48, resume 14:23:50, Autumn 18, 1087, 12:00, day 18), the kingdom's war room stopped, rebuilt alone, self-tested and started again (`WarRoom.exe run --dir kingdom-war-council`; the rivals' war rooms stay off in C2). No game file changed. Imnagath was still holding when the clock was held.
 
-### 14:37 (Nov 25) · War room 0.20.9: no length limit on any answer (mid-run, the clock held)
+### 14:37 (Nov 25) · War room 0.20.9: no length limit on any answer (mid-run, the clock held) · commit 5b3b1a1
 - **Why:** every length limit so far has cost real answers (the lieutenant's audit at 48,000 on Nov 6; the kingdom's strike at Imnagath at 16,000 on Nov 25, four times). I want the limit gone, not raised.
 - **`Claude.cs`:** `RunawayChars`, `RunawayCharsWithTools`, `RunawayCharsLieutenant` and `RunawayLimit` removed; `RunawayReason` stops only an answer that types tool calls as text (`<invoke `, `<function_calls>`). A call that hangs is still caught by the stall rule.
 - **Self-test:** a strike of 500 group orders of 36 lords each (361,421 characters), the lieutenant's long answer, a long handover, an answer writing 400 tools and a 200,000-character proposal are not stopped; typed tool calls still are. `WarRoom selftest`: all checks passed.
