@@ -86,7 +86,8 @@ namespace BannerlordAgents.WarRoom
         /// The handover's moments and sizes: as the player's own battle begins (the clock stands still), once the conversation holds at least compact_at_tokens; as the game
         /// closes, at least compact_at_close_tokens; and at any wake past compact_hard_tokens, so a conversation never reaches the window's end.
         /// </summary>
-        public long CompactAtTokens = 500_000, CompactAtCloseTokens = 500_000, CompactHardTokens = 850_000;
+        // war room 0.20.7 (Nov 25): handovers earlier (run 20261125-0020-C2 carried one conversation of about 670,000 tokens for 177 days, its answers emptier and emptier)
+        public long CompactAtTokens = 250_000, CompactAtCloseTokens = 250_000, CompactHardTokens = 300_000;
         /// <summary>The wakes a day the agent is told it should keep to (told, not enforced).</summary>
         public int WakeBudget = 12;
         /// <summary>
@@ -105,6 +106,10 @@ namespace BannerlordAgents.WarRoom
         /// picks out as easy prey), so an agent on facts-only instructions finds its targets itself.
         /// </summary>
         public bool ChancesPage = true;
+        /// <summary>War room 0.20.7 (Nov 25): every lord must hold an order of the agent's (Room.Lords.cs): its reviews list the lords with none and ask until each has one; the war room gives any left its standing order.</summary>
+        public bool EveryLordOrdered = true;
+        /// <summary>War room 0.20.7 (Nov 25): a strategy review sits at least this often, in in-game hours, whatever review_in says (0: only when the agent sets one).</summary>
+        public double ReviewEveryHours = 24;
         /// <summary>A files agent's instructions: each "## " section of it takes the place of the same section, over warroom-continuous.md.</summary>
         public string FilesTemplate => Path.Combine(AgentDir, "warroom-files.md");
 
@@ -176,6 +181,8 @@ namespace BannerlordAgents.WarRoom
                     case "context": if (v == "report" || v == "files") c.Context = v; break;
                     case "human_player": c.HumanPlayer = !(v == "none" || v == "off" || v == "no" || v == "false"); break;
                     case "chances_page": c.ChancesPage = !(v == "none" || v == "off" || v == "no" || v == "false"); break;
+                    case "every_lord_ordered": c.EveryLordOrdered = !(v == "none" || v == "off" || v == "no" || v == "false"); break;
+                    case "review_every_hours": if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double reh) && reh >= 0) c.ReviewEveryHours = reh; break;
                     case "story_every": if (int.TryParse(v, out int se) && se > 0) c.StoryEvery = se; break;
                     case "story_words": if (int.TryParse(v, out int sw) && sw >= 100) c.StoryWords = sw; break;
                     case "story_model": c.StoryModel = v; break;
@@ -242,6 +249,9 @@ namespace BannerlordAgents.WarRoom
             sb.AppendLine("compact_hard_tokens = " + CompactHardTokens.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("# continuous only: the wakes a day the agent is told to keep to (told, not enforced); its strategy reviews follow the council settings below");
             sb.AppendLine("wake_budget = " + WakeBudget.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine("# continuous only (0.20.7): every lord must hold an order of the agent's (on/off), and a strategy review sits at least every review_every_hours in-game hours (0: only when the agent sets one)");
+            sb.AppendLine("every_lord_ordered = " + (EveryLordOrdered ? "on" : "off"));
+            sb.AppendLine("review_every_hours = " + ReviewEveryHours.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("# the chronicler rewrites the story so far after this many new chronicle lines, in a quiet moment, in at most story_words words");
             sb.AppendLine("story_every = " + StoryEvery.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("story_words = " + StoryWords.ToString(CultureInfo.InvariantCulture));

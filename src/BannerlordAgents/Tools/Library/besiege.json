@@ -20,12 +20,14 @@
     "withdraw_on_relief": [0, 0, 10, "lift the siege and march into the nearest of your castles or towns once the relief that could reach the camp (by relief_hours below) reaches this many times your camp's strength there (0: never); weighed before storm_on_relief. Not while a storm or another battle is being fought: nobody leaves a battle once in it, so the bar waits for it to end"],
     "relief_hours": [0, 0, 96, "the relief counted for those two bars: 0, every enemy lord and army near it or heading for it that could reach the camp by the middle or the end of the battle the first of them would bring (its march and the battle's own hours, by the game's rules), with the garrison and the lords inside, who come out to join a relief once they and it together are more than one and a half times your camp (the game's rule); a number, the relief alone that would get there within that many hours instead"]
   },
-  "init": { "relief_told": "0", "storm_now": "0", "refuge": "none", "held": "0" },
+  "init": { "relief_told": "0", "storm_now": "0", "refuge": "none", "held": "0", "warned": "0" },
   "start": "march",
   "states": {
     "march": { "about": "marching on {at}", "do": "near at",
       "when": [
         { "if": "not hostile(at)", "go": "over", "poke": "{at} is no longer an enemy holding." },
+        { "if": "warned == 0 and withdraw_on_relief <= 0 and relief_coming(at, relief_radius) >= max(1, max(camp_strength(at), mates_strength(at, 6)))", "go": "march", "set": { "warned": "1" },
+          "poke": "Warning: {me}'s siege of {at} has withdraw_on_relief 0, so the camp never lifts, and a relief of {relief_coming(at, relief_radius)} is already coming against your side's {max(camp_strength(at), mates_strength(at, 6))}. Give withdraw_on_relief (with relief_hours) by adjust if it should pull back." },
         { "if": "within(at, 6)", "go": "muster" } ] },
     "muster": { "about": "waiting near {at} for {lords_count()} lords ({lords_arrived()} arrived)", "do": "hold",
       "when": [

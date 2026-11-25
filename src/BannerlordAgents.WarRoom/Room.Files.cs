@@ -78,6 +78,7 @@ namespace BannerlordAgents.WarRoom
             string loadId = meta?.LoadId ?? _mem.LoadId;
             double bookHours = book?["hours"] is JsonValue bhv && bhv.TryGetValue(out double bh0) ? bh0 : meta?.Hours ?? double.NaN;
             JsonObject view = ViewFor(campaign, realm, loadId, bookHours, out string stale);
+            if (view != null) _lastView = view;
             var x = new ShelfInput
             {
                 Book = book, View = view, ViewStale = stale,

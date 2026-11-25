@@ -231,6 +231,18 @@ Nov 16: my lieutenant, in a conversation begun on Nov 13, told me no order of it
 - `WarRoom.exe changes <old system file> <new system file>` prints what a conversation knowing the first would be told against the second.
 - The war room self-test checks the line-by-line note (changed, new, dropped; never the unchanged lines or the own tools) and that it is told once, again after a call that never reached the conversation, and not from a lost text.
 
+### Every lord under an order, a review every day (since war room 0.20.7)
+
+After run 20261125-0020-C2 (reports/C2 run of Nov 25 collapse root causes.md: the agent ordered at most a quarter of its lords, 94% of the 392 captures were of lords the game's AI was leading, 450 of its 624 wakes were only news of captures, and it set its reviews four to seven days apart), my rules are: every lord must be under an order of the agent's, it reviews its lords every day to take back control of each, it holds a strategy review every day, its review brings the money, and it always asks whether it can gather enough to beat each enemy army where it stands (`Room.Lords.cs`).
+
+- **A review every day:** `ReviewDue` sits one once `review_every_hours` (24) have passed since the last, whatever `review_in` said; `review_in` is kept to 1 to 24, and a review that sets none has the next a day later.
+- **The digest:** a files agent's review, and the first answer of a conversation, open with a digest from the files just built: realm/in-sum, the first lines of realm/money, every lord on lords/no-order, the newest lines of lords/order-results, realm/captives, and **the question** (`ArmyQuestion`): each enemy army in view (two parties or more) with the strength the realm's lords and armies could gather where it stands within 24, 48 and 72 hours, each at its own pace in a straight line.
+- **Enforced orders:** after a review's answer, the lords its digest listed with no order that it left so are asked for again in the same conversation (twice at most, each logged as `review-lords`); any still left get the war room's **standing order** (`StandingOrders`: defend the nearest castle or town, a lord under 300 men the nearest one well back from any threat), written to the orders folder as `poke-N-standing-*.json`, and the agent is told at its next message. After a wake's answer, a lord newly on lords/no-order (freed, his order ended, new) gets the standing order at once. A lord the agent ordered in the last 12 in-game hours is left alone, since his order may still be on its way.
+- **Captures do not wake:** the wake rule `lord_taken` rides along (lane digest).
+- **Earlier handovers:** `compact_at_tokens` and `compact_at_close_tokens` 250,000, `compact_hard_tokens` 300,000 (were 500,000 and 850,000).
+- **Settings** (warroom.txt): `every_lord_ordered` (on), `review_every_hours` (24).
+- **The war room's questions:** `muster` (who could be at a place by when, and the strength gathered within 12, 24, 48 and 72 hours), and `battle_odds` with `how = strike` (the named lords, gathered, striking a siege camp at one of the realm's places in the open, the garrison joining by the game's 1.5 rule). `battle_odds` now counts each force once: a party named on either side is never a joiner too (run 20261125-0020-C2: Lorgath's army, named as the besieger and seen marching to the place, was counted twice, "22,640 of the besiegers' 11,478 still standing"), its totals count the joiners, and a forecast with more men left than came says not to rely on it.
+
 ## Guards
 
 - **The answer ends the call,** not Claude Code's exit: Claude Code sometimes lingers after answering, so it is closed after 2 s.

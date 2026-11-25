@@ -362,6 +362,7 @@ namespace BannerlordAgents.WarRoom
             var sb = new StringBuilder();
             double wakeHours = meta?.Hours ?? _pokeHours;
             int today = _talk.WakesOn(wakeHours);
+            List<Unordered> openingUnordered = null;
             if (_c.Files)
             {
                 // a files agent (war room 0.20): its files built from this wake's book, and its message only what woke it; its shelf counts this wake among today's
@@ -369,9 +370,11 @@ namespace BannerlordAgents.WarRoom
                 BuildShelf(meta, BookFor(meta, number) ?? NewestBook(meta, number), pokeText, why: why);
                 _wakesTodayForShelf = -1;
                 if (opening) sb.Append(FilesOpening());
-                string fnotes = Join(carried, InstructionsNote());
+                string fnotes = Join(Join(carried, TakeLordsNote()), InstructionsNote());
                 if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes.TrimEnd()).AppendLine();
                 sb.Append(FilesWake(number, why));
+                // war room 0.20.7: a conversation's first answer is a review too: its digest, and its lords with no order enforced after it
+                if (opening) { openingUnordered = _c.EveryLordOrdered ? NoOrderLords(_c.ChannelDir) : null; sb.AppendLine().Append(ReviewDigest()); }
             }
             else
             {
@@ -406,6 +409,12 @@ namespace BannerlordAgents.WarRoom
                 changed = Remember(answer, number, when, meta);
                 AfterContinuous(answer, meta?.Hours ?? _pokeHours, opening);
                 File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                // war room 0.20.7: every lord under an order: after the first answer as after a review, after a wake the standing order for lords newly without one
+                if (_c.Files)
+                {
+                    if (opening) EnforceAfterReview(number, answer, meta, openingUnordered, "opening");
+                    else StandingAfterWake(number, answer, meta?.Hours ?? _pokeHours);
+                }
             }
             // a big event calls a strategy review at once (council_after; not the first look, whose report is the whole realm already): kept in 0.18.2's agent-set reviews
             if (!firstLook)
@@ -447,6 +456,8 @@ namespace BannerlordAgents.WarRoom
             double? next = null;
             foreach (string k in new[] { "review_in", "council_in" })
                 if (answer[k] is JsonValue v && v.TryGetValue(out double h)) { next = Math.Max(ReviewInMin, Math.Min(ReviewInMax, h)); break; }
+            // war room 0.20.7: never further than a day ahead, and a review that sets none has the next a day after it
+            if (_c.ReviewEveryHours > 0) next = next != null ? Math.Min(next.Value, _c.ReviewEveryHours) : review ? _c.ReviewEveryHours : (double?)null;
             if (double.IsNaN(hours)) return;
             if (review)
             {
@@ -1061,7 +1072,10 @@ namespace BannerlordAgents.WarRoom
             if (!_c.Council || _talk == null || !_talk.Started || double.IsNaN(nowHours)) return null;
             if ((_talk.Context ?? "report") != ContextMode) return null;   // a conversation of the other kind ends at the next wake (war room 0.20)
             if (_reviewWanted != null) return _reviewWanted;
-            return !double.IsNaN(_talk.NextReviewHours) && nowHours >= _talk.NextReviewHours - 1e-6 ? "the hour you set for it has come" : null;
+            if (!double.IsNaN(_talk.NextReviewHours) && nowHours >= _talk.NextReviewHours - 1e-6) return "the hour you set for it has come";
+            // war room 0.20.7: a review every day at least (run 20261125-0020-C2: the agent set them four to seven days apart and stopped minding its realm)
+            if (_c.ReviewEveryHours > 0 && !double.IsNaN(_talk.LastReviewHours) && nowHours - _talk.LastReviewHours >= _c.ReviewEveryHours - 1e-6) return "a day has passed since your last strategy review (one sits every day)";
+            return null;
         }
 
         private void ReviewIfDue()
@@ -1098,9 +1112,12 @@ namespace BannerlordAgents.WarRoom
             {
                 // a files agent's review (war room 0.20): its files built from the newest hour, and its message only that it sits and why
                 BuildShelf(meta, FreshNow() ?? NewestBook(meta, number), null, situation, briefing, fate: fate);
-                string fnotes = InstructionsNote();
+                string fnotes = Join(TakeLordsNote(), InstructionsNote());
                 if (!string.IsNullOrEmpty(fnotes)) sb.AppendLine(fnotes).AppendLine();
                 sb.Append(FilesReview(number, why));
+                // war room 0.20.7: the review's digest (the money, the lords with no order, the question), and its lords with no order enforced after its answer
+                _reviewUnordered = _c.EveryLordOrdered ? NoOrderLords(_c.ChannelDir) : null;
+                sb.AppendLine().Append(ReviewDigest());
                 return ReviewCall(sb.ToString().Replace("\r\n", "\n"), why, meta, number, mark, began, briefing.Length, situation.Length);
             }
             string notes = Join(OwnToolsNote(), InstructionsNote());
@@ -1146,6 +1163,9 @@ namespace BannerlordAgents.WarRoom
                 AfterContinuous(answer, meta.Hours, true);
                 File.WriteAllText(Path.Combine(folder, "answer.json"), answer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
+            List<Unordered> unordered = _reviewUnordered;
+            _reviewUnordered = null;
+            if (answer != null && unordered != null) EnforceAfterReview(number, answer, meta, unordered, "review");
             _talk.Save();
             _mem.Save();
             _talk.Checkpoint(_lastUuid, meta.Hours, meta.Date, meta.LoadId ?? _mem.LoadId);

@@ -240,6 +240,8 @@ namespace BannerlordAgents
         public static void OnDailyClan(Clan clan)
         {
             if (clan == null || clan.IsEliminated || !Bridge.IsSeat(clan.Kingdom)) return;
+            // 0.24.6: the ruling clan of a playerless run gets the game's daily clan upkeep (its parties' wage limits by its gold, ...), before the agent's caps go back on
+            RulingClanUpkeep.Daily(clan);
             Daily[clan] = (int)Math.Round(Campaign.Current.Models.ClanFinanceModel.CalculateClanGoldChange(clan, false, false, false).ResultNumber);
             Wages.OnDailyClan(clan);
         }

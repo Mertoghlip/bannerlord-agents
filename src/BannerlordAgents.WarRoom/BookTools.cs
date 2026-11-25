@@ -50,7 +50,7 @@ namespace BannerlordAgents.WarRoom
         {
             if (!BookOnly)
             {
-                yield return ToolName; yield return OddsName; yield return RoadsName; yield return ChaseName; yield return EngageName;
+                yield return ToolName; yield return OddsName; yield return RoadsName; yield return ChaseName; yield return EngageName; yield return MusterName;
                 if (!NoCheck) yield return CheckName;
             }
             if (BookPath != null) { yield return LookName; if (Shelf == null) yield return ListName; yield return ChronicleName; }
@@ -63,7 +63,7 @@ namespace BannerlordAgents.WarRoom
             var list = new JsonArray();
             if (!BookOnly)
             {
-                list.Add(Definition()); list.Add(OddsDefinition()); list.Add(RoadsDefinition()); list.Add(ChaseDefinition()); list.Add(EngageDefinition());
+                list.Add(Definition()); list.Add(OddsDefinition()); list.Add(RoadsDefinition()); list.Add(ChaseDefinition()); list.Add(EngageDefinition()); list.Add(MusterDefinition());
                 if (!NoCheck) list.Add(CheckDefinition());
             }
             if (BookPath != null) { bool fresh = Refresh != null; list.Add(LookDefinition(fresh)); if (Shelf == null) list.Add(ListDefinition(fresh)); list.Add(ChronicleDefinition(fresh)); }

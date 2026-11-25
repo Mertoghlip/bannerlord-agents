@@ -91,8 +91,8 @@ namespace SmokeTest
                 return tr.Lane;
             }
             var follows = new HashSet<string> { "p_naglur" };
-            Check(Self("besieged", "Orc Keep is besieged by Thalion.") == WakeRules.Now && Self("captured", "Bolg was taken prisoner.") == WakeRules.Now && Self("vote_closing", "The vote closes.") == WakeRules.Now
-                  && Self("letter", "A letter.", urgent: true) == WakeRules.Now && Self("first_look", "First look.") == WakeRules.Now, "the locked wakes still wake a self-waking agent");
+            Check(Self("besieged", "Orc Keep is besieged by Thalion.") == WakeRules.Now && Self("captured", "Bolg was taken prisoner.") == WakeRules.Digest && Self("vote_closing", "The vote closes.") == WakeRules.Now
+                  && Self("letter", "A letter.", urgent: true) == WakeRules.Now && Self("first_look", "First look.") == WakeRules.Now, "the locked wakes still wake a self-waking agent, and a lord taken rides along (0.24.6)");
             Check(Self("war", "Gondor declared war on Misty Mountain Orcs.") == WakeRules.Now && Self("offer", "Gondor offers peace.") == WakeRules.Now && Self("watch", "Your watch.") == WakeRules.Now && Self("check_in", "Check-in.") == WakeRules.Now,
                   "and so do war, peace, offers, its watches and their check-ins");
             Check(Self("clan_free", "Vargrim (Misty Mountain Orcs) has lost its realm and has no lands.") == WakeRules.Now, "and (0.24) a clan of its peoples that lost its realm, which the game ends in 28 days");

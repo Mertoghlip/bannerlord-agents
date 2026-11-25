@@ -165,7 +165,7 @@ namespace BannerlordAgents.WarRoom
                         if (fresh != null) { BookPath = fresh; _bookRead = false; }
                     }
                     string text = name == ToolName ? Ask(args) : name == OddsName ? Safe(() => Odds(args)) : name == RoadsName ? Safe(() => RoadsIn(args))
-                                  : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args))
+                                  : name == ChaseName ? Safe(() => Chase(args)) : name == EngageName ? Safe(() => Engagement(args)) : name == MusterName ? Safe(() => Muster(args))
                                   : name == CheckName && !NoCheck ? Safe(() => CheckTool(args))
                                   : name == LookName && BookPath != null ? LookUp(args) : name == ListName && BookPath != null ? List(args) : name == ChronicleName && BookPath != null ? Chronicle(args)
                                   : name == PastTalk.ToolName && PastMem != null ? PastAnswer(args)

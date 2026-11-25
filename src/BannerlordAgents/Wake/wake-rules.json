@@ -25,7 +25,7 @@
   "rules": [
     { "name": "first_look", "kinds": ["first_look"], "lane": "now", "locked": true },
     { "name": "letter_marked", "kinds": ["letter"], "if": "urgent", "lane": "now", "locked": true },
-    { "name": "lord_taken", "kinds": ["captured"], "lane": "now", "locked": true },
+    { "name": "lord_taken", "kinds": ["captured"], "lane": "digest", "locked": true },
     { "name": "holding_attacked", "kinds": ["besieged", "siege_started", "holding_changed"], "lane": "now", "locked": true },
     { "name": "vote_closing", "kinds": ["vote_closing"], "lane": "now", "locked": true },
 

@@ -259,9 +259,10 @@ namespace BannerlordAgents.WarRoom
                   + c1?.Replace("\n", " | ") + " || " + c2?.Replace("\n", " | "));
             // 0.7.4: the battle odds and the roads in, served beside the way
             string Ask(string name, string args) => (string)tool.Handle((JsonObject)JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}"))?["result"]?["content"]?[0]?["text"];
-            Check((list?["result"]?["tools"] as JsonArray)?.Count == 6 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
-                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch" && (string)list?["result"]?["tools"]?[4]?["name"] == "engagement" && (string)list?["result"]?["tools"]?[5]?["name"] == "check_tool",
-                  "the server lists the battle odds, the roads in, the chase, the engagement and (0.13) checking a tool beside the way");
+            Check((list?["result"]?["tools"] as JsonArray)?.Count == 7 && (string)list?["result"]?["tools"]?[1]?["name"] == "battle_odds" && (string)list?["result"]?["tools"]?[2]?["name"] == "roads_in"
+                  && (string)list?["result"]?["tools"]?[3]?["name"] == "can_catch" && (string)list?["result"]?["tools"]?[4]?["name"] == "engagement" && (string)list?["result"]?["tools"]?[5]?["name"] == "muster"
+                  && (string)list?["result"]?["tools"]?[6]?["name"] == "check_tool",
+                  "the server lists the battle odds, the roads in, the chase, the engagement, (0.20.7) the muster and (0.13) checking a tool beside the way");
             // 0.12.3: the engagement: when Bolg gets to Hirgon, the fight, and Aragorn's army (50 off at the pace its trail shows) too late to join it
             string e1 = Ask("engagement", "{\"ours\":[\"lord_bolg\"],\"target\":\"lord_sc\"}");
             Check(e1 != null && e1.StartsWith("ENGAGEMENT: Bolg [lord_bolg] against Hirgon [lord_sc]") && System.Text.RegularExpressions.Regex.IsMatch(e1, @"Bolg in about \d+ hours")
@@ -309,12 +310,42 @@ namespace BannerlordAgents.WarRoom
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"),
                 "{\"hours\":1000,\"map\":\"test\",\"own\":[{\"id\":\"p_bolg\",\"lord\":\"lord_bolg\",\"name\":\"Bolg\",\"x\":20,\"y\":29,\"men\":300,\"strength\":400,\"morale\":60,\"tactics\":50,\"pace\":4},"
                 + "{\"id\":\"p_gor\",\"lord\":\"lord_gor\",\"name\":\"Gorbag\",\"x\":40,\"y\":29,\"men\":800,\"strength\":1200,\"morale\":60,\"tactics\":50,\"pace\":4}],"
-                + "\"seen\":[{\"id\":\"p_sc\",\"lord\":\"lord_sc\",\"name\":\"Hirgon\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":3000,\"strength\":6000,\"x\":22,\"y\":29,\"doing\":\"besieging Orc Keep\",\"seen_hours\":1000}],"
+                + "\"seen\":[{\"id\":\"p_sc\",\"lord\":\"lord_sc\",\"name\":\"Hirgon\",\"relation\":\"enemy\",\"faction_name\":\"Arnor\",\"men\":3000,\"strength\":6000,\"x\":22,\"y\":29,\"doing\":\"besieging Orc Keep\",\"seen_hours\":1000,\"toward\":\"castle_k\",\"arrives_at\":1000}],"
                 + "\"holdings\":[{\"id\":\"castle_k\",\"name\":\"Orc Keep\",\"kind\":\"castle\",\"garrison\":150,\"militia\":50,\"defence\":300,\"wall_level\":2,\"x\":20,\"y\":29}]}");
             string own1 = Ask("battle_odds", "{\"ours\":[\"lord_bolg\",\"lord_gor\"],\"theirs\":[\"lord_sc\"],\"at\":\"castle_k\"}");
             Check(own1 != null && own1.Contains("your lords inside: Bolg [lord_bolg]") && own1.Contains("Outside the walls: Gorbag [lord_gor]") && own1.Contains("about 5 hours")
                   && own1.Contains("the storm is a battle outside the walls") && own1.Contains("Only lords already inside defend behind the walls"),
                   "the battle odds of a storm of your place: lords inside defend behind the walls, a lord outside comes as a relief and turns the storm into a battle outside the walls: " + own1?.Replace("\n", " | "));
+            // war room 0.20.7: the besieger named in theirs, seen marching to the place, is counted once (run 20261125-0020-C2: "22,640 of the besiegers' 11,478 still standing")
+            Check(own1 != null && own1.Contains("of the besiegers' 3,000") && !own1.Contains("Also marching there") && !own1.Contains("do not add up") && own1.Contains("ask again with how = strike"),
+                  "the battle odds count a besieger named in theirs once, though it is also seen marching to the place, and point to the strike: " + own1?.Replace("\n", " | "));
+            string st1 = Ask("battle_odds", "{\"ours\":[\"lord_gor\"],\"theirs\":[\"lord_sc\"],\"at\":\"castle_k\",\"how\":\"strike\"}");
+            Check(st1 != null && st1.StartsWith("BATTLE ODDS: Gorbag [lord_gor] strike the siege camp of Hirgon [lord_sc] at your Orc Keep [castle_k], all together, in the open")
+                  && st1.Contains("stay inside: you and they are not more than 1.5 times the camp") && st1.Contains("Run ahead: the besiegers win") && st1.Contains("gather them first"),
+                  "the strike: your lords gathered against the siege camp in the open, the garrison staying inside under the 1.5 rule: " + st1?.Replace("\n", " | "));
+            string mu1 = Ask("muster", "{\"at\":\"castle_k\"}");
+            Check(mu1 != null && mu1.StartsWith("MUSTER AT Orc Keep [castle_k]") && mu1.Contains("Bolg [lord_bolg]: 300 men, strength 400, about 0 hours") && mu1.Contains("Gorbag [lord_gor]: 800 men, strength 1,200, about 5 hours")
+                  && mu1.Contains("Gathered within 12 hours: 2 lords and armies, 1,100 men, strength 1,600"),
+                  "the muster: who of the realm's lords could be at the place by when, and the strength gathered by each hour: " + mu1?.Replace("\n", " | "));
+            // war room 0.20.7: every lord under an order: the lords with no order read from the files, the lords an answer orders, the standing order, and the review's question
+            string lordsDir = Path.Combine(root, "every-lord", Shelf.DirName, "lords");
+            Directory.CreateDirectory(lordsDir);
+            File.WriteAllText(Path.Combine(lordsDir, "no-order.md"), "# Lords with no order\nAs of Summer 1.\n\n- Frar [lord_frar] (frar): 271 men, strength 556; 7.9 from Angloss\n- Chinua Hûz [lord_6_23_8] (chinua-huz): 1,260 men, strength 2,631; going to Rochthir\n");
+            var noOrd = Room.NoOrderLords(Path.Combine(root, "every-lord"));
+            var ordered = Room.OrderedIn((JsonObject)JsonNode.Parse("{\"orders\":[{\"lord\":\"lord_a\",\"do\":\"defend\",\"at\":\"castle_k\",\"lords\":[\"lord_b\"]},{\"lord\":\"lord_c\",\"do\":\"supply\",\"at\":\"castle_k\",\"then\":{\"do\":\"defend\",\"lords\":[\"lord_d\"]}}]}"));
+            var standView = (JsonObject)JsonNode.Parse("{\"own\":[{\"lord\":\"lord_frar\",\"x\":10,\"y\":10,\"men\":271,\"strength\":556},{\"lord\":\"lord_6_23_8\",\"x\":10,\"y\":10,\"men\":1260,\"strength\":2631}],"
+                + "\"holdings\":[{\"id\":\"castle_front\",\"kind\":\"castle\",\"x\":12,\"y\":10,\"threat_men\":1500,\"threat_distance\":10},{\"id\":\"castle_back\",\"kind\":\"castle\",\"x\":20,\"y\":10,\"threat_men\":0,\"threat_distance\":0},{\"id\":\"village_x\",\"kind\":\"village\",\"x\":10,\"y\":11}],"
+                + "\"seen\":[{\"id\":\"p_lg\",\"lord\":\"lord_lg\",\"name\":\"Lorgath\",\"faction_name\":\"Dol Guldur\",\"relation\":\"enemy\",\"army_parties\":26,\"army_men\":11478,\"strength\":25271,\"x\":14,\"y\":10,\"doing\":\"besieging Front Keep\"}]}");
+            var standing = Room.StandingOrders(noOrd, standView);
+            string question = Room.ArmyQuestion(standView);
+            Check(noOrd.Count == 2 && noOrd[0].Id == "lord_frar" && noOrd[0].Men == 271 && noOrd[1].Men == 1260
+                  && ordered.SetEquals(new[] { "lord_a", "lord_b", "lord_c", "lord_d" })
+                  && standing.Count == 2 && (string)standing[0]["at"] == "castle_back" && (string)standing[1]["at"] == "castle_front" && (string)standing[0]["do"] == "defend"
+                  && question.Contains("THE QUESTION, at every review") && question.Contains("Lorgath [lord_lg] (Dol Guldur): 26 parties, 11,478 men, strength 25,271")
+                  && question.Contains("within 24 hours strength 0 (2 lords and armies)") == false && question.Contains("(2 lords and armies)"),
+                  "every lord under an order: the lords with no order read from the files, the lords an answer's orders name (group and follow-on orders too), the standing order "
+                  + "(a weak lord to a calm holding further back, a strong one to the nearest), and the review's question with each enemy army and what could gather against it: "
+                  + string.Join(", ", noOrd.Select(n => n.Id + "/" + n.Men)) + " | " + string.Join(",", ordered) + " | " + standing.ToJsonString() + " | " + question.Replace("\n", " | "));
             File.WriteAllText(Path.Combine(live, "camp5", "view_orcs.json"), ownView);
             string r1 = Ask("roads_in", "{\"to\":\"town_a\",\"hours_out\":3}");
             Check(r1 != null && r1.StartsWith("THE ROADS INTO Aldburg [town_a]") && r1.Contains("Bree (Arnor") && System.Text.RegularExpressions.Regex.IsMatch(r1, @"\[p\d+_\d+\]") && r1.Contains("hours before it reaches the walls"),

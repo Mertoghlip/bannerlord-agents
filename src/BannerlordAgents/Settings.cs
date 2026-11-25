@@ -90,6 +90,8 @@ namespace BannerlordAgents
         public static bool LieutenantPause = true;
         /// <summary>The siege food rule (0.19.5, SiegeFood): a besieged castle or town about to run out of food draws on the food its lords inside carry.</summary>
         public static bool SiegeFood = true;
+        /// <summary>0.24.6 (RulingClanUpkeep): in a playerless run the ruling clan (the game's player clan, which the player does not lead then) gets the game's daily clan upkeep too.</summary>
+        public static bool RulingClanUpkeep = true;
         /// <summary>The siege drill (0.20.0, SiegeDrill): the computer's camps build every tower and the ram, then mass trebuchets in reserve and roll them out together; defenders against the player keep fire catapults up.</summary>
         public static bool SiegeDrill = true;
         /// <summary>
@@ -195,6 +197,7 @@ namespace BannerlordAgents
                         case "dashboard": Dashboard = On(value, Dashboard); break;
                         case "lieutenant_pause": LieutenantPause = On(value, LieutenantPause); break;
                         case "siege_food": SiegeFood = On(value, SiegeFood); break;
+                        case "ruling_clan_upkeep": RulingClanUpkeep = On(value, RulingClanUpkeep); break;
                         case "siege_drill": SiegeDrill = On(value, SiegeDrill); break;
                         case "map_speed":
                             if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double ms) && ms >= 0.1 && ms <= 4) MapSpeed = ms;
@@ -234,7 +237,7 @@ namespace BannerlordAgents
                     }
                 }
                 // a file from an older version gets the new keys written in, so they can be found and changed
-                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause", "siege_food", "siege_drill", "map_speed", "memory_tidy", "memory_tidy_mb", "memory_tidy_running_mb",
+                foreach (string k in new[] { "sighting_distance", "detail", "witness", "ai_reasons", "screen_alarms", "answer_alarm_minutes", "freeze_probe", "dashboard", "keep_loads", "lieutenant_pause", "siege_food", "ruling_clan_upkeep", "siege_drill", "map_speed", "memory_tidy", "memory_tidy_mb", "memory_tidy_running_mb",
                                              "perf_record_hours", "perf_record_after", "run_save", "run_days", "run_rivals", "run_kingdom", "backup", "war_room" })
                     if (!seen.Contains(k)) missing = true;
                 if (missing) Save();
@@ -276,6 +279,8 @@ namespace BannerlordAgents
                 sb.AppendLine("lieutenant_pause = " + (LieutenantPause ? "on" : "off"));
                 sb.AppendLine("# a besieged castle or town about to run out of food draws on the food its lords inside carry (the game's own rule: off)");
                 sb.AppendLine("siege_food = " + (SiegeFood ? "on" : "off"));
+                sb.AppendLine("# 0.24.6: in a playerless run the ruling clan (the game's player clan, which the player does not lead then) gets the game's daily clan upkeep too: wage limits by gold, governors, garrison wages and recruiting");
+                sb.AppendLine("ruling_clan_upkeep = " + (RulingClanUpkeep ? "on" : "off"));
                 sb.AppendLine("# the siege drill: the computer's camps build every siege tower and the ram, then mass trebuchets in reserve and roll them out together, and against you in person swap them for fire onagers; defenders against your own siege keep fire catapults up (the game's own siege strategies: off)");
                 sb.AppendLine("siege_drill = " + (SiegeDrill ? "on" : "off"));
                 sb.AppendLine("# the campaign map's pace: the clock and every march at this share of the game's own, at play and fast-forward alike (1: the game's own, 18 in-game hours a real minute at play; 0.5: half; from 0.1 to 4)");

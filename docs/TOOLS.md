@@ -560,6 +560,16 @@ Nov 24, run 20261124-1840-C2, day 64: thirteen lords sent to besiege Goblin Town
 - The besiege order's relief call-back, `withdraw_on_relief` and `storm_on_relief` weigh against `max(camp_strength(at), mates_strength(at, 6))`: the lords camped there, or this siege's lords (every unfinished besiege order at the place, and the lords the order names) within 6 of it if they are more. Lords farther off are never counted, so the Lasgalor case of 0.24.3 still holds. Its messages say "your side's N at the siege".
 - Check: `SmokeTest` `Camp0243.cs` `SiegeSideTests` (two lords near, no camp yet, a relief of 1,500 against their 2,000: both stay; a third far off not counted).
 
+## The defend order's shelter, warnings and stuck lords (since 0.24.6)
+
+From run 20261125-0020-C2's captures (reports/C2 run of Nov 25 collapse root causes.md):
+
+- **defend comes out of shelter later:** six hours inside at least, and only when the forces that could reach him within half as far again (`pace * hs * 1.5`) are under 0.6 of the shelter bar (was three hours and 0.8 within `pace * hs`); lords went in and out three or four times in a day or two and were caught.
+- **No relief ride for a tiny party:** a defend lord under 100 men, or one out of shelter less than six hours (`out_at`), does not ride to break a siege of his holding.
+- **Warnings:** an order with `caution` 0 (it never shelters) says so when it starts (`Runner.Start`); a besiege order with `withdraw_on_relief` 0 says so in its march when a relief at least its side's strength is already coming (`warned`).
+- **Held in a raid:** a lord under an order who is in a raid the game began (not a raid of the order's) is told about once, three hours after the order started: the order moves him only once the raid is over (`ToolInstance.RaidTold`; Val was held 37 hours and caught).
+- **The ruling clan's upkeep** (`RulingClanUpkeep`, settings.txt `ruling_clan_upkeep`): see docs/ENGINE-NOTES.md.
+
 ## Testing by hand
 
 - `agents.tools` lists the library and says whether every tool passed the checker. `agents.tools defend` shows one tool.

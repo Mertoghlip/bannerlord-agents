@@ -73,6 +73,8 @@ namespace BannerlordAgents.Tools
         public string State;
         public double StateSince, Started;
         public bool Entered, Finished;
+        /// <summary>0.24.6: the lord was told to be held in a raid the game began (said once a raid).</summary>
+        public bool RaidTold;
         public Move Current, Pending;
         public bool HasCurrent, HasPending;
         /// <summary>The move in force was a step that the game's side has finished (0.17.4, StepDone): "arrived" is true until the next move.</summary>
@@ -218,6 +220,9 @@ namespace BannerlordAgents.Tools
             {
                 World w = WorldFor(s0);
                 Step(t, w);
+                // 0.24.6 (Nov 25): an order that switches the safety off says so (run 20261125-0020-C2: a lord sent with caution 0 was caught on the way)
+                if (def.Safety && (t.Settings.TryGetValue("caution", out double cz) || o.Settings.TryGetValue("caution", out cz)) && cz <= 0)
+                    Tell(t, "Warning: " + (o.LordName ?? o.Lord) + "'s " + def.Name + " order has caution 0, so he never shelters, whatever comes near him. Give it caution (default 1.5) with adjust if he should.", w);
             }
         }
 
@@ -565,6 +570,13 @@ namespace BannerlordAgents.Tools
         {
             PartyRow me = w.Party(t.Order.Party);
             if (me == null || me.Attached) return;   // gone (the game's thread ends the order and tells us), or marching in another's army
+            // 0.24.6 (Nov 25): held in a raid the game began, the order cannot move him until it ends: said once (run 20261125-0020-C2: Val stuck 37 hours, caught)
+            if (me.Raiding == null) t.RaidTold = false;
+            else if (!t.RaidTold && !(t.HasCurrent && t.Current.Verb == "raid") && w.Hours - t.Started >= 3)
+            {
+                t.RaidTold = true;
+                Tell(t, (t.Order.LordName ?? t.Order.Lord) + " is held in a raid of " + (w.Holding(me.Raiding)?.Name ?? me.Raiding) + " that the game began: your order moves him only once the raid is over.", w);
+            }
             // an agent's own tool's call-backs held past yesterday's limit, summed in one now the day is out (0.13, A5)
             if (t.Def.Own && t.Held.Count > 0 && (long)Math.Floor(w.Hours / 24) != t.CallBackDay) SumHeld(t, w);
             var scope = new Scope(t, w);

@@ -27,8 +27,10 @@ namespace BannerlordAgents.WarRoom
             ["description"] = "How a battle would go and how long it would last, by the game's own battle rules: your lords or armies against enemies your report shows, in the open, "
                               + "or storming a castle or town (with how long the siege camp's preparations would take first). It gives each side's blows a round, the losses an hour, "
                               + "who wins, how (all down, morale broken, or a retreat), in how long, and with how many left; the enemy's morale you cannot see, so it is run low, "
-                              + "middling and high. Lords seen marching to that place join their side as they arrive. Only lords inside a castle or town defend behind its walls: "
-                              + "a relief from outside that joins a storm turns it into a battle outside the walls, where the walls no longer count for anyone, the garrison included.",
+                              + "middling and high. Lords seen marching to that place join their side as they arrive (each counted once). Only lords inside a castle or town defend behind its walls: "
+                              + "a relief from outside that joins a storm turns it into a battle outside the walls, where the walls no longer count for anyone, the garrison included. "
+                              + "With how = strike and at one of your castles or towns under siege, it reckons your named lords, gathered, striking the siege camp together in the open, "
+                              + "the garrison coming out beside them by the game's rule; the muster question says who can be there by when.",
             ["inputSchema"] = new JsonObject
             {
                 ["type"] = "object",
@@ -36,11 +38,74 @@ namespace BannerlordAgents.WarRoom
                 {
                     ["ours"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Ids in [brackets] of your lords or armies who would fight together." },
                     ["theirs"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Ids of enemy lords or armies your report shows (leave empty for a storm of a castle or town with no lord outside)." },
-                    ["at"] = new JsonObject { ["type"] = "string", ["description"] = "Optional: a castle or town. An enemy one: your lords storm it. One of yours: their lords storm it; those of your lords inside it defend with its garrison behind the walls, those outside come as a relief, and the first to join turns the storm into a battle outside the walls." }
+                    ["at"] = new JsonObject { ["type"] = "string", ["description"] = "Optional: a castle or town. An enemy one: your lords storm it. One of yours: their lords storm it; those of your lords inside it defend with its garrison behind the walls, those outside come as a relief, and the first to join turns the storm into a battle outside the walls." },
+                    ["how"] = new JsonObject { ["type"] = "string", ["description"] = "Optional, with at one of your castles or towns that enemies (theirs) besiege: strike = your lords in ours, gathered, attack the siege camp together, all at once, by the rules of a battle in the open; the garrison and your lords inside come out to join once they and yours are more than 1.5 times the camp. Without it, their storm of the place is reckoned." }
                 },
                 ["required"] = new JsonArray("ours")
             }
         };
+
+        public const string MusterName = "muster";
+
+        /// <summary>War room 0.20.7 (Nov 25): who of the realm's lords can be at a place by when, and the strength gathered there by each hour (run 20261125-0020-C2: the agent never weighed gathering everything against Lorgath's camp with the right numbers).</summary>
+        public static JsonObject MusterDefinition() => new JsonObject
+        {
+            ["name"] = MusterName,
+            ["description"] = "Who of your lords and armies could be at a place by when: each one's hours to it at its own pace (in a straight line; by road it is longer), sorted, "
+                              + "and the strength you could have gathered there within 12, 24, 48 and 72 hours. Ask it before deciding whether you can beat an enemy army where it stands, "
+                              + "then ask battle_odds with the lords who arrive in time (how = strike for a siege camp at one of your places).",
+            ["inputSchema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["at"] = new JsonObject { ["type"] = "string", ["description"] = "The id in [brackets] of a castle, town or village (any realm's), or of a lord or army your report shows." },
+                    ["lords"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Optional: only these lords or armies of yours (default: all in the field)." },
+                    ["hours"] = new JsonObject { ["type"] = "number", ["description"] = "Optional: list those who arrive within this many hours (default 72, from 6 to 240)." }
+                },
+                ["required"] = new JsonArray("at")
+            }
+        };
+
+        public string Muster(JsonObject args)
+        {
+            JsonObject view = ReadView();
+            if (view == null) return "Your realm's view is not ready yet; ask again in a moment.";
+            string at = Str(args["at"])?.Trim().Trim('[', ']');
+            if (string.IsNullOrEmpty(at)) return "Name the place or lord in at.";
+            double within = args["hours"] is JsonValue hv && hv.TryGetValue(out double hd) ? Math.Max(6, Math.Min(240, hd)) : 72;
+            var own = (view["own"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().ToList();
+            IEnumerable<JsonObject> Arr(string k) => (view[k] as JsonArray ?? new JsonArray()).OfType<JsonObject>();
+            JsonObject spot = Arr("holdings").Concat(Arr("frontier")).Concat(Arr("enemy_holdings")).Concat(own).Concat(Arr("seen")).Concat(Arr("last_seen"))
+                .FirstOrDefault(o => Eq(Str(o["id"]), at) || Eq(Str(o["lord"]), at));
+            if (spot == null || !(spot["x"] is JsonValue)) return "Your realm knows no place or lord by the id " + at + ".";
+            double px = F(spot["x"]), py = F(spot["y"]);
+            var only = (args["lords"] as JsonArray)?.Select(Str).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim().Trim('[', ']')).ToList();
+            var rows = new List<(string Name, string Id, double Men, double Str, double Hours, string Doing)>();
+            foreach (JsonObject o in own)
+            {
+                string id = Str(o["lord"]) ?? Str(o["id"]);
+                if (only != null && only.Count > 0 && !only.Any(q => Eq(q, id) || Eq(q, Str(o["id"])))) continue;
+                double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
+                double str = F(o["army_strength"]) > 0 ? F(o["army_strength"]) : F(o["strength"]);
+                double pace = F(o["pace"]) > 0 ? F(o["pace"]) : 2.8;
+                double d = Math.Sqrt((F(o["x"]) - px) * (F(o["x"]) - px) + (F(o["y"]) - py) * (F(o["y"]) - py));
+                rows.Add((Str(o["name"]), id, men, str, d / pace, Str(o["doing"])));
+            }
+            rows = rows.OrderBy(r => r.Hours).ToList();
+            var lines = new List<string> { "MUSTER AT " + (Str(spot["name"]) ?? at) + " [" + at + "]: who could be there by when (each at its own pace, in a straight line; by road it is longer)" };
+            foreach (var r in rows.Where(r => r.Hours <= within))
+                lines.Add("- " + r.Name + " [" + r.Id + "]: " + Words.N(r.Men) + " men, strength " + Words.N(r.Str) + ", about " + Words.N(Math.Max(0, Math.Round(r.Hours))) + " hours" + (string.IsNullOrEmpty(r.Doing) ? "" : " (" + r.Doing + ")"));
+            if (!rows.Any(r => r.Hours <= within)) lines.Add("- Nobody of yours could be there within " + Words.N(within) + " hours.");
+            foreach (double h in new[] { 12.0, 24, 48, 72 })
+            {
+                var by = rows.Where(r => r.Hours <= h).ToList();
+                lines.Add("- Gathered within " + Words.N(h) + " hours: " + by.Count + " lords and armies, " + Words.N(by.Sum(r => r.Men)) + " men, strength " + Words.N(by.Sum(r => r.Str)) + ".");
+            }
+            lines.Add("- All your lords and armies in the field: " + rows.Count + ", strength " + Words.N(rows.Sum(r => r.Str)) + ". Lords marching alone can be caught on the way: gather where the enemy is not, or march them as one army.");
+            Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = MusterName, place = at, lines });
+            return string.Join("\n", lines);
+        }
 
         public static JsonObject RoadsDefinition() => new JsonObject
         {
@@ -79,6 +144,11 @@ namespace BannerlordAgents.WarRoom
             List<string> oursQ = (args["ours"] as JsonArray)?.Select(Str).Where(s => !string.IsNullOrWhiteSpace(s)).ToList() ?? new List<string>();
             List<string> theirsQ = (args["theirs"] as JsonArray)?.Select(Str).Where(s => !string.IsNullOrWhiteSpace(s)).ToList() ?? new List<string>();
             string atQ = Str(args["at"])?.Trim().Trim('[', ']');
+            string howQ = Str(args["how"])?.Trim().ToLowerInvariant();
+            bool strike = howQ == "strike" || howQ == "strike_camp";
+            // war room 0.20.7 (Nov 25): every force named on either side, so the lords seen marching to the place never count it a second time (run 20261125-0020-C2:
+            // Lorgath's army, named as the besieger, was added again as a joiner, "22,640 of the besiegers' 11,478 still standing")
+            var counted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var own = (view["own"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().ToList();
             var enemies = (view["seen"] as JsonArray ?? new JsonArray()).OfType<JsonObject>().Concat((view["last_seen"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()).ToList();
             var lines = new List<string>();
@@ -93,6 +163,8 @@ namespace BannerlordAgents.WarRoom
                 double str = F(o["army_strength"]) > 0 ? F(o["army_strength"]) : F(o["strength"]);
                 ours.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = str, Morale = o["morale"] is JsonValue ? F(o["morale"]) : -1, Tactics = F(o["tactics"]),
                                      X = F(o["x"]), Y = F(o["y"]), Pace = F(o["pace"]) });
+                if (Str(o["id"]) != null) counted.Add(Str(o["id"]));
+                if (Str(o["lord"]) != null) counted.Add(Str(o["lord"]));
                 if (InPerson(o)) human = true;
             }
             var theirs = new List<Force>();
@@ -103,6 +175,8 @@ namespace BannerlordAgents.WarRoom
                 if (o == null) { lines.Add("(" + q + ": your realm has seen no enemy by that id.)"); continue; }
                 double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 theirs.Add(new Force { Id = Str(o["lord"]) ?? Str(o["id"]), Name = Str(o["name"]), Men = men, Strength = F(o["strength"]) });
+                if (Str(o["id"]) != null) counted.Add(Str(o["id"]));
+                if (Str(o["lord"]) != null) counted.Add(Str(o["lord"]));
                 if (InPerson(o)) human = true;
             }
             if (ours.Count == 0) return string.Join("\n", lines.Prepend("Name at least one of your lords or armies in ours."));
@@ -119,6 +193,46 @@ namespace BannerlordAgents.WarRoom
             }
             string Names(List<Force> fs) => fs.Count == 0 ? "none" : string.Join(", ", fs.Select(f => f.Name + " [" + f.Id + "]"));
             BattleSide mine = Side(ours, true);
+            if (strike && (ownPlace == null || theirs.Count == 0))
+                lines.Add("(how = strike needs at = one of your castles or towns and the besiegers in theirs; reckoned as asked otherwise.)");
+            if (strike && ownPlace != null && theirs.Count > 0)
+            {
+                // war room 0.20.7: your named lords, gathered, attack the siege camp together: a battle outside the walls by the field rule (the game's SiegeOutside),
+                // the garrison and your lords inside coming out beside them once they and yours are more than 1.5 times the camp (the game's sally beside a relief)
+                double px = F(ownPlace["x"]), py = F(ownPlace["y"]);
+                var inside = ours.Where(f => Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) <= 1.5).ToList();
+                var strikers = ours.Except(inside).ToList();
+                if (strikers.Count == 0) return string.Join("\n", lines.Append("Name at least one lord of yours outside " + Str(ownPlace["name"]) + " to strike its siege camp."));
+                double gMen = Math.Max(0, I(ownPlace["garrison"])) + Math.Max(0, I(ownPlace["militia"])) + inside.Sum(f => f.Men);
+                double gStr = Math.Max(0, F(ownPlace["defence"])) + inside.Sum(f => f.Strength);
+                double campStr = theirs.Sum(f => f.Strength), strikeStr = strikers.Sum(f => f.Strength);
+                bool sally = strikeStr + gStr > 1.5 * campStr;
+                var side = new List<Force>(strikers);
+                if (sally && gMen > 0) side.Add(new Force { Id = atQ, Name = "the garrison" + (inside.Count > 0 ? " and " + Names(inside) : ""), Men = gMen, Strength = gStr, Morale = 50 });
+                BattleSide us = Side(side, true);
+                BattleSide camp = Side(theirs, false);
+                // enemies seen marching to the place join the camp as they arrive; others of the realm's side (allies) join yours
+                List<BattleJoiner> sj = Joiners(view, atQ, now, false, counted, out List<string> sjNames);
+                foreach (BattleJoiner j in sj) j.Attackers = !j.Attackers;
+                BattleOutcome[] sruns = GameBattle.ByUnseenMorale("field", false, 1f, us, camp, false, sj);
+                BattleOutcome so = sruns[1];
+                GameBattle.StrikesPerRound(false, false, 1f, us.Men, camp.Men, out double ssA, out double ssD);
+                double usTot = us.Men + sj.Where(j => j.Attackers).Sum(j => j.Men), campTot = camp.Men + sj.Where(j => !j.Attackers).Sum(j => j.Men);
+                lines.Insert(0, "BATTLE ODDS: " + Names(strikers) + " strike the siege camp of " + Names(theirs) + " at your " + Str(ownPlace["name"]) + " [" + atQ + "], all together, in the open");
+                lines.Add("- Yours, gathered and striking at once: " + Words.N(strikers.Sum(f => f.Men)) + " men, strength " + Words.N(strikeStr) + "; the camp: " + Words.N(camp.Men) + " men, strength " + Words.N(campStr) + ".");
+                lines.Add(sally ? "- The garrison" + (inside.Count > 0 ? " and your lords inside" : "") + " (" + Words.N(gMen) + " men, strength " + Words.N(gStr) + ") come out to join you: you and they are more than 1.5 times the camp (the game's rule)."
+                                : "- The garrison" + (inside.Count > 0 ? " and your lords inside" : "") + " (" + Words.N(gMen) + " men, strength " + Words.N(gStr) + ") stay inside: you and they are not more than 1.5 times the camp (the game's rule).");
+                if (sjNames.Count > 0) lines.Add("- Also marching there, joining as they arrive: " + string.Join(", ", sjNames) + ".");
+                lines.Add("- In the open: two rounds an hour, each side's blows growing with its own men: yours " + ssA + " a round, the camp's " + ssD + ". At first you lose about "
+                          + Words.N(so.AttackerLossPerHour) + " men an hour, the camp about " + Words.N(so.DefenderLossPerHour) + ".");
+                lines.Add("- Run ahead: " + Outcome(so, sruns, "you", "the besiegers", "your", "the besiegers'", usTot, campTot) + ". Nobody can leave a battle once in it, but a side whose morale falls to 20 after losing four rounds running may retreat.");
+                if (so.AttackersLeft > usTot + 0.5 || so.DefendersLeft > campTot + 0.5) lines.Add("- (These numbers do not add up: more men left than came. Do not rely on this forecast.)");
+                if (so.Winner == "attackers") lines.Add(TakingsLine(view, camp.Men - so.DefendersLeft));
+                lines.Add("- This reckons your lords already gathered at the camp. Lords marching one by one arrive and fight one by one: gather them first (the muster question says who can be where by when).");
+                if (human) lines.Add(HumanNote);
+                Log(new { at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), campaign = _campaign, realm = _realm, poke = _poke, call = _call, tool = OddsName, how = "strike", ours = oursQ, theirs = theirsQ, place = atQ, lines });
+                return string.Join("\n", lines);
+            }
             if (enemyPlace != null || (ownPlace != null && theirs.Count > 0))
             {
                 bool weStorm = enemyPlace != null;
@@ -151,8 +265,9 @@ namespace BannerlordAgents.WarRoom
                 float worth = (float)((4.0 + level) / (1 + 0.25 + 0.16));   // the walls' worth once the first engine, a ram, is built
                 besiegers.Advantage -= 0.1f;                               // the game's siege attackers' -0.1
                 bool town = Str(place["kind"]) == "town";
-                List<BattleJoiner> js = Joiners(view, atQ, now, weStorm);
+                List<BattleJoiner> js = Joiners(view, atQ, now, weStorm, counted, out List<string> jsNames);
                 foreach ((Force f, double at) in outside) js.Add(new BattleJoiner { Attackers = false, Men = f.Men, At = at, Power = f.Men > 0 ? (float)(f.Strength / f.Men) : 0 });
+                double aTot = besiegers.Men + js.Where(j => j.Attackers).Sum(j => j.Men), dTot = walls.Men + js.Where(j => !j.Attackers).Sum(j => j.Men);
                 BattleOutcome[] runs = GameBattle.ByUnseenMorale("siege", town, worth, besiegers, walls, !weStorm, js);
                 BattleOutcome o = runs[1];
                 double prep = 24.0 * 48 / Math.Sqrt(Math.Max(1, besiegers.Men)), ram = 24.0 * 12 / Math.Sqrt(Math.Max(1, besiegers.Men));
@@ -171,7 +286,11 @@ namespace BannerlordAgents.WarRoom
                 if (!double.IsNaN(o.OutsideAt))
                     lines.Add("- About " + Words.N(Math.Max(1, Math.Round(o.OutsideAt))) + " hours in, the first relief joins the defenders from outside: from then the storm is a battle outside the walls, "
                               + "where the walls no longer count for anyone, the garrison included, and both sides strike two rounds an hour by the field rule.");
-                lines.Add("- Run ahead: " + Outcome(o, runs, "the besiegers", "the defenders", "the besiegers'", "the defenders'", besiegers.Men, walls.Men + outside.Sum(x => x.F.Men)) + ". Nobody can leave a battle once in it.");
+                if (jsNames.Count > 0) lines.Add("- Also marching there, joining their side as they arrive: " + string.Join(", ", jsNames) + ".");
+                lines.Add("- Run ahead: " + Outcome(o, runs, "the besiegers", "the defenders", "the besiegers'", "the defenders'", aTot, dTot) + ". Nobody can leave a battle once in it.");
+                if (o.AttackersLeft > aTot + 0.5 || o.DefendersLeft > dTot + 0.5) lines.Add("- (These numbers do not add up: more men left than came. Do not rely on this forecast.)");
+                if (!weStorm && theirs.Count > 0 && ours.Count > 0)
+                    lines.Add("- This reckons their storm, with your lords outside arriving one by one. To reckon your lords gathered and striking the camp together, ask again with how = strike.");
                 // what a win would bring in (0.9.4): storming, the defenders who fall; defending, the besiegers who fall
                 if (weStorm && o.Winner == "attackers") lines.Add(TakingsLine(view, walls.Men - o.DefendersLeft));
                 else if (!weStorm && o.Winner == "defenders") lines.Add(TakingsLine(view, besiegers.Men - o.AttackersLeft));
@@ -232,19 +351,23 @@ namespace BannerlordAgents.WarRoom
         }
 
         /// <summary>Lords the realm saw marching to the place (heading for it, with the hour they get there), joining their own side.</summary>
-        private static List<BattleJoiner> Joiners(JsonObject view, string place, double now, bool weStorm)
+        private static List<BattleJoiner> Joiners(JsonObject view, string place, double now, bool weStorm, ISet<string> counted, out List<string> names)
         {
             var list = new List<BattleJoiner>();
+            names = new List<string>();
             if (place == null) return list;
             foreach (JsonObject o in (view["seen"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
             {
                 if (!Eq(Str(o["toward"]), place)) continue;
+                // war room 0.20.7: a force named on either side is not a joiner too (an army in view stands for its members, so its leader's ids suffice)
+                if ((Str(o["id"]) != null && counted.Contains(Str(o["id"]))) || (Str(o["lord"]) != null && counted.Contains(Str(o["lord"])))) continue;
                 double at = o["arrives_at"] is JsonValue av && av.TryGetValue(out double ad) ? ad - now : double.NaN;
                 if (double.IsNaN(at) || at > 24 * 5) continue;
                 bool enemy = Str(o["relation"]) == "enemy";
                 double men = I(o["army_men"]) > 0 ? I(o["army_men"]) : I(o["men"]);
                 // an enemy marching to an enemy place joins its defenders (we storm); to our place, its besiegers
                 list.Add(new BattleJoiner { Attackers = weStorm ? !enemy : enemy, Men = men, At = Math.Max(0, at), Power = men > 0 ? F(o["strength"]) / (float)men : 0 });
+                names.Add(Str(o["name"]) + " [" + (Str(o["lord"]) ?? Str(o["id"])) + "] (" + Words.N(men) + " men, in about " + Words.N(Math.Max(1, Math.Round(at))) + " hours)");
             }
             return list;
         }

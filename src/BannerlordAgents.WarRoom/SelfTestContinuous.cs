@@ -121,9 +121,10 @@ namespace BannerlordAgents.WarRoom
             talk.NextReviewHours = 1001;
             Check(room.ReviewDue(1000.5) == null && room.ReviewDue(1001) == "the hour you set for it has come", "a review sits at the hour the agent set, even an hour after the last");
             talk.NextReviewHours = double.NaN;
-            Check(room.ReviewDue(1024) == null && room.ReviewDue(1500) == null, "with no hour set, none sits: no daily review of its own");
-            Check(room.Review_In("{\"review_in\": 0.2}", 2000, true) == 2001 && room.Review_In("{\"review_in\": 500}", 2000, true) == 2240 && double.IsNaN(room.Review_In("{\"orders\": []}", 2000, true))
-                  && room.Review_In("{\"council_in\": 6}", 2000, false) == 2006, "review_in is kept between 1 and 240 hours; a review that sets none leaves none set; a wake's answer may set it too");
+            // war room 0.20.7: a review every day at least (review_every_hours, 24 by default)
+            Check(room.ReviewDue(1023) == null && room.ReviewDue(1024) == "a day has passed since your last strategy review (one sits every day)", "with no hour set, one sits a day after the last");
+            Check(room.Review_In("{\"review_in\": 0.2}", 2000, true) == 2001 && room.Review_In("{\"review_in\": 500}", 2000, true) == 2024 && room.Review_In("{\"orders\": []}", 2000, true) == 2024
+                  && room.Review_In("{\"council_in\": 6}", 2000, false) == 2006, "review_in is kept between 1 and 24 hours; a review that sets none has the next a day later; a wake's answer may set it too");
             talk.LastReviewHours = 2000;
             room.WantReview("Orc Keep is besieged by Thalion");
             Check(room.ReviewDue(2000.5) == "Orc Keep is besieged by Thalion", "a big event calls a review at once, even right after the last");
@@ -198,8 +199,8 @@ namespace BannerlordAgents.WarRoom
             var cs = new Config { AgentDir = Path.Combine(root, "continuous-settings"), MemoryMode = "continuous", CompactAtTokens = 400_000, WakeBudget = 10 };
             cs.Save();
             Config cr = Config.Load(cs.AgentDir);
-            Check(cr.Continuous && cr.CompactAtTokens == 400_000 && cr.CompactAtCloseTokens == 500_000 && cr.CompactHardTokens == 850_000 && cr.WakeBudget == 10 && cr.ContinuousModel == "claude-opus-5-5[1m]"
-                  && cr.ContinuousThinkingCap == 6000, "a continuous agent's settings are written and read back");
+            Check(cr.Continuous && cr.CompactAtTokens == 400_000 && cr.CompactAtCloseTokens == 250_000 && cr.CompactHardTokens == 300_000 && cr.WakeBudget == 10 && cr.ContinuousModel == "claude-opus-5-5[1m]"
+                  && cr.ContinuousThinkingCap == 6000 && cr.EveryLordOrdered && cr.ReviewEveryHours == 24, "a continuous agent's settings are written and read back");
             Check(Claude.RunawayLimit("HANDOVER, Misty Mountain Orcs") == Claude.RunawayCharsWithTools && Claude.RunawayLimit("{\"poke\": 3") == Claude.RunawayChars, "a handover may run longer than an answer");
             Check(Room.ContinuousEnv["CLAUDE_CODE_PROMPT_CACHE_TTL"] == "1h" && Room.ContinuousEnv["DISABLE_AUTO_COMPACT"] == "1", "every call of a conversation asks for the one-hour cache and no compaction of Claude Code's own");
         }

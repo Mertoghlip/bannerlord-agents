@@ -74,8 +74,9 @@ namespace SmokeTest
         {
             Check(WakeRules.Problems.Count == 0, "the wake rule's list reads and its facts exist" + (WakeRules.Problems.Count > 0 ? ": " + string.Join("; ", WakeRules.Problems) : ""));
             string[] locked = { "first_look", "letter_marked", "lord_taken", "holding_attacked", "vote_closing" };
-            Check(locked.All(n => WakeRules.Rules.Any(r => r.Name == n && r.Locked && r.Lane == WakeRules.Now)) && WakeRules.Rules.Count(r => r.Locked) == locked.Length,
-                  "the locked rules all wake at once, and only those are locked");
+            // 0.24.6 (Nov 25): a lord taken rides along with the next message, never wakes alone (run 20261125-0020-C2: 450 of the agent's 624 wakes were only that news)
+            Check(locked.All(n => WakeRules.Rules.Any(r => r.Name == n && r.Locked && r.Lane == (n == "lord_taken" ? WakeRules.Digest : WakeRules.Now))) && WakeRules.Rules.Count(r => r.Locked) == locked.Length,
+                  "the locked rules all wake at once but a lord taken, which rides along, and only those are locked");
 
             string Lane(string kind, string text, LineFacts f = null)
             {
@@ -102,7 +103,7 @@ namespace SmokeTest
                 Tuple.Create("order_ended", "The order \"Radbug recruits\" ended: volunteers are within reach, but he has too little gold.", WakeRules.Wait),
                 Tuple.Create("raided", "Grish-morn is being raided by Elendara (Kingdom of Arnor and Gondor).", WakeRules.Now),
                 Tuple.Create("battle", "Fight over a raid at Eithel Glin: Karim against Eithel Glin; Karim won.", WakeRules.Now),
-                Tuple.Create("captured", "Malthorn (Kingdom of Arnor and Gondor) was taken prisoner by Dramthak.", WakeRules.Now),
+                Tuple.Create("captured", "Malthorn (Kingdom of Arnor and Gondor) was taken prisoner by Dramthak.", WakeRules.Digest),
                 Tuple.Create("besieged", "Western Moria is besieged by Aragorn, 5,532 men.", WakeRules.Now),
                 Tuple.Create("holding_changed", "Western Moria passed from Misty Mountain Orcs to Kingdom of Arnor and Gondor.", WakeRules.Now),
                 Tuple.Create("army_dispersed", "The army of Naglur broke up (CohesionDepleted).", WakeRules.Now),
@@ -181,7 +182,7 @@ namespace SmokeTest
 
             // while that poke waits for its answer, news holds, so the next report is fresh
             before = Pokes();
-            Brain.OnNotice(new Notice { Id = NoticeIds.Next(), Hours = h0 + 3, Kind = "captured", Text = "Bolg's friend was taken prisoner.", Factions = { "orcs" } });
+            Brain.OnNotice(new Notice { Id = NoticeIds.Next(), Hours = h0 + 3, Kind = "besieged", Text = "Bolg's friend's keep is besieged.", Factions = { "orcs" } });
             Brain.OnHour(World(h0 + 3, passing));
             Check(Pokes() == before, "news that wakes at once waits while the last poke has no answer");
             Answer(ch.LastPoke);
