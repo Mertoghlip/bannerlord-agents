@@ -180,6 +180,11 @@ namespace BannerlordAgents
         /// prosperity / 40 and its garrison's men / 20). Only the realm's own are shown (Views).
         /// </summary>
         public float Food = -1, FoodCap, FoodPerDay;
+        /// <summary>
+        /// The food a town's or village's market has for sale now (0.25.0, items 1 and 20: ItemRoster.TotalFood, the game's own count, which the game's lords buy from);
+        /// for the rules' choice of a market only, never shown to the agent.
+        /// </summary>
+        public int MarketFood;
         /// <summary>The clan that owns it (0.13.21: a garrison_floor takes men only from a lord's own clan's holdings), id and name.</summary>
         public string OwnerClan, OwnerClanName;
     }
@@ -365,6 +370,11 @@ namespace BannerlordAgents
         public string Run = RunTags.Id;
         /// <summary>A letter its writer marked to wake its reader now (0.15).</summary>
         public bool Urgent;
+        /// <summary>
+        /// The big quiet news in it for each realm it matters to (0.25.0, item 13): by realm, the plain line for that realm's "since your last answer" (a lord of its
+        /// taken, a holding of its lost or taken by it, a battle of its with more than 500 of its men lost); null when none.
+        /// </summary>
+        public Dictionary<string, string> Since;
     }
 
     /// <summary>

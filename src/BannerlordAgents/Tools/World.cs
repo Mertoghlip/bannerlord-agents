@@ -47,6 +47,9 @@ namespace BannerlordAgents.Tools
             }
         }
 
+        /// <summary>The hostile lords and armies in view (not those shut inside a besieged castle or town), as the rules count them.</summary>
+        public IReadOnlyList<PartyRow> Enemies => _enemies;
+
         public PartyRow Party(string id) => id != null && S.PartyById.TryGetValue(id, out PartyRow r) ? r : null;
         public SettlementRow Holding(string id) => id != null && S.SettlementById.TryGetValue(id, out SettlementRow h) ? h : null;
 
@@ -1009,6 +1012,104 @@ namespace BannerlordAgents.Tools
                 double d = (h.X - px) * (h.X - px) + (h.Y - py) * (h.Y - py);
                 if (d < bd) { bd = d; best = h; }
             }
+            return best;
+        }
+
+        /// <summary>
+        /// A market a lord may buy food at now (0.25.0, item 1, as the supply order's own buying chooses one): a town not under siege, or a village not raided or
+        /// looted, of a realm not at war with this one, whose market has food for sale.
+        /// </summary>
+        public bool IsMarket(SettlementRow h)
+        {
+            if (h == null || h.MarketFood <= 0 || HostileFaction(h.Faction)) return false;
+            if (h.Kind == "town") return !Besieged(h);
+            return h.Kind == "village" && (h.VillageState == null || h.VillageState == "Normal");
+        }
+
+        /// <summary>How many markets nearest in a straight line the food rules time by road at most (0.25.0): a road is never shorter than the straight line, so the rest rarely matter.</summary>
+        public const int MarketsTimed = 12;
+
+        /// <summary>
+        /// The market a lord rides to for food (0.25.0, item 1, run 20261125-2341-C2: 243 trips to the nearest town or village in a straight line bought nothing; Angloss,
+        /// picked 78 times, had none for sale or no road): of the markets (IsMarket) not in skip, the one he reaches soonest by the march clock along the game's own
+        /// ways, skipping any he has no way to. hours: his march there (NaN with none). Only the MarketsTimed nearest in a straight line are timed, nearest first,
+        /// stopping once even his fastest pace on the straight line could not beat the best found.
+        /// </summary>
+        public SettlementRow FoodMarket(PartyRow me, ICollection<string> skip, out double hours)
+        {
+            hours = double.NaN;
+            if (me == null) return null;
+            var near = new List<KeyValuePair<SettlementRow, double>>();
+            foreach (SettlementRow h in S.Settlements)
+            {
+                if (!IsMarket(h) || (skip != null && skip.Contains(h.Id))) continue;
+                float gx = h.Gx != 0 || h.Gy != 0 ? h.Gx : h.X, gy = h.Gx != 0 || h.Gy != 0 ? h.Gy : h.Y;
+                near.Add(new KeyValuePair<SettlementRow, double>(h, Math.Sqrt((me.X - gx) * (me.X - gx) + (me.Y - gy) * (me.Y - gy))));
+            }
+            if (near.Count == 0) return null;
+            near.Sort((a, b) => a.Value.CompareTo(b.Value));
+            Common.ClockParty sp = SeenOf(me);
+            double fast = Math.Max(0.05, Common.MarchClock.FastestUnits(sp, Common.MarchClock.BasisAt(sp, Hours)));
+            SettlementRow best = null;
+            double bestHours = double.PositiveInfinity;
+            for (int i = 0; i < near.Count && i < MarketsTimed; i++)
+            {
+                if (near[i].Value / fast > bestHours) break;
+                Common.MarchTime m = MarchTo(sp, near[i].Key);
+                if (m == null || !m.Reached || double.IsNaN(m.Hours)) continue;
+                if (m.Hours < bestHours) { bestHours = m.Hours; best = near[i].Key; }
+            }
+            if (best != null) hours = bestHours;
+            return best;
+        }
+
+        /// <summary>
+        /// The food a holding of the realm still needs to last days of siege at what it eats under siege, within its stores (0.25.0, item 20, the supply order's own
+        /// reckoning); 0 for a village or another realm's.
+        /// </summary>
+        public static double FoodNeedOf(SettlementRow h, double days)
+        {
+            if (h == null || h.Food < 0 || !(h.FoodPerDay > 0)) return 0;
+            return Math.Max(0, Math.Min(h.FoodCap, days * h.FoodPerDay) - h.Food);
+        }
+
+        /// <summary>
+        /// The best market for a lord carrying food to a holding of the realm (0.25.0, item 20, run 20261125-2341-C2: Fanuidhol got 212 deliveries of a median 5 food
+        /// from the market costing the least detour that had any food at all): the food each market can sell, up to what the holding still needs beyond the food the
+        /// lord can spare (all he carries past keepDays of his own eating), for each extra hour the trip costs over riding straight there; a market that could add
+        /// less than a day of the holding's eating is skipped. gainDays: the days of the holding's eating the trip would add, his spare food and the market's
+        /// together (his spare food alone when no market is chosen). Null when no market is worth the ride (or none is needed).
+        /// </summary>
+        public SettlementRow FeedMarket(PartyRow me, SettlementRow h, double days, double keepDays, out double gainDays)
+        {
+            gainDays = 0;
+            if (me == null || h == null || !(h.FoodPerDay > 0)) return null;
+            double need = FoodNeedOf(h, days);
+            double spare = me.FoodItems >= 0 ? Math.Max(0, me.FoodItems - Math.Ceiling(keepDays * Math.Max(0, me.FoodEats))) : 0;
+            if (spare >= need) { gainDays = need / h.FoodPerDay; return null; }
+            double want = need - spare, pace = Math.Max(0.05, PerHour(me));
+            double direct = HoursFor(me, h.Id);
+            if (double.IsNaN(direct)) direct = Math.Sqrt((me.X - h.X) * (me.X - h.X) + (me.Y - h.Y) * (me.Y - h.Y)) / pace;
+            var near = new List<KeyValuePair<SettlementRow, double>>();
+            foreach (SettlementRow m in S.Settlements)
+            {
+                if (m == h || !IsMarket(m) || Math.Min(m.MarketFood, want) < h.FoodPerDay) continue;
+                near.Add(new KeyValuePair<SettlementRow, double>(m, Math.Sqrt((me.X - m.X) * (me.X - m.X) + (me.Y - m.Y) * (me.Y - m.Y))));
+            }
+            near.Sort((a, b) => a.Value.CompareTo(b.Value));
+            SettlementRow best = null;
+            double bestScore = 0, bestGain = 0;
+            for (int i = 0; i < near.Count && i < MarketsTimed; i++)
+            {
+                SettlementRow m = near[i].Key;
+                double there = HoursFor(me, m.Id);
+                if (double.IsNaN(there)) continue;   // no way to it
+                double onward = Math.Sqrt((m.X - h.X) * (m.X - h.X) + (m.Y - h.Y) * (m.Y - h.Y)) / pace;
+                double gain = Math.Min(m.MarketFood, want), extra = Math.Max(1, there + onward - direct);
+                double score = gain / extra;
+                if (score > bestScore) { bestScore = score; best = m; bestGain = gain; }
+            }
+            gainDays = (spare + bestGain) / h.FoodPerDay;
             return best;
         }
 

@@ -34,6 +34,8 @@ namespace SmokeTest
                 Snapshot s = ToolWorld(h, parties);
                 SettlementRow c = s.SettlementById["castle_orc"];
                 c.Food = food; c.FoodCap = cap; c.FoodPerDay = perDay;
+                // 0.25.0 (item 20): a guard rides to feed it only when a market can sell food worth the trip; the village's market has some
+                if (s.SettlementById.TryGetValue("village_orc", out SettlementRow market)) market.MarketFood = 500;
                 Brain.OnHour(s);
             }
             string StateOf(int id) => Runner.All().FirstOrDefault(t => t.Id == id)?.State;

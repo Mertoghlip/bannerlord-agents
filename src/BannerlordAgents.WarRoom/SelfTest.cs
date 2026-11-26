@@ -183,6 +183,7 @@ namespace BannerlordAgents.WarRoom
             KeptTests(root);
             ReviewFateTests(root);
             FilesTests(root);
+            Fixes022Tests(root);
 
             // the replay's view of what the bridge now keeps quiet
             Check(Program.Quiet(T("battle", "Battle: Bolg (Misty Mountain Orcs) against Looters (Looters); Bolg won.")), "replay: a fight with bandits is kept quiet");
@@ -324,7 +325,8 @@ namespace BannerlordAgents.WarRoom
                   && st1.Contains("stay inside: you and they are not more than 1.5 times the camp") && st1.Contains("Run ahead: the besiegers win") && st1.Contains("gather them first"),
                   "the strike: your lords gathered against the siege camp in the open, the garrison staying inside under the 1.5 rule: " + st1?.Replace("\n", " | "));
             string mu1 = Ask("muster", "{\"at\":\"castle_k\"}");
-            Check(mu1 != null && mu1.StartsWith("MUSTER AT Orc Keep [castle_k]") && mu1.Contains("Bolg [lord_bolg]: 300 men, strength 400, about 0 hours") && mu1.Contains("Gorbag [lord_gor]: 800 men, strength 1,200, about 5 hours")
+            // war room 0.22.0: by the way the game would march at each one's pace (20 across open ground at speed 4 by day: 6 hours), not the straight line over the pace (5)
+            Check(mu1 != null && mu1.StartsWith("MUSTER AT Orc Keep [castle_k]") && mu1.Contains("by the way the game would march") && mu1.Contains("Bolg [lord_bolg]: 300 men, strength 400, about 0 hours") && mu1.Contains("Gorbag [lord_gor]: 800 men, strength 1,200, about 6 hours")
                   && mu1.Contains("Gathered within 12 hours: 2 lords and armies, 1,100 men, strength 1,600"),
                   "the muster: who of the realm's lords could be at the place by when, and the strength gathered by each hour: " + mu1?.Replace("\n", " | "));
             // war room 0.20.10 (Nov 25, run 20261125-1457-C2's two lost battles): the strike is led by the first of yours to arrive and fought outside the walls, with no retreat
@@ -368,8 +370,8 @@ namespace BannerlordAgents.WarRoom
             Check(uw1 != null && uw1.StartsWith("BATTLE ODDS: a battle already under way at Orc Keep [castle_k], a battle outside the walls, 129 hours in; in it: Bolg [lord_bolg]")
                   && uw1.Contains("Your side is led by Orc Keep (a holding") && uw1.Contains("Run ahead from now: they win") && uw1.Contains("Too early to measure") && !uw1.Contains("you win"),
                   "a battle under way is run on from now, not reckoned afresh: Lasgalor two days in, the kingdom under its castle against Lorgath, by the rules alone: Dol Guldur wins: " + uw1?.Replace("\n", " | "));
-            Check(uw2 != null && uw2.Contains("Measured over its last 12 hours, your side's blows landed 97% and theirs 121%") && uw2.Contains("Run ahead from now: they win")
-                  && uw2.Contains("Joining your side as they arrive") && uw2.Contains("Gorbag in about 10 hours") && System.Text.RegularExpressions.Regex.IsMatch(uw2, @"First hour: you lose about 1[0-9]{2} men, they about [0-9]{2,3}"),
+            Check(uw2 != null && uw2.Contains("Measured over its last 12 hours, your side's blows landed 97% and theirs 121%") && uw2.Contains("Run ahead from now, with the joiners: they win")
+                  && uw2.Contains("Joining your side as they arrive") && System.Text.RegularExpressions.Regex.IsMatch(uw2, @"Gorbag \[lord_gor\] \(if he marches now\) in about 1[0-9] hours") && System.Text.RegularExpressions.Regex.IsMatch(uw2, @"First hour: you lose about 1[0-9]{2} men, they about [0-9]{2,3}"),
                   "a battle under way, measured: its last hours' rates carry on, a named lord not in it joins as he arrives, and Dol Guldur wins: " + uw2?.Replace("\n", " | "));
             // war room 0.20.7: every lord under an order: the lords with no order read from the files, the lords an answer orders, and the review's question
             string lordsDir = Path.Combine(root, "every-lord", Shelf.DirName, "lords");

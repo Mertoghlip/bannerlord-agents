@@ -352,6 +352,7 @@ namespace BannerlordAgents
                 Recorder.PollVassalOrders();
                 // the hour's order rules go first; its reports follow on the reporting lane, newest hour only (0.12.0)
                 Background.Publisher = Brain.NextStep;
+                Background.Writer = Writes.Next;
                 Background.PostHour(snap.Hours, () => Brain.Decide(snap));
                 try { Run.OnHour(snap); }
                 catch (Exception e) { Diag.Error("the test run's hour", e); }

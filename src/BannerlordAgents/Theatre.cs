@@ -74,6 +74,8 @@ namespace BannerlordAgents
         public HashSet<string> Places = new HashSet<string>();
         /// <summary>The agent's answer time, in in-game hours from the report to its orders taking effect: as a rule, and one answer in ten.</summary>
         public double UsualLag = DefaultUsualLag, LateLag = DefaultLateLag;
+        /// <summary>The review answers' delay (0.25.0, item 11), said beside the wake answers' in the clock's line.</summary>
+        public double ReviewUsualLag = Channel.DefaultReviewUsualLag, ReviewLateLag = Channel.DefaultReviewLateLag;
         public const double DefaultUsualLag = 7, DefaultLateLag = 20;
 
         private static readonly HashSet<string> WholeKinds = new HashSet<string> { "first_look", "quiet_day", "letter" };

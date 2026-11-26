@@ -75,7 +75,8 @@ namespace BannerlordAgents.WarRoom
             {
                 Known k = Find(known, m, s);
                 JsonObject o = k == null ? null : own.FirstOrDefault(x => Eq(Str(x["id"]), k.Id));
-                if (k == null || !k.Own || o == null) { lines.Add("(" + s + ": no lord or army of yours by that id.)"); continue; }
+                // war room 0.22.0 (item 30): a lord riding in an army, a prisoner, or a lord with no party, said so
+                if (k == null || !k.Own || o == null) { lines.Add("(" + (NotInField(s.Trim().Trim('[', ']'), own, out _) ?? s + ": no lord or army of yours by that id") + ".)"); continue; }
                 if (k.March == null) { lines.Add("(" + k.Name + "'s pace is not known, so it is left out.)"); continue; }
                 RouteResult r;
                 lock (Gate) r = _finder.Find(k.X, k.Y, q.X, q.Y);
@@ -134,6 +135,10 @@ namespace BannerlordAgents.WarRoom
             double bringsA = Brought(first, ours, begins, endsAlone), bringsD = targetMen;
             lines.Add("- Against " + q.Name + " alone: " + Outcome(alone[1], alone, "you", "they", "your", "their", bringsA, bringsD)
                       + (double.IsNaN(endsAlone) ? "." : ", ending about " + cal.When(now + begins + endsAlone) + "."));
+            // war room 0.22.0 (item 9): the enemy realm's measured edge in the realm's own battles, once there are enough of them
+            RecordEdge(EdgeFile, view);
+            string edge = EdgeLine(Str(qo["faction_name"]), now, hit => LossShare("field", false, 1f, mine, Hit(enemy, hit), false, ourJoiners, true, bringsA));
+            if (edge != null) lines.Add(edge);
             // who could join it: soonest first, each with when it gets there and whether the fight is still going on then
             double horizon = double.IsNaN(ends) ? 24 * 5 : ends;
             List<Marcher> inTime = theirs.Where(x => x.Hours - begins <= horizon).ToList();

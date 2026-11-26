@@ -113,6 +113,10 @@ namespace BannerlordAgents
             {
                 if (oldParty != null && oldParty.IsActive) oldParty.Ai.SetDoNotMakeNewDecisions(false);
                 done.Add(Names.Hero(old) + "'s party is led by the game's AI now, for your kingdom's agent to command");
+                // 0.25.0 (item 41, run 20261125-2341-C2: Aragorn carried loot of about 83,963,978 at the run's first hour, 21,604 a day later): the old party keeps the
+                // player's own stash, which the game's AI sells at its first town; said in the run's setup, so day 0's loot is read with it
+                int stash = oldParty != null && oldParty.IsActive ? Purse.LootValue(oldParty, out int pieces) : 0;
+                if (stash > 0) done.Add(Names.Hero(old) + "'s party keeps your own stash, loot worth about " + Text.N(stash) + ", which the game's AI sells at its first town: day 0's loot counts it");
             }
 
             // 4b. Party AI Controls' own refill off for every lord, so only the agent sends them to recruit (0.12.1)

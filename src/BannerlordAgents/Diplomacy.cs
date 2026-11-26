@@ -199,7 +199,7 @@ namespace BannerlordAgents
                 Diag.Count("diplomacy:votes held");
                 Diag.Event("diplomacy", "vote held", new { id = h.Id, realm = k.StringId, vote = d.GetGeneralTitle()?.ToString(), proposer = d.ProposerClan?.StringId, closes = h.Closes });
                 Notices.Diplomacy(k, "vote", "A vote is open in your realm: " + d.GetGeneralTitle() + ", proposed by " + Names.Faction(d.ProposerClan) + " [" + h.Id + "]. It closes "
-                                              + Text.When(h.Closes) + "; you vote and, as ruler, decide (OPEN VOTES).");
+                                              + Text.When(h.Closes) + "; you vote and, as ruler, decide (OPEN VOTES)." + DelayNote(k, h, now));
                 Book("vote_held", h, null);
                 return true;
             }
@@ -258,7 +258,7 @@ namespace BannerlordAgents
                     GameHeld[d] = h;
                     Holds.Add(h);
                     if (!Proposed.Contains(d))
-                        Notices.Diplomacy(mine, "vote", "A vote is open in your realm: " + d.GetGeneralTitle() + ", proposed by " + Names.Faction(d.ProposerClan) + " [" + h.Id + "]. It closes " + Text.When(h.Closes) + ".");
+                        Notices.Diplomacy(mine, "vote", "A vote is open in your realm: " + d.GetGeneralTitle() + ", proposed by " + Names.Faction(d.ProposerClan) + " [" + h.Id + "]. It closes " + Text.When(h.Closes) + "." + DelayNote(mine, h, now));
                 }
                 foreach (Held h in Holds.Where(x => x.Election == null && !mine.UnresolvedDecisions.Contains(x.Decision)).ToList()) Forget(h);
             }
@@ -271,10 +271,18 @@ namespace BannerlordAgents
                         string said = h.Offer ? Answer(h, true, "no answer came in time") : Settle(h);
                         Notices.Diplomacy(h.Realm, h.Offer ? "offer_settled" : "vote_settled", (h.Offer ? Names.Faction(h.Decision.Kingdom) + "'s offer [" + h.Id + "]: " : "The vote [" + h.Id + "], " + h.Decision.GetGeneralTitle() + ": ") + said);
                     }
-                    else if (!h.Offer && !h.ClosingTold && h.Closes - now <= 3 && !Votes.ContainsKey(h.Decision) && !Decisions.ContainsKey(h.Decision))
+                    else if (!h.Offer && !h.ClosingTold && !Votes.ContainsKey(h.Decision) && !Decisions.ContainsKey(h.Decision))
                     {
-                        h.ClosingTold = true;
-                        Notices.Diplomacy(h.Realm, "vote_closing", "The vote [" + h.Id + "] (" + h.Decision.GetGeneralTitle() + ") closes " + Text.When(h.Closes) + " and you have not voted.");
+                        // 0.25.0 (item 33, run 20261125-2341-C2: 3 of 9 warnings came after the vote closed, fired 3 hours or less before it while the usual order delay was
+                        // about 8): a reminder only while the usual delay and 2 hours more still remain, at the last hour that does, and never in the first 3 hours
+                        double usual = UsualDelay(h.Realm), left = h.Closes - now;
+                        if (left >= usual + ReminderSpare - 1e-6 && left < usual + ReminderSpare + 1 && now - h.Opened >= 3)
+                        {
+                            h.ClosingTold = true;
+                            Notices.Diplomacy(h.Realm, "vote_closing", "The vote [" + h.Id + "] (" + h.Decision.GetGeneralTitle() + ") closes " + Text.When(h.Closes) + " and you have not voted; "
+                                                                    + "your answers usually take effect about " + Math.Round(usual) + " in-game hours after the report they answer, so a vote in your next answer still counts.");
+                        }
+                        else if (left < usual + ReminderSpare) h.ClosingTold = true;   // too late for any reminder to be in time: none is sent
                     }
                 }
                 catch (Exception e)
@@ -283,6 +291,24 @@ namespace BannerlordAgents
                     Forget(h);
                 }
             }
+        }
+
+        /// <summary>The time a vote reminder leaves beyond the usual order delay (0.25.0, item 33).</summary>
+        public const double ReminderSpare = 2;
+
+        /// <summary>The usual order delay of the realm's agent (its wake answers), as the game's thread may read it; the run's measure when it has none.</summary>
+        private static double UsualDelay(Kingdom realm)
+        {
+            Channel ch = Agents.Of(realm?.StringId)?.Channel;
+            return ch != null ? ch.UsualLagNow : Theatre.DefaultUsualLag;
+        }
+
+        /// <summary>What a vote's opening says of the time to answer it (0.25.0, item 33): its closing hour beside the usual order delay.</summary>
+        private static string DelayNote(Kingdom realm, Held h, double now)
+        {
+            double usual = UsualDelay(realm), left = h.Closes - now;
+            return " Your answers usually take effect about " + Math.Round(usual) + " in-game hours after the report they answer; it closes in " + Math.Round(left) + " hours"
+                   + (left >= usual ? ", so vote in this answer." : ", so your vote may come too late.");
         }
 
         private static void Forget(Held h)

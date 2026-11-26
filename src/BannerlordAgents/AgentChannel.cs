@@ -724,15 +724,49 @@ namespace BannerlordAgents
         /// In-game hours from a poke to its fast answer's first order taking effect, over this session's last 60 answers: as a rule (the median)
         /// and one answer in ten (the 90th); the run's measures (7 and 20 hours, Nov 2) until five answers are in.
         /// </summary>
-        public void Lag(out double usual, out double late)
+        public void Lag(out double usual, out double late) => Spread(_lags, Theatre.DefaultUsualLag, Theatre.DefaultLateLag, out usual, out late);
+
+        // 0.25.0 (item 11): review answers measured apart, from the hour of the briefing the review read to its first order taking effect
+        private readonly List<double> _reviewLags = new List<double>();
+        private readonly HashSet<string> _reviewFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<int> _reviewPokes = new HashSet<int>();
+        private readonly Dictionary<string, double> _reviewRead = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        private double _briefingHours = double.NaN;
+        private long _usualBits = BitConverter.DoubleToInt64Bits(Theatre.DefaultUsualLag);
+        /// <summary>The run's measure of review answers (run 20261125-2341-C2: a median 16.4 hours from the wake, 45 of 143 at 20 or more), until five are in.</summary>
+        public const double DefaultReviewUsualLag = 16, DefaultReviewLateLag = 30;
+
+        /// <summary>In-game hours from a review's briefing to its answer's first order taking effect, as a rule and for one review in ten (0.25.0, item 11).</summary>
+        public void ReviewLag(out double usual, out double late) => Spread(_reviewLags, DefaultReviewUsualLag, DefaultReviewLateLag, out usual, out late);
+
+        /// <summary>The wake answers' usual delay, for the game's thread (votes): kept as plain bits, written by the worker.</summary>
+        public double UsualLagNow => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _usualBits));
+
+        /// <summary>A review's briefing was written from this hour (Brain.Briefing): the hour its answer's delay counts from.</summary>
+        public void BriefingWritten(double hours) => _briefingHours = hours;
+
+        /// <summary>An answer file read (Answered): a review's is timed from the briefing written last, and its poke marks the lords question after it as the review's.</summary>
+        internal void ReviewAnswerRead(string file, int poke)
         {
-            usual = Theatre.DefaultUsualLag;
-            late = Theatre.DefaultLateLag;
-            if (_lags.Count < LagsNeeded) return;
-            List<double> sorted = _lags.OrderBy(x => x).ToList();
+            if (!IsReviewFile(file)) return;
+            if (!double.IsNaN(_briefingHours)) _reviewRead[file] = _briefingHours;
+            if (poke >= 0) _reviewPokes.Add(poke);
+        }
+
+        private static void Spread(List<double> lags, double usualDefault, double lateDefault, out double usual, out double late)
+        {
+            usual = usualDefault;
+            late = lateDefault;
+            if (lags.Count < LagsNeeded) return;
+            List<double> sorted = lags.OrderBy(x => x).ToList();
             usual = sorted[sorted.Count / 2];
             late = Math.Max(usual, sorted[Math.Min(sorted.Count - 1, (int)Math.Ceiling(sorted.Count * 0.9) - 1)]);
         }
+
+        /// <summary>Is this answer file a review's (a council answer, "poke-N-council-...")?</summary>
+        internal static bool IsReviewFile(string file) => file != null && file.IndexOf("-council-", StringComparison.OrdinalIgnoreCase) >= 0;
+        /// <summary>Is this answer file the follow-up question about lords with no order ("poke-N-lords-...")?</summary>
+        internal static bool IsLordsFile(string file) => file != null && file.IndexOf("-lords-", StringComparison.OrdinalIgnoreCase) >= 0;
 
         /// <summary>
         /// The question book of a poke (book\poke-N.json) or a council (book\council.json), for the war room's look_up, list and chronicle
@@ -753,6 +787,35 @@ namespace BannerlordAgents
 
         /// <summary>The war room's request for the newest hour before a question (0.18.1), in the orders folder: book-request*.json.</summary>
         public const string BookRequest = "book-request";
+
+        /// <summary>
+        /// Has the war room given up on this request for the newest hour (0.25.0, item 12, contract (c): an empty book-request-ID.withdrawn beside where the request was)? The
+        /// mark is taken away when it is found; the request itself went when it was read. Worker.
+        /// </summary>
+        public bool Withdrawn(string request)
+        {
+            if (string.IsNullOrEmpty(request)) return false;
+            string f = Path.Combine(OrdersDir, request + ".withdrawn");
+            try
+            {
+                if (!System.IO.File.Exists(f)) return false;
+                System.IO.File.Delete(f);
+                Diag.Event("agent", "book request withdrawn", new { realm = Realm, request });
+                return true;
+            }
+            catch (Exception e) { Diag.Swallowed("reading a withdrawn book request", e); return false; }
+        }
+
+        /// <summary>Withdrawn marks nobody took away (their request was written before they came) go after two minutes (0.25.0).</summary>
+        private void TidyWithdrawn()
+        {
+            try
+            {
+                foreach (string f in Directory.GetFiles(OrdersDir, "*.withdrawn"))
+                    if ((DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(f)).TotalMinutes > 2) System.IO.File.Delete(f);
+            }
+            catch (Exception e) { Diag.Swallowed("tidying withdrawn book requests", e); }
+        }
 
         /// <summary>
         /// The answer to a request for the newest hour (0.18.1): book\now.txt, written after the book and the view file, naming the request, the hour they are of, its date,
@@ -854,10 +917,12 @@ namespace BannerlordAgents
             _scanAlarmed = false;
             if (!Directory.Exists(OrdersDir)) { Paths.Ensure(OrdersDir); return; }
             if (!_leftoversChecked) SetAsideLeftovers();
+            TidyWithdrawn();
             bool fresh = false;
             foreach (string f in Directory.GetFiles(OrdersDir, "*.json").OrderBy(System.IO.File.GetLastWriteTimeUtc))
             {
-                // the war room asks for its council's briefing (0.12.0): written now from the newest hour (it moves the request in whole)
+                // the war room asks for its council's briefing (0.12.0): written from the newest hour (it moves the request in whole); since 0.25.0 in small steps
+                // between the helper's other jobs (Writes), the hour's fresh book with it
                 if (Path.GetFileName(f).StartsWith(BriefingRequest, StringComparison.OrdinalIgnoreCase))
                 {
                     try { System.IO.File.Delete(f); }
@@ -866,7 +931,8 @@ namespace BannerlordAgents
                     catch (Exception e) { Diag.Error("writing the council's briefing", e); }
                     continue;
                 }
-                // the war room asks for the newest hour before a question of the agent's (0.18.1): the question book and the view file written afresh
+                // the war room asks for the newest hour before a question of the agent's (0.18.1): the question book and the view file written afresh, since 0.25.0 in
+                // small steps (Writes), skipped when the war room withdraws the request first
                 if (Path.GetFileName(f).StartsWith(BookRequest, StringComparison.OrdinalIgnoreCase))
                 {
                     string request = Path.GetFileNameWithoutExtension(f);
@@ -927,6 +993,8 @@ namespace BannerlordAgents
             string name = Path.GetFileName(f);
             AnswerFiles++;
             Diag.Count("agent:files");
+            // 0.25.0 (item 11): a review's answer is timed from the hour of the briefing it read
+            ReviewAnswerRead(name, poke);
             DateTime written = SafeCreation(f);
             DateTime read = DateTime.Now;
             Pokes.TryGetValue(poke, out PokeInfo pi);
@@ -951,7 +1019,7 @@ namespace BannerlordAgents
             if (poke >= 0 && pi != null && poke > _lastAnswered) _lastAnswered = poke;
 
             EnsureBefore(null);
-            if (poke >= 0 && poke <= _before && !Pokes.ContainsKey(poke))
+            if (poke >= 0 && poke <= _before && !Pokes.ContainsKey(poke) && !_takenAtLoad.Contains(name))
             {
                 Diag.Count("agent:before load", orders.Count);
                 foreach (AgentChannel.AgentOrder o in orders)
@@ -1199,15 +1267,54 @@ namespace BannerlordAgents
             }
         }
 
+        // 0.25.0 (item 14): the answers from before this session taken at the load (CarryOn.TakesAtLoad), and what the first look says of the last answer
+        private readonly HashSet<string> _takenAtLoad = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _loadAnswerNotes = new List<string>();
+
+        /// <summary>Worker: the orders folder's leftovers from before this session looked at now, if not yet (the first look's note needs them).</summary>
+        public void CheckLeftovers()
+        {
+            if (!On || _leftoversChecked || !Directory.Exists(OrdersDir)) return;
+            SetAsideLeftovers();
+        }
+
+        /// <summary>
+        /// What the first look after a load says of the agent's last answer (0.25.0, item 14): whether an answer written after the save was taken or set aside, or that the last
+        /// answer before the save had reached the game. Empty when nothing is known.
+        /// </summary>
+        public string LoadAnswerNote()
+        {
+            if (_loadAnswerNotes.Count > 0) return " " + string.Join(" ", _loadAnswerNotes);
+            int answered = CarryOn.AnsweredAtSave(Realm);
+            return answered >= 0 ? " Your last answer before the save (to #" + answered + ") had reached the game, and no answer of yours was waiting at the load." : "";
+        }
+
         private void SetAsideLeftovers()
         {
             _leftoversChecked = true;
+            _takenAtLoad.Clear();
+            _loadAnswerNotes.Clear();
             try
             {
                 foreach (string f in Directory.GetFiles(OrdersDir, "*.json"))
                 {
                     DateTime written = System.IO.File.GetLastWriteTime(f);
                     if (written >= _sessionStart) continue;
+                    string name = Path.GetFileName(f);
+                    // an answer written after the save this session loaded from, to a wake made at or before it, is taken (0.25.0, item 14)
+                    bool request = name.StartsWith(BriefingRequest, StringComparison.OrdinalIgnoreCase) || name.StartsWith(BookRequest, StringComparison.OrdinalIgnoreCase)
+                                   || name.StartsWith(ToolCheckRequest, StringComparison.OrdinalIgnoreCase) || name.StartsWith("chat-", StringComparison.OrdinalIgnoreCase);
+                    if (!request && AgentChannel.Parse(f, out int poke, out _, out _) && CarryOn.TakesAtLoad(Realm, System.IO.File.GetLastWriteTimeUtc(f), poke))
+                    {
+                        _takenAtLoad.Add(name);
+                        Diag.Count("agent:taken at load");
+                        Diag.Event("answer", "taken at load", new { realm = Realm, file = name, poke, written = written.ToString("yyyy-MM-dd HH:mm:ss") });
+                        _loadAnswerNotes.Add("Your answer to #" + poke + " was written after the save this game was loaded from, for news from before it, so it reached the game: its orders are given now.");
+                        Line("file " + name + " (poke #" + poke + "): TAKEN at the load. It was written at " + written.ToString("HH:mm:ss") + ", after the save this session was loaded from, and answers a wake from before it.");
+                        continue;
+                    }
+                    if (!request && AgentChannel.Parse(f, out int stalePoke, out _, out _))
+                        _loadAnswerNotes.Add("Your answer to #" + stalePoke + " (written at " + written.ToString("HH:mm") + ") did not reach the game: it answers news from after the save this game was loaded from, so none of it was carried out. Give again any of its orders that still stand.");
                     string stale = Paths.Ensure(Path.Combine(OrdersDir, "stale"));
                     string to = Path.Combine(stale, Path.GetFileName(f));
                     if (System.IO.File.Exists(to)) to = Path.Combine(stale, Path.GetFileNameWithoutExtension(f) + "-" + DateTime.Now.ToString("HHmmssfff") + ".json");
@@ -1257,13 +1364,25 @@ namespace BannerlordAgents
                 gameHours = hours - t.Hours;
                 // when the answer took effect (0.13.22); a next order (then) starts later by design, so it does not count
                 if (status == "applied" && a.File != "then") _late.Applied(a.Poke, hours);
-                // a fast answer's lag, once per poke, for a news wake's clock (0.14): a council's answers take longer by design
-                if (status == "applied" && a.File != "then" && (a.File == null || a.File.IndexOf("council", StringComparison.OrdinalIgnoreCase) < 0) && gameHours >= 0 && _lagPokes.Add(a.Poke))
+                // a fast answer's lag, once per poke, for a news wake's clock (0.14): a council's answers take longer by design; 0.25.0: nor does the lords question after a review
+                bool review = IsReviewFile(a.File), afterReview = IsLordsFile(a.File) && _reviewPokes.Contains(a.Poke);
+                if (status == "applied" && a.File != "then" && !review && !afterReview && (a.File == null || a.File.IndexOf("council", StringComparison.OrdinalIgnoreCase) < 0) && gameHours >= 0 && _lagPokes.Add(a.Poke))
                 {
                     _lags.Add(gameHours);
                     if (_lags.Count > LagsKept) _lags.RemoveAt(0);
+                    Lag(out double usualNow, out _);
+                    Interlocked.Exchange(ref _usualBits, BitConverter.DoubleToInt64Bits(usualNow));
                 }
-                delay = " Answered " + seconds.ToString("0", Text.Inv) + " s after poke #" + a.Poke + " (" + gameHours.ToString("0.0", Text.Inv) + " in-game hours).";
+                // 0.25.0 (item 11): a review's answer, once per file, from the hour of the briefing it read
+                if (status == "applied" && review && _reviewRead.TryGetValue(a.File, out double read) && hours >= read && _reviewFiles.Add(a.File))
+                {
+                    _reviewLags.Add(hours - read);
+                    if (_reviewLags.Count > LagsKept) _reviewLags.RemoveAt(0);
+                }
+                // 0.25.0 (item 41): a next order (then) starts when the order before it ends, by design: its receipt says so, not a delay from the wake
+                delay = a.File == "then"
+                    ? " A next order (then), started when the order before it ended; it follows from poke #" + a.Poke + "."
+                    : " Answered " + seconds.ToString("0", Text.Inv) + " s after poke #" + a.Poke + " (" + gameHours.ToString("0.0", Text.Inv) + " in-game hours).";
             }
             else if (a.Poke < 0) delay = " (The file gave no poke number, so the answer time is unknown.)";
             double waited = (DateTime.Now - a.Received).TotalSeconds;
@@ -1286,7 +1405,9 @@ namespace BannerlordAgents
             Brain.WriteOrder(new
             {
                 Type = "agent_receipt", Realm, a.Poke, a.File, a.Index, a.Lord, a.Do, a.Target, a.Why, Status = status, Reason = reason,
-                Hours = hours, AnswerSeconds = seconds >= 0 ? seconds : (double?)null, AnswerGameHours = gameHours >= 0 ? gameHours : (double?)null,
+                // 0.25.0 (item 41): a next order's time from the first order's wake is no answer delay: left out, and the receipt marked as a follow-on
+                Hours = hours, AnswerSeconds = seconds >= 0 && a.File != "then" ? seconds : (double?)null, AnswerGameHours = gameHours >= 0 && a.File != "then" ? gameHours : (double?)null,
+                FollowOn = a.File == "then" ? true : (bool?)null, Review = IsReviewFile(a.File) ? true : (bool?)null,
                 WaitedSeconds = waited >= 2 ? waited : (double?)null, Mode, Run = RunTags.Id, Arm = RunTags.Arm, ToolRun = a.ToolRun > 0 ? a.ToolRun : (int?)null
             });
             Episodes.Receipt(Realm, a, status, reason, hours);

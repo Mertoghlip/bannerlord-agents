@@ -148,7 +148,7 @@ namespace BannerlordAgents
         /// A line for an agent that sets its own wakes (0.18, wake = self; Sort has run first): the locked rules keep their lane; its watches' lines, their check-ins,
         /// news of war, peace and offers, and the order news of the lords its watches follow wake it; every other line rides its next wake.
         /// </summary>
-        public static void SortSelf(Trigger t, ISet<string> followed)
+        public static void SortSelf(Trigger t, ISet<string> followed, string realm = null)
         {
             if (t.Rule != null && List.Any(r => r.Locked && r.Name == t.Rule)) return;
             if (t.Kind == "watch" || t.Kind == "check_in") { t.Lane = Now; t.Rule = "your_watch"; return; }
@@ -156,6 +156,15 @@ namespace BannerlordAgents
             if (SelfAlways.Contains(t.Kind)) { t.Lane = Now; t.Rule = "self_" + t.Kind; return; }
             if (followed != null && t.Party != null && followed.Contains(t.Party) && (t.Kind == "tool" || t.Kind == "order_ended" || t.Kind == "order_arrived"))
             {
+                // 0.25.0 (item 21, run 20261125-2341-C2: "X is besieged by strength N, too strong to break in time; Y shelters in Z" came about every hour, 53 such lines in
+                // wakes, 8 wakes with nothing else): a routine line about a followed lord wakes the agent the first time only; the same line again, numbers aside, within
+                // FollowedAgainHours rides as background news
+                if (SaidLately(realm, t))
+                {
+                    t.Lane = Digest;
+                    t.Rule = "your_watch_follows_again";
+                    return;
+                }
                 t.Lane = Now;
                 t.Rule = "your_watch_follows";
                 return;
@@ -163,6 +172,27 @@ namespace BannerlordAgents
             t.Lane = Digest;
             t.Rule = "self_rides_next";
         }
+
+        /// <summary>A followed lord's same routine line, numbers aside, wakes the agent once in this many in-game hours (0.25.0).</summary>
+        public const double FollowedAgainHours = 24;
+
+        // each followed lord's routine lines with their numbers taken out, by realm, lord and line, and when each last woke the agent (worker)
+        private static readonly Dictionary<string, double> FollowedSaid = new Dictionary<string, double>(StringComparer.Ordinal);
+        private static readonly Regex Numbers = new Regex(@"\d[\d,.]*", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        /// <summary>Did this line, numbers aside, wake the agent about the same lord within FollowedAgainHours? Notes it as said now when not.</summary>
+        private static bool SaidLately(string realm, Trigger t)
+        {
+            string key = (realm ?? "") + "|" + t.Party + "|" + Numbers.Replace(t.Text ?? "", "#");
+            if (FollowedSaid.TryGetValue(key, out double at) && t.Hours - at < FollowedAgainHours - 1e-6 && t.Hours >= at) return true;
+            FollowedSaid[key] = t.Hours;
+            if (FollowedSaid.Count > 4000)
+                foreach (string k in FollowedSaid.Where(kv => t.Hours - kv.Value > FollowedAgainHours).Select(kv => kv.Key).ToList()) FollowedSaid.Remove(k);
+            return false;
+        }
+
+        /// <summary>A new campaign session: the lines said before are forgotten (they were the other session's).</summary>
+        public static void Reset() => FollowedSaid.Clear();
 
         private sealed class Scope : IScope
         {

@@ -942,16 +942,31 @@ namespace BannerlordAgents
                 Common.Pace pace = Forecast.PaceOf(s, r);
                 if (pace != null) { pace.PerkValues = null; vp.March = pace; }
                 // arrival: a march to a holding (not a patrol round it), or one of the realm's own lords walking to a point of its order
-                bool toHolding = MarchesTo(r) && r.TargetSettlement != null;
+                bool toHolding = MarchesTo(r) && r.TargetSettlement != null, reckoned = false;
                 if (toHolding || (relation == "own" && r.Doing == "GoToPoint"))
                 {
                     // to a holding: along its way only when that way ends there, else by road at its pace (0.7.4: Latif walking to a
                     // point 7 ahead was "going to Starkmoore, there in about 3 hours", 364 away)
                     Forecast.Arrival a = toHolding && s.SettlementById.TryGetValue(r.TargetSettlement, out SettlementRow th) ? Forecast.ToHolding(s, r, th) : Forecast.ArrivalOf(s, r);
+                    reckoned = a != null;
                     if (a != null && (toHolding || a.Length > 3))
                     {
                         vp.Arrives = Forecast.ArrivalText(a);
                         vp.ArrivesAt = a.Reached ? a.At : double.NaN;
+                    }
+                }
+                // 0.25.0 (item 2, run 20261125-2341-C2: Durin's page read "going to Celebcharn, there in about 6 hours" after 1,534 hours at one spot): one of the realm's own lords
+                // standing still on an order says so instead of an arrival time, and one with no way over land to the holding he goes to says that
+                if (relation == "own")
+                {
+                    double still = Tools.Runner.StillHours(r.Id, s.Hours);
+                    string to = toHolding ? r.TargetSettlement : null;
+                    // the way is asked only where it is already kept: a lord standing still, or one whose march just found none
+                    bool noWay = to != null && (!double.IsNaN(still) || !reckoned) && s.SettlementById.TryGetValue(to, out SettlementRow nh) && NoLandWay(r, nh);
+                    if (!double.IsNaN(still) || noWay)
+                    {
+                        vp.Arrives = (!double.IsNaN(still) ? "has not moved for " + Math.Round(still) + " hours" : "") + (noWay ? (!double.IsNaN(still) ? "; " : "") + "cannot reach " + SName(s, to) + " by land" : "");
+                        vp.ArrivesAt = double.NaN;
                     }
                 }
             }
@@ -1059,6 +1074,8 @@ namespace BannerlordAgents
 
         public static string Doing(Snapshot s, PartyRow r)
         {
+            // 0.25.0 (item 16): a lord called to another's army and still marching to join it says so (orders for him are refused until he is released from it)
+            if (r.Kind == "lord" && r.ArmyLeader != null && !r.Attached && r.ArmyLeader != r.Id && r.InSettlement == null && !r.InBattle) return "called to " + PName(s, r.ArmyLeader) + "'s army, marching to join it";
             if (r.Raiding != null) return "raiding " + SName(s, r.Raiding);
             if (r.InBattle) return "fighting";
             if (r.Besieging != null) return "besieging " + SName(s, r.Besieging);
@@ -1122,6 +1139,15 @@ namespace BannerlordAgents
                 if (d < distance) { distance = d; best = h; }
             }
             return best;
+        }
+
+        /// <summary>Does the game's own way-finder (the proven copy, Ways) find no way over land from where the party stands to the holding's gate (0.25.0)? False while the copy is not proven.</summary>
+        private static bool NoLandWay(PartyRow r, SettlementRow h)
+        {
+            if (!Ways.Proven || h == null) return false;
+            bool gate = h.Gx != 0 || h.Gy != 0;
+            List<float[]> way = Ways.Between(r.X, r.Y, gate ? h.Gx : h.X, gate ? h.Gy : h.Y, out bool real);
+            return real && way == null;
         }
 
         public static string FactionName(Snapshot s, string id)

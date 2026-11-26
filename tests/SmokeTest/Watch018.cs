@@ -159,6 +159,7 @@ namespace SmokeTest
                 Directory.CreateDirectory(orders);
                 File.WriteAllText(Path.Combine(orders, id + ".json"), "{}");
                 AgentChannel.Scan();
+                Writes.Drain();   // 0.25.0: the book is written in steps between the helper's other jobs
                 return ReadIf(Path.Combine(dir, "book", "now.txt"));
             }
             string stamp1 = Ask("book-request-1");

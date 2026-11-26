@@ -27,6 +27,23 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         public long LastContext;
         public List<string> Denied = new List<string>();
+        /// <summary>
+        /// What this call read of the realm's files (war room 0.22.0): its page reads (by the Read tool or named in an open), the steps that asked anything, its opens, and the
+        /// pages by name. Kept with the call itself, so a follow-up question's reads never stand in for its own (run 20261125-2341-C2: all 89 wakes and reviews followed by a
+        /// lords question were logged with that question's counts).
+        /// </summary>
+        public (int reads, int steps, int opens, List<string> pages) Reads = (0, 0, 0, new List<string>());
+
+        /// <summary>A retry's usage and reads folded into the call it retried.</summary>
+        public void Add(CallResult r2)
+        {
+            if (r2 == null) return;
+            Seconds += r2.Seconds;
+            OutTokens += r2.OutTokens;
+            Thinking += r2.Thinking;
+            Cost += r2.Cost;
+            Reads = (Reads.reads + r2.Reads.reads, Reads.steps + r2.Reads.steps, Reads.opens + r2.Reads.opens, Reads.pages.Concat(r2.Reads.pages).Distinct().ToList());
+        }
     }
 
     /// <summary>
@@ -117,10 +134,17 @@ namespace BannerlordAgents.WarRoom
         /// </summary>
         public static string CacheTtl = "5m";
 
+        /// <summary>
+        /// For the self-test only (war room 0.22.0): a stand-in for Claude Code that answers a call from its message and session, so the order of calls (a wake before its
+        /// handover, a review before a routine wake) and what each message opens with can be checked without a real call. Null in every real run.
+        /// </summary>
+        internal static Func<string, string, CallResult> Fake;
+
         public static CallResult Run(string exe, string systemFile, string prompt, string model, string effort, string cwd, bool read, int timeoutSeconds, int thinkingCap = 0,
                                      string sessionId = null, bool resume = false, CancellationToken cancel = default, IToolHost tools = null, IDictionary<string, string> env = null,
                                      int stallSeconds = 0, string forkAt = null, string forkTo = null)
         {
+            if (Fake != null) return Fake(prompt, sessionId) ?? new CallResult { Error = "no answer" };
             var r = new CallResult();
             var psi = new ProcessStartInfo(exe)
             {

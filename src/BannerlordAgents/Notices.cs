@@ -62,12 +62,25 @@ namespace BannerlordAgents
             return list;
         }
 
-        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null, bool recordOnly = false, double? hours = null)
+        private static void Send(string kind, string text, List<string> factions, string party = null, string quiet = null, string place = null, bool recordOnly = false, double? hours = null,
+                                 Dictionary<string, string> since = null)
         {
             if (!Bridge.Running || (factions.Count == 0 && kind != "party_destroyed")) return;
-            var n = new Notice { Id = NoticeIds.Next(), Hours = hours ?? CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place, RecordOnly = recordOnly };
+            var n = new Notice { Id = NoticeIds.Next(), Hours = hours ?? CampaignTime.Now.ToHours, Kind = kind, Text = text, Factions = factions, Party = party, Quiet = quiet, Place = place, RecordOnly = recordOnly, Since = since };
             Background.Post(() => Brain.OnNotice(n));
         }
+
+        /// <summary>The big quiet news line of a notice for one realm we follow (0.25.0, item 13), or null when that realm is not one.</summary>
+        private static Dictionary<string, string> SinceFor(IFaction realm, string line, Dictionary<string, string> into = null)
+        {
+            if (realm == null || line == null || !Bridge.IsSeat(realm.StringId)) return into;
+            into = into ?? new Dictionary<string, string>();
+            into[realm.StringId] = line;
+            return into;
+        }
+
+        /// <summary>A battle wakes a realm's agent at once when it lost more than this many men in it, or more than BigBattleLords of its lords were taken (0.25.0, item 13).</summary>
+        public const int BigBattleMen = 1000, BigBattleLords = 2, SinceBattleMen = 500;
 
         private static string F(IFaction f) => Names.Faction(f);
 
@@ -232,8 +245,11 @@ namespace BannerlordAgents
             // a holding taken by storm: its siege was not lifted (OnSiegeEnded, 0.13.18)
             if (s != null && now != before) LiftedWaiting.Remove(s.StringId);
             if (s == null || now == before) return;
-            Send("holding_changed", Names.Settlement(s) + " passed from " + F(before) + " to " + F(now)
-                 + (capturer != null ? ", taken by " + Names.Hero(capturer) : "") + ".", Involved(now, before), place: s.StringId);
+            // 0.25.0 (item 13): a holding of the realm's lost, or one it took, is among its big quiet news
+            string by = capturer != null ? ", taken by " + Names.Hero(capturer) : "";
+            Dictionary<string, string> since = SinceFor(before, "Your " + (s.IsVillage ? "village " : s.IsCastle ? "castle " : s.IsTown ? "town " : "") + Names.Settlement(s) + " fell to " + F(now) + by + ".");
+            since = SinceFor(now, "You took " + Names.Settlement(s) + " from " + F(before) + by + ".", since);
+            Send("holding_changed", Names.Settlement(s) + " passed from " + F(before) + " to " + F(now) + by + ".", Involved(now, before), place: s.StringId, since: since);
         }
 
         public static void OnArmyDispersed(Army army, Army.ArmyDispersionReason reason, bool isPlayersArmy)
@@ -280,8 +296,60 @@ namespace BannerlordAgents
             string winner = me.WinningSide == BattleSideEnum.Attacker ? attacker : defender;
             string what = me.IsSiegeAssault ? "Assault" : me.IsRaid ? "Fight over a raid" : "Battle";
             string place = me.MapEventSettlement != null ? " at " + Names.Settlement(me.MapEventSettlement) : "";
+            // 0.25.0 (item 13, run 20261125-2341-C2: on day 101, 18 lords were taken at Imnagath and 4,323 men lost, and the next wake named only Náth): each realm we follow
+            // that lost more than 500 men here has it among its big quiet news; more than 1,000 men or more than 2 of its lords taken wakes its agent at once, once a battle
+            Dictionary<string, string> since = null;
+            foreach (MapEventSide side in new[] { me.AttackerSide, me.DefenderSide })
+            {
+                foreach (IFaction realm in RealmsOn(side))
+                {
+                    Losses(side, realm, out int lost, out List<string> taken);
+                    if (lost <= SinceBattleMen && taken.Count <= BigBattleLords) continue;
+                    bool won = side == me.Winner;
+                    MobileParty foe = (side == me.AttackerSide ? me.DefenderSide : me.AttackerSide)?.LeaderParty?.MobileParty;
+                    string where = me.MapEventSettlement != null ? Names.Settlement(me.MapEventSettlement) + " battle" : "The battle against " + (side == me.AttackerSide ? defender : attacker);
+                    string held = taken.Count == 0 ? "" : "; they are held by " + (won ? "nobody: your side won the field" : (side == me.AttackerSide ? defender : attacker) + (me.MapEventSettlement != null ? ", at " + Names.Settlement(me.MapEventSettlement) : ""));
+                    string line = where + (won ? " won" : " lost") + ": " + (taken.Count > 0 ? taken.Count + (taken.Count == 1 ? " of your lords taken (" : " of your lords taken (") + Text.List(taken.Take(20).ToList())
+                                  + (taken.Count > 20 ? " and " + (taken.Count - 20) + " more" : "") + "), " : "") + Text.N(lost) + " men lost" + held + ".";
+                    if (lost > SinceBattleMen) since = SinceFor(realm, line, since);
+                    if (lost > BigBattleMen || taken.Count > BigBattleLords)
+                        Send("battle_big", line, new List<string> { realm.StringId }, foe?.StringId, place: me.MapEventSettlement?.StringId);
+                }
+            }
             Send("battle", what + place + ": " + attacker + " (" + F(a) + ") against " + defender + " (" + F(d) + "); " + winner + " won." + WhoFought(me, attacker, defender), involved, null, Small(me, start),
-                 me.MapEventSettlement?.StringId);
+                 me.MapEventSettlement?.StringId, since: since);
+        }
+
+        /// <summary>The realms we follow (Bridge.IsSeat) with a party on a side of a battle.</summary>
+        private static List<IFaction> RealmsOn(MapEventSide side)
+        {
+            var list = new List<IFaction>(1);
+            if (side?.Parties == null) return list;
+            foreach (MapEventParty mp in side.Parties)
+            {
+                IFaction f = mp?.Party?.MapFaction;
+                if (f != null && Bridge.IsSeat(f.StringId) && !list.Contains(f)) list.Add(f);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// A realm's losses on one side of a battle at its end (0.25.0, item 13): its men down since the battle began (each of its parties' healthy men at the start, less
+        /// those standing now), and its lords taken in it (a lord party of the realm whose lord is a prisoner now; their parties are still in the side's list).
+        /// </summary>
+        private static void Losses(MapEventSide side, IFaction realm, out int lost, out List<string> taken)
+        {
+            lost = 0;
+            taken = new List<string>();
+            if (side?.Parties == null) return;
+            foreach (MapEventParty mp in side.Parties)
+            {
+                PartyBase pb = mp?.Party;
+                if (pb == null || pb.MapFaction != realm) continue;
+                lost += Math.Max(0, mp.HealthyManCountAtStart - pb.NumberOfHealthyMembers);
+                MobileParty m = pb.MobileParty;
+                if (m != null && m.IsLordParty && m.LeaderHero == null && m.Owner != null && m.Owner.IsPrisoner) taken.Add(Names.Hero(m.Owner));
+            }
         }
 
         /// <summary>
@@ -381,8 +449,10 @@ namespace BannerlordAgents
         {
             if (h == null || !h.IsLord) return;
             // the captor's realm too (0.13.16): "taken prisoner by Dramthak" alone did not tell the lieutenant that Dol Guldur had fought at Nanduhirion
-            Send("captured", Names.Hero(h) + " (" + F(h.MapFaction) + ") was taken prisoner by " + P(capturer) + (capturer?.MapFaction != null ? " (" + F(capturer.MapFaction) + ")" : "") + ".",
-                 Involved(h.MapFaction, capturer?.MapFaction), capturer?.MobileParty?.StringId);
+            string text = Names.Hero(h) + " (" + F(h.MapFaction) + ") was taken prisoner by " + P(capturer) + (capturer?.MapFaction != null ? " (" + F(capturer.MapFaction) + ")" : "") + ".";
+            // 0.25.0 (item 13): one of the realm's own lords taken is among its big quiet news
+            Send("captured", text, Involved(h.MapFaction, capturer?.MapFaction), capturer?.MobileParty?.StringId,
+                 since: SinceFor(h.MapFaction, "Your lord " + Names.Hero(h) + " was taken prisoner by " + P(capturer) + (capturer?.MapFaction != null ? " (" + F(capturer.MapFaction) + ")" : "") + "."));
         }
 
         public static void OnDecisionAdded(KingdomDecision d, bool isPlayerInvolved)

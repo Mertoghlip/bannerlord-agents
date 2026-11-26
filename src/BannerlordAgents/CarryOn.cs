@@ -78,10 +78,20 @@ namespace BannerlordAgents
             }
             // the self-waking agents' watches (0.18), as they stood
             JObject watches = Watches.ExportAll();
+            // 0.25.0 (item 14): each agent's newest poke and newest answered poke at the save, for the load rule that takes an answer written after it
+            var pokes = new JObject();
+            var answered = new JObject();
+            foreach (RealmAgent ag in Agents.All)
+            {
+                if (ag?.Realm == null || ag.Channel == null) continue;
+                pokes[ag.Realm] = ag.Channel.LastPoke;
+                answered[ag.Realm] = ag.Channel.LastAnswered;
+            }
             var o = new JObject
             {
                 ["type"] = "orders_at_save", ["save"] = save, ["hours"] = hours, ["date"] = Text.When(hours), ["load"] = load,
-                ["wall"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), ["orders"] = orders, ["wages"] = new JArray(caps), ["watches"] = watches
+                ["wall"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", Text.Inv), ["wall_utc"] = DateTime.UtcNow.ToString("o", Text.Inv),
+                ["orders"] = orders, ["wages"] = new JArray(caps), ["watches"] = watches, ["pokes"] = pokes, ["answered"] = answered
             };
             if (lieutenantWaiting > 0) o["lieutenant_waiting"] = new JObject { ["orders"] = lieutenantWaiting, ["answers"] = lieutenantAnswers };
             Files.Overwrite(file, o.ToString(Formatting.None));
@@ -97,6 +107,7 @@ namespace BannerlordAgents
         public static void AtLoad(string save, double loadedAt)
         {
             JObject o = Read(save, loadedAt, out string why);
+            SetSaveMark(o);
             if (o == null)
             {
                 if (why != null) Log.Line("orders: " + why);
@@ -222,6 +233,53 @@ namespace BannerlordAgents
 
         /// <summary>Worker: what the realm's first look since the load says of its orders (empty when nothing was carried on).</summary>
         public static string NoteFor(string realm) => realm != null && Told.TryGetValue(realm, out string t) ? t : "";
+
+        // ---------- 0.25.0 (item 14): an answer written after the save this session loaded from ----------
+
+        private static readonly object MarkGate = new object();
+        private static DateTime _savedUtc = DateTime.MinValue;
+        private static readonly Dictionary<string, int> SavedPokes = new Dictionary<string, int>(StringComparer.Ordinal), SavedAnswered = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        /// <summary>Game's thread at a load: when the save was made (by the wall, in UTC) and each agent's newest poke and newest answered poke then; cleared with no file.</summary>
+        internal static void SetSaveMark(JObject o)
+        {
+            lock (MarkGate)
+            {
+                _savedUtc = DateTime.MinValue;
+                SavedPokes.Clear();
+                SavedAnswered.Clear();
+                if (o == null) return;
+                // Newtonsoft reads an ISO time as a date of its own (see Json.Raw): either way it is turned into UTC here
+                JToken wt = o["wall_utc"];
+                if (wt != null && wt.Type == JTokenType.Date) _savedUtc = ((DateTime)wt).ToUniversalTime();
+                else if (wt != null && DateTime.TryParse((string)wt, Text.Inv, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime utc)) _savedUtc = utc.ToUniversalTime();
+                if (o["pokes"] is JObject p) foreach (JProperty x in p.Properties()) if (x.Value.Type == JTokenType.Integer) SavedPokes[x.Name] = (int)x.Value;
+                if (o["answered"] is JObject a) foreach (JProperty x in a.Properties()) if (x.Value.Type == JTokenType.Integer) SavedAnswered[x.Name] = (int)x.Value;
+            }
+        }
+
+        /// <summary>
+        /// The load rule for an answer left in the orders folder from before this session (0.25.0, item 14; run 20261125-2341-C2, restart 2: review #13293's answer, 8 camp-strike
+        /// orders, came 12 seconds after the save and was set aside as answering "a situation that no longer exists"): it is taken when it was written after the save this session
+        /// loaded from and answers a wake made at or before the save (its poke number no newer than the realm's newest poke then). A save written before 0.25.0 has no mark: none is.
+        /// </summary>
+        internal static bool TakesAtLoad(string realm, DateTime writtenUtc, int poke)
+        {
+            lock (MarkGate)
+            {
+                if (_savedUtc == DateTime.MinValue || realm == null || poke < 0 || !SavedPokes.TryGetValue(realm, out int newest)) return false;
+                return writtenUtc > _savedUtc && poke <= newest;
+            }
+        }
+
+        /// <summary>The realm's newest answered poke when the save this session loaded from was made (-1 when not known).</summary>
+        internal static int AnsweredAtSave(string realm)
+        {
+            lock (MarkGate) return realm != null && SavedAnswered.TryGetValue(realm, out int n) ? n : -1;
+        }
+
+        /// <summary>Was a save mark read at this load (a save made with 0.25.0 or later)?</summary>
+        internal static bool HasSaveMark { get { lock (MarkGate) return _savedUtc != DateTime.MinValue; } }
     }
 
     /// <summary>

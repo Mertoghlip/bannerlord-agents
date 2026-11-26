@@ -677,7 +677,8 @@ namespace BannerlordAgents
                           + Minutes("time:in a menu") + " in menus, " + Minutes("time:battle or scene") + " in battles or scenes, " + Minutes("time:other screens")
                           + " on other screens, " + Minutes("time:no campaign") + " outside a campaign; the game window was in the background for " + Minutes("time:window in the background") + ".");
             sb.AppendLine("Campaign loads: " + CountOf("campaign loads") + ". In-game hours covered: " + CountOf("hours") + ".");
-            sb.AppendLine("Pokes for the watched realm: " + CountOf("pokes") + Breakdown("poke:") + ". Reports: " + SampleText("report:tokens", "tokens", "0")
+            sb.AppendLine("Pokes for the watched realms: " + CountOf("pokes") + ", by realm" + (Breakdown("pokes of:") is string byRealm && byRealm.Length > 0 ? byRealm : " (none)")
+                          + "; by kind" + Breakdown("poke:") + "; wakes not reported because the realm's agent is off " + CountOf("wake:not reported, agent off") + ". Reports: " + SampleText("report:tokens", "tokens", "0")
                           + "; the 40-party limit hid parties " + CountOf("report:cap hit") + " times.");
             sb.AppendLine("Not poked: " + CountOf("quiet") + " notices kept to the logs" + Breakdown("quiet:") + "; enemy lords newly seen far off "
                           + CountOf("sighting:far off") + ".");

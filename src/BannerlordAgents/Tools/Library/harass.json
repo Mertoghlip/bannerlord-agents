@@ -77,6 +77,7 @@
     "weigh": { "about": "weighing {foe}",
       "when": [
         { "if": "gone(foe) or not in_view(foe)", "go": "back" },
+        { "if": "hours_to(foe) == none", "go": "back", "set": { "spurned[foe]": "now + 6" } },
         { "if": "true", "go": "decide", "set": { "t0": "hours_to(foe)", "b": "fight_hours(foe)", "odds": "fight_odds(foe)" } } ] },
     "decide": { "about": "weighing {foe}: the enemies who could be in the fight by its middle or end are {round(odds * 100)}% of your side",
       "when": [

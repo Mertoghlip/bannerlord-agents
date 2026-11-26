@@ -73,7 +73,8 @@ namespace SmokeTest
         private static void WakeTests(string root)
         {
             Check(WakeRules.Problems.Count == 0, "the wake rule's list reads and its facts exist" + (WakeRules.Problems.Count > 0 ? ": " + string.Join("; ", WakeRules.Problems) : ""));
-            string[] locked = { "first_look", "letter_marked", "lord_taken", "holding_attacked", "vote_closing" };
+            // 0.25.0: a stuck or starving lord (items 1 and 2) and a battle with more than 1,000 of the realm's men lost or more than 2 of its lords taken (item 13) wake at once too
+            string[] locked = { "first_look", "letter_marked", "lord_taken", "holding_attacked", "vote_closing", "lord_stuck_or_starving", "battle_lost_big" };
             // 0.24.6 (Nov 25): a lord taken rides along with the next message, never wakes alone (run 20261125-0020-C2: 450 of the agent's 624 wakes were only that news)
             Check(locked.All(n => WakeRules.Rules.Any(r => r.Name == n && r.Locked && r.Lane == (n == "lord_taken" ? WakeRules.Digest : WakeRules.Now))) && WakeRules.Rules.Count(r => r.Locked) == locked.Length,
                   "the locked rules all wake at once but a lord taken, which rides along, and only those are locked");

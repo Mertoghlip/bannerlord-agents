@@ -174,13 +174,14 @@ namespace BannerlordAgents.WarRoom
             // by name: the page whose first line begins with it
             key ??= pages.Where(kv => kv.Value is JsonValue).Select(kv => kv.Key)
                          .FirstOrDefault(k => (Str(pages[k]) ?? "").StartsWith(q + " [", StringComparison.OrdinalIgnoreCase));
-            // a party id of a lord whose page is by his own id: the list line that names both
+            // a party id of a lord whose page is by his own id: the list line that is his own (war room 0.22.0, item 34: a line that only names him, an army's line listing
+            // its lords, gave its leader's page: a look-up of Aragorn, a prisoner just being freed, returned Dáin II Ironfoot's)
             if (key == null)
                 foreach (JsonObject item in Items(book).Select(x => x.Item2))
                 {
                     List<string> ids = (item["ids"] as JsonArray)?.Select(x => Str(x)).Where(x => x != null).ToList() ?? new List<string>();
                     if (!ids.Contains(q, StringComparer.OrdinalIgnoreCase)) continue;
-                    key = ids.FirstOrDefault(id => pages.ContainsKey(id));
+                    key = OwnPage(item, ids, q, pages);
                     if (key != null) break;
                 }
             var sb = new StringBuilder();
@@ -199,6 +200,21 @@ namespace BannerlordAgents.WarRoom
             if (note != null) sb.Append("\n\nYour note on " + note);
             return sb.ToString().TrimEnd();
         });
+
+        private static readonly System.Text.RegularExpressions.Regex LineHead = new System.Text.RegularExpressions.Regex(@"^- (?:ENEMY |SEEN EARLIER |TRAIL )?(.+?) \[([^\]]+)\]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// The page of the one a list line is about, when the id asked is that line's own (its head, or its first id) and the page is of the same one (it begins with the line's
+        /// name); null when the line only names him (an army's line naming its lords, a captive's line naming his holding).
+        /// </summary>
+        internal static string OwnPage(JsonObject item, List<string> ids, string q, JsonObject pages)
+        {
+            System.Text.RegularExpressions.Match h = LineHead.Match(Str(item["t"]) ?? "");
+            string headId = h.Success ? h.Groups[2].Value : null, headName = h.Success ? h.Groups[1].Value : null;
+            bool own = string.Equals(q, headId, StringComparison.OrdinalIgnoreCase) || (ids.Count > 0 && string.Equals(q, ids[0], StringComparison.OrdinalIgnoreCase));
+            if (!own || headName == null) return null;
+            return ids.FirstOrDefault(id => pages.ContainsKey(id) && (Str(pages[id]) ?? "").StartsWith(headName + " [", StringComparison.OrdinalIgnoreCase));
+        }
 
         /// <summary>The name a page begins with ("Name [id] ...").</summary>
         private static string FirstName(string page)

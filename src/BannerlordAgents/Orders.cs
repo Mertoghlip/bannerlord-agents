@@ -338,6 +338,10 @@ namespace BannerlordAgents
             bool takeOut = lieutenant && !armyVerb && party.Army != null && party.Army.LeaderParty != party;
             if (!takeOut && party.AttachedTo != null && party.Army?.LeaderParty != party)
                 return name + " marches in " + Names.Party(party.Army?.LeaderParty) + "'s army. Order the army's leader instead.";
+            // 0.25.0 (item 16, run 20261125-2341-C2: Lashonek, Lek, Alvar and Svana took orders while marching to Gárjan's army, then joined it and drew 9 refusals):
+            // a lord called to an army and still on his way to it is refused at once, with the reason; only the lieutenant takes him out of it first
+            if (!takeOut && !armyVerb && party.Army != null && party.Army.LeaderParty != null && party.Army.LeaderParty != party)
+                return CalledToArmy(name, party);
 
             if (verb == "adjust")
             {
@@ -428,6 +432,13 @@ namespace BannerlordAgents
         }
 
         private static string Notes(List<string> notes) => notes.Count > 0 ? " (" + string.Join("; ", notes) + ")" : "";
+
+        /// <summary>The refusal for a lord called to another's army who has not joined it yet (0.25.0, item 16): who calls him, and the two ways out.</summary>
+        internal static string CalledToArmy(string name, MobileParty party)
+        {
+            string leader = Names.Party(party.Army?.LeaderParty);
+            return name + " is called to " + leader + "'s army and will join it: release him from it (release, with the army's leader) or order " + leader;
+        }
 
         /// <summary>Why a recruiting order (ToolDef.IsRecruiting) is refused up front: his wage cap, his gold or his clan's purse leaves him unable to pay for any recruit; null otherwise.</summary>
         private static string RecruitRefusal(ToolDef def, MobileParty party)
@@ -538,9 +549,18 @@ namespace BannerlordAgents
                 foreach (string w in a.Lords)
                 {
                     Hero h = FindLord(realm, w, out error);
-                    if (h == null) return null;
+                    if (h == null)
+                    {
+                        // 0.25.0 (item 27, run 20261125-2341-C2: Calathiel's follow-on guard order was refused because "Táli is a prisoner"): a partner who is a prisoner or leads
+                        // no party is left out with a note, as gather does, and the order goes to the rest; a name that is no lord of the realm still refuses it
+                        Hero gone = RealmHero(realm, w);
+                        if (gone == null) return null;
+                        error = null;
+                        notes.Add(Names.Hero(gone) + " was left out of \"lords\": " + (gone.IsPrisoner ? "he is a prisoner" + (gone.PartyBelongedToAsPrisoner != null ? " of " + Names.Party(gone.PartyBelongedToAsPrisoner.MobileParty) : "") : "he leads no party now"));
+                        continue;
+                    }
                     MobileParty p = h.PartyBelongedTo;
-                    if (p == null || p.LeaderHero != h) { error = Names.Hero(h) + " is not leading a party right now."; return null; }
+                    if (p == null || p.LeaderHero != h) { notes.Add(Names.Hero(h) + " was left out of \"lords\": he leads no party now"); continue; }
                     // the lord himself in his own list (0.13.16): left out with a note, not the whole order refused (Nov 1: the orcs' council gave 13
                     // lords each a besiege of Sirannon naming all 13 to wait for, the lord himself among them, and all 13 were refused)
                     if (p == party) { notes.Add(Names.Hero(h) + " was left out of \"lords\": he is the lord being ordered"); continue; }
@@ -995,6 +1015,7 @@ namespace BannerlordAgents
                 case "recruit":
                 case "garrison":
                 case "sell":
+                case "buy":
                     return o.Place != null && (realm == null || o.Place.MapFaction == null || !FactionManager.IsAtWarAgainstFaction(o.Place.MapFaction, realm));
                 case "tour": return true;   // a stop that fell or emptied: the tour picks the next one itself
                 // the supply move (0.13.19): its holding must still be friendly; Supply.Step ends it when the holding is lost or besieged
@@ -1438,6 +1459,11 @@ namespace BannerlordAgents
                 error = Names.Hero(lord) + " marches in " + Names.Party(party.Army?.LeaderParty) + "'s army. Order the army's leader instead.";
                 return null;
             }
+            if (party.Army != null && party.Army.LeaderParty != null && party.Army.LeaderParty != party)
+            {
+                error = CalledToArmy(Names.Hero(lord), party) + ".";
+                return null;
+            }
             var o = new HandOrder { Party = party, Lord = lord, Realm = realm, Verb = verb, Since = CampaignTime.Now.ToHours };
             targetWords = (targetWords ?? "").Trim();
             if (verb == "hold") return o;
@@ -1546,6 +1572,17 @@ namespace BannerlordAgents
                         o.BestDistance = Distance(o) ?? float.MaxValue;
                         o.LastProgressAt = now;
                         Note(o, "next stop", Describe(o), quiet: true);
+                        changed = true;
+                        continue;
+                    }
+                }
+                if (o.Verb == "buy" && o.ToolId > 0)
+                {
+                    // the food rule's trip (0.25.0, item 1): at the market's gate he buys, as the supply order does; a market that no longer sells food ends the trip
+                    if (At(p, o.Place) || !Supply.SellsFood(p, o.Place))
+                    {
+                        int bought = At(p, o.Place) ? Supply.BuyOwn(p, o.Place) : 0;
+                        FoodTripDone(o, bought, bought > 0 ? "bought " + bought + " food at " + Names.Settlement(o.Place) : At(p, o.Place) ? "could buy no food at " + Names.Settlement(o.Place) : Names.Settlement(o.Place) + " no longer sells food", now);
                         changed = true;
                         continue;
                     }
@@ -1903,6 +1940,7 @@ namespace BannerlordAgents
                     case "recruit":
                     case "sell":
                     case "supply":
+                    case "buy":
                     case "tour": SetPartyAiAction.GetActionForVisitingSettlement(p, o.Place, nav, false, false); break;
                     // wait (0.13): he stands where he is, inside the holding when he is in one
                     case "wait": if (p.CurrentSettlement == null) p.SetMoveModeHold(); break;
@@ -1975,6 +2013,7 @@ namespace BannerlordAgents
                 case "recruit":
                 case "sell":
                 case "supply":
+                case "buy":
                 case "tour": return (b == AiBehavior.GoToSettlement && p.TargetSettlement == o.Place) || At(p, o.Place);
                 case "wait": return p.CurrentSettlement != null || b == AiBehavior.Hold;
                 // on the way to a spot close to the place (its target there), or standing close to it
@@ -2092,6 +2131,26 @@ namespace BannerlordAgents
             Log.Line("order #" + o.Id + " [" + o.Source + "] " + o.Tool + ": food step over (" + why + "); " + Describe(o));
             int tid = o.ToolId;
             Background.PostFirst("tool step done", () => Runner.StepDone(tid, why));
+        }
+
+        /// <summary>
+        /// A food trip's buying is over on the game's side (0.25.0, item 1): the lord holds where he stands and the runner hears what he bought; the food rule ends the
+        /// trip on its next hour and his order takes up its own move again.
+        /// </summary>
+        private static void FoodTripDone(HandOrder o, int bought, string why, double now)
+        {
+            o.Verb = "hold";
+            o.Place = null;
+            o.Target = null;
+            o.HasPoint = false;
+            o.ReissueTimes.Clear();
+            o.StuckAlarmed = o.FightAlarmed = false;
+            o.Arrived = true;
+            o.ArrivedAt = now;
+            Apply(o);
+            Diag.Event("order", "food trip done", new { id = o.Id, tool = o.Tool, lord = o.Lord?.StringId, bought, why });
+            int tid = o.ToolId;
+            Background.PostFirst("tool food trip", () => Runner.FoodTrip(tid, bought, why));
         }
 
         private static void EndMove(HandOrder o, string why, string key, bool reached)
@@ -2234,6 +2293,20 @@ namespace BannerlordAgents
             return found;
         }
 
+        /// <summary>A lord of the realm by id or exact name who leads no party now (a prisoner, or one in a holding), for an order's partners (0.25.0, item 27); null when none.</summary>
+        private static Hero RealmHero(Kingdom realm, string words)
+        {
+            string w = (words ?? "").Trim().Trim('[', ']');
+            if (w.Length == 0 || realm == null) return null;
+            Hero h = Hero.Find(w);
+            if (h != null && h.MapFaction == realm && h.IsLord && h.IsAlive) return h.PartyBelongedTo?.LeaderHero == h && !h.IsPrisoner ? null : h;
+            string plain = Text.Plain(w);
+            foreach (Clan c in realm.Clans)
+                foreach (Hero x in c.Heroes)
+                    if (x != null && x.IsLord && x.IsAlive && (x.IsPrisoner || x.PartyBelongedTo?.LeaderHero != x) && Text.Plain(Names.Hero(x)) == plain) return x;
+            return null;
+        }
+
         private static Settlement FindSettlement(string words, out string error)
         {
             List<Settlement> all = Settlement.All.Where(s => s != null && !s.IsHideout).ToList();
@@ -2323,6 +2396,7 @@ namespace BannerlordAgents
                         ? lord + " rides to " + Names.Settlement(o.Place) + " to buy food for " + Names.Settlement(o.SupplyFor)
                         : lord + " brings food to " + Names.Settlement(o.Place);
                 case "sell": return lord + " goes to sell his loot at " + Names.Settlement(o.Place);
+                case "buy": return lord + " rides to buy food at " + Names.Settlement(o.Place);
                 case "wait": return lord + " waits " + ToolDef.Num(o.Radius) + " hours where he is";
                 default: return lord + " holds position";
             }

@@ -102,7 +102,7 @@ namespace BannerlordAgents
                 men += l.Men;
                 strength += l.Strength;
                 band.Add(l.Name + (AtOnce(w, l, place) ? "*" : "") + " [" + l.Tag + "] " + Text.N(l.Men) + " men, strength " + Text.N((int)l.Strength) + ", " + H(h)
-                         + (l.Row.ArmyLeader == l.Row.Id ? ", leads an army" : l.Row.ArmyLeader != null ? ", in an army" : "") + ", " + l.Order);
+                         + (l.Row.ArmyLeader == l.Row.Id ? ", leads an army" : l.Row.ArmyLeader != null ? (l.Row.Attached ? ", in an army" : ", called to an army") : "") + ", " + l.Order);
             }
             while (b < Bands.Length) Close(BandNames[b++]);
             if (band.Count > 0) Close("later");
@@ -290,6 +290,20 @@ namespace BannerlordAgents
         public static Dictionary<string, string> Lookups(World w, Dictionary<string, ViewParty> lastSeen, Dictionary<string, ViewTrail> trails = null)
         {
             var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (object step in LookupsSteps(w, lastSeen, trails, files)) { }
+            return files;
+        }
+
+        /// <summary>How many look-up pages one step of a write in steps makes at most (0.25.0, item 12: the war room's fresh book, Writes).</summary>
+        public const int PagesAStep = 16;
+
+        /// <summary>
+        /// The look-up pages made into files, a few at a time (0.25.0, item 12): it yields after every PagesAStep pages, so the war room's fresh book, written in steps
+        /// between the helper's other jobs (Writes), never holds an order up for long.
+        /// </summary>
+        internal static System.Collections.IEnumerable LookupsSteps(World w, Dictionary<string, ViewParty> lastSeen, Dictionary<string, ViewTrail> trails, Dictionary<string, string> files)
+        {
+            int made = 0;
             List<Lord> lords = OwnLords(w);
             List<SettlementRow> own = w.S.Settlements.Where(x => x.Faction == w.Realm).ToList();
 
@@ -312,6 +326,7 @@ namespace BannerlordAgents
                     foreach (string line in Muster(w, h.Id)) sb.AppendLine("- " + line);
                 }
                 files[h.Id] = sb.ToString();
+                if (++made % PagesAStep == 0) yield return null;
             }
 
             // the realm's lords held prisoner: one file each, and all of them by where they are held
@@ -355,6 +370,7 @@ namespace BannerlordAgents
                 sb.AppendLine(foes.Count > 0 ? "Enemies in view within 60 of this lord:" : "No enemy in view within 60 of this lord.");
                 foreach (PartyRow e in foes.Take(10)) sb.AppendLine("- " + EnemyLine(w, e, r.Id) + ", " + H(Hours(w, r, e.Id)) + " to reach");
                 files[l.Tag] = sb.ToString();
+                if (++made % PagesAStep == 0) yield return null;
             }
 
             var known = new List<KeyValuePair<string, ViewParty>>();
@@ -385,6 +401,7 @@ namespace BannerlordAgents
                 sb.AppendLine("Your lords who can reach it soonest:");
                 foreach (Lord l in Soonest(w, lords, id, 8)) sb.AppendLine("- " + LordLine(w, l, id));
                 files[tag] = sb.ToString();
+                if (++made % PagesAStep == 0) yield return null;
             }
 
             files["README"] = "Look-ups for " + Views.FactionName(w.S, w.Realm) + ", as of " + Text.When(w.Hours) + ", rewritten with each poke.\n"
@@ -403,7 +420,6 @@ namespace BannerlordAgents
                 string text = InPerson.Lookup(w.S, w.Realm, seen);
                 if (text != null) files[InPerson.LookupName] = text;
             }
-            return files;
         }
 
         /// <summary>
@@ -477,7 +493,7 @@ namespace BannerlordAgents
             {
                 PartyRow r = l.Row;
                 string ranks = r.SizeLimit > 0 ? " of " + Text.N(r.SizeLimit) + " (" + Math.Round(100.0 * r.Men / r.SizeLimit) + "%)" : "";
-                string army = r.ArmyLeader == r.Id ? ", leads an army of " + Text.N(r.ArmyMen) + " men in " + r.ArmyParties + " parties" : r.ArmyLeader != null ? ", in " + w.Name(r.ArmyLeader) + "'s army" : "";
+                string army = r.ArmyLeader == r.Id ? ", leads an army of " + Text.N(r.ArmyMen) + " men in " + r.ArmyParties + " parties" : r.ArmyLeader != null ? (r.Attached ? ", in " : ", called to ") + w.Name(r.ArmyLeader) + "'s army" : "";
                 string clan = r.Clan != null && clanNames.TryGetValue(r.Clan, out ClanRow cr) ? "; clan " + cr.Name + (cr.Ruler ? " (yours)" : "") + ", influence " + Text.N((int)cr.Influence) : "";
                 string purse = PurseView.LordLine(r);
                 sb.AppendLine("- " + l.Name + " [" + l.Tag + "]: " + Text.N(r.Men) + ranks + " men" + army + ", strength " + Text.N((int)l.Strength)

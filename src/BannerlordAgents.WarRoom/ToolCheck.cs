@@ -29,13 +29,15 @@ namespace BannerlordAgents.WarRoom
             ["name"] = CheckName,
             ["description"] = "Checks a tool you are writing as the game will before it runs it: its parts, its moves, facts and functions, every state reachable, and the limits on "
                               + "your own tools; each problem says where it is (\"state recruit, rule 2: ...\"). With a lord, it is also tried on your realm's newest hour for him, "
-                              + "moving no one: his first move, which rule would fire now and where it leads, and anything that comes out none. Fix it and ask again as often as you need.",
+                              + "moving no one: his first move, which rule would fire now and where it leads, and anything that comes out none. Fix it and ask again as often as you need. "
+                              + "To check and try an order you already have (one of ours, or one of your own you kept), give its name in name instead of a definition.",
             ["inputSchema"] = new JsonObject
             {
                 ["type"] = "object",
                 ["properties"] = new JsonObject
                 {
-                    ["definition"] = new JsonObject { ["type"] = "object", ["description"] = "The tool as you would write it in your answer's \"tools\": name, about, takes, settings, init, start, states." },
+                    ["definition"] = new JsonObject { ["type"] = "object", ["description"] = "The tool as you would write it in your answer's \"tools\": name, about, takes, settings, init, start, states. Leave it out when you give name." },
+                    ["name"] = new JsonObject { ["type"] = "string", ["description"] = "Instead of definition: the name of an order you have (\"defend\", or one of your own such as \"camp_strike\"), checked and tried as it is kept." },
                     ["lord"] = new JsonObject { ["type"] = "string", ["description"] = "Optional: the id in [brackets] of one of your lords, to try the tool on him now." },
                     ["at"] = new JsonObject { ["type"] = "string", ["description"] = "Optional, with lord: the order's at, a holding's id." },
                     ["target"] = new JsonObject { ["type"] = "string", ["description"] = "Optional, with lord: the order's target, a lord's or party's id." },
@@ -43,17 +45,53 @@ namespace BannerlordAgents.WarRoom
                     ["lords"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "Optional, with lord: the order's lords, your lords' ids." },
                     ["settings"] = new JsonObject { ["type"] = "object", ["description"] = "Optional, with lord: settings as the order would give them, for example {\"radius\": 20}." }
                 },
-                ["required"] = new JsonArray("definition")
+                ["required"] = new JsonArray()
             }
         };
+
+        /// <summary>
+        /// An order by its name, as it is kept (war room 0.22.0, item 35: 11 of 27 refused checks tried an order by name and were told only "start must name one of the states"):
+        /// one of the realm's own from tools\(name).json in the channel, else one of ours from the library; the hyphen and the underscore spellings both found. Null when none.
+        /// </summary>
+        internal string StoredTool(string name, out bool ours)
+        {
+            ours = false;
+            string n = (name ?? "").Trim().Trim('[', ']').ToLowerInvariant();
+            if (n.Length == 0) return null;
+            foreach (string cand in new[] { n, n.Replace('-', '_'), n.Replace('_', '-') }.Distinct())
+            {
+                string own = ChannelDir != null ? Path.Combine(ChannelDir, "tools", cand + ".json") : null;
+                if (own != null && File.Exists(own) && Room.ReadShared(own) is string text && text.Trim().StartsWith("{", StringComparison.Ordinal))
+                {
+                    // the channel's tools folder holds ours too: an order of ours there is checked as ours
+                    ours = Library.Get(cand) != null;
+                    return text;
+                }
+                ToolDef lib = Library.Get(cand);
+                if (lib != null) { ours = true; return lib.Json; }
+            }
+            return null;
+        }
 
         /// <summary>One check: the checker's result, then the try when a lord is named and the tool passes.</summary>
         public string CheckTool(JsonObject args)
         {
             var sw = Stopwatch.StartNew();
-            string json = ToolJson(args["definition"]);
-            if (json == null) return "Give the tool in definition: {\"name\": ..., \"about\": ..., \"takes\": ..., \"settings\": ..., \"init\": ..., \"start\": ..., \"states\": ...}.";
-            ToolDef d = ToolDef.FromJson(json, "tool", _realm ?? "agent");
+            string asked = Str(args["name"]) ?? (args["definition"] is JsonValue dv && dv.TryGetValue(out string ds) && !ds.TrimStart().StartsWith("{", StringComparison.Ordinal) ? ds : null);
+            string json;
+            bool ours = false;
+            if (asked != null)
+            {
+                json = StoredTool(asked, out ours);
+                if (json == null) return "You have no order called \"" + asked.Trim() + "\" (ours or kept of your own): give a kept order's name as your Orders file lists it, or the whole definition in definition.";
+                try { json = ToolJson(JsonNode.Parse(json)) ?? json; } catch (System.Text.Json.JsonException) { }
+            }
+            else json = ToolJson(args["definition"]);
+            if (json == null) return "Give the tool in definition: {\"name\": ..., \"about\": ..., \"takes\": ..., \"settings\": ..., \"init\": ..., \"start\": ..., \"states\": ...}, or the name of an order you have in name.";
+            ToolDef d;
+            try { d = ToolDef.FromJson(json, "tool", ours ? "ours" : _realm ?? "agent"); }
+            catch (Exception e) when (e is ArgumentException || e is InvalidCastException || e is FormatException || e is NullReferenceException)
+            { return "THE CHECKER could not read the tool (" + e.Message + "): give it as your answer's \"tools\" would, with its states."; }
             int rules = d.States.Values.Sum(s => s.When.Count);
             var lines = new List<string>();
             if (d.Valid)
@@ -63,6 +101,9 @@ namespace BannerlordAgents.WarRoom
             {
                 lines.Add("THE CHECKER: " + (string.IsNullOrEmpty(d.Name) ? "the tool" : d.Name) + " has " + d.Problems.Count + " problem" + (d.Problems.Count == 1 ? "" : "s") + ", so it would be refused:");
                 foreach (string p in d.Problems) lines.Add("- " + p);
+                // war room 0.22.0 (item 35): a definition with no states is most often an order meant by its name
+                if (asked == null && d.Problems.Any(p => p.Contains("start must name one of the states")) && !json.Contains("\"states\""))
+                    lines.Add("(definition takes a whole tool with its states; to check and try an order you already have, ours or your own, give its name in name.)");
             }
             string lord = Str(args["lord"]);
             string tried = null;

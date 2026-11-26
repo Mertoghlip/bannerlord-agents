@@ -2,6 +2,8 @@
   "about": "The vanilla wake rule (0.15, docs/reports/2026-11-06-news-wake-study.md). Every news line gets a kind (the sorts, for a tool's own words; else its notice's kind) and then the first rule that matches gives it a lane: now wakes the agent, wait wakes it once the line has waited wait_hours, digest never wakes it and rides the next call. A line no rule matches wakes the agent. Rules marked locked are the ones an agent will never be able to change.",
   "wait_hours": 6,
   "sorts": [
+    ["stuck", "has not moved for"],
+    ["starving", "has food for 0 days and lost"],
     ["shelter", "is sheltering"],
     ["fallback", "is falling back|falling back\\.$|pulling back"],
     ["relief_ride", "rides with all haste to relieve"],
@@ -12,7 +14,6 @@
     ["few_recruits", "found few recruits"],
     ["refill", "still below its floor|refilled to|broke off refilling"],
     ["cashed", "cashed in"],
-    ["stuck", "has not moved for"],
     ["gave_up", "gave up the chase"],
     ["no_hold", "would not hold against"],
     ["rested", " rested \\d+ days"],
@@ -27,7 +28,9 @@
     { "name": "letter_marked", "kinds": ["letter"], "if": "urgent", "lane": "now", "locked": true },
     { "name": "lord_taken", "kinds": ["captured"], "lane": "digest", "locked": true },
     { "name": "holding_attacked", "kinds": ["besieged", "siege_started", "holding_changed"], "lane": "now", "locked": true },
-    { "name": "vote_closing", "kinds": ["vote_closing"], "lane": "now", "locked": true },
+    { "name": "vote_closing", "kinds": ["vote_closing", "vote"], "lane": "now", "locked": true },
+    { "name": "lord_stuck_or_starving", "kinds": ["stuck", "starving"], "lane": "now", "locked": true },
+    { "name": "battle_lost_big", "kinds": ["battle_big"], "lane": "now", "locked": true },
 
     { "name": "letter", "kinds": ["letter"], "lane": "wait" },
     { "name": "order_over", "kinds": ["ended_captured", "ended_supply", "ended_recruit_stop", "ended_recruit", "ended_other", "gave_up", "target_gone"], "lane": "wait" },

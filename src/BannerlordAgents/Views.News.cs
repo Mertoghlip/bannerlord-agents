@@ -148,7 +148,7 @@ namespace BannerlordAgents
                 }
             }
             // 0.20.4 (Nov 17): told at every wake, not only beside a clock of the game's, so every plan is made for the hour its orders will land
-            sb.AppendLine("- " + LagLine(t.UsualLag, t.LateLag) + (t.Focuses.Any(f => !double.IsNaN(f.DecidedAt)) ? " Each lord below is marked against the clock with that counted." : ""));
+            sb.AppendLine("- " + LagLine(t.UsualLag, t.LateLag, t.ReviewUsualLag, t.ReviewLateLag) + (t.Focuses.Any(f => !double.IsNaN(f.DecidedAt)) ? " Each lord below is marked against the clock with that counted." : ""));
         }
 
         /// <summary>
@@ -156,8 +156,19 @@ namespace BannerlordAgents
         /// answer in ten (Channel.Lag), for the wake's clock and the review's briefing alike.
         /// </summary>
         internal static string LagLine(double usual, double late)
-            => "Your answers' orders take effect about " + Math.Round(usual) + " in-game hours after the report they answer as a rule, and " + Math.Round(late)
-               + " or more for one answer in ten, since the game runs while you think: plan for where things will be then, not where they are now.";
+            => LagLine(usual, late, Channel.DefaultReviewUsualLag, Channel.DefaultReviewLateLag);
+
+        /// <summary>
+        /// Both of the agent's order delays (0.25.0, item 11; run 20261125-2341-C2: the figure shown, 8/19 hours, left out review answers, which landed a median 16.4 hours
+        /// after their wake, and reviews gave 46% of all orders): wake answers from the wake's report, review answers from the hour of the review's own briefing.
+        /// </summary>
+        internal static string LagLine(double usual, double late, double reviewUsual, double reviewLate, bool reviewFirst = false)
+        {
+            string wake = "Wake answers: about " + Math.Round(usual) + " hours (" + Math.Round(late) + " for one in ten).";
+            string review = "Review answers: about " + Math.Round(reviewUsual) + " hours (" + Math.Round(reviewLate) + " for one in ten).";
+            return "Your answers' orders take effect some in-game hours after the report they answer, since the game runs while you think. " + (reviewFirst ? review + " " + wake : wake + " " + review)
+                   + " Plan for where things will be then, not where they are now.";
+        }
 
         private static string TagOf(View v, string partyId)
         {

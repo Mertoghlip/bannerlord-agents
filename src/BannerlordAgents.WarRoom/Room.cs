@@ -26,6 +26,11 @@ namespace BannerlordAgents.WarRoom
         public List<string> Names = new List<string>();
         /// <summary>The realms at war with it and its allies: a note on a whole realm is kept in every news wake.</summary>
         public List<string> Realms = new List<string>();
+        /// <summary>
+        /// The big quiet news since the realm's previous poke (contract d, war room 0.22.0): every capture of one of its lords, every holding of its lost or taken, every battle of
+        /// its with more than 500 of its men lost, each a plain line; empty when none (or from an older bridge).
+        /// </summary>
+        public List<string> SinceLast = new List<string>();
         public bool Theatre => NewsMode == "theatre";
         /// <summary>Only what bears on the news is shown: the notes and the chronicle lines are cut to it too.</summary>
         public bool Focused => Theatre && Recipe == "theatre";
@@ -119,6 +124,13 @@ namespace BannerlordAgents.WarRoom
             while (!stop.IsCancellationRequested)
             {
                 int newest = NewestPoke(out string text, out string when);
+                // war room 0.22.0 (item 36): the run has ended: no call of any kind
+                if (RunFinished())
+                {
+                    if (newest > _lastAnswered) _lastAnswered = newest;
+                    stop.WaitHandle.WaitOne(1000);
+                    continue;
+                }
                 if (newest > _lastAnswered && text != null)
                 {
                     Answer(newest, when, text);
@@ -177,7 +189,7 @@ namespace BannerlordAgents.WarRoom
                 + (conversation ? (resume ? ", in its conversation (" + _mem.SessionTokens.ToString("N0", CultureInfo.InvariantCulture) + " tokens so far)" : ", in a new conversation") : "") + "...");
             // the first look since a load reads the realm whole, often with no story yet: it gets the council's time (0.11.3: the kingdom's first answer was stopped at 122 s of 120)
             int timeout = why.IndexOf("First look", StringComparison.OrdinalIgnoreCase) >= 0 ? Math.Max(_c.TimeoutSeconds, _c.CouncilTimeoutSeconds) : _c.TimeoutSeconds;
-            CallResult r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, read, timeout, cap, sessionId, resume, tools: routes);
+            CallResult r = Guarded("wake", () => Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, read, timeout, cap, sessionId, resume, tools: routes));
             if (r.HandshakeLate) Say("Poke #" + number + ": Claude Code took over 30 s to answer the tools' handshake; the message went anyway.");
             bool stallRetry = false;
             if (!r.Ok && (r.Stalled || r.Runaway))
@@ -188,7 +200,7 @@ namespace BannerlordAgents.WarRoom
                 double lost = r.Seconds;
                 stallRetry = true;
                 if (conversation && !resume) sessionId = _mem.SessionId = Guid.NewGuid().ToString();   // the first call of a conversation is begun again under a new id
-                r = Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, read, timeout, cap, sessionId, resume, tools: routes);
+                r = Guarded("wake", () => Claude.Run(_claude, system, prompt, _c.Model, effort, _c.ChannelDir, read, timeout, cap, sessionId, resume, tools: routes));
                 r.Seconds += lost;
             }
             if (conversation && r.Ok)
@@ -206,7 +218,7 @@ namespace BannerlordAgents.WarRoom
                 retried = true;
                 string fix = "Your answer to poke #" + number + " could not be read: " + problem + ".\nHere it is:\n" + r.Text
                              + "\n\nReply again with ONLY the JSON object, nothing before or after it.";
-                CallResult r2 = Claude.Run(_claude, system, fix, _c.Model, "low", _c.ChannelDir, false, _c.TimeoutSeconds, 1000, tools: routes);
+                CallResult r2 = Guarded("wake", () => Claude.Run(_claude, system, fix, _c.Model, "low", _c.ChannelDir, false, _c.TimeoutSeconds, 1000, tools: routes));
                 File.WriteAllText(Path.Combine(folder, "raw-retry.jsonl"), r2.Raw ?? "");
                 problem = r2.Ok ? Extract(r2.Text, number, out answer) : r2.Error;
                 r.Seconds += r2.Seconds;
@@ -259,7 +271,7 @@ namespace BannerlordAgents.WarRoom
                 answer_began_ms = Math.Round(r.FirstTextMs), memory = _c.MemoryMode, context_tokens = context, story_words = storyWords, gap_lines = gapLines,
                 notes_chars = _mem.Notes.Length, notes_changed = changed, session = sessionId, campaign = _mem.Campaign,
                 orders, denied = r.Denied, folder, written = write && answer != null, ways_asked = routes?.Asked ?? 0, way_tool = routes != null,
-                run = meta?.Run, arm = meta?.Arm, realm = meta?.Realm, system_hash = _systemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
+                run = RunTag(meta, out string aArm), arm = aArm, realm = meta?.Realm, system_hash = _systemHash, library_hash = LibraryHash(), thinking_chars = r.ThinkingText.Length,
                 tools = Count(answer, "tools"), diplomacy = Count(answer, "diplomacy"), letters = Count(answer, "letters"),
                 news_mode = meta?.NewsMode, recipe = meta?.Recipe, message_chars = prompt.Length, read_tool = read, book_asked = routes?.AskedBook ?? 0,
                 tools_offered = routes?.Tools.Count() ?? 0, tools_dropped = toolsDropped
@@ -431,6 +443,7 @@ namespace BannerlordAgents.WarRoom
                     if (nw["names"] is JsonArray na) m.Names = na.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
                     if (nw["realms"] is JsonArray ra) m.Realms = ra.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
                 }
+                if (o["since_last"] is JsonArray sl) m.SinceLast = sl.Select(x => x is JsonValue xv && xv.TryGetValue(out string s) ? s : null).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
                 if (o["history"] is JsonObject h && h["before"] is JsonArray steps)
                 {
                     m.HistoryFound = (string)h["found"] ?? "";
@@ -499,7 +512,7 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), sb.ToString());
             Say("Memory: the chronicler is rewriting the story so far (" + fresh.Count + " new lines)...");
-            CallResult r = Claude.Run(_claude, ChroniclerFile(), sb.ToString(), model, _c.StoryEffort, _c.ChannelDir, false, Math.Max(_c.TimeoutSeconds, 240), _c.StoryThinkingCap, cancel: cancel);
+            CallResult r = Guarded("chronicle", () => Claude.Run(_claude, ChroniclerFile(), sb.ToString(), model, _c.StoryEffort, _c.ChannelDir, false, Math.Max(_c.TimeoutSeconds, 240), _c.StoryThinkingCap, cancel: cancel));
             File.WriteAllText(Path.Combine(folder, "raw.jsonl"), r.Raw ?? "");
             string newStory = null;
             List<string> lessons = null;
@@ -815,7 +828,7 @@ namespace BannerlordAgents.WarRoom
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), prompt);
             Say((extra ? "Extra council" : "Council of war") + " (after poke #" + number + ", " + meta.Date + "): " + why + ". Asking " + _c.Model + " at effort " + _c.CouncilEffort + ", thinking up to " + _c.CouncilThinkingCap + " tokens...");
             RouteTool routes = Routes(meta, number, "council", write);
-            CallResult r = Claude.Run(_claude, SystemFile(routes != null), prompt, _c.Model, _c.CouncilEffort, _c.ChannelDir, _c.Lookups, _c.CouncilTimeoutSeconds, _c.CouncilThinkingCap, cancel: cancel, tools: routes);
+            CallResult r = Guarded("review", () => Claude.Run(_claude, SystemFile(routes != null), prompt, _c.Model, _c.CouncilEffort, _c.ChannelDir, _c.Lookups, _c.CouncilTimeoutSeconds, _c.CouncilThinkingCap, cancel: cancel, tools: routes));
             File.WriteAllText(Path.Combine(folder, "raw.jsonl"), r.Raw ?? "");
             JsonObject answer = null;
             string problem = r.Ok ? Extract(r.Text, number, out answer) : r.Error;
@@ -1174,6 +1187,8 @@ namespace BannerlordAgents.WarRoom
             tool.BookPath = book;
             tool.ChronicleDir = _c.ChannelDir;
             tool.Notes = NotesNow;
+            tool.EdgeFile = EdgeFile();
+            tool.LagHours = UsualLag;
             if (_routesWhy != "ready") { Say("The \"ask the way\" tool is offered in every answer and council."); _routesWhy = "ready"; }
             if ((DateTime.Now - _rulesWritten).TotalMinutes >= 10)
             {

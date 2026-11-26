@@ -178,7 +178,9 @@ namespace BannerlordAgents.Tools
             // 0.20.0, the walls and the engines
             ["walls_left"] = 1, ["walls_down_in"] = 1, ["enemy_engines"] = 1,
             // 0.19.1, the storm guard: a storm run ahead, alone and with the relief that could reach the camp before it ends
-            ["storm_hours"] = 1, ["storm_relief"] = 1, ["storm_clear"] = 2
+            ["storm_hours"] = 1, ["storm_relief"] = 1, ["storm_clear"] = 2,
+            // 0.25.0: an enemy that keeps marching on a holding (item 7), a food trip's worth to a holding (item 20), a group counted by road (item 8)
+            ["marched_on"] = 2, ["feed_gain"] = 1, ["group_within"] = 2
         };
 
         /// <summary>The functions in words, with what they take, for the instructions' and the library's account of the language (0.13).</summary>
@@ -201,9 +203,12 @@ namespace BannerlordAgents.Tools
             ["fight_odds"] = "fight_odds(p): the enemy strength that could be in a fight with p by its middle and by its end (the march to it and the battle's own hours: p with every enemy who could join it within join_hours, and, for the besiegers of one of your holdings or a party at the place it heads for, every enemy lord and army due there by then), the larger of the two, over your side's strength there (with the defenders inside who would sally out, for a siege of yours); for a holding you besiege, the relief that could reach your camp by the end of the battle it would bring, over your side in the siege; 0 when nothing could be there",
             ["needed"] = "needed(p, times): whether this lord is needed against p: true while the lords of yours already striking p, and those guarding the same holding who are nearer to p (or as near and stronger), are together under times the strength p fights with",
             ["lords_near"] = "lords_near(x, r): how many of the order's lords are within r of x",
-            ["group_strength"] = "group_strength(x, r): the strength of the lord and the order's lords within r of x",
             ["group_offers"] = "group_offers(h): offers(h) for the lord and each of the order's lords, added up (none when no count is known for any of them)",
             ["marching_on"] = "marching_on(h, r): the strongest enemy lord or army within r of h that is heading for h (none when none is)",
+            ["marched_on"] = "marched_on(h, r): the strongest enemy army within r of h, else the strongest enemy lord within r, that has been seen heading for h for 2 hours running; it goes on counting until it has stopped heading there for 6 hours (none when none is)",
+            ["feed_gain"] = "feed_gain(h): how many days of a castle's or town's eating under siege a food trip of his would add to it: the food he can spare past 3 days of his own, and what the best market can sell up to what the holding still needs to last the order's days (the food each market has for sale for each extra hour on the road; a market that could add less than a day is passed over); none for a village or another realm's",
+            ["group_within"] = "group_within(x, hours): the strength of the lord and the order's lords (and the realm's other lords on the same order at the same place) who can be at x within that many hours by the march clock; an army counts once, by its leader, and a lord falling back, sheltering, inside walls or fighting elsewhere counts for nothing",
+            ["group_strength"] = "group_strength(x, r): the strength of the lord and the order's lords within r of x; an army counts once, by its leader, and a lord falling back, sheltering, inside walls or fighting elsewhere counts for nothing",
             // 0.19
             ["in_battle_of"] = "in_battle_of(p): whether p (a lord or army of yours, an ally's or an enemy's) is in a fight now; none for an enemy out of view",
             ["battle_hours_left"] = "battle_hours_left(p): about how many more hours the fight p is in should last, by the game's battle rules (once it has run two rounds, at the rates it has gone at so far), run again with the enemy lords and armies in view who could join it coming in as each would arrive, the shorter of the two (at most 120); for a raid whose defenders are down, the hours until the village is looted; 0 for a fight of the human player's, which is fought on the spot, so nobody arrives later; none when p is in no fight or out of view",
@@ -216,7 +221,7 @@ namespace BannerlordAgents.Tools
             ["would_flee"] = "would_flee(e, l): whether e would flee from l now by the same quick reaction (an approximation: when its ratio is under 1 and it does not attack, it flees from close by at any ratio under 1, from 7.5 away under about 0.94, from 9 under about 0.4); use it to see whether a hunter will be run from",
             ["mates"] = "mates(): the lord's group: the other lords of yours holding the same order at the same place (or on the same lord), and the lords the order names",
             ["nearest_mate"] = "nearest_mate(x, r): the nearest to the lord of his mates within r of x (none when none is)",
-            ["mates_strength"] = "mates_strength(x, r): the strength of the lord and his mates within r of x",
+            ["mates_strength"] = "mates_strength(x, r): the strength of the lord and his mates within r of x; an army counts once, by its leader, and a lord falling back, sheltering, inside walls or fighting elsewhere counts for nothing",
             ["could_reach"] = "could_reach(x, hours): the strength of the enemy lords and armies in view, and those seen in the last three days, that could march to x within that many hours, by the march clock (in view at their own pace for each stretch of ground and hour; seen earlier from where they were seen, at their pace then and a tenth faster, after a day no slower than speed 2.8 unless the order's unseen_floor is 0)",
             ["raid_hours"] = "raid_hours(v): about how many hours this lord would take to loot village v by the game's raid rule (each hour the raiders take the square root of their number + 5, over 900, of its health, from full health, or from what is left of it while it is being raided; an hour more for its militia first); a raid holds the raiders until it is done; none for anything but a village not looted",
             ["fall_back"] = "fall_back(r): where the safety rule would take this lord from the forces within r of him (and those who could join them within join_hours): the first castle or town of yours or an ally's within a day's march, by a way over land, that he reaches before them whose defenders, with him, would hold it, else the nearest such place he reaches first that takes him farther from them; none when there is none",
@@ -582,6 +587,15 @@ namespace BannerlordAgents.Tools
         public const double ReliefWinBar = 1.5;
 
         /// <summary>
+        /// The relief rule's cap on lords free to ride (0.25.0, item 24, as the guard order's own "enough" rule): they go nearest first only until our side there is this
+        /// many times the enemy with its joiners. Run 20261125-2341-C2: 782 free rides to fights won anyway, 55 fights drawing 8 or more lords against fewer than 1,000.
+        /// </summary>
+        public const double ReliefEnough = 2;
+
+        /// <summary>The food rule (0.25.0, item 1): a trip with no step closer to its market for this many hours gives up (it was a fixed 24, even while he was still closing in). Runner reads it.</summary>
+        public const double FoodGiveUpHours = 6;
+
+        /// <summary>
         /// Men from the clan's own garrisons while recruiting (0.13.19, Nov 1: orders can also get lords to go to their clan's
         /// settlements and take troops from those garrisons as they recruit up until the strength of the garrison falls to a floor set by the
         /// agent), on every move and tool: at a castle or town of his own clan, a recruiting lord (the recruit order's tour, a recruit stop)
@@ -680,18 +694,21 @@ namespace BannerlordAgents.Tools
             sb.AppendLine();
             sb.AppendLine("Every move and tool also takes caution (default " + ToolDef.Num(Caution.Default) + "), danger_radius (default " + ToolDef.Num(DangerRadius.Default)
                           + ") and danger_hours (default " + ToolDef.Num(DangerHours.Default) + "): " + Caution.About + "; how close counts: " + DangerHours.About + ". Lords holding your orders do not flee by themselves, so keep caution on unless you mean them to stand.");
-            sb.AppendLine("Food: a lord holding your orders who runs low rides to the nearest market to buy more, once his food would last less than the trip there and a day and a half, and then takes up his order again.");
+            sb.AppendLine("Food: a lord holding your orders who runs low, once his food would last less than the trip and a day and a half, rides to the market he reaches soonest by road that has food for sale "
+                          + "(a town not under siege, or a village not raided, of a realm not at war with yours; never one he has no way to), buys there at its gate as the game's lords buy food, keeping half his gold, "
+                          + "and then takes up his order again. A trip that gets no closer for " + ToolDef.Num(FoodGiveUpHours) + " hours, or a market where he could buy nothing, is given up, and that market is left out for three days.");
             sb.AppendLine("And join_hours (default " + ToolDef.Num(JoinHours.Default) + "): " + JoinHours.About + ".");
             sb.AppendLine("And garrison_floor (default " + ToolDef.Num(GarrisonFloor.Default) + "): " + GarrisonFloor.About + ".");
             sb.AppendLine("Every lord holding your orders, out of an army or leading one, also rides with all haste to relieve a lord of yours or an ally's fighting in the field (or at a siege camp, or over a raid), "
                           + "when he can get there with time to spare (a fifth of the fight's hours left, at least an hour) before it ends by the game's battle rules (at most " + ToolDef.Num(MaxReliefHours) + " hours ahead), "
                           + "the fight run ahead with the enemies who could join it coming in, and your side there, with every lord of yours who can get there in time, "
                           + "outweighs the enemies in the fight and every enemy lord and army in view who could join it by then (and every band of bandits of the same kind, when it is bandits fighting). "
-                          + "A lord on defend, patrol, hold, recruit or rest, or on one of your own recruiting tools, rides to every such fight, however it goes: a bigger win costs fewer men. "
+                          + "Lords on defend, patrol, hold, recruit or rest, or on one of your own recruiting tools, ride to such a fight however it goes, nearest first, but only until your side there is "
+                          + ToolDef.Num(ReliefEnough) + " times the enemy with those who could join (a bigger win costs fewer men), and never to a fight against bandits alone that your lords there would win anyway. "
                           + "A lord on any other order rides only when your lords in the fight would not win alone (under " + ToolDef.Num(ReliefWinBar) + " times the enemy with those who could join), "
                           + "and only as many of them as it takes, nearest first, to bring your side there to " + ToolDef.Num(ReliefWinBar) + " times the enemy. "
-                          + "He strikes the enemy side's leader; his order resumes once the fight is over. "
-                          + "An army goes whole. Lords marching in another's army, camped in a siege, inside a besieged castle or town, or on their way to buy food do not ride. "
+                          + "He strikes the enemy side's leader, and keeps riding until the fight is over or he can no longer get there before it ends; then his order resumes. "
+                          + "An army goes whole. Lords marching in another's army, camped in a siege, inside a besieged castle or town, waiting to strike an enemy their order names, or on their way to buy food do not ride. "
                           + "A lord on reserve rides to no other fight: only to the fights of the lord he backs, by his own order, whatever the odds, and he counts on your side there.");
             return sb.ToString();
         }

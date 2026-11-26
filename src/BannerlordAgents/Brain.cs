@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -46,6 +47,11 @@ namespace BannerlordAgents
             public readonly List<Trigger> Held = new List<Trigger>();
             /// <summary>Each own holding last warned about for hunger (0.13.20, LowFood): the hour, and the days of food it had then.</summary>
             public readonly Dictionary<string, KeyValuePair<double, double>> HungerTold = new Dictionary<string, KeyValuePair<double, double>>();
+            /// <summary>
+            /// The big quiet news since the realm's last poke (0.25.0, item 13; contract (d)): every capture of one of its lords, every holding of its lost or taken by it,
+            /// every battle of its with more than 500 of its men lost, oldest first, in plain words; poke.json carries them as since_last and they are cleared then.
+            /// </summary>
+            public readonly List<string> SinceLast = new List<string>();
         }
 
         /// <summary>
@@ -114,6 +120,8 @@ namespace BannerlordAgents
             _dir = Paths.Data(campaign);
             MarkLoad(loadedAt, agents);
             Tools.Runner.Reset();
+            WakeRules.Reset();
+            Writes.Reset();
             Outcomes.Reset();
             Episodes.Reset();
             RecordedReports.Clear();
@@ -263,6 +271,12 @@ namespace BannerlordAgents
             foreach (string f in n.Factions.Distinct())
             {
                 Memory m = Get(f);
+                // 0.25.0 (item 13): the big quiet news rides the realm's next poke whatever wakes it
+                if (n.Since != null && n.Since.TryGetValue(f, out string since) && since != null)
+                {
+                    m.SinceLast.Add(since);
+                    if (m.SinceLast.Count > 200) m.SinceLast.RemoveRange(0, m.SinceLast.Count - 200);
+                }
                 if (!n.RecordOnly) m.Pending.Add(n);
                 m.News.Add(n);
                 m.News.RemoveAll(x => n.Hours - x.Hours > 48);
@@ -459,8 +473,12 @@ namespace BannerlordAgents
             List<Trigger> triggers = ag.Config.WakeRule ? TakeSorted(v, m, ag.Channel, out digest, ag.Config.WakeSelf ? ag : null) : TakeTriggers(v, m);
             if (ag.Config.WakeSelf && triggers.Count > 0) Watches.Woke(ag.Watches, v.Hours);
             View view = null;
-            if (triggers.Count > 0 || ag.On || Settings.Dashboard) Timed(ms, "view", () => view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m));
-            if (triggers.Count > 0) Poke(v, v.Watched, v.WatchedSees, v.HostileToWatched, m, view, triggers, ms, files, digest);
+            // 0.25.0 (item 37, run 20261125-2341-C2: 3,419 full reports, 739 MB, for the Orcs and Dol Guldur, whose agents were off, against 427 for the live agent): a realm
+            // whose agent is off gets no wake report, only its light map record for the dashboard; the news is still sorted, so nothing piles up for a later switch-on
+            bool reportIt = ag.On || v.Watched == v.PlayerFaction;
+            if ((triggers.Count > 0 && reportIt) || ag.On || Settings.Dashboard) Timed(ms, "view", () => view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m));
+            if (triggers.Count > 0 && reportIt) Poke(v, v.Watched, v.WatchedSees, v.HostileToWatched, m, view, triggers, ms, files, digest);
+            else if (triggers.Count > 0) Diag.Count("wake:not reported, agent off");
             if (ag.Config.WakeRule) ag.Channel.Clock(v.Hours);
             if (view != null && (ag.On || Settings.Dashboard)) RoundViews.Add(new KeyValuePair<Snapshot, View>(v, view));
             // the lieutenant (0.10) serves the player: its report says where the player's own party is, and its look-ups are kept
@@ -482,19 +500,24 @@ namespace BannerlordAgents
         /// <summary>
         /// A realm agent's situation report (report.txt) and council briefing (council.txt), from its newest hour, written when its
         /// war room asks for them as a council sits (0.12.0: they were rewritten every hour for every agent, and read only then).
+        /// Since 0.25.0 (item 12) written in small steps between the helper's other jobs (Writes), and followed by that hour's fresh book, so the review's own request for
+        /// the newest hour right after it is answered at once.
         /// </summary>
-        public static void Briefing(RealmAgent ag)
+        public static void Briefing(RealmAgent ag) => Writes.Add("briefing of " + (ag?.Realm ?? "?"), BriefingSteps(ag));
+
+        private static IEnumerable BriefingSteps(RealmAgent ag)
         {
             Snapshot v = ag?.Latest;
             if (v == null || v.Watched == null || v.WatchedSees == null)
             {
                 Diag.Event("agent", "briefing not written", new { realm = ag?.Realm, why = "no hour copied yet" });
-                return;
+                yield break;
             }
             long began = Stopwatch.GetTimestamp();
             Memory m = Get(v.Watched);
             Tools.World w = Tools.Runner.WorldFor(v);
             View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
+            yield return null;
             var extras = new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = true };
             if (ag.Config.WakeRule)
             {
@@ -509,66 +532,107 @@ namespace BannerlordAgents
                     Files.Append(Path.Combine(Dir, "wake_" + v.Watched + ".jsonl"), Json.Line(new { Type = "council", Realm = v.Watched, Run = v.Run, Arm = v.Arm, Hours = v.Hours, Lines = held.Count }));
                 }
             }
+            yield return null;
             string report = Views.Report(view, null, extras);
+            yield return null;
             List<string> known = Known(v, v.Watched, v.WatchedSees, m, w).ToList();
             Audit.CheckReport(view, report, v.WatchedSees, v.InspectedByWatched, "council's situation report", known);
+            yield return null;
             ag.Channel.OnHour(v.Hours, report);
+            yield return null;
             // a self-waking agent's review (0.18) sees its watches with the realm
             // 0.20.4: the review is where plans are made, so it opens with the realm's own order delay too
             ag.Channel.Lag(out double usualLag, out double lateLag);
+            // 0.25.0 (item 11): the review's own delay first, counted from this briefing's hour, then the wake answers'
+            ag.Channel.ReviewLag(out double reviewUsual, out double reviewLate);
+            ag.Channel.BriefingWritten(v.Hours);
             string briefing = Facts.Council(w);
             int head = briefing.IndexOf('\n');
-            string delay = "\r\nYOUR ORDER DELAY\r\n- " + Views.LagLine(usualLag, lateLag) + "\r\n";
+            string delay = "\r\nYOUR ORDER DELAY\r\n- " + Views.LagLine(usualLag, lateLag, reviewUsual, reviewLate, reviewFirst: true) + " A review's delay counts from the hour of its briefing (" + Text.When(v.Hours) + ").\r\n";
             briefing = head < 0 ? briefing + delay : briefing.Substring(0, head + 1) + delay + briefing.Substring(head + 1);
             ag.Channel.WriteCouncil(briefing + (ag.Config.WakeSelf ? "\r\n\r\n" + Watches.Section(ag.Watches, v) + "\r\n" : ""));
+            yield return null;
             if (ag.Config.Theatre)
             {
                 // a news wake no longer writes the look-up files (its question book replaces them, 0.14), but a council, which keeps the whole
                 // picture as before, still reads them: written for it, from its own hour
-                try { ag.Channel.WriteLookups(Facts.Lookups(w, m.LastSeen, m.Trails)); }
+                var lookups = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (object step in Facts.LookupsSteps(w, m.LastSeen, m.Trails, lookups)) yield return step;
+                yield return null;
+                try { if (lookups != null) ag.Channel.WriteLookups(lookups); }
                 catch (Exception e) { Diag.Error("the council's look-up files", e); }
+                yield return null;
             }
             double took = Took(began);
             Diag.Sample("helper:briefing ms", took);
-            Diag.Event("agent", "briefing written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), ms = Math.Round(took, 1) });
+            Diag.Event("agent", "briefing written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), wall_ms = Math.Round(took, 1) });
+            // 0.25.0 (item 12): that hour's fresh book, from the same view
+            foreach (object step in BookSteps(ag, null, v, view)) yield return step;
         }
 
         /// <summary>
         /// The realm's question book and the view file of its way-finding questions, from its newest hour, on the war room's asking before a question of the agent's (0.18.1):
         /// whatever the agent asks, whenever it asks, is answered from the newest hour the game has copied, not from the hour of its wake. The book is built as a wake's is
         /// (every lord, holding and enemy, the lists by kind and region, the orders in force), fog-checked, and written as book\now.json; then the stamp book\now.txt names the
-        /// request answered. Built once an in-game hour at most: asked again within the same hour, only the stamp is written.
+        /// request answered. Since 0.25.0 (item 12) written in small steps (Writes); a book of the hour before or this one (a briefing writes one) is used again with only the
+        /// stamp written, and a request the war room has withdrawn (book-request-ID.withdrawn beside it, contract (c)) is skipped and the mark taken away.
         /// </summary>
-        public static void FreshBook(RealmAgent ag, string request)
+        public static void FreshBook(RealmAgent ag, string request) => Writes.Add("fresh book of " + (ag?.Realm ?? "?"), BookSteps(ag, request, null, null));
+
+        /// <summary>A book built within this many in-game hours of the newest is used again for a new request (0.25.0, item 12).</summary>
+        public const double BookFreshHours = 1;
+
+        private static IEnumerable BookSteps(RealmAgent ag, string request, Snapshot v0, View view0)
         {
-            Snapshot v = ag?.Latest;
+            Snapshot v = v0 ?? ag?.Latest;
             if (v == null || v.Watched == null || v.WatchedSees == null)
             {
-                ag?.Channel.BookStamp(request, double.NaN, "no hour of your realm has been copied yet");
-                return;
+                if (request != null) ag?.Channel.BookStamp(request, double.NaN, "no hour of your realm has been copied yet");
+                yield break;
             }
-            if (!(Math.Abs(ag.FreshBookHours - v.Hours) < 1e-6))
+            if (request != null && ag.Channel.Withdrawn(request)) { Diag.Count("writes:withdrawn, skipped"); yield break; }
+            double fresh = ag.FreshBookHours;
+            if (!double.IsNaN(fresh) && v.Hours >= fresh - 1e-6 && v.Hours - fresh <= (v0 != null ? 1e-6 : BookFreshHours + 1e-6))
             {
-                long began = Stopwatch.GetTimestamp();
-                Memory m = Get(v.Watched);
-                Tools.World w = Tools.Runner.WorldFor(v);
-                View view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
-                var extras = new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = false, Chances = Views.ChanceLines(view, (own, foe) => MarchHours(w, own, foe)) };
-                List<Views.Area> areas = Views.Areas(view);
-                Dictionary<string, string> pages = Facts.Lookups(w, m.LastSeen, m.Trails);
-                foreach (KeyValuePair<string, string> kv in Facts.EnemyHoldings(w, view)) pages[kv.Key] = kv.Value;
-                pages.Remove("README");
-                string book = Json.Line(Views.Book(view, extras, -1, areas, pages)), bookText = Views.BookText(view, extras, areas, pages);
-                Audit.CheckReport(view, bookText, v.WatchedSees, v.InspectedByWatched, "question book on the war room's asking", Known(v, v.Watched, v.WatchedSees, m, w).ToList());
-                ag.Channel.WriteBook("now", book);
-                ag.Channel.Shows(bookText);
-                LiveMap.WriteView(v, view, v.Watched);
-                ag.FreshBookHours = v.Hours;
-                double took = Took(began);
-                Diag.Sample("helper:fresh book ms", took);
-                Diag.Event("agent", "fresh book written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), ms = Math.Round(took, 1), chars = book.Length });
+                if (request != null) ag.Channel.BookStamp(request, fresh, null);
+                yield break;
             }
-            ag.Channel.BookStamp(request, v.Hours, null);
+            long began = Stopwatch.GetTimestamp();
+            Memory m = Get(v.Watched);
+            Tools.World w = Tools.Runner.WorldFor(v);
+            View view = view0;
+            if (view == null)
+            {
+                view = Views.Build(v, v.Watched, v.WatchedSees, v.HostileToWatched, m);
+                yield return null;
+            }
+            var extras = new ReportExtras { InForce = Tools.Runner.InForce(w), Lookups = false, Chances = Views.ChanceLines(view, (own, foe) => MarchHours(w, own, foe)) };
+            yield return null;
+            List<Views.Area> areas = Views.Areas(view);
+            yield return null;
+            var pages = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (object step in Facts.LookupsSteps(w, m.LastSeen, m.Trails, pages)) yield return step;
+            yield return null;
+            foreach (KeyValuePair<string, string> kv in Facts.EnemyHoldings(w, view)) pages[kv.Key] = kv.Value;
+            pages.Remove("README");
+            yield return null;
+            string book = Json.Line(Views.Book(view, extras, -1, areas, pages));
+            yield return null;
+            string bookText = Views.BookText(view, extras, areas, pages);
+            yield return null;
+            Audit.CheckReport(view, bookText, v.WatchedSees, v.InspectedByWatched, "question book on the war room's asking", Known(v, v.Watched, v.WatchedSees, m, w).ToList());
+            yield return null;
+            if (request != null && ag.Channel.Withdrawn(request)) { Diag.Count("writes:withdrawn, skipped"); yield break; }
+            ag.Channel.WriteBook("now", book);
+            yield return null;
+            ag.Channel.Shows(bookText);
+            yield return null;
+            LiveMap.WriteView(v, view, v.Watched);
+            ag.FreshBookHours = v.Hours;
+            double took = Took(began);
+            Diag.Sample("helper:fresh book ms", took);
+            Diag.Event("agent", "fresh book written", new { realm = ag.Realm, hours = v.Hours, date = Text.When(v.Hours), wall_ms = Math.Round(took, 1), chars = book.Length, for_briefing = v0 != null });
+            if (request != null) ag.Channel.BookStamp(request, v.Hours, null);
         }
 
         private static void Guarded(string what, Action a)
@@ -670,7 +734,10 @@ namespace BannerlordAgents
             {
                 m.Started = s.Hours;
                 // what became of the orders in force at the save, when it was loaded from one (0.13.5, CarryOn)
-                triggers.Add(new Trigger { Hours = s.Hours, Kind = "first_look", Text = "First look since the campaign was loaded." + CarryOn.NoteFor(fid) });
+                // 0.25.0 (item 14): and whether the agent's last answer reached the game, its leftovers looked at first
+                Channel loadCh = Agents.Of(fid)?.Channel;
+                loadCh?.CheckLeftovers();
+                triggers.Add(new Trigger { Hours = s.Hours, Kind = "first_look", Text = "First look since the campaign was loaded." + CarryOn.NoteFor(fid) + (loadCh?.LoadAnswerNote() ?? "") });
             }
 
             var close = new HashSet<string>();
@@ -850,7 +917,7 @@ namespace BannerlordAgents
             foreach (Trigger t in fresh)
             {
                 WakeRules.Sort(t);
-                if (self != null) WakeRules.SortSelf(t, followed);
+                if (self != null) WakeRules.SortSelf(t, followed, s.Watched);
                 m.Held.Add(t);
                 Diag.Count("wake:" + t.Lane);
                 Files.Append(book, Json.Line(new { Type = "line", Realm = s.Watched, Run = s.Run, Arm = s.Arm, t.Hours, At = s.Hours, t.Kind, t.Sub, t.Lane, t.Rule, t.Text, t.Party, t.Place, t.Facts, t.Notice }));
@@ -905,6 +972,8 @@ namespace BannerlordAgents
             }
 
             PokesWatched++;
+            // 0.25.0 (item 37): counted by realm too, so a session's summary says which realm got how many
+            Diag.Count("pokes of:" + fid);
             Channel ch = AgentChannel.For(fid);
             int number = ch.NextNumber(Path.Combine(Dir, "pokes_" + fid + ".jsonl"));
             if (digest != null && digest.Count > 0) ch.Digest(number, digest.Select(t => t.Text).ToList());
@@ -988,10 +1057,13 @@ namespace BannerlordAgents
             if (news != null && !theatreMode) Files.Overwrite(Path.Combine(Dir, "reports", fid + "_latest_news.txt"), news);
             // the player's lieutenant is never poked (0.10): it speaks when spoken to; what became of its orders goes into the chat box
             if (ch.IsLieutenant) Lieutenant.Heard(triggers);
+            // 0.25.0 (item 13, contract (d)): the big quiet news since the realm's previous poke, oldest first; an empty list when none
+            List<string> sinceLast = null;
+            if (ch.On && !ch.IsLieutenant) { sinceLast = m.SinceLast.ToList(); m.SinceLast.Clear(); }
             if (ch.On && !ch.IsLieutenant)
                 ch.OnPoke(number, s.Hours, triggers, sent, stale: stale, view: v, meta: new
                 {
-                    Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName,
+                    Number = number, Hours = s.Hours, Date = Text.When(s.Hours), Campaign = s.Campaign, Realm = fid, RealmName = v.FactionName, SinceLast = sinceLast,
                     LoadId = s.LoadId, LoadedAt = double.IsNaN(s.LoadedAt) ? (double?)null : s.LoadedAt,
                     LoadedAtDate = double.IsNaN(s.LoadedAt) ? null : Text.When(s.LoadedAt), ChronicleLines = Chronicle.For(fid).Count,
                     History = History.ForAgent(), Run = s.Run, Arm = s.Arm,
@@ -1061,7 +1133,10 @@ namespace BannerlordAgents
             };
             Func<string, Tuple<float, float, string>> place = id => s.SettlementById.TryGetValue(id, out SettlementRow h) ? Tuple.Create(h.X, h.Y, h.Name) : null;
             ch.Lag(out double usualLag, out double lateLag);
-            return Theatre.Build(v, triggers, own, other, place, usualLag, lateLag);
+            Theatre t = Theatre.Build(v, triggers, own, other, place, usualLag, lateLag);
+            // 0.25.0 (item 11): the review answers' delay is said beside the wake answers'
+            ch.ReviewLag(out t.ReviewUsualLag, out t.ReviewLateLag);
+            return t;
         }
 
         private static double UsualPaceOf(View v) => Theatre.UsualPace(v);

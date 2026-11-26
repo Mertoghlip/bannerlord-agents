@@ -95,7 +95,13 @@ namespace BannerlordAgents.Runs
                 bool game = GameRunning();
                 if (gameWas && !game) closedAt = DateTime.Now;
                 gameWas = game;
-                if (last != null && open != last) Try(last, false, "its last pass: it is no longer the open run");
+                if (last != null && open != last)
+                {
+                    // Nov 26 (tooling audit, fault 36): the last pass only once the war rooms have been quiet for a minute (their busy marks),
+                    // so it holds the closing handover and the plan rewrites written after the run ended; ten minutes at most
+                    WaitQuiet(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(10));
+                    Try(last, false, "its last pass: it is no longer the open run");
+                }
                 string why = open == null ? null
                     : open != last ? "a new open run"
                     : closedAt != DateTime.MinValue && (DateTime.Now - closedAt).TotalSeconds < 20 ? "the game has closed"
@@ -107,6 +113,45 @@ namespace BannerlordAgents.Runs
                 Try(open, true, why);
                 lastPass = DateTime.Now;
             }
+        }
+
+        /// <summary>
+        /// Waits until no war room is in a call and none has been for <paramref name="quiet"/>, <paramref name="most"/> at most. A war room keeps
+        /// autopilot\busy\(realm).json = {pid, since, kind} while a call runs; a mark whose process is gone counts for nothing.
+        /// </summary>
+        internal static void WaitQuiet(TimeSpan quiet, TimeSpan most)
+        {
+            DateTime until = DateTime.Now + most, quietSince = DateTime.MinValue;
+            while (DateTime.Now < until)
+            {
+                if (!WarRoomBusy())
+                {
+                    if (quietSince == DateTime.MinValue) quietSince = DateTime.Now;
+                    if (DateTime.Now - quietSince >= quiet) return;
+                }
+                else quietSince = DateTime.MinValue;
+                Thread.Sleep(2000);
+            }
+        }
+
+        internal static bool WarRoomBusy()
+        {
+            string dir = Path.Combine(Root, "autopilot", "busy");
+            if (!Directory.Exists(dir)) return false;
+            foreach (string f in Directory.GetFiles(dir, "*.json"))
+            {
+                try
+                {
+                    JsonObject o = Bundle.Parse(ReadShared(f));
+                    if (o == null || !int.TryParse(Str(o, "pid"), out int pid)) continue;
+                    using Process p = Process.GetProcessById(pid);
+                    if (!p.HasExited) return true;
+                }
+                catch (ArgumentException) { }          // no such process
+                catch (InvalidOperationException) { }
+                catch (IOException) { }
+            }
+            return false;
         }
 
         private static void Try(string id, bool open, string why)
@@ -175,8 +220,14 @@ namespace BannerlordAgents.Runs
         /// <summary>The test's name: its saves' (the first "TEST ..." save, less " START"), else its arm.</summary>
         public static string Label(RunData r)
         {
+            // Runs 0.15.0 (Nov 26, tooling audit fault 41): named after the run's start save, never after a kept, automatic or end save
+            // (archives of the autopilot's runs were named after their long-gone day-5 kept save)
+            string start = Str(r.State, "save");
+            if (!string.IsNullOrWhiteSpace(start) && start.StartsWith("TEST START", StringComparison.OrdinalIgnoreCase))
+                return ("TEST" + start.Substring("TEST START".Length)).Trim();
             List<string> saves = (r.State?["saves"] as JsonArray)?.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList() ?? new List<string>();
-            string test = saves.FirstOrDefault(x => x.StartsWith("TEST ", StringComparison.OrdinalIgnoreCase) && !x.StartsWith("TEST END", StringComparison.OrdinalIgnoreCase));
+            string test = saves.FirstOrDefault(x => x.StartsWith("TEST ", StringComparison.OrdinalIgnoreCase) && !x.StartsWith("TEST END", StringComparison.OrdinalIgnoreCase)
+                                                    && !x.StartsWith("TEST KEPT", StringComparison.OrdinalIgnoreCase) && !x.StartsWith("TEST AUTO", StringComparison.OrdinalIgnoreCase));
             if (test != null && test.EndsWith(" START", StringComparison.OrdinalIgnoreCase)) test = test.Substring(0, test.Length - 6);
             return test ?? "arm " + r.Arm;
         }
@@ -376,6 +427,40 @@ namespace BannerlordAgents.Runs
             return Directory.GetDirectories(projects).Where(d => string.Equals(Path.GetFileName(d), name, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
+        /// <summary>
+        /// The run's saves in words (Runs 0.15.0, Nov 26, tooling audit fault 41): each marked when it is no longer in the game's save folder
+        /// (the autopilot keeps only the newest kept saves, by design), and the end save added when the run's record lacks it.
+        /// </summary>
+        private static string SavesLine(RunData r)
+        {
+            List<string> saves = (r.State?["saves"] as JsonArray ?? new JsonArray()).Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Mount and Blade II Bannerlord", "Game Saves");
+            bool look = Directory.Exists(folder);
+            string end = "TEST END " + r.Arm + " " + r.Id;
+            if (look && !saves.Contains(end) && File.Exists(Path.Combine(folder, end + ".sav"))) saves.Add(end);
+            if (saves.Count == 0) return "none";
+            return string.Join(", ", saves.Select(s => "\"" + s + "\"" + (look && !File.Exists(Path.Combine(folder, s + ".sav")) ? " (since deleted)" : "")));
+        }
+
+        private const string DatedByWake = "Exchanges are dated by the wake they answer.";
+
+        /// <summary>A wake's number as a message names it ("wake #13071", "(#13071)", "review #13143").</summary>
+        private static readonly Regex WakeNumber = new Regex(@"#(\d{3,7})\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        /// <summary>The in-game hour of each wake of the run, from the agent's call log (each call's "poke" and "when").</summary>
+        private static Dictionary<int, string> WakeDates(RunData r, Agent a)
+        {
+            var map = new Dictionary<int, string>();
+            foreach (string l in Bundle.SelectWall(Path.Combine(a.LogDir, "calls.jsonl"), r.Windows, "at", r.Id))
+            {
+                JsonObject o = Bundle.Parse(l);
+                string when = Str(o, "when");
+                if (o == null || string.IsNullOrEmpty(when) || !int.TryParse(Str(o, "poke"), NumberStyles.Integer, Inv, out int n) || n <= 0) continue;
+                if (!map.ContainsKey(n)) map[n] = when;
+            }
+            return map;
+        }
+
         private static void Conversations(Pass p, RunData r, Agent a)
         {
             if (a.Workspace == null || r.Windows.Count == 0) return;
@@ -393,6 +478,7 @@ namespace BannerlordAgents.Runs
             if (Directory.Exists(memory))
                 foreach (string kept in Directory.GetDirectories(memory).Select(d => Path.Combine(d, "transcripts")).Where(Directory.Exists))
                     foreach (string f in Directory.GetFiles(kept, "*.jsonl")) Offer(f);
+            Dictionary<int, string> wakeDates = null;
             foreach (string f in files.Values)
             {
                 if (File.GetLastWriteTime(f) < start) continue;
@@ -400,11 +486,22 @@ namespace BannerlordAgents.Runs
                 string session = Path.GetFileNameWithoutExtension(f);
                 string dir = Path.Combine(p.Root, "agents", a.Name, "conversations", first.ToString("yyyyMMdd-HHmm", Inv) + " " + session);
                 bool changed = Copy(p, f, Path.Combine(dir, "transcript.jsonl"));
-                if (!changed && File.Exists(Path.Combine(dir, "conversation.txt"))) continue;
+                if (!changed && File.Exists(Path.Combine(dir, "conversation.txt")) && File.Exists(Path.Combine(dir, "exchanges.txt"))
+                    && File.ReadLines(Path.Combine(dir, "exchanges.txt")).Take(3).Any(x => x.Contains(DatedByWake))) continue;
                 List<Transcript.Exchange> ex = Transcript.Read(f);
+                // Runs 0.15.0 (Nov 26, fault 41): date each exchange by the wake it answers (the call log's wake number and in-game hour); the reader carries
+                // the last date it saw forward, which froze whole conversations at one date once messages stopped naming the hour
+                wakeDates ??= WakeDates(r, a);
+                string carry = null;
+                foreach (Transcript.Exchange e in ex)
+                {
+                    Match m = WakeNumber.Match(e.Text.Length > 600 ? e.Text.Substring(0, 600) : e.Text);
+                    if (m.Success && wakeDates.TryGetValue(int.Parse(m.Groups[1].Value, Inv), out string when)) carry = e.Date = when;
+                    else if (carry != null) e.Date = carry;   // a follow-up within the same wake (a question's answer, the lords question)
+                }
                 string head = a.Name + "'s conversation " + session + ", " + ex.Count + " exchanges, " + (ex.FirstOrDefault(e => e.Date.Length > 0)?.Date ?? "?") + " to "
                               + (ex.LastOrDefault(e => e.Date.Length > 0)?.Date ?? "?") + " in the game (" + first.ToString("MMM d HH:mm", Inv) + " to " + last.ToString("MMM d HH:mm", Inv) + " real time).\n"
-                              + "Claude Code's own record of it is transcript.jsonl beside this file.\n\n";
+                              + "Claude Code's own record of it is transcript.jsonl beside this file. " + DatedByWake + "\n\n";
                 Put(p, Path.Combine(dir, "conversation.txt"), Encoding.UTF8.GetBytes(head + string.Join("\n", ex.Select(e => e.Text))), null, keep: false);
                 Put(p, Path.Combine(dir, "exchanges.txt"), Encoding.UTF8.GetBytes(head + string.Join("\n", ex.Select(e => "#" + e.N + " · " + (e.Date.Length > 0 ? e.Date : "no date") + " · " + e.Kind + " · "
                                                                                                                        + e.Text.Length.ToString("N0", Inv) + " characters")) + "\n"), null, keep: false);
@@ -639,7 +736,7 @@ namespace BannerlordAgents.Runs
             sb.AppendLine("# " + r.Id + " · " + Label(r));
             sb.AppendLine();
             sb.AppendLine("Arm " + r.Arm + " (" + Text.ArmWords(r.Arm) + "), campaign " + campaign + ", begun from the save \"" + (Str(r.State, "save") ?? "?") + "\" on " + (Str(r.State, "started") ?? Str(r.State, "armed") ?? "?")
-                          + ". Status: " + status + ", day " + Int(r.State, "last_day") + " of " + r.DaysPlanned + ". Saves made in it: " + string.Join(", ", (r.State?["saves"] as JsonArray ?? new JsonArray()).Select(x => "\"" + x + "\"")) + ".");
+                          + ". Status: " + status + ", day " + Int(r.State, "last_day") + " of " + r.DaysPlanned + ". Saves made in it: " + SavesLine(r) + ".");
             sb.AppendLine();
             sb.AppendLine("Brought up to date " + DateTime.Now.ToString("yyyy-MM-dd HH:mm", Inv) + (open ? " (the open run: kept up to date every " + EveryMinutes + " minutes while the game runs, and as it closes)." : " (the run is closed)."));
             sb.AppendLine();

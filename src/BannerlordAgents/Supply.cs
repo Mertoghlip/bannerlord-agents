@@ -88,7 +88,7 @@ namespace BannerlordAgents
             Errand e = Of(o);
             int need = Need(h.Town, o.Setting("days", 10));
             if (need <= 0 || e.Shopped || Spare(p, o.Setting("keep_days", 3)) >= need) return;
-            Settlement m = BestMarket(p, h);
+            Settlement m = BestMarket(p, h, need - Spare(p, o.Setting("keep_days", 3)));
             if (m != null) o.Place = m;
         }
 
@@ -119,7 +119,7 @@ namespace BannerlordAgents
                 }
                 if (!IsMarket(p, o.Place))
                 {
-                    Settlement m = e.Shopped ? null : BestMarket(p, h);
+                    Settlement m = e.Shopped ? null : BestMarket(p, h, need - Spare(p, keep));
                     o.Place = m ?? h;
                     moved = true;
                 }
@@ -128,7 +128,7 @@ namespace BannerlordAgents
             if (need <= 0 && e.Bought == 0) { key = "stocked"; return Names.Settlement(h) + " needs no food: it has " + Stocks(town); }
             if (!Orders.At(p, h))
             {
-                if (Spare(p, keep) == 0 && !e.Shopped && BestMarket(p, h) == null) { key = "nothing to bring"; return "he has no food to spare and no market within reach to buy it"; }
+                if (Spare(p, keep) == 0 && !e.Shopped && BestMarket(p, h, need - Spare(p, keep)) == null) { key = "nothing to bring"; return "he has no food to spare and no market within reach to buy it"; }
                 return null;
             }
             int given = Give(p, town, Math.Min(Spare(p, keep), need));
@@ -158,25 +158,71 @@ namespace BannerlordAgents
             return s.Village != null && s.Village.VillageState == Village.VillageStates.Normal;
         }
 
-        /// <summary>The market costing the least detour on the way to the holding, within reach; null when none, or when he could buy nothing (no gold, no room).</summary>
-        private static Settlement BestMarket(MobileParty p, Settlement h)
+        /// <summary>
+        /// The market for the food the holding needs, within reach (0.25.0, item 20, as the rules' World.FeedMarket weighs it; run 20261125-2341-C2: Fanuidhol got 212
+        /// deliveries of a median 5 food from the market costing the least detour that had any food at all): the food each market can sell, up to what the holding
+        /// still needs beyond what he can spare, for each extra hour the trip costs over riding straight there; a market that could add less than a day of the holding's
+        /// eating is passed over. Null when none is worth it, or when he could buy nothing (no gold, no room).
+        /// </summary>
+        private static Settlement BestMarket(MobileParty p, Settlement h, int want = int.MaxValue)
         {
             if (p.PartyTradeGold < 100 || p.TotalWeightCarried >= p.InventoryCapacity) return null;
             Vec2 at = p.GetPosition2D, to = h.GatePosition.ToVec2();
             float reach = Campaign.Current.GetAverageDistanceBetweenClosestTwoTownsWithNavigationType(MobileParty.NavigationType.Default) * ReachInTownGaps;
+            float perDay = h.Town != null ? Math.Max(0.1f, PerDay(h.Town)) : 1f;
+            // a party covers its speed / 1.2 map units an hour (the game's marching rule, GamePace)
+            float perHour = Math.Max(0.5f, p.Speed / 1.2f);
+            float direct = at.Distance(to);
             Settlement best = null;
-            float bestCost = float.MaxValue;
+            float bestScore = 0f;
             foreach (Settlement s in Settlement.All)
             {
                 if (s == null || s == h || !IsMarket(p, s)) continue;
                 Vec2 g = s.GatePosition.ToVec2();
                 float there = at.Distance(g);
                 if (reach > 0 && there > reach) continue;
-                float cost = there + g.Distance(to);
-                if (cost < bestCost) { bestCost = cost; best = s; }
+                float gain = Math.Min(s.ItemRoster.TotalFood, want);
+                if (gain < perDay) continue;
+                float extra = Math.Max(1f, (there + g.Distance(to) - direct) / perHour);
+                float score = gain / extra;
+                if (score > bestScore) { bestScore = score; best = s; }
             }
             return best;
         }
+
+        // ---------- a lord's own food (0.25.0, item 1: the food rule's trips buy at the gate, as the supply order does) ----------
+
+        /// <summary>
+        /// Buys food for his own men where he stands, by the game's own rule for lords buying food (PartiesBuyFoodCampaignBehavior: enough to last 30 days from a
+        /// town, 12 from a village, at what his men eat), as the game's lords buy it (PartyFoodBuyingModel.FindItemToBuy, SellItemsAction), keeping half his gold and
+        /// within what he can carry without slowing down. Returns the food items bought.
+        /// </summary>
+        public static int BuyOwn(MobileParty p, Settlement s)
+        {
+            if (p == null || s == null || !IsMarket(p, s)) return 0;
+            PartyFoodBuyingModel model = Campaign.Current.Models.PartyFoodBuyingModel;
+            float eats = Math.Max(0f, -p.FoodChange);
+            if (eats <= 0f) return 0;
+            float days = s.IsVillage ? model.MinimumDaysFoodToLastWhileBuyingFoodFromVillage : model.MinimumDaysFoodToLastWhileBuyingFoodFromTown;
+            int want = (int)Math.Ceiling(Math.Max(0f, days - p.TotalFoodAtInventory / eats) * eats);
+            int budget = p.PartyTradeGold / 2, bought = 0;
+            for (int i = 0; i < want; i++)
+            {
+                model.FindItemToBuy(p, s, out ItemRosterElement element, out float price);
+                ItemObject item = element.EquipmentElement.Item;
+                if (item == null || !item.IsFood || price > budget || p.TotalWeightCarried + item.Weight > p.InventoryCapacity) break;
+                int before = p.ItemRoster.TotalFood;
+                SellItemsAction.Apply(s.Party, p.Party, element, 1);
+                if (p.ItemRoster.TotalFood <= before) break;
+                budget -= (int)Math.Ceiling(price);
+                bought++;
+            }
+            Diag.Count("supply:own food bought", bought);
+            return bought;
+        }
+
+        /// <summary>Is this a market he may buy food at now (0.25.0, for the food rule's trips on the game's side)?</summary>
+        public static bool SellsFood(MobileParty p, Settlement s) => IsMarket(p, s);
 
         /// <summary>Buys up to want food items where he stands, as the game's lords buy food; keeps half his gold and his pace.</summary>
         private static void Buy(MobileParty p, Settlement s, int want, Errand e)

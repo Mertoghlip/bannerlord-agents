@@ -79,6 +79,8 @@ namespace BannerlordAgents.WarRoom
             double bookHours = book?["hours"] is JsonValue bhv && bhv.TryGetValue(out double bh0) ? bh0 : meta?.Hours ?? double.NaN;
             JsonObject view = ViewFor(campaign, realm, loadId, bookHours, out string stale);
             if (view != null) _lastView = view;
+            // war room 0.22.0 (item 9): every build reads the realm's battles under way, so their measured edge is kept even when no battle question is asked
+            if (view != null) RouteTool.RecordEdge(EdgeFile(), view);
             var x = new ShelfInput
             {
                 Book = book, View = view, ViewStale = stale,
@@ -88,7 +90,10 @@ namespace BannerlordAgents.WarRoom
                 Chronicle = Memory.ReadChronicle(_c.ChannelDir), AgentPages = _mem.PagesNow(),
                 ToolsText = ReadShared(Path.Combine(_c.ChannelDir, "tools.txt")) ?? "", OwnToolsManual = TemplateSection("## Writing your own tools"), CheckManual = TemplateSection("## Checking a tool"),
                 Why = why ?? "", Fate = fate, WakeBudget = _c.WakeBudget, WriteNotes = _lastWriteNotes.ToList(),
-                NextReview = _talk != null && !double.IsNaN(_talk.NextReviewHours) ? "by " + Program.When(_talk.NextReviewHours) + " (the hour you set)" : ""
+                NextReview = _talk != null && !double.IsNaN(_talk.NextReviewHours) ? "by " + Program.When(_talk.NextReviewHours) + " (the hour you set)" : "",
+                // war room 0.22.0: when the book was written (the no-order filter, item 10), and the game's receipts since the last build (item 19)
+                BookWrittenUtc = bookPath != null && File.Exists(bookPath) ? File.GetLastWriteTimeUtc(bookPath) : DateTime.MinValue,
+                Receipts = NewReceipts()
             };
             _mem.View(out string story, out _, out string storyDate, out _, out _);
             if (story.StartsWith("HANDOVER", StringComparison.Ordinal)) { x.Handover = story; x.HandoverDate = storyDate; }
@@ -102,6 +107,37 @@ namespace BannerlordAgents.WarRoom
             _lastWriteNotes.Clear();
             if (_shelf.LastBuildMs > 3000) Say("The realm's files took " + (_shelf.LastBuildMs / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " s to build.");
             return _shelf;
+        }
+
+        private long _shelfReceiptsMark = -1;
+
+        /// <summary>
+        /// The game's receipts written since the last build (war room 0.22.0, item 19), each line without its time, whole lines only; none at the first build (what came before is in
+        /// the next wake's WHAT CHANGED).
+        /// </summary>
+        private List<string> NewReceipts()
+        {
+            var lines = new List<string>();
+            string path = Path.Combine(_c.ChannelDir, "receipts.log");
+            try
+            {
+                if (!File.Exists(path)) return lines;
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                if (_shelfReceiptsMark < 0 || _shelfReceiptsMark > fs.Length) { _shelfReceiptsMark = fs.Length; return lines; }
+                fs.Position = _shelfReceiptsMark;
+                using var sr = new StreamReader(fs, new UTF8Encoding(false));
+                string text = sr.ReadToEnd();
+                int last = text.LastIndexOf('\n');
+                if (last < 0) return lines;
+                _shelfReceiptsMark += Encoding.UTF8.GetByteCount(text.Substring(0, last + 1));
+                foreach (string raw in text.Substring(0, last + 1).Split('\n'))
+                {
+                    string l = System.Text.RegularExpressions.Regex.Replace(raw.TrimEnd('\r'), @"^\d\d:\d\d:\d\d\s+", "").Trim();
+                    if (l.Length > 0) lines.Add(l);
+                }
+            }
+            catch (IOException) { }
+            return lines;
         }
 
         /// <summary>
@@ -315,6 +351,7 @@ namespace BannerlordAgents.WarRoom
         {
             if (!_c.Files || _mem == null || (_story != null && !_story.IsCompleted)) return;
             if ((DateTime.Now - _storyFailedAt).TotalMinutes < 5 || (DateTime.Now - _lastCallEnded).TotalSeconds < 2) return;
+            if (RunFinished()) return;
             if ((DateTime.Now - _storyLooked).TotalSeconds < 10) return;
             _storyLooked = DateTime.Now;
             ReadClock();
@@ -397,7 +434,7 @@ namespace BannerlordAgents.WarRoom
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "prompt.txt"), sb.ToString());
             Say("Chronicle: the chronicler writes " + string.Join(", ", dayNames) + "...");
-            CallResult r = Claude.Run(_claude, ChroniclerFilesFile(), sb.ToString(), model, _c.StoryEffort, _c.ChannelDir, false, Math.Max(_c.TimeoutSeconds, 300), _c.StoryThinkingCap, cancel: cancel);
+            CallResult r = Guarded("chronicle", () => Claude.Run(_claude, ChroniclerFilesFile(), sb.ToString(), model, _c.StoryEffort, _c.ChannelDir, false, Math.Max(_c.TimeoutSeconds, 300), _c.StoryThinkingCap, cancel: cancel));
             File.WriteAllText(Path.Combine(folder, "raw.jsonl"), r.Raw ?? "");
             string problem = r.Ok ? null : r.Error;
             var written = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -422,7 +459,9 @@ namespace BannerlordAgents.WarRoom
             {
                 kind = "chronicle", at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture), model, effort = _c.StoryEffort, ok = kept, problem, days = dayNames,
                 lines = days.Sum(d => d.Count), pages = written.Keys.ToList(), seconds = Math.Round(seconds, 2), tokens_in = r.InTokens, tokens_out = r.OutTokens, cache_read = r.CacheRead,
-                cache_write = r.CacheWrite, cost_usd_list = r.Cost, campaign = m.Campaign, folder
+                cache_write = r.CacheWrite, cost_usd_list = r.Cost, campaign = m.Campaign, folder,
+                // war room 0.22.0 (item 40): the chronicler's calls carry the run too, so the archive and the costs hold them
+                run = RunTag(null, out string chArm), arm = chArm, realm = ReadMeta(-1)?.Realm
             });
             if (kept) Say("Chronicle: written (" + string.Join(", ", written.Keys) + ") in " + seconds.ToString("0", CultureInfo.InvariantCulture) + " s.");
             else if (!cancel.IsCancellationRequested) { _storyFailedAt = DateTime.Now; Say("Chronicle: not written (" + problem + "); tried again in five minutes."); }

@@ -250,6 +250,60 @@ function Quit-Game([int]$seconds = 240) {
     Say 'Game closed.'
 }
 
+# Nov 26 (tooling audit, faults 14 and 36): every war room keeps a busy mark while a call of its runs, autopilot\busy\<realm>.json
+# = {pid, since, kind}; a mark whose war room is gone counts for nothing.
+function Warroom-Busy {
+    $dir = Join-Path $Ap 'busy'
+    $out = @()
+    if (-not (Test-Path $dir)) { return $out }
+    foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter '*.json' -ErrorAction SilentlyContinue)) {
+        try {
+            $j = [System.IO.File]::ReadAllText($f.FullName, $utf8) | ConvertFrom-Json
+            if ((Prop $j 'pid') -and (Get-Process -Id ([int](Prop $j 'pid')) -ErrorAction SilentlyContinue)) { $out += ($f.BaseName + ' (' + (Prop $j 'kind') + ')') }
+        }
+        catch { }
+    }
+    return $out
+}
+
+# Waits until no war room is in a call and none has been for $quietSeconds, $maxSeconds at most; true when quiet.
+function Wait-Warrooms([int]$maxSeconds, [int]$quietSeconds = 0) {
+    $t0 = Get-Date; $quietSince = $null
+    while (((Get-Date) - $t0).TotalSeconds -lt $maxSeconds) {
+        Stay-Awake
+        if (@(Warroom-Busy).Count -eq 0) {
+            if (-not $quietSince) { $quietSince = Get-Date }
+            if (((Get-Date) - $quietSince).TotalSeconds -ge $quietSeconds) { return $true }
+        }
+        else { $quietSince = $null }
+        Start-Sleep -Seconds 2
+    }
+    return $false
+}
+
+# Fault 36: at a run's end, the answers the game never read (poke-*.json still in an agent's orders folder) go into the run's records.
+function Keep-LeftOrders([string]$runId) {
+    if (-not $runId) { return }
+    $agents = Get-Setting 'agents'
+    if (-not $agents) { return }
+    foreach ($folder in ($agents -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        $cfg = Join-Path $folder 'agent.txt'
+        if (-not (Test-Path $cfg)) { continue }
+        $realm = $null; $channel = 'warroom'
+        foreach ($l in [System.IO.File]::ReadAllLines($cfg, $utf8)) {
+            if ($l -match '^\s*realm\s*=\s*(\S+)') { $realm = $Matches[1] }
+            if ($l -match '^\s*channel\s*=\s*(.+)$') { $channel = $Matches[1].Trim() }
+        }
+        $orders = Join-Path (Join-Path $folder $channel) 'orders'
+        $left = @(Get-ChildItem -LiteralPath $orders -Filter 'poke-*.json' -ErrorAction SilentlyContinue)
+        if ($left.Count -eq 0) { continue }
+        $to = Join-Path $Root ('runs\' + $runId + '\orders-left\' + $(if ($realm) { $realm } else { Split-Path $folder -Leaf }))
+        New-Item -ItemType Directory -Force $to | Out-Null
+        foreach ($f in $left) { Move-Item -LiteralPath $f.FullName -Destination (Join-Path $to $f.Name) -Force }
+        Say "  $($left.Count) answer(s) the game never read moved from $orders to the run's records ($to)."
+    }
+}
+
 # ---------------------------------------------------------------- crashes and freezes: note, gather, decide
 
 function Gather([string]$what) {
@@ -588,6 +642,10 @@ function Mind-Run {
                 $end = [string](Prop $s 'end_save')
                 if ($end -like 'saved *' -or $end -like 'NOT saved*') {
                     Say "The run $lastRun is over (day $(Prop $run 'day')): $end."
+                    # Nov 26 (fault 36): the war rooms make no new call after the game's run-finished mark; let one still running end,
+                    # and the war rooms stay quiet a minute, before the game closes and the archive takes its last copy
+                    if (-not (Wait-Warrooms 600 60)) { Say "  a war room was still in a call after 10 minutes: $((Warroom-Busy) -join ', ')." }
+                    Keep-LeftOrders $lastRun
                     Quit-Game
                     return $(if ($end -like 'saved *') { 0 } else { 3 })
                 }
@@ -620,6 +678,18 @@ function Mind-Run {
                 $memoryRestarts++
                 $name = 'TEST AUTO ' + $Arm
                 Say "MEMORY: the game holds $mem MB (limit $MemoryRestartMb): saving as $name and restarting ($memoryRestarts so far)."
+                # Nov 26 (fault 14): a restart in the middle of an agent's call lost its answer. Hold the game while a war room is in a call
+                # (10 minutes at most), then let it run a few seconds so it takes the answer and gives its orders, then save.
+                $busy = @(Warroom-Busy)
+                if ($busy.Count -gt 0) {
+                    try { [void](Send 'pause' 60) } catch { }
+                    Say "  a war room is in a call ($($busy -join ', ')): the game held until it answers (10 minutes at most)."
+                    $t0 = Get-Date
+                    $quiet = Wait-Warrooms 600 0
+                    try { [void](Send 'resume' 60) } catch { }
+                    Start-Sleep -Seconds 10
+                    Say "  $(if ($quiet) { 'answered' } else { 'still in a call' }) after $([int]((Get-Date) - $t0).TotalSeconds) s: saving now."
+                }
                 [void](Must ("save " + $name) 300)
                 Quit-Game
                 Begin-Run $name $false

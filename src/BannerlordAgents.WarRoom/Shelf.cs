@@ -40,6 +40,10 @@ namespace BannerlordAgents.WarRoom
         public string NextReview = "";
         /// <summary>The agent's own page writes and their refusals in its last answer, told on the shelf.</summary>
         public List<string> WriteNotes = new List<string>();
+        /// <summary>When the question book this build is made from was written (UTC): a lord ordered after it may not show his order yet (war room 0.22.0, item 10).</summary>
+        public DateTime BookWrittenUtc = DateTime.MinValue;
+        /// <summary>The game's receipts since the last build, each line without its time (war room 0.22.0, item 19): on the order-results page as soon as the game takes an answer.</summary>
+        public List<string> Receipts = new List<string>();
     }
 
     /// <summary>A page the agent (or its chronicler) wrote, with when, why and by whom.</summary>
@@ -97,6 +101,14 @@ namespace BannerlordAgents.WarRoom
         public double LastBuildMs { get; private set; }
         public int LastChanges { get; private set; }
         public int LastWritten { get; private set; }
+        /// <summary>When the book the last build was made from was written (UTC), else the build's own time (war room 0.22.0).</summary>
+        public DateTime BuiltFromUtc { get; private set; } = DateTime.MinValue;
+        /// <summary>The lords of the realm marching in its armies or to join one (they hold no order of their own and follow the army), as of the last build (item 32).</summary>
+        public int InArmies { get; private set; }
+        /// <summary>The lords with no order the game's AI leads, as of the last build (item 32): the lords/no-order list.</summary>
+        public int NoOrderCount { get; private set; }
+        /// <summary>The game's line on how long the agent's orders take to land (THE CLOCK), as of the last build.</summary>
+        public string ClockLine => _s.Sections.TryGetValue("THE CLOCK", out string l) ? l : "";
 
         /// <summary>Nobody plays in person (warroom.txt human_player = none, war room 0.20.3): the human player's record is no page of the shelf.</summary>
         public bool NoHumanPlayer { get; set; }
@@ -135,6 +147,11 @@ namespace BannerlordAgents.WarRoom
             public int FiredPoke { get; set; } = -1;
             /// <summary>The last build went without the view file (war room 0.20.1): the next build with one is a new start for the facts, not their changes.</summary>
             public bool NoView { get; set; }
+            /// <summary>The receipt lines already on the order-results page (war room 0.22.0): a later wake's WHAT CHANGED does not repeat them.</summary>
+            public List<string> Folded { get; set; } = new List<string>();
+            /// <summary>The last name the realm knew for each lord, and the lord of each party (war room 0.22.0, item 29): a gone partner is named, not left as a code.</summary>
+            public Dictionary<string, string> LordNames { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+            public Dictionary<string, string> PartyLords { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
         private static readonly JsonSerializerOptions Opts = new JsonSerializerOptions { WriteIndented = false, IncludeFields = true, NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals };
@@ -205,6 +222,7 @@ namespace BannerlordAgents.WarRoom
                 _s.NoView = x.View == null;
                 _s.Hours = x.Hours;
                 _s.Date = x.Date ?? "";
+                BuiltFromUtc = x.BookWrittenUtc > DateTime.MinValue ? x.BookWrittenUtc : DateTime.UtcNow;
                 TakeSections(x);
                 var pages = new SortedDictionary<string, Page>(StringComparer.Ordinal);
                 var facts = new List<Fact>();
@@ -340,7 +358,14 @@ namespace BannerlordAgents.WarRoom
                         asked = true;
                         string name = (string)c["name"] ?? "";
                         if (name == "Read" && (string)c["input"]?["file_path"] is string fp) { string pg = PageOf(fp); if (pg != null && Pages.ContainsKey(pg) || pg != null && pg.EndsWith("/changes", StringComparison.Ordinal)) read.Add(pg); }
-                        else if (name.EndsWith("__open", StringComparison.Ordinal)) opens++;
+                        else if (name.EndsWith("__open", StringComparison.Ordinal))
+                        {
+                            // war room 0.22.0 (item 39): every page an open names is a page read (opens were counted, never listed: 181 reads recorded against about 324)
+                            opens++;
+                            JsonNode pagesArg = c["input"]?["pages"] ?? c["input"]?["page"];
+                            IEnumerable<string> named = pagesArg is JsonArray pa ? pa.Select(x => x?.ToString()) : (pagesArg?.ToString() ?? "").Split(',');
+                            foreach (string a in named) { string pg = Resolve(a); if (pg != null) read.Add(pg); }
+                        }
                     }
                     if (asked) steps++;
                 }
@@ -368,12 +393,21 @@ namespace BannerlordAgents.WarRoom
                     string body = b.Value.TrimEnd();
                     if (head == "THE CLOCK")
                     {
-                        string lag = body.Replace("\r", "").Split('\n').FirstOrDefault(l => l.Contains("orders take effect"));
-                        if (lag != null) _s.Sections["THE CLOCK"] = lag.TrimStart('-', ' ').Trim();
+                        // war room 0.22.0: the order delay's line, with the figures for wake answers and review answers once the game gives both (contract e)
+                        var lag = body.Replace("\r", "").Split('\n').Where(l => l.Contains("orders take effect") || l.Contains("Wake answers") || l.Contains("Review answers")).Select(l => l.TrimStart('-', ' ').Trim()).ToList();
+                        if (lag.Count > 0) _s.Sections["THE CLOCK"] = string.Join(" ", lag);
                         continue;
                     }
                     _s.Sections[head] = (b.Key + "\n" + body).Trim();
                 }
+            }
+            // war room 0.22.0 (item 19): the game's receipts as soon as it takes an answer, not one answer later (7 searches for receipts 11 to 90 s old came back empty)
+            var fresh = (x.Receipts ?? new List<string>()).Where(l => !string.IsNullOrWhiteSpace(l) && !_s.Folded.Contains(l.Trim())).Select(l => l.Trim()).ToList();
+            if (fresh.Count > 0)
+            {
+                _s.Results.Insert(0, "As of " + (x.Date ?? "") + ": the game's receipts of your answers\n" + string.Join("\n", fresh.Select(l => "- " + l)));
+                _s.Folded.AddRange(fresh);
+                if (_s.Folded.Count > 600) _s.Folded.RemoveRange(0, _s.Folded.Count - 600);
             }
             // the receipts of the answers: the poke's WHAT CHANGED SINCE YOUR LAST ANSWER, once a poke, newest first
             if (!string.IsNullOrWhiteSpace(x.PokeText) && x.Poke > _s.ResultsPoke)
@@ -381,13 +415,47 @@ namespace BannerlordAgents.WarRoom
                 foreach (KeyValuePair<string, string> b in Room.Blocks(x.PokeText))
                     if (b.Key != null && Room.Key(b.Key).StartsWith("WHAT CHANGED SINCE YOUR LAST ANSWER", StringComparison.Ordinal) && b.Value.Trim().Length > 0)
                     {
-                        _s.Results.Insert(0, "As of " + (x.Date ?? "") + " (wake #" + x.Poke + "): " + b.Key.Substring(b.Key.IndexOf('(') >= 0 ? b.Key.IndexOf('(') : 0).Trim() + "\n" + b.Value.TrimEnd());
+                        string entry = ResultEntry(b.Value, _s.Folded);
+                        if (entry.Length > 0) _s.Results.Insert(0, "As of " + (x.Date ?? "") + " (wake #" + x.Poke + "): " + b.Key.Substring(b.Key.IndexOf('(') >= 0 ? b.Key.IndexOf('(') : 0).Trim() + "\n" + entry);
                         break;
                     }
                 _s.ResultsPoke = x.Poke;
             }
             if (!string.IsNullOrWhiteSpace(x.Fate)) _s.Results.Insert(0, "As of " + (x.Date ?? "") + ": what became of your last answer, as the game answered it\n" + x.Fate.TrimEnd());
-            if (_s.Results.Count > 30) _s.Results.RemoveRange(30, _s.Results.Count - 30);
+            if (_s.Results.Count > ResultsKept) _s.Results.RemoveRange(ResultsKept, _s.Results.Count - ResultsKept);
+        }
+
+        /// <summary>The answers' results kept (the newest ResultsShown on lords/order-results, the rest on lords/order-results-earlier), and the most minor news one keeps.</summary>
+        internal const int ResultsKept = 30, ResultsShown = 10, MinorNewsChars = 1500, PageMostChars = 40000;
+
+        /// <summary>
+        /// One answer's WHAT CHANGED for the order-results page (war room 0.22.0, item 19: the page held 132,000 to 241,000 characters and could not be opened): the receipts and the
+        /// wakes it missed in full, less the receipts already on the page; at most 1,500 characters of the quieter news.
+        /// </summary>
+        internal static string ResultEntry(string body, ICollection<string> folded)
+        {
+            var main = new StringBuilder();
+            var quiet = new StringBuilder();
+            bool inQuiet = false;
+            foreach (string raw in (body ?? "").Replace("\r", "").Split('\n'))
+            {
+                string l = raw.TrimEnd();
+                if (l.Length == 0) continue;
+                if (l.StartsWith("Quieter news", StringComparison.Ordinal)) { inQuiet = true; continue; }
+                if (l.StartsWith("What became of your orders", StringComparison.Ordinal)) { inQuiet = false; main.AppendLine(l); continue; }
+                if (inQuiet) { quiet.AppendLine(l); continue; }
+                if (folded != null && l.StartsWith("- ", StringComparison.Ordinal) && folded.Contains(l.Substring(2).Trim())) continue;
+                main.AppendLine(l);
+            }
+            string m = main.ToString().TrimEnd();
+            if (m.EndsWith("What became of your orders since then:", StringComparison.Ordinal)) m = m.Substring(0, m.Length - "What became of your orders since then:".Length).TrimEnd();
+            string q = quiet.ToString().TrimEnd();
+            if (q.Length > MinorNewsChars)
+            {
+                int cut = q.LastIndexOf('\n', MinorNewsChars);
+                q = q.Substring(0, cut > 0 ? cut : MinorNewsChars).TrimEnd() + "\n- (more quieter news: chronicle/record has it all)";
+            }
+            return (m + (q.Length > 0 ? (m.Length > 0 ? "\n" : "") + "Quieter news since then, which did not call you:\n" + q : "")).Trim();
         }
 
         // ---------- lords ----------
@@ -467,6 +535,23 @@ namespace BannerlordAgents.WarRoom
             var noOrder = new StringBuilder();
             var joiners = new List<string>();
             int armies = 0, forces = 0;
+            // war room 0.22.0 (item 29): the parties with no lord at their head (the view's own parties with no leader), the lords and parties the realm knows by name, its captives
+            var leaderless = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JsonObject o in (x.View?["own"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+            {
+                string pid = (string)o["id"], lid = (string)o["lord"], pname = (string)o["name"];
+                if (string.IsNullOrEmpty(pid)) continue;
+                if (string.IsNullOrEmpty(lid)) { leaderless.Add(pid); continue; }
+                _s.PartyLords[pid] = lid;
+                if (!string.IsNullOrEmpty(pname)) _s.LordNames[lid] = pname;
+            }
+            var captiveIds = new HashSet<string>(Items(x, "captives").SelectMany(Ids).Where(i => !i.StartsWith("castle", StringComparison.Ordinal) && !i.StartsWith("town", StringComparison.Ordinal) && !i.StartsWith("village", StringComparison.Ordinal)), StringComparer.Ordinal);
+            var inArmies = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JsonObject it in Items(x, "lords"))
+            {
+                Match hh = Head.Match(T(it));
+                if (hh.Success) { names[hh.Groups[2].Value] = hh.Groups[1].Value; _s.LordNames[hh.Groups[2].Value] = hh.Groups[1].Value; }
+            }
             foreach (JsonObject it in Items(x, "lords"))
             {
                 string t = T(it);
@@ -482,18 +567,29 @@ namespace BannerlordAgents.WarRoom
                 string area = (string)it["area"] ?? "elsewhere";
                 string look = BookPage(x, id);
                 orders.TryGetValue(id, out string order);
+                if (order != null) order = NameCodes(order, names, captiveIds);
                 bool joining = order == null && MarchesToArmy(first);
+                bool noLord = leaderless.Contains(id) || (Regex.IsMatch(id, @"_party(_\d+)?$") && name.EndsWith("Party", StringComparison.Ordinal));
+                // the lords in this army or marching to join it (each on a line of its own under the leader): they follow it, holding no order of their own
+                if (army || t.Contains("\n"))
+                    foreach (string ml in t.Split('\n').Skip(1))
+                    {
+                        Match mm = MemberLine.Match(ml);
+                        if (mm.Success) inArmies.Add(mm.Groups[1].Value);
+                    }
+                if (joining) inArmies.Add(id);
                 string orderName = order == null ? (joining ? "none: he marches to join an army" : "none") : FirstClause(order);
                 string doing = first;
                 string state = StateOf((order ?? "") + " " + doing);
                 double? men = NumBefore(first, " men"), strength = NumAfter(first, "strength "), ranks = NumAfter(look, "ranks "), food = NumAfter(look, "food for "), gold = NumAfter(look, "gold ");
                 string line = "- " + name + " [" + id + "] (" + slug + "): " + Short(first.Substring(first.IndexOf("]: ", StringComparison.Ordinal) >= 0 ? first.IndexOf("]: ", StringComparison.Ordinal) + 3 : 0), 220)
-                              + (order == null ? (joining ? " · no order of his own: he marches to join an army of yours and follows it" : " · no order: the game's own AI leads him") : "");
+                              + (order == null ? (joining ? " · no order of his own: he marches to join an army of yours and follows it" : noLord ? " · no lord at its head: it cannot be ordered" : " · no order: the game's own AI leads him") : "");
                 index.AppendLine(line);
                 if (!byArea.TryGetValue(area, out List<string> al)) byArea[area] = al = new List<string>();
                 al.Add(line);
                 if (joining) joiners.Add(name + " [" + id + "]");
-                else if (order == null) noOrder.AppendLine("- " + name + " [" + id + "] (" + slug + "): " + Short(first.Substring(first.IndexOf("]: ", StringComparison.Ordinal) >= 0 ? first.IndexOf("]: ", StringComparison.Ordinal) + 3 : 0), 200));
+                // war room 0.22.0: a party with no lord at its head is no lord to order (item 29); a lord's whole line, never cut (item 31: the cut hid the key figure in 22 of 89 messages)
+                else if (order == null && !noLord) noOrder.AppendLine("- " + name + " [" + id + "] (" + slug + "): " + first.Substring(first.IndexOf("]: ", StringComparison.Ordinal) >= 0 ? first.IndexOf("]: ", StringComparison.Ordinal) + 3 : 0).Trim());
                 var body = new StringBuilder();
                 body.AppendLine(t.TrimStart('-', ' ').Trim());
                 body.AppendLine();
@@ -536,8 +632,17 @@ namespace BannerlordAgents.WarRoom
             string notListed = joiners.Count == 0 ? "" : (noOrder.Length > 0 ? "\n" : "") + "Not listed here: " + joiners.Count + (joiners.Count == 1 ? " lord marching" : " lords marching")
                 + " to join an army of yours, who follow it until they reach it; an order of yours would take them out of it: " + string.Join(", ", joiners) + ".";
             pages["lords/no-order"] = new Page { Title = "Lords with no order", Desc = "led by the game's own AI until you order them", Body = (noOrder.Length > 0 ? noOrder.ToString() : "Every lord in the field holds an order of yours.\n") + notListed };
+            InArmies = inArmies.Count;
+            NoOrderCount = noOrder.ToString().Split('\n').Count(l => l.StartsWith("- ", StringComparison.Ordinal));
             pages["lords/held-by-the-enemy"] = new Page { Title = "Your lords held by the enemy", Desc = "your captured lords, by where they are held", Body = held.Length > 0 ? held : "None of your lords is held." };
-            pages["lords/order-results"] = new Page { Title = "What became of your orders", Desc = "the game's receipts of your answers and the quieter news since each, newest first", Body = _s.Results.Count > 0 ? string.Join("\n\n", _s.Results) : "Nothing yet in this game session." };
+            // war room 0.22.0 (item 19): the newest ten answers on the page, the older on order-results-earlier, each page kept under 40,000 characters
+            (List<string> shown, List<string> earlier) = SplitResults(_s.Results);
+            pages["lords/order-results"] = new Page
+            {
+                Title = "What became of your orders", Desc = "the game's receipts of your answers and the quieter news since each, newest first (the newest " + ResultsShown + "; order-results-earlier has the ones before)",
+                Body = shown.Count > 0 ? string.Join("\n\n", shown) : "Nothing yet in this game session."
+            };
+            pages["lords/order-results-earlier"] = new Page { Title = "What became of your orders, earlier", Desc = "the answers before the newest " + ResultsShown + ", newest first", Body = earlier.Count > 0 ? string.Join("\n\n", earlier) : "None yet." };
             foreach (JsonObject it in Items(x, "captives"))
                 foreach (string id in Ids(it).Where(i => i.StartsWith("lord", StringComparison.Ordinal) || i.StartsWith("Character", StringComparison.Ordinal)))
                     facts.Add(new Fact { Key = "captive:" + id, Value = "held", Page = "lords/held-by-the-enemy", Weight = 3, Say = (o, n) => o == null ? CaptiveName(T(it), id, names) + " is held by the enemy: " + Short(T(it).TrimStart('-', ' '), 160) : null });
@@ -550,6 +655,44 @@ namespace BannerlordAgents.WarRoom
             Match m = Regex.Match(line ?? "", @"([^:;,\[\]]+?) \[" + Regex.Escape(id) + @"\]");
             if (m.Success) return m.Groups[1].Value.Trim();
             return names.TryGetValue(id, out string nm) ? nm : id;
+        }
+
+        private static readonly Regex MemberLine = new Regex(@"^\s+- .+? \[([^\]]+)\]", RegexOptions.Compiled);
+        private static readonly Regex BareCode = new Regex(@"(?<![\[\w])([A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)(?![\]\w])", RegexOptions.Compiled);
+
+        /// <summary>
+        /// A partner written as the game's code in an order's text, named by the last name the realm knew (war room 0.22.0, item 29: Malthorn's party code stood in 66 reports and
+        /// hid that he was a prisoner): "Malthorn (prisoner)", "Malthorn (no party now)", or his name and id while he leads a party in the field.
+        /// </summary>
+        internal string NameCodes(string text, IReadOnlyDictionary<string, string> inField, ISet<string> captives)
+        {
+            if (string.IsNullOrEmpty(text) || text.IndexOf('_') < 0) return text;
+            return BareCode.Replace(text, m =>
+            {
+                string code = m.Groups[1].Value;
+                string lord = _s.PartyLords.TryGetValue(code, out string l) ? l : Regex.IsMatch(code, @"_party_\d+$") ? Regex.Replace(code, @"_party_\d+$", "") : code;
+                string name = inField.TryGetValue(lord, out string n) ? n : _s.LordNames.TryGetValue(lord, out string n2) ? n2 : null;
+                if (name == null) return code;
+                if (captives.Contains(lord)) return name + " (prisoner)";
+                if (!inField.ContainsKey(lord)) return name + " (no party now)";
+                return name + " [" + lord + "]";
+            });
+        }
+
+        /// <summary>The order-results entries split for the two pages: the newest ten (fewer if they pass 40,000 characters), and the rest up to 40,000 characters.</summary>
+        internal static (List<string> shown, List<string> earlier) SplitResults(List<string> results)
+        {
+            var shown = new List<string>();
+            var earlier = new List<string>();
+            int chars = 0, chars2 = 0;
+            foreach (string r in results)
+            {
+                if (shown.Count < ResultsShown && earlier.Count == 0 && (shown.Count == 0 || chars + r.Length + 2 <= PageMostChars)) { shown.Add(r); chars += r.Length + 2; continue; }
+                if (chars2 + r.Length + 2 > PageMostChars) break;
+                earlier.Add(r);
+                chars2 += r.Length + 2;
+            }
+            return (shown, earlier);
         }
 
         private static string FirstClause(string order)
@@ -834,7 +977,7 @@ namespace BannerlordAgents.WarRoom
             List<string> realm = Items(x, "realm").Select(T).ToList();
             List<string> enemyRealms = (x.View?["enemy_holdings"] as JsonObject)?.Select(kv => kv.Key).ToList() ?? new List<string>();
             List<string> enemyLines = realm.Where(l => enemyRealms.Any(r => l.StartsWith("- " + r, StringComparison.Ordinal))).ToList();
-            List<string> sum = realm.Except(enemyLines).ToList();
+            List<string> sum = realm.Except(enemyLines).Select(l => InSumCounts(l, InArmies, NoOrderCount)).ToList();
             string lag = _s.Sections.TryGetValue("THE CLOCK", out string lg) ? lg : "";
             pages["realm/in-sum"] = new Page { Title = "Your realm in sum, and the clock", Desc = "the realm's numbers, the hour and how long your orders take to land", Body = "As of " + x.Date + "." + (lag.Length > 0 ? "\n" + lag : "") + "\n\n" + string.Join("\n", sum) };
             pages["realm/money"] = new Page { Title = "Money", Desc = "the clans' gold, wages, loot and prisoners", Body = string.Join("\n", Items(x, "purse").Select(T)) };
@@ -856,6 +999,16 @@ namespace BannerlordAgents.WarRoom
             foreach (string v in votes) { string k = Hash(Regex.Replace(v, @"\d", "")); facts.Add(new Fact { Key = "vote:" + k, Value = "open", Page = "realm/allies-and-letters", Weight = 2, Say = (o, n) => o == null ? "open: " + Short(v.TrimStart('-', ' '), 160) : null }); }
             foreach (string a in allies) { string k = Hash(Regex.Replace(a, @"\d", "")); facts.Add(new Fact { Key = "ally:" + k, Value = "1", Page = "realm/allies-and-letters", Weight = 1, Say = (o, n) => o == null ? "allies: " + Short(a.TrimStart('-', ' '), 160) : null }); }
         }
+
+        private static readonly Regex OrdersClause = new Regex(@"Holding your orders: (\d+); the other (\d+) are led by the game's own AI\.", RegexOptions.Compiled);
+
+        /// <summary>
+        /// The realm's sum line on its lords with the counts that add up to the no-order list (war room 0.22.0, item 32: its "led by the game's own AI" count took in the lords marching
+        /// in the realm's own armies, so it was higher than the list in all 273 summaries, 9 against 1 named).
+        /// </summary>
+        internal static string InSumCounts(string line, int inArmies, int noOrder) =>
+            OrdersClause.Replace(line ?? "", m => "Holding your orders: " + m.Groups[1].Value + ". Lords with no order of yours: " + (inArmies + noOrder) + ". " + inArmies
+                                                  + (inArmies == 1 ? " marches" : " march") + " in your armies or to join one; " + noOrder + (noOrder == 1 ? " is" : " are") + " led by the game's AI (lords/no-order lists them).");
 
         // ---------- intelligence: the game's pages ----------
 
@@ -933,9 +1086,14 @@ namespace BannerlordAgents.WarRoom
 
         // ---------- orders ----------
 
+        private string _lastToolsText;
+
         private void BuildOrders(ShelfInput x, SortedDictionary<string, Page> pages, List<Fact> facts)
         {
             string text = (x.ToolsText ?? "").Replace("\r", "");
+            // war room 0.22.0 (item 35): the library read while the game was writing it holds no order at all: the last whole one stands (the list once showed "0 orders")
+            if (text.Contains("- **")) _lastToolsText = text;
+            else if (_lastToolsText != null) text = _lastToolsText;
             var index = new StringBuilder();
             var common = new StringBuilder();
             string category = "";
@@ -947,7 +1105,8 @@ namespace BannerlordAgents.WarRoom
             {
                 if (name == null) return;
                 string body = current.ToString().Trim();
-                string slug = Slug(name);
+                // war room 0.22.0 (item 35): an order's page is named as the order is ("camp_strike"; 4 reads of "camp_strike.md" failed when it was "camp-strike.md")
+                string slug = OrderSlug(name);
                 // what it does: past its name in bold and the bracket of what it takes
                 string what = body;
                 int bold = what.IndexOf("**", 2, StringComparison.Ordinal);
@@ -967,7 +1126,7 @@ namespace BannerlordAgents.WarRoom
                     Title = name + (own ? " (your own order)" : ""), Desc = Short(first, 140),
                     Body = (category.Length > 0 ? "Kind: " + category.TrimEnd(':') + "\n\n" : "") + body + "\n\nIts whole definition (every setting, rule and call-back): read tools/" + name + ".json in your channel. The settings every order takes are on the page common-settings."
                 };
-                facts.Add(new Fact { Key = "order:" + slug, Value = own ? Hash(body.Length > 300 ? body.Substring(0, 300) : body) : "ours", Page = "orders/" + slug, Weight = own ? 2 : 1, Say = (o, n) => o == null ? (own ? "your own order " + name + " is kept" : null) : (own ? "your own order " + name + " changed" : null) });
+                facts.Add(new Fact { Key = "order:" + Slug(name), Value = own ? Hash(body.Length > 300 ? body.Substring(0, 300) : body) : "ours", Page = "orders/" + slug, Weight = own ? 2 : 1, Say = (o, n) => o == null ? (own ? "your own order " + name + " is kept" : null) : (own ? "your own order " + name + " changed" : null) });
                 count++;
                 name = null;
                 current.Clear();
@@ -1210,23 +1369,41 @@ namespace BannerlordAgents.WarRoom
         // ---------- open, find, history ----------
 
         /// <summary>Pages by their names, whole, as the last build wrote them (open); each read is marked. A name may be a folder (its contents) or "shelf".</summary>
+        /// <summary>The most one open answers with in all, and with one page (war room 0.22.0, item 19: a page past what one answer may hold failed the whole open, the other pages asked for with it).</summary>
+        internal const int OpenMostChars = 60000, OpenPageMostChars = 40000;
+
+        /// <summary>The page a name asks for: its path (either spelling, "camp-strike" or "camp_strike"), a folder's name (its contents), a page's own name, or a name or id a page is about; null when none.</summary>
+        internal string Resolve(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            string p = PageOf(raw.Trim()) ?? raw.Trim().ToLowerInvariant();
+            if (Files.Contains(p)) p += "/contents";
+            if (Pages.ContainsKey(p)) return p;
+            foreach (string alt in new[] { p.Replace('_', '-'), p.Replace('-', '_') })
+                if (Pages.ContainsKey(alt)) return alt;
+            string slug = Slug(raw), under = OrderSlug(raw.Trim().Trim('/'));
+            string hit = Pages.Keys.FirstOrDefault(k => k.EndsWith("/" + slug, StringComparison.Ordinal) || k.EndsWith("/" + under, StringComparison.Ordinal))
+                         ?? Pages.FirstOrDefault(kv => kv.Value.Contains("[" + raw.Trim() + "]") && !kv.Key.EndsWith("/index", StringComparison.Ordinal) && !kv.Key.EndsWith("/contents", StringComparison.Ordinal) && !kv.Key.EndsWith("/changes", StringComparison.Ordinal) && !kv.Key.EndsWith("/by-front", StringComparison.Ordinal) && kv.Value.StartsWith("# ", StringComparison.Ordinal) && kv.Value.Substring(0, Math.Min(200, kv.Value.Length)).Contains("[" + raw.Trim() + "]")).Key;
+            return hit;
+        }
+
         public string Open(IEnumerable<string> names)
         {
             var sb = new StringBuilder();
             foreach (string raw in names.Where(n => !string.IsNullOrWhiteSpace(n)).Take(12))
             {
-                string p = PageOf(raw.Trim()) ?? raw.Trim().ToLowerInvariant();
-                if (Files.Contains(p)) p += "/contents";
-                if (!Pages.TryGetValue(p, out string text))
-                {
-                    // a page by a name or id it holds
-                    string hit = Pages.Keys.FirstOrDefault(k => k.EndsWith("/" + Slug(raw), StringComparison.Ordinal)) ?? Pages.FirstOrDefault(kv => kv.Value.Contains("[" + raw.Trim() + "]") && !kv.Key.EndsWith("/index", StringComparison.Ordinal) && !kv.Key.EndsWith("/contents", StringComparison.Ordinal) && !kv.Key.EndsWith("/changes", StringComparison.Ordinal) && !kv.Key.EndsWith("/by-front", StringComparison.Ordinal) && kv.Value.StartsWith("# ", StringComparison.Ordinal) && kv.Value.Substring(0, Math.Min(200, kv.Value.Length)).Contains("[" + raw.Trim() + "]")).Key;
-                    if (hit == null) { sb.AppendLine("== " + raw + ": no such page (files/<folder>/contents.md lists each folder's pages)").AppendLine(); continue; }
-                    p = hit;
-                    text = Pages[p];
-                }
+                string p = Resolve(raw);
+                if (p == null) { sb.AppendLine("== " + raw + ": no such page (files/<folder>/contents.md lists each folder's pages)").AppendLine(); continue; }
+                string text = Pages[p].TrimEnd();
                 MarkRead(p);
-                sb.AppendLine("== files/" + p + ".md").AppendLine(text.TrimEnd()).AppendLine();
+                int room = Math.Max(2000, Math.Min(OpenPageMostChars, OpenMostChars - sb.Length));
+                if (text.Length > room)
+                {
+                    int cut = text.LastIndexOf('\n', room);
+                    text = text.Substring(0, cut > room / 2 ? cut : room).TrimEnd()
+                           + "\n(cut here: this page holds " + Pages[p].Length.ToString("N0", CultureInfo.InvariantCulture) + " characters, more than one answer can carry; read files/" + p + ".md in parts, or ask find for the lines you need)";
+                }
+                sb.AppendLine("== files/" + p + ".md").AppendLine(text).AppendLine();
             }
             return sb.Length > 0 ? sb.ToString() : "Name one page or more (\"settlements/hiltbolt\", \"lords/index\", \"plan\").";
         }
@@ -1320,6 +1497,19 @@ namespace BannerlordAgents.WarRoom
             if (a < 1 && b >= 100) return true;
             if (b < 1 && a >= 100) return true;
             return a >= 100 && (b >= 2 * a || b <= a / 2);
+        }
+
+        /// <summary>An order's page name: the order's own name, small letters, digits and underscores kept ("camp_strike").</summary>
+        internal static string OrderSlug(string name)
+        {
+            var sb = new StringBuilder();
+            foreach (char c in (name ?? "").Trim().ToLowerInvariant())
+            {
+                if (c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_') sb.Append(c);
+                else if (sb.Length > 0 && sb[sb.Length - 1] != '-') sb.Append('-');
+            }
+            string r = sb.ToString().Trim('-');
+            return r.Length > 0 ? r : "page";
         }
 
         internal static string Slug(string name)

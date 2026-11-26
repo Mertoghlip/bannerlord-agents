@@ -91,7 +91,7 @@ namespace SmokeTest
                       + (section.Length == 0 ? " (no such section)" : missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : ""));
                 List<string> pending = NotYetInInstructions.Where(f => !section.Contains("`" + f + "(")).ToList();
                 if (pending.Count > 0)
-                    Console.WriteLine("  NOTE: " + file + " does not list the functions added in 0.19 yet (" + string.Join(", ", pending.Select(f => f + "()"))
+                    Console.WriteLine("  NOTE: " + file + " does not list the newest functions yet (" + string.Join(", ", pending.Select(f => f + "()"))
                                       + "); add them under " + heading + ", then empty NotYetInInstructions in Fixes01322.cs");
             }
         }
@@ -103,6 +103,7 @@ namespace SmokeTest
         /// </summary>
         private static readonly HashSet<string> NotYetInInstructions = new HashSet<string>
         {
+            // empty: module 0.25.0's marched_on, feed_gain and group_within were listed in both templates on Nov 26
         };
     }
 }

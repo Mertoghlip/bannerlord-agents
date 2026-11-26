@@ -36,7 +36,19 @@ namespace BannerlordAgents
         // recruits since the last day line, by realm (counted on the game's hot path without allocating)
         private static readonly Dictionary<string, int> Recruits = new Dictionary<string, int>(StringComparer.Ordinal);
         private static bool _trueSightFlagged, _cheatFlagged;
-        private static DateTime _lastLineAt = DateTime.Now;
+        // 0.25.0 (item 41): the real seconds of the day so far with the game's clock running (played) and stopped (held), kept across loads by the run's saves
+        private static double _dayPlayed, _dayHeld;
+
+        /// <summary>
+        /// Game's thread, every frame (0.25.0, item 41; run 20261125-2341-C2: days 53 and 118 were timed from the restarted game, 88 and 215 seconds against 292 and 305
+        /// real, and day 28 took in a 174-second clock hold): the frame's real seconds go to the day's played or held time. No allocation.
+        /// </summary>
+        public static void Frame(float dt)
+        {
+            if (_run == null || _run.Status != "running" || !(dt > 0) || dt > 5) return;
+            if (Watchdog.ClockRunning) _dayPlayed += dt;
+            else _dayHeld += dt;
+        }
 
         /// <summary>Where the detailed log's run lines go (Diag's writer reads it); null when no run is going.</summary>
         public static volatile string EventsFile;
@@ -75,6 +87,7 @@ namespace BannerlordAgents
                 };
                 _run.Segments.Add(new RunSegment { Load = loadId, From = loadedAt, WallFrom = wall, How = "the run's save loaded" });
                 RunFiles.Write(_run, current: true);
+                RunFiles.ClearFinished();
                 Say("Test run ready: " + save.Trim() + " is loaded. It begins when the clock first runs, so set up first (agents.run check shows who commands what).");
                 Diag.Event("run", "armed", new { run = _run.Id, save, hours = loadedAt, kingdom = _run.Kingdom });
                 return;
@@ -88,6 +101,7 @@ namespace BannerlordAgents
                 open.H0 = loadedAt;
                 open.LastHours = loadedAt;
                 RunFiles.Write(open, current: true);
+                RunFiles.ClearFinished();
                 Say("Test run ready again from " + save.Trim() + " (saved before its clock first ran). It begins when the clock runs.");
                 Diag.Event("run", "readied again", new { run = open.Id, save, hours = loadedAt });
                 return;
@@ -101,12 +115,16 @@ namespace BannerlordAgents
                 open.Segments.Add(new RunSegment { Load = loadId, From = loadedAt, WallFrom = wall, How = "carried on from " + save });
                 open.LastHours = loadedAt;
                 open.LastDay = Math.Max(0, RunRules.Day(loadedAt, open.H0) - 1);
+                // the day's played and held seconds as they stood at that save (0.25.0, item 41), so a day across a load is timed whole
+                _dayPlayed = _dayHeld = 0;
+                if (open.SaveClock != null && open.SaveClock.TryGetValue(save.Trim(), out RunClock clock) && clock.Day == open.LastDay) { _dayPlayed = clock.Played; _dayHeld = clock.Held; }
                 if (Diag.PreviousLaunchNote != null) open.Flag(wall, loadedAt, "crash", Diag.PreviousLaunchNote);
                 Realms.Clear();
                 Realms.UnionWith(open.AllRealms());
                 EventsFile = RunFiles.Events(open.Id);
                 RunTags.Set(open.Id, open.Arm);
                 RunFiles.Write(open, current: true);
+                RunFiles.ClearFinished();
                 Say("Test run " + open.Arm + " (" + open.Id + ") carries on from " + save + ", day " + RunRules.Day(loadedAt, open.H0) + " of " + open.Days + ".");
                 Diag.Event("run", "carried on", new { run = open.Id, save, hours = loadedAt });
                 return;
@@ -151,10 +169,11 @@ namespace BannerlordAgents
             EventsFile = RunFiles.Events(_run.Id);
             RunTags.Set(_run.Id, _run.Arm);
             RunFiles.Write(_run, current: true);
+            RunFiles.ClearFinished();
             RunSetup setup = Setup();
             string id = _run.Id;
             Background.Post("run setup", () => RunFiles.WriteSetup(id, setup));
-            _lastLineAt = DateTime.Now;
+            _dayPlayed = _dayHeld = 0;
             DayLine(0, h, snap);
             Say("Test run " + _run.Arm + " began (" + _run.Id + "): " + string.Join("; ", _run.Who.Select(kv => RealmName(kv.Key) + " commanded by " + WhoWords(kv.Value)))
                 + ". It ends after " + _run.Days + " in-game days.");
@@ -198,6 +217,8 @@ namespace BannerlordAgents
             _run.CloseSegment(wall, h);
             RunFiles.Write(_run, current: true);
             Diag.Event("run", "finished", new { run = _run.Id, arm = _run.Arm, hours = h });
+            // 0.25.0 (item 36): the war rooms make no new call once the run is over (run-finished.json in each agent's channel)
+            RunFiles.MarkFinished(_run.Id);
             EventsFile = null;
             RunTags.Set(null, null);
             // the run's bundle, for the dataset builder (0.13, C5): packed by Runs.exe beside the game, once the files are flushed
@@ -238,6 +259,7 @@ namespace BannerlordAgents
             EventsFile = null;
             RunTags.Set(null, null);
             Diag.Event("run", "stopped", new { run = _run.Id, hours = h });
+            RunFiles.MarkFinished(_run.Id);
             string id = _run.Id;
             _run = null;
             return "Test run " + id + " stopped. Its files stay in runs\\" + id + ".";
@@ -292,6 +314,9 @@ namespace BannerlordAgents
             // the newest save last (0.13.12), so "load ... to carry it on" names the one saved most recently
             _run.Saves.Remove(name);
             _run.Saves.Add(name);
+            // 0.25.0 (item 41): the day's seconds so far, for a load of this save to carry on with
+            if (_run.SaveClock == null) _run.SaveClock = new Dictionary<string, RunClock>();
+            _run.SaveClock[name] = new RunClock { Day = _run.LastDay, Played = Math.Round(_dayPlayed, 1), Held = Math.Round(_dayHeld, 1) };
             // written at every save (0.13.5), so the hour it stands at is on disk: a load of the save after hours played and lost says so
             RunFiles.Write(_run);
         }
@@ -494,12 +519,11 @@ namespace BannerlordAgents
             List<WarRow> wars = Wars();
             var recruits = new Dictionary<string, int>(Recruits);
             Recruits.Clear();
-            DateTime now = DateTime.Now;
-            double seconds = (now - _lastLineAt).TotalSeconds;
-            _lastLineAt = now;
+            double played = _dayPlayed, held = _dayHeld;
+            _dayPlayed = _dayHeld = 0;
             var header = new RunDayHeader
             {
-                Run = _run.Id, Arm = _run.Arm, Day = day, Hours = h, Date = Text.When(h), Wall = Now(), RealSeconds = day == 0 ? 0 : Math.Round(seconds, 1), Speed = Watchdog.Speed,
+                Run = _run.Id, Arm = _run.Arm, Day = day, Hours = h, Date = Text.When(h), Wall = Now(), RealSeconds = day == 0 ? 0 : Math.Round(played, 1), HeldSeconds = day == 0 ? 0 : Math.Round(held, 1), Speed = Watchdog.Speed,
                 Who = new Dictionary<string, string>(_run.Who), Helper = Background.TakeDay()
             };
             var tally = _run.Tally.ToDictionary(kv => kv.Key, kv => kv.Value.Copy());
@@ -806,7 +830,7 @@ namespace BannerlordAgents
             PartyRow me = s != null && s.PlayerParty != null && s.PartyById.TryGetValue(s.PlayerParty, out PartyRow p) ? p : null;
             return new
             {
-                Type = "day", head.Run, head.Arm, head.Day, Hours = Math.Round(head.Hours, 2), head.Date, head.Wall, head.RealSeconds, head.Speed, head.Helper, Realms = rows, Wars = wars,
+                Type = "day", head.Run, head.Arm, head.Day, Hours = Math.Round(head.Hours, 2), head.Date, head.Wall, head.RealSeconds, head.HeldSeconds, head.Speed, head.Helper, Realms = rows, Wars = wars,
                 You = me == null ? null : new { Party = me.Name, me.Faction, me.Men, Strength = (int)Math.Round(me.Strength), me.ArmyMen, Doing = me.Doing }
             };
         }
@@ -882,6 +906,44 @@ namespace BannerlordAgents
                 Directory.Delete(dir, true);
             }
             catch (Exception e) { Diag.Swallowed("removing the readied run's folder", e); }
+        }
+
+        /// <summary>The run-finished mark's name in each agent's channel folder (0.25.0, item 36, contract (b)).</summary>
+        public const string FinishedMark = "run-finished.json";
+
+        /// <summary>
+        /// The run is over (0.25.0, item 36; run 20261125-2341-C2: the war room opened a new conversation after the run's end and wrote 7 orders the game never read):
+        /// run-finished.json = {"run", "at"} in the channel folder of every agent switched on, for its war room, which makes no new call while it is there. Written by the helper.
+        /// </summary>
+        public static void MarkFinished(string runId)
+        {
+            List<string> dirs = Bridge.Configs.Where(c => c.On && !string.IsNullOrEmpty(c.ChannelDir)).Select(c => c.ChannelDir).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            string at = DateTimeOffset.Now.ToString("o", Text.Inv);
+            Background.Post("run finished mark", () =>
+            {
+                foreach (string dir in dirs)
+                {
+                    try { Files.Overwrite(Path.Combine(Paths.Ensure(dir), FinishedMark), Json.Line(new { Run = runId, At = at })); }
+                    catch (Exception e) { Diag.Error("writing the run-finished mark in " + dir, e); }
+                }
+                Files.FlushAll();
+                Diag.Event("run", "finished mark", new { run = runId, folders = dirs.Count });
+            });
+        }
+
+        /// <summary>A run is armed, begins, or is carried on at a load (0.25.0, item 36): the run-finished mark goes from every agent's channel folder.</summary>
+        public static void ClearFinished()
+        {
+            List<string> dirs = Bridge.Configs.Where(c => !string.IsNullOrEmpty(c.ChannelDir)).Select(c => c.ChannelDir).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            Background.Post("run finished mark cleared", () =>
+            {
+                foreach (string dir in dirs)
+                {
+                    string f = Path.Combine(dir, FinishedMark);
+                    try { if (File.Exists(f)) { File.Delete(f); Files.Forget(f); Diag.Event("run", "finished mark cleared", new { folder = dir }); } }
+                    catch (Exception e) { Diag.Error("clearing the run-finished mark in " + dir, e); }
+                }
+            });
         }
 
         public static void AppendDay(string id, object line)
@@ -998,6 +1060,8 @@ namespace BannerlordAgents
         public List<RunFlag> Flags = new List<RunFlag>();
         public Dictionary<string, RunTally> Tally = new Dictionary<string, RunTally>();
         public List<WarRow> WarAtStart = new List<WarRow>();
+        /// <summary>Each of the run's saves: the day it was made in and that day's played and held seconds so far (0.25.0, item 41).</summary>
+        public Dictionary<string, RunClock> SaveClock = new Dictionary<string, RunClock>();
 
         public List<string> AllRealms() => (Kingdom != null ? new[] { Kingdom } : new string[0]).Concat(Rivals).Distinct().ToList();
 
@@ -1052,11 +1116,19 @@ namespace BannerlordAgents
         public int CasualtiesA, CasualtiesB, SiegesA, SiegesB, TownSiegesA, TownSiegesB, RaidsA, RaidsB, TributeA, TributeB;
     }
 
+    /// <summary>A save's place in its day's timing (0.25.0, item 41): the last day line before it, and the real seconds played and held since.</summary>
+    internal sealed class RunClock
+    {
+        public int Day;
+        public double Played, Held;
+    }
+
     internal sealed class RunDayHeader
     {
         public string Run, Arm, Date, Wall, Speed;
         public int Day;
-        public double Hours, RealSeconds;
+        /// <summary>RealSeconds: the day's real seconds with the game's clock running; HeldSeconds: with it stopped (0.25.0, item 41), each kept across loads.</summary>
+        public double Hours, RealSeconds, HeldSeconds;
         public Dictionary<string, string> Who = new Dictionary<string, string>();
         /// <summary>The background helper's day (0.12.0): the most the lords' orders and the agents' reports were behind the game.</summary>
         public HelperDay Helper;

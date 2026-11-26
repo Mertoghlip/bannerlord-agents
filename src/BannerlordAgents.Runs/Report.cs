@@ -69,10 +69,14 @@ namespace BannerlordAgents.Runs
             // taken or killed within the hour of a battle the winner fought with lords
             List<JsonObject> battleEvents = run.Where(e => Str(e, "w") == "battle").ToList();
             List<JsonObject> falls = run.Where(e => Str(e, "w") == "lord taken" || Str(e, "w") == "lord killed").ToList();
+            // Runs 0.15.0 (Nov 26, tooling audit fault 41): the fallback only for records made before module 0.11.3; on later records it counted
+            // battles with no lord on the losing side (run 20261125-2341-C2: 265 won and 50 lost, against its own tally of 260 and 38)
+            bool oldRecord = Version.TryParse(Str(r.Setup, "module_version") ?? "", out Version mv) && mv < new Version(0, 11, 3);
             bool BetweenLords(JsonObject e)
             {
                 JsonNode d = e["d"];
                 if (LordBattle(d)) return true;
+                if (!oldRecord) return false;
                 string win = Str(d, "winner");
                 if (win != "attacker" && win != "defender") return false;
                 JsonNode ws = d[win], ls = d[win == "attacker" ? "defender" : "attacker"];

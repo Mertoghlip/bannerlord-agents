@@ -90,6 +90,19 @@ namespace BannerlordAgents.Tools
         /// <summary>Where and since when the lord has stood still on his way (NaN: moving, or not on his way), and the stand already told.</summary>
         public float StillX, StillY;
         public double StillSince = double.NaN, StallTold = double.NaN;
+        /// <summary>0.25.0 (item 2): the step toward a reachable point along the way tried once a stand (NaN: none going), and whether this stand has had it.</summary>
+        public double DetourUntil = double.NaN;
+        public bool DetourTried;
+        public float DetourX, DetourY;
+        /// <summary>0.25.0 (item 7): the danger range (hours, and the floor in map units) the lord had when he went into shelter, kept until he comes out.</summary>
+        public double ShelterReach = double.NaN, ShelterFloor = double.NaN;
+        /// <summary>0.25.0 (item 1): a food trip's best distance to its market and when it was last closer; the food the game's side bought at the gate (-1: not yet).</summary>
+        public double SupplyBest = double.NaN, SupplyBestAt = double.NaN;
+        public int FoodBought = -1;
+        /// <summary>0.25.0 (item 1): since when he has had no food, his men then, and whether his starving was told.</summary>
+        public double HungrySince = double.NaN;
+        public int HungryMen;
+        public bool HungryTold;
         /// <summary>When the move now in force was given (0.13: a wait's hours count from it, and so does "arrived").</summary>
         public double MoveSince = double.NaN;
         /// <summary>The order's places as the language reads them (a list, 0.13), made once.</summary>
@@ -162,7 +175,11 @@ namespace BannerlordAgents.Tools
             if (ById.Count > 0) Diag.Event("tool", "cleared", new { count = ById.Count });
             ById.Clear();
             NamesSeen.Clear();
+            LordsSeen.Clear();
             CloseTold.Clear();
+            FoodFailed.Clear();
+            Courses.Clear();
+            CoursesNoted.Clear();
             StormSink(null, null);
             DrillSink(null, null);
         }
@@ -170,11 +187,33 @@ namespace BannerlordAgents.Tools
         /// <summary>The names of the parties tools act on, kept for the call-back once a party is gone and the world no longer knows it.</summary>
         private static readonly Dictionary<string, string> NamesSeen = new Dictionary<string, string>();
 
+        // 0.25.0 (item 29): the lord of each party tools act on, kept with its name, so a gone partner reads "Malthorn (prisoner)" and not the party's code
+        private static readonly Dictionary<string, string> LordsSeen = new Dictionary<string, string>(StringComparer.Ordinal);
+
         private static void RememberName(string id, World w)
         {
-            if (id == null || w.Party(id) == null) return;
+            PartyRow r = id == null ? null : w.Party(id);
+            if (r == null) return;
             string name = w.Name(id);
             if (name != id) NamesSeen[id] = name;
+            if (r.Leader != null) LordsSeen[id] = r.Leader;
+        }
+
+        /// <summary>
+        /// A party an order names, as the agent reads it (0.25.0, item 29; run 20261125-2341-C2: about 20 gone partners showed as the game's party codes, Malthorn's in 66
+        /// reports, hiding that he was a prisoner): in the realm's view, its name and [the id orders use]; gone, the last name the realm knew with "(prisoner)" when its
+        /// lord is held, else "(no party now)".
+        /// </summary>
+        internal static string PartyText(string id, World w)
+        {
+            if (id == null) return "none";
+            if (w.Party(id) != null || w.Holding(id) != null) return w.Name(id) + " [" + w.Tag(id) + "]";
+            string name = NamesSeen.TryGetValue(id, out string known) ? known : w.Name(id);
+            string lord = LordsSeen.TryGetValue(id, out string l) ? l : null;
+            bool held = lord != null && w.S.Captives != null && w.S.Captives.Any(c => c.Hero == lord);
+            if (name == id && lord != null) name = w.S.Captives?.FirstOrDefault(c => c.Hero == lord)?.Name ?? name;
+            if (name == id) return "a party no longer in your view (no party now)";
+            return name + (held ? " (prisoner)" : " (no party now)");
         }
 
         /// <summary>A fresh id for a tool instance (game's thread, when it takes an order).</summary>
@@ -227,7 +266,27 @@ namespace BannerlordAgents.Tools
                 // 0.24.6 (Nov 25): an order that switches the safety off says so (run 20261125-0020-C2: a lord sent with caution 0 was caught on the way)
                 if (def.Safety && (t.Settings.TryGetValue("caution", out double cz) || o.Settings.TryGetValue("caution", out cz)) && cz <= 0)
                     Tell(t, "Warning: " + (o.LordName ?? o.Lord) + "'s " + def.Name + " order has caution 0, so he never shelters, whatever comes near him. Give it caution (default 1.5) with adjust if he should.", w);
+                // 0.25.0 (item 8): caution on with its target already within his danger range is said once, with what the safety rule spares
+                else if (def.Safety && t.Settings.TryGetValue("caution", out double cOn) && cOn > 0) TargetInDanger(t, w);
             }
+        }
+
+        /// <summary>
+        /// An order with caution on whose target is already within the lord's danger range (0.25.0, item 8): said once at its start. The safety rule spares the target
+        /// and the lords marching with it (and any enemy the order's step is waiting for), but falls back from any other force near it that is caution times his side.
+        /// </summary>
+        private static void TargetInDanger(ToolInstance t, World w)
+        {
+            PartyRow me = w.Party(t.Order.Party);
+            string target = t.Order.Target ?? (t.Memory.TryGetValue("target", out object mt) ? mt as string : null);
+            if (me == null || target == null || w.Holding(target) != null || !w.InView(target)) return;
+            double hours = w.HoursFor(me, target), reach = DangerHours(t, me, w, out double floor);
+            double d = w.Distance(me.Id, target);
+            if (!((!double.IsNaN(hours) && hours <= reach) || (!double.IsNaN(d) && d <= floor))) return;
+            double caution = t.Settings.TryGetValue("caution", out double c) ? c : 0;
+            Tell(t, "Note: " + t.Order.LordName + "'s " + t.Def.Name + " order has caution " + ToolDef.Num(caution) + ", and its target " + Show(target, w) + " is already within his danger range ("
+                    + (double.IsNaN(hours) ? Text.D((float)d) + " away" : "about " + Forecast.HoursText(hours) + " away") + "). He does not fall back from " + Show(target, w)
+                    + " or the lords marching with it, but does from any other force near it that is " + ToolDef.Num(caution) + " times his side.", w);
         }
 
         // ---------- carried across a reload of the same save (0.13.5, CarryOn) ----------
@@ -534,6 +593,8 @@ namespace BannerlordAgents.Tools
             World w = WorldFor(s);
             // where the enemies the realm sees are (0.16): the recruit order's tour passes by stops under threat (RecruitTour, on the game's thread)
             if (agent.Tools.Values.Any(t => t.Def.Name == "recruit" && !t.Finished)) Threats.Publish(w);
+            // 0.25.0 (item 7): where each enemy in view is heading, every hour, so an enemy marching on a holding counts only once it keeps to it
+            NoteCourses(w);
             foreach (ToolInstance t in agent.Tools.Values.ToList())
             {
                 // 0.21.0: the order's own judgement of enemies seen more than a day ago (unseen_floor 0 trusts their last pace)
@@ -589,6 +650,7 @@ namespace BannerlordAgents.Tools
             var scope = new Scope(t, w);
             RememberName(t.Order.Target, w);
             if (t.Memory.TryGetValue("target", out object mt)) RememberName(mt as string, w);
+            for (int i = 0; i < t.Order.Lords.Count; i++) RememberName(t.Order.Lords[i], w);
             if (!t.Entered)
             {
                 mark = Stopwatch.GetTimestamp();
@@ -610,9 +672,14 @@ namespace BannerlordAgents.Tools
                     t.HasPending = true;
                 }
                 own += Stopwatch.GetTimestamp() - mark;
-                if (!t.Finished && t.Shelter == null && t.SupplyAt == null) Stalled(t, me, w, scope);
                 // an attack on the human player closes in and strikes together (0.17.3)
                 if (!t.Finished && t.Shelter == null && t.SupplyAt == null && t.ReliefOf == null) CloseIn(t, me, w, scope);
+            }
+            // 0.25.0 (item 2): standing still is counted across the whole order, its shelters and food trips too, and a stand's detour taken up or ended
+            if (!t.Finished && t.ReliefOf == null)
+            {
+                Detour(t, me, w, scope);
+                Stalled(t, me, w, scope);
             }
             Issue(t, w);
             if (t.Settings.ContainsKey("storm")) StormSink(t.Order.Party, StormRuleOf(t, w));
@@ -659,11 +726,18 @@ namespace BannerlordAgents.Tools
             double guard = Num("storm_guard");
             if (guard > 0 && !now && rule.Mode != 2 && w != null && t.Order.At != null)
             {
-                World.StormCheckResult c = w.StormCheck(t.Order.At);
-                if (c != null && !c.Clear(guard))
+                // 0.25.0 (item 21, run 20261125-2341-C2: the storm guard at Lasgalor flipped three times in 12 minutes, 4 wakes): an order whose own rules keep the guard's
+                // hold ("held", our siege order, which keeps a hold or a clear for 2 hours unless a new force comes within reach) is held exactly while they hold it
+                bool kept = t.Def.Init.Exists(kv => string.Equals(kv.Key, "held", StringComparison.OrdinalIgnoreCase));
+                bool hold = kept && t.Memory.TryGetValue("held", out object hv) && Expr.Number(hv) > 0;
+                World.StormCheckResult c = !kept || hold ? w.StormCheck(t.Order.At) : null;
+                if (!kept) hold = c != null && !c.Clear(guard);
+                else if (c != null && c.Clear(guard)) c = null;   // still held for its 2 hours, though this hour's weighing is clear
+                if (hold)
                 {
                     rule.Hold = true;
-                    rule.HoldWhy = "enemy strength " + Math.Round(c.ReliefStrength) + " (" + c.ReliefCount + (c.ReliefCount == 1 ? " lord or army" : " lords and armies") + ") could reach the camp within the "
+                    rule.HoldWhy = c == null ? "the storm guard holds it (its last weighing found a relief that could turn it; it is weighed again within 2 hours)"
+                                 : "enemy strength " + Math.Round(c.ReliefStrength) + " (" + c.ReliefCount + (c.ReliefCount == 1 ? " lord or army" : " lords and armies") + ") could reach the camp within the "
                                    + Math.Round(c.Hours) + " hours a storm would last, and would " + (c.Won ? "leave the besiegers " + Math.Round(c.LeftShare * 100) + "% of their men" : "turn it");
                 }
             }
@@ -722,45 +796,146 @@ namespace BannerlordAgents.Tools
             t.HasPending = true;
         }
 
-        /// <summary>A lord this many in-game hours standing still on his way to a place, still farther from it than StallNear, is stuck.</summary>
-        public const double StallHours = 6, StallNear = 6;
+        /// <summary>
+        /// A lord this many in-game hours standing still on his way to a place, still farther from it than StallNear, is stuck (0.25.0: 12, counted by where he stands
+        /// alone; it was 6 hours counted from the order's last change of step); told again only after StallAgain more.
+        /// </summary>
+        public const double StallHours = 12, StallNear = 6, StallAgain = 24;
+        /// <summary>The step toward a reachable point along the way, once a stand (0.25.0): about this many hours of his march along it, and at most this long.</summary>
+        public const double DetourHours = 3, DetourLimit = 4;
+
+        /// <summary>The place or point the lord's move in force takes him to, and how far from it he is now (NaN: his move goes nowhere, or he is where it stops him).</summary>
+        private static double GoingTo(ToolInstance t, PartyRow me, World w, out string place, out bool toPlace)
+        {
+            place = null;
+            toPlace = false;
+            if (!t.HasCurrent) return double.NaN;
+            string verb = t.Current.Verb;
+            // 0.13: a stop to recruit or sell at is a place to get to as well; 0.25.0: a food trip's market too
+            toPlace = verb == "near" || verb == "goto" || verb == "enter" || verb == "recruit" || verb == "sell" || verb == "buy" || verb == "supply";
+            bool toSpot = verb == "post" || verb == "toward";
+            if (!toPlace && !toSpot) return double.NaN;
+            if (toPlace) { place = t.Current.Place; return w.Near(me.Id, place); }
+            return Math.Sqrt((me.X - t.Current.X) * (me.X - t.Current.X) + (me.Y - t.Current.Y) * (me.Y - t.Current.Y));
+        }
 
         /// <summary>
-        /// A march that stopped short (0.12.1): a lord whose move takes him to a place (near, goto, enter, post, toward; since 0.13 recruit and sell) and who
-        /// has not moved for StallHours while still far from it is called back once (run 20261025-1524-C2: three sieges stood
-        /// still outside their castles for up to 15 days and the agent was never told). The order is kept: the lord holds where
-        /// he is until the agent gives another.
+        /// Hours the lord holding an order has stood still on his way somewhere (0.25.0, item 2: his page says so instead of an arrival time), once that is at least
+        /// StallHours; NaN otherwise. Worker.
+        /// </summary>
+        public static double StillHours(string party, double now)
+        {
+            if (party == null) return double.NaN;
+            foreach (ToolInstance t in ById.Values)
+                if (t.Order.Party == party && !t.Finished && !double.IsNaN(t.StillSince) && now - t.StillSince >= StallHours - 1e-6) return now - t.StillSince;
+            return double.NaN;
+        }
+
+        /// <summary>
+        /// A march that stopped short (0.12.1; 0.25.0, item 2). Run 20261125-2341-C2: Elbereth stood at one spot near Celebcharn for about 936 hours and Durin for about
+        /// 1,534, while the add-on's own alarm fired 132 times into its logs and the agent's notice fired 5 times, since its count of standing still began again at
+        /// every change of the order's step (the guard loop changes step every 6 to 7 hours) and was switched off on food trips and in shelter. Now standing still is
+        /// counted by where he stands alone, across the whole order (its steps, food trips and shelters): only a move of more than a map unit begins it again, and so
+        /// does being inside a holding, in a fight, at a siege or near where he is going. After StallHours still while more than StallNear from where his move takes
+        /// him, the agent is told in one line (and again after every StallAgain more), and the order tries once a step toward a reachable point about DetourHours of
+        /// his march along the game's own way there (Ways), before it takes up its own move again. The order is kept.
         /// </summary>
         private static void Stalled(ToolInstance t, PartyRow me, World w, Scope scope)
         {
-            string verb = t.HasCurrent ? t.Current.Verb : null;
-            // 0.13: a stop to recruit or sell at is a place to get to as well
-            bool toPlace = verb == "near" || verb == "goto" || verb == "enter" || verb == "recruit" || verb == "sell";
-            bool toSpot = verb == "post" || verb == "toward";
-            double d = double.NaN;
-            if ((toPlace || toSpot) && !me.InBattle && me.InSettlement == null && me.Besieging == null)
-                d = toPlace ? w.Near(me.Id, t.Current.Place) : Math.Sqrt((me.X - t.Current.X) * (me.X - t.Current.X) + (me.Y - t.Current.Y) * (me.Y - t.Current.Y));
-            if (double.IsNaN(d) || d <= (toPlace ? StallNear : 3))
+            double d = GoingTo(t, me, w, out string place, out bool toPlace);
+            bool settled = me.InBattle || me.InSettlement != null || me.Besieging != null || me.Raiding != null;
+            // on the detour, or a detour just ended: no count meanwhile
+            if (settled || double.IsNaN(d) || d <= (toPlace ? StallNear : 3) || !double.IsNaN(t.DetourUntil))
             {
                 t.StillSince = double.NaN;
+                if (double.IsNaN(t.DetourUntil)) t.DetourTried = false;
                 return;
             }
             double dx = me.X - t.StillX, dy = me.Y - t.StillY;
-            if (double.IsNaN(t.StillSince) || t.StillSince < t.StateSince || dx * dx + dy * dy > 1)
+            bool moved = dx * dx + dy * dy > 1;
+            if (double.IsNaN(t.StillSince) || moved)
             {
                 t.StillSince = w.Hours;
                 t.StillX = me.X;
                 t.StillY = me.Y;
+                // a new stand only once he has moved: a count begun again after a detour that took him nowhere keeps what was told and tried
+                if (moved) { t.StallTold = double.NaN; t.DetourTried = false; }
                 return;
             }
-            if (w.Hours - t.StillSince < StallHours || t.StallTold == t.StillSince) return;
-            t.StallTold = t.StillSince;
-            string about = t.Def.States.TryGetValue(t.State, out StateDef st) && st.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : t.Def.Name;
-            string where = toPlace ? w.Name(t.Current.Place) : Spots.Describe(w.S, t.Current.X, t.Current.Y);
+            double still = w.Hours - t.StillSince;
+            if (still < StallHours - 1e-6 || (!double.IsNaN(t.StallTold) && w.Hours - t.StallTold < StallAgain - 1e-6)) return;
+            t.StallTold = w.Hours;
+            string where = toPlace ? w.Name(place) : Spots.Describe(w.S, t.Current.X, t.Current.Y);
+            // the game's own way there (the proven copy of its way-finder): none at all, or a reachable point a few hours along it to step to first
+            float tx = t.Current.X, ty = t.Current.Y;
+            if (toPlace && w.Holding(place) is SettlementRow ph) { tx = ph.Gx != 0 || ph.Gy != 0 ? ph.Gx : ph.X; ty = ph.Gx != 0 || ph.Gy != 0 ? ph.Gy : ph.Y; }
+            List<float[]> way = Ways.Between(me.X, me.Y, tx, ty, out bool real);
+            bool noWay = real && way == null;
+            bool detour = false;
+            if (!t.DetourTried && !noWay && real && way != null && way.Count >= 2)
+            {
+                t.DetourTried = true;
+                double along = Math.Max(4, DetourHours * w.PerHour(me));
+                if (PointAlong(way, along, out float px, out float py) && (px - me.X) * (px - me.X) + (py - me.Y) * (py - me.Y) > 4)
+                {
+                    detour = true;
+                    t.DetourUntil = w.Hours + DetourLimit;
+                    t.DetourX = px;
+                    t.DetourY = py;
+                    t.Pending = new Move { Verb = "toward", X = px, Y = py };
+                    t.HasPending = true;
+                }
+            }
             Diag.Count("tool:stalled");
-            Diag.Event("tool", "stalled", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, state = t.State, move = t.Current.ToString(), distance = Math.Round(d, 1), hours = Math.Round(w.Hours - t.StillSince, 1) });
-            Poke(t, t.Order.LordName + " has not moved for " + Math.Round(w.Hours - t.StillSince) + " hours while " + about + ", still " + Text.D((float)d) + " from " + where
-                    + ": he may be stuck on the map. The order is kept and he holds where he is; give him another order if he should go elsewhere.", w);
+            Diag.Event("tool", "stalled", new { id = t.Id, tool = t.Def.Name, lord = t.Order.Lord, state = t.State, move = t.Current.ToString(), distance = Math.Round(d, 1), hours = Math.Round(still, 1), no_way = noWay, detour });
+            Tell(t, t.Order.LordName + " has not moved for " + Math.Round(still) + " hours, " + Text.D((float)d) + " from " + where + "; "
+                    + (noWay ? "he cannot reach " + where + " by land from where he stands, so he may be stuck." : "he may be stuck.")
+                    + (detour ? " He first tries a step a few hours along the road there." : "") + " His order is kept.", w);
+        }
+
+        /// <summary>The point at this distance along a way (its first corner where it starts), or its end if it is shorter.</summary>
+        internal static bool PointAlong(List<float[]> way, double along, out float x, out float y)
+        {
+            x = y = 0;
+            if (way == null || way.Count < 2) return false;
+            double left = along;
+            for (int i = 1; i < way.Count; i++)
+            {
+                float ax = way[i - 1][0], ay = way[i - 1][1], bx = way[i][0], by = way[i][1];
+                double seg = Math.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+                if (seg >= left && seg > 1e-6)
+                {
+                    double k = left / seg;
+                    x = (float)(ax + (bx - ax) * k);
+                    y = (float)(ay + (by - ay) * k);
+                    return true;
+                }
+                left -= seg;
+            }
+            x = way[way.Count - 1][0];
+            y = way[way.Count - 1][1];
+            return true;
+        }
+
+        /// <summary>
+        /// The detour of a stand (0.25.0, item 2): over once he is at its point or its time is up, or when anything else gave him a new move meanwhile; then the move
+        /// his order wants now is given again (the shelter's, the food trip's, or his state's).
+        /// </summary>
+        private static void Detour(ToolInstance t, PartyRow me, World w, Scope scope)
+        {
+            if (double.IsNaN(t.DetourUntil)) return;
+            bool mine = t.HasCurrent && t.Current.Verb == "toward" && t.Current.Party == null && Math.Abs(t.Current.X - t.DetourX) < 0.5f && Math.Abs(t.Current.Y - t.DetourY) < 0.5f;
+            bool pendingMine = t.HasPending && t.Pending.Verb == "toward" && t.Pending.Party == null && Math.Abs(t.Pending.X - t.DetourX) < 0.5f && Math.Abs(t.Pending.Y - t.DetourY) < 0.5f;
+            if (t.HasPending && !pendingMine) { t.DetourUntil = double.NaN; return; }   // something else moved him: the detour is over
+            if (pendingMine || !mine) return;
+            double gap = Math.Sqrt((me.X - t.DetourX) * (me.X - t.DetourX) + (me.Y - t.DetourY) * (me.Y - t.DetourY));
+            if (gap > 1.5 && w.Hours < t.DetourUntil) return;
+            t.DetourUntil = double.NaN;
+            t.StillSince = double.NaN;
+            Log(t, "detour", t.State, gap <= 1.5 ? "reached the point along the way" : "the detour's time is up");
+            if (t.Shelter != null && t.Shelter != Away) { t.Pending = new Move { Verb = t.Running ? "near" : "enter", Place = t.Shelter }; t.HasPending = true; }
+            else if (t.SupplyAt != null) { t.Pending = new Move { Verb = "buy", Place = t.SupplyAt }; t.HasPending = true; }
+            else Resume(t, scope, w);
         }
 
         /// <summary>The move a state makes, worked out now: a holding, a party, or the point a party was last seen at. problems: a try's (it says, instead of counting).</summary>
@@ -949,6 +1124,7 @@ namespace BannerlordAgents.Tools
                 case "recruit":
                 case "sell":
                 case "tour":
+                case "buy":
                     return m.Place != null && (me.InSettlement == m.Place || w.Near(me.Id, m.Place) <= 2);
                 case "near": return m.Place != null && w.Near(me.Id, m.Place) <= StallNear;
                 case "post":
@@ -1163,29 +1339,41 @@ namespace BannerlordAgents.Tools
                     PartyRow r = w.Party(x.Order.Party);
                     if (r == null || inIt.Contains(r.Id) || !CanRide(x, r, w)) continue;
                     double hours = w.HoursTo(r, b.X, b.Y);
-                    if (hours > endsIn - Library.ReliefSpare(endsIn)) continue;
+                    // 0.25.0 (item 24): a rider already sent keeps going while he can still get there before it ends; a new one needs time to spare
+                    if (hours > endsIn - (x.ReliefOf == b.Key ? 0 : Library.ReliefSpare(endsIn))) continue;
                     can.Add(Tuple.Create(x, r, hours));
                 }
-                // who is sent (0.13.17, Nov 1): none while our side there, with every one of them, would not outweigh the enemy; else every
-                // lord free to ride, however the fight goes (a crushing victory reduces losses compared to a close victory); and, only while the
-                // lords in it would not win alone, lords from other orders, nearest first (one already riding to it first), until our side is
-                // Library.ReliefWinBar times the enemy (the logic must assign enough lords to tip the balance)
-                double bar = Library.ReliefWinBar * p.Theirs;
+                // who is sent (0.13.17, Nov 1; 0.25.0, item 24): none while our side there, with every one of them, would not outweigh the enemy. Riders already sent
+                // keep going (they were weighed once; run 20261125-2341-C2: half of all rides were called back before the fight ended). Then lords free to ride, nearest
+                // first, only until our side there is Library.ReliefEnough times the enemy (it was every one of them: 782 free rides to fights won anyway, 25 lords against
+                // 422 corsairs), and none to a fight against bandits alone; and, only while the lords in it would not win alone, lords from other orders, nearest first,
+                // until our side is Library.ReliefWinBar times the enemy (the logic must assign enough lords to tip the balance)
+                double bar = Library.ReliefWinBar * p.Theirs, enough = Library.ReliefEnough * p.Theirs;
+                bool bandits = theirRows.Count > 0 && theirRows.All(r => r.Kind == "bandit");
                 p.Needed = p.Ours < bar;
-                if (p.Ours + can.Sum(c => World.StrengthOf(c.Item2)) > p.Theirs)
+                foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => c.Item1.ReliefOf == b.Key))
                 {
-                    foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => FreeToRide(c.Item1)))
-                    {
-                        p.Riders[c.Item1.Id] = c.Item3;
-                        p.Ours += World.StrengthOf(c.Item2);
-                        p.Free++;
-                    }
-                    foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => !FreeToRide(c.Item1)).OrderByDescending(c => c.Item1.ReliefOf == b.Key).ThenBy(c => c.Item3))
+                    p.Riders[c.Item1.Id] = c.Item3;
+                    p.Ours += World.StrengthOf(c.Item2);
+                    if (FreeToRide(c.Item1)) p.Free++; else p.Busy++;
+                }
+                if (p.Ours + can.Where(c => c.Item1.ReliefOf != b.Key).Sum(c => World.StrengthOf(c.Item2)) > p.Theirs)
+                {
+                    if (!bandits)
+                        foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => c.Item1.ReliefOf != b.Key && FreeToRide(c.Item1)).OrderBy(c => c.Item3))
+                        {
+                            if (p.Ours >= enough) break;
+                            p.Riders[c.Item1.Id] = c.Item3;
+                            p.Ours += World.StrengthOf(c.Item2);
+                            p.Free++;
+                        }
+                    // to tip a fight the lords in it would not win alone, any lord who can ride may go, nearest first, a free one too (bandits or not)
+                    foreach (Tuple<ToolInstance, PartyRow, double> c in can.Where(c => c.Item1.ReliefOf != b.Key && !p.Riders.ContainsKey(c.Item1.Id)).OrderBy(c => c.Item3))
                     {
                         if (!p.Needed || p.Ours >= bar) break;
                         p.Riders[c.Item1.Id] = c.Item3;
                         p.Ours += World.StrengthOf(c.Item2);
-                        p.Busy++;
+                        if (FreeToRide(c.Item1)) p.Free++; else p.Busy++;
                     }
                 }
                 _reliefPlans.Add(p);
@@ -1277,8 +1465,24 @@ namespace BannerlordAgents.Tools
             if (me == null || me.Kind != "lord" || me.Attached || me.InBattle || me.Besieging != null || t.SupplyAt != null || t.Finished) return false;
             // a reserve (0.19) rides only to the fights of the lord he backs, by his own rule, never to others: he keeps his station for that lord
             if (!reserveToo && IsReserve(t)) return false;
+            // 0.25.0 (item 24, run 20261125-2341-C2: lords on camp-strike orders were pulled away 237 times): a lord whose order is waiting to strike an enemy it names,
+            // or striking one now, never rides elsewhere; one already riding to a relief is on the relief's own attack
+            if (!reserveToo && t.ReliefOf == null && StrikeWaiting(t, w)) return false;
             SettlementRow inside = w.Holding(me.InSettlement);
             return !(inside != null && World.IsFort(inside) && w.Besieged(inside));
+        }
+
+        [ThreadStatic] private static World _strikeFor;
+        [ThreadStatic] private static Dictionary<int, bool> _strikeWaiting;
+
+        /// <summary>Is the order's step waiting to strike, or striking, an enemy it names (StepFoes)? Worked out once a tool and world.</summary>
+        private static bool StrikeWaiting(ToolInstance t, World w)
+        {
+            if (!ReferenceEquals(_strikeFor, w) || _strikeWaiting == null) { _strikeFor = w; _strikeWaiting = new Dictionary<int, bool>(); }
+            if (_strikeWaiting.TryGetValue(t.Id, out bool known)) return known;
+            bool yes = StepFoes(t, new Scope(t, w), w).Count > 0;
+            _strikeWaiting[t.Id] = yes;
+            return yes;
         }
 
         /// <summary>Our reserve order (0.19): a lord standing off another of his realm, who rides in the hour that lord fights.</summary>
@@ -1313,7 +1517,8 @@ namespace BannerlordAgents.Tools
             double bestHours = double.MaxValue;
             if (CanRide(t, me, w))
                 foreach (ReliefPlan p in ReliefPlans(w))
-                    if (p.Outweighs && p.Riders.TryGetValue(t.Id, out double h) && h < bestHours) { best = p; bestHours = h; }
+                    // 0.25.0 (item 24): a rider already sent keeps going while he can get there in time, whatever the weighing of this hour says
+                    if ((p.Outweighs || t.ReliefOf == p.Battle.Key) && p.Riders.TryGetValue(t.Id, out double h) && h < bestHours) { best = p; bestHours = h; }
             if (best == null)
             {
                 if (t.ReliefOf == null) return false;
@@ -1326,7 +1531,7 @@ namespace BannerlordAgents.Tools
                 return false;
             }
             bool first = t.ReliefOf != best.Battle.Key;
-            if (t.Shelter != null) { t.Shelter = t.ShelterFrom = null; t.Running = false; }
+            if (t.Shelter != null) { t.Shelter = t.ShelterFrom = null; t.Running = false; t.ShelterReach = t.ShelterFloor = double.NaN; }
             t.ReliefOf = best.Battle.Key;
             if (first || t.ReliefTarget != best.Enemy || !(t.HasCurrent && t.Current.Verb == "engage" && t.Current.Party == best.Enemy))
             {
@@ -1351,6 +1556,66 @@ namespace BannerlordAgents.Tools
                     + (best.Joiners > 0 ? " with the " + best.Joiners + " enemy lords, armies or bands who could join it by then" : "") + "." + why + " The order resumes once the fight is over.", w);
             Log(t, t.State, "relieving", "a lord of ours fighting, and our side with every lord who can reach it before it ends outweighs the enemies there and those who could join it");
             return true;
+        }
+
+        // ---------- 0.25.0 (item 7): an enemy marching on a holding, counted only once it keeps to it ----------
+
+        /// <summary>An enemy marching on a place counts once it has headed there this many hours running, and goes on counting this many hours after it stopped.</summary>
+        public const double MarchOnHours = 2, MarchOffHours = 6;
+
+        private sealed class Course
+        {
+            public string To;
+            public double Since, Last;
+            /// <summary>The last holding it marched on for MarchOnHours or more, and when it was last seen heading there (kept when it turns elsewhere).</summary>
+            public string Marched;
+            public double MarchedLast = double.NaN;
+        }
+
+        // what each realm has seen each enemy lord and army heading for, by realm and party, and the hour each realm's sightings were last noted (worker)
+        private static readonly Dictionary<string, Course> Courses = new Dictionary<string, Course>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, double> CoursesNoted = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Notes, once a realm's hour, where every enemy lord and army in its view is heading (World.TowardOf): a party seen heading for the same holding in hours
+        /// next to each other keeps its course's start, else a new course begins.
+        /// </summary>
+        internal static void NoteCourses(World w)
+        {
+            string realm = w.Realm ?? "";
+            if (CoursesNoted.TryGetValue(realm, out double noted) && Math.Abs(noted - w.Hours) < 1e-6) return;
+            CoursesNoted[realm] = w.Hours;
+            foreach (PartyRow e in w.Enemies)
+            {
+                string to = w.TowardOf(e.Id);
+                if (to == null) continue;
+                string key = realm + "|" + e.Id;
+                if (Courses.TryGetValue(key, out Course c) && c.To == to && w.Hours - c.Last <= 1.5) c.Last = w.Hours;
+                else Courses[key] = c = new Course { To = to, Since = w.Hours, Last = w.Hours, Marched = c?.Marched, MarchedLast = c?.MarchedLast ?? double.NaN };
+                if (c.Last - c.Since >= MarchOnHours - 1e-6) { c.Marched = c.To; c.MarchedLast = c.Last; }
+            }
+            if (Courses.Count > 5000)
+                foreach (string k in Courses.Where(kv => w.Hours - kv.Value.Last > 24).Select(kv => kv.Key).ToList()) Courses.Remove(k);
+        }
+
+        /// <summary>
+        /// The language's marched_on(h, r) (0.25.0, item 7; run 20261125-2341-C2: "An enemy marches on Baracharn ... rides in to fill its stores" fired 285 times on 64
+        /// days, and Baracharn was besieged 7 times): the strongest enemy army within r of h, or else the strongest enemy lord within r, that has been seen heading for
+        /// h for MarchOnHours running, and goes on counting until MarchOffHours after it was last seen heading there. Null when none.
+        /// </summary>
+        internal static string MarchedOn(World w, string h, double r)
+        {
+            if (w.Holding(h) == null || double.IsNaN(r)) return null;
+            NoteCourses(w);
+            List<PartyRow> near = w.EnemiesNear(h, r);
+            PartyRow army = near.Where(e => e.ArmyMen > 0).OrderByDescending(World.StrengthOf).FirstOrDefault();
+            PartyRow strongest = near.OrderByDescending(World.StrengthOf).FirstOrDefault();
+            foreach (PartyRow e in new[] { army, strongest })
+            {
+                if (e == null || !Courses.TryGetValue((w.Realm ?? "") + "|" + e.Id, out Course c)) continue;
+                if (c.Marched == h && w.Hours - c.MarchedLast <= MarchOffHours + 1e-6) return e.Id;
+            }
+            return null;
         }
 
         // ---------- 0.17.3: an attack on the human player closes in and strikes together ----------
@@ -1498,6 +1763,13 @@ namespace BannerlordAgents.Tools
             double mine = w.SideStrength(me, me.X, me.Y, JoinHoursOf(t), me.Besieging ?? CampOf(t), Objectives(t), with);
             string ours = SideText(t, me, mine, with);
             var spare = new HashSet<string> { t.Order.Target, t.Current.Party, scope.Get("target") as string };
+            // 0.25.0 (item 8, run 20261125-2341-C2: 36 "falling back away from Lorgath" moves for 9 lords waiting on camp-strike orders at Goblin Town): the enemy the
+            // order's step is waiting for (any enemy party its rules or move name) and every lord marching with it are the fight the order chose, not a danger
+            HashSet<string> waitedFor = StepFoes(t, scope, w);
+            foreach (string f in waitedFor) spare.Add(f);
+            var spareHeads = new HashSet<string>(StringComparer.Ordinal);
+            // the lords marching with a spared party are those whose host is that party (or the army it rides in), never the army it is marching to join
+            foreach (string f in spare) if (f != null && w.Lead(w.Party(f)) is PartyRow head) spareHeads.Add(head.Id);
             // striking a siege camp: every lord camped in that siege is part of the fight the order chose, not a danger to flee
             string siege = t.Current.Verb == "engage" ? w.Party(t.Current.Party)?.Besieging : null;
             // a shadow keeps its own distance from its target, but a target that turns to chase it is a danger like any other
@@ -1510,6 +1782,7 @@ namespace BannerlordAgents.Tools
             BattleRow ride = RidesInto(t, w);
             bool Spared(PartyRow e) => (spare.Contains(e.Id) && !(shadowing && Chasing(e))) || (siege != null && e.Besieging == siege)
                                        || (shadowed != null && w.HeadOf(e)?.Id == shadowed && !Chasing(e))
+                                       || (!shadowing && spareHeads.Count > 0 && w.HeadOf(e) is PartyRow eh && spareHeads.Contains(eh.Id))
                                        || (ride != null && (World.SideIn(ride, e.Id) != null || World.SideIn(ride, w.Lead(e)?.Id) != null));
             // the danger counted as a group (0.12.2): everything in view within reach of the lord and the hosts those lords march
             // with, together (World.DangerAround); the strongest of them stands for where it is and how fast it comes
@@ -1533,12 +1806,16 @@ namespace BannerlordAgents.Tools
             string preferred = hasStay && World.IsFort(own) ? own.Id : null;
             if (t.Shelter != null)
             {
-                Danger still = caution > 0 ? Find(reach * 1.5, floor * 1.5) : null;
+                // 0.25.0 (item 7, run 20261125-2341-C2: 483 lords came out "the danger has passed" and went back in within 12 hours from a threat of about the same size):
+                // the danger range he had when he went in is kept until he comes out; inside, the nearest castle is the one he is in, so the range shrank to 2 hours
+                double keptReach = double.IsNaN(t.ShelterReach) ? reach : t.ShelterReach, keptFloor = double.IsNaN(t.ShelterFloor) ? floor : t.ShelterFloor;
+                Danger still = caution > 0 ? Find(keptReach * 1.5, keptFloor * 1.5) : null;
                 // a reserve whose lord is fighting comes out at once when nothing but that fight is near (0.19): he has a fight to ride to
                 if (still == null && (w.Hours - t.AsideSince >= 2 || (IsReserve(t) && ride != null)))
                 {
                     string was = t.Shelter;
                     t.Shelter = t.ShelterFrom = null;
+                    t.ShelterReach = t.ShelterFloor = double.NaN;
                     t.Running = false;
                     Log(t, "sheltering", t.State, "the danger passed");
                     Resume(t, scope, w);
@@ -1561,7 +1838,38 @@ namespace BannerlordAgents.Tools
                 // inside a castle or town: stay if it would hold (or the order is told to stay in its own holding); else run
                 if ((alwaysOwn && inside.Id == own.Id) || w.Holds(inside, me.Id, danger.Strength + w.ThreatStrength(inside.Id, World.HoldRadius, danger.Ids))) return false;
             }
+            t.ShelterReach = reach;
+            t.ShelterFloor = floor;
             return Shelter(t, me, w, danger, mine, alwaysOwn ? own : null, preferred, again: false);
+        }
+
+        // the plain names each state's rules and move read (0.25.0), worked out once a state
+        private static readonly Dictionary<StateDef, string[]> StepNames = new Dictionary<StateDef, string[]>();
+
+        /// <summary>
+        /// The enemy parties the order's current step is waiting for or acting on (0.25.0, items 8 and 24): every plain name its rules and its move read whose value
+        /// now is an enemy lord, army or band the realm knows of (a camp strike's "prey", a guard's "foe"), and its move's own party. Empty for a step that names none.
+        /// </summary>
+        private static HashSet<string> StepFoes(ToolInstance t, Scope scope, World w)
+        {
+            var foes = new HashSet<string>(StringComparer.Ordinal);
+            if (t.HasCurrent && t.Current.Verb == "engage" && t.Current.Party != null) foes.Add(t.Current.Party);
+            if (t.Finished || t.State == null || !t.Def.States.TryGetValue(t.State, out StateDef st)) return foes;
+            if (!StepNames.TryGetValue(st, out string[] names))
+            {
+                var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (TransitionDef tr in st.When) tr.If?.Walk(n => found.Add(n), (f, n) => { });
+                st.Do?.Arg?.Walk(n => found.Add(n), (f, n) => { });
+                found.ExceptWith(new[] { "me", "at", "places", "lords", "now", "arrived" });
+                StepNames[st] = names = found.ToArray();
+            }
+            foreach (string n in names)
+            {
+                if (!(scope.Get(n) is string id)) continue;
+                PartyRow p = w.Party(id);
+                if (p != null && (w.HostileFaction(p.Faction) || p.Kind == "bandit")) foes.Add(p.Id);
+            }
+            return foes;
         }
 
         /// <summary>The siege an order's lord is in or making for: a besiege order's place (0.12.4).</summary>
@@ -1737,27 +2045,114 @@ namespace BannerlordAgents.Tools
             return 1.5 + (double.IsNaN(hours) ? 0 : hours / 24);
         }
 
+        /// <summary>A food trip with no step closer to its market for this many hours gives up (0.25.0, item 1; it was a fixed 24 hours, even while he was still closing in).</summary>
+        public const double FoodGiveUpHours = Library.FoodGiveUpHours;
+        /// <summary>A market a food trip failed at is left out of the choice for this many hours (0.25.0: it was forgotten at once, and picked again).</summary>
+        public const double FoodFailedHours = 72;
+
+        // the markets food trips failed at, by party and market, until when (worker)
+        private static readonly Dictionary<string, double> FoodFailed = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        private static void FailedAt(string party, string market, double hours)
+        {
+            if (party == null || market == null) return;
+            FoodFailed[party + "|" + market] = hours + FoodFailedHours;
+            if (FoodFailed.Count > 2000)
+                foreach (string k in FoodFailed.Where(kv => kv.Value < hours).Select(kv => kv.Key).ToList()) FoodFailed.Remove(k);
+        }
+
+        /// <summary>The markets a lord's food trips failed at within the last FoodFailedHours (null: none).</summary>
+        private static HashSet<string> FailedFor(string party, double hours)
+        {
+            HashSet<string> set = null;
+            string head = party + "|";
+            foreach (KeyValuePair<string, double> kv in FoodFailed)
+                if (kv.Value > hours && kv.Key.StartsWith(head, StringComparison.Ordinal)) (set ?? (set = new HashSet<string>(StringComparer.Ordinal))).Add(kv.Key.Substring(head.Length));
+            return set;
+        }
+
+        /// <summary>
+        /// The food rule (0.25.0, item 1; run 20261125-2341-C2: 243 food trips, none bought food, about 2,070 men starved away from three lords). When his food would
+        /// not last the trip and a day and a half, he rides to the market he reaches soonest by road that has food for sale (World.FoodMarket: a town not besieged, a
+        /// village not raided, of a realm not at war with his; never one with no way to it, nor one he failed at in the last three days), and buys at its gate as the
+        /// game's lords buy food, keeping half his gold (the game's side, Orders "buy"). The trip ends once he has bought food, by the game's own buying or ours; it gives
+        /// up only after FoodGiveUpHours with no step closer, and that market is left out for three days. A lord inside a castle may ride out to buy (a town feeds him
+        /// by the game's own rule); a sheltering lord does not (the safety rule runs first).
+        /// </summary>
         private static bool Supply(ToolInstance t, PartyRow me, World w, Scope scope)
         {
+            Hungry(t, me, w);
             if (t.SupplyAt != null)
             {
-                bool inside = me.InSettlement == t.SupplyAt;
-                if (!(inside && (me.FoodDays >= 6 || w.Hours - t.AsideSince >= 8)) && w.Hours - t.AsideSince < 24) return true;
-                Log(t, "buying food", t.State, inside ? "food bought (" + me.FoodDays + " days)" : "gave up after a day");
+                SettlementRow market = w.Holding(t.SupplyAt);
+                double d = w.Near(me.Id, t.SupplyAt);
+                if (!double.IsNaN(d) && (double.IsNaN(t.SupplyBest) || d < t.SupplyBest - 0.5)) { t.SupplyBest = d; t.SupplyBestAt = w.Hours; }
+                string end = null;
+                bool failed = false;
+                if (t.MoveDone && t.HasCurrent && t.Current.Verb == "buy")
+                {
+                    failed = t.FoodBought <= 0;
+                    end = failed ? "bought no food at " + w.Name(t.SupplyAt) : "bought " + t.FoodBought + " food at " + w.Name(t.SupplyAt) + " (" + me.FoodDays + " days)";
+                }
+                else if (me.FoodDays >= 0 && me.FoodDays >= FoodNeed(me, null, w) + 2) end = "food bought (" + me.FoodDays + " days)";
+                else if (market == null || !w.IsMarket(market)) { end = w.Name(t.SupplyAt) + " no longer sells food"; failed = true; }
+                else if (!double.IsNaN(t.SupplyBestAt) && w.Hours - t.SupplyBestAt >= FoodGiveUpHours && !me.InBattle) { end = "no closer to " + w.Name(t.SupplyAt) + " in " + ToolDef.Num(FoodGiveUpHours) + " hours"; failed = true; }
+                if (end == null) return true;
+                if (failed) FailedAt(t.Order.Party, t.SupplyAt, w.Hours);
+                Diag.Count(failed ? "tool:food runs failed" : "tool:food runs bought");
+                Log(t, "buying food", t.State, end);
                 t.SupplyAt = null;
+                t.SupplyBest = t.SupplyBestAt = double.NaN;
+                t.FoodBought = -1;
                 Resume(t, scope, w);
                 return false;
             }
-            if (me.FoodDays < 0 || me.FoodDays >= 6 || me.InSettlement != null || me.InBattle || me.Besieging != null) return false;
-            SettlementRow at = w.NearestSupply(me.Id);
-            if (at == null || me.FoodDays >= FoodNeed(me, at, w)) return false;
+            if (me.FoodDays < 0 || me.FoodDays >= 6 || me.InBattle || me.Besieging != null) return false;
+            // inside a town the game's own rule feeds him (it buys for any lord in a town or at a village each hour); inside a castle nothing does, so he may ride out
+            if (me.InSettlement != null && w.Holding(me.InSettlement)?.Kind != "castle") return false;
+            SettlementRow at = w.FoodMarket(me, FailedFor(t.Order.Party, w.Hours), out double hours);
+            if (at == null || me.FoodDays >= 1.5 + (double.IsNaN(hours) ? 0 : hours / 24)) return false;
             t.SupplyAt = at.Id;
             t.AsideSince = w.Hours;
-            t.Pending = new Move { Verb = "enter", Place = at.Id };
+            t.SupplyBest = w.Near(me.Id, at.Id);
+            t.SupplyBestAt = w.Hours;
+            t.FoodBought = -1;
+            t.Pending = new Move { Verb = "buy", Place = at.Id };
             t.HasPending = true;
             Diag.Count("tool:food runs");
-            Log(t, t.State, "buying food", me.FoodDays + " days of food left");
+            Log(t, t.State, "buying food", me.FoodDays + " days of food left; " + at.Name + " sells food, about " + Forecast.HoursText(hours) + " away by road");
             return true;
+        }
+
+        /// <summary>
+        /// A lord with no food losing men (0.25.0, item 1: Durin, Balakhôr and Orophin starved for days and the agent was never told): said once an episode, with the
+        /// men lost since his food ran out and the market he reaches soonest. Not while he fights, nor in the hour a battle of his ended.
+        /// </summary>
+        private static void Hungry(ToolInstance t, PartyRow me, World w)
+        {
+            if (me.FoodDays != 0) { t.HungrySince = double.NaN; t.HungryTold = false; return; }
+            if (double.IsNaN(t.HungrySince)) { t.HungrySince = w.Hours; t.HungryMen = me.Men; return; }
+            if (me.InBattle || (!double.IsNaN(me.LastBattleEnd) && me.LastBattleEnd >= w.Hours - 1.01)) { t.HungryMen = Math.Min(t.HungryMen, me.Men); return; }
+            if (me.Men > t.HungryMen) t.HungryMen = me.Men;   // recruits came in
+            int lost = t.HungryMen - me.Men;
+            if (t.HungryTold || lost <= 0) return;
+            t.HungryTold = true;
+            SettlementRow m = w.FoodMarket(me, null, out double hours);
+            Diag.Count("tool:starving told");
+            Tell(t, t.Order.LordName + " has food for 0 days and lost " + Text.N(lost) + " men in " + Forecast.HoursText(Math.Max(1, w.Hours - t.HungrySince)) + "; "
+                    + (m != null ? "the nearest market with food is " + m.Name + ", " + Forecast.HoursText(hours) + " by road." : "no market with food for sale is within his reach by road."), w);
+        }
+
+        /// <summary>
+        /// A food trip's buying at the gate is done on the game's side (0.25.0, Orders "buy"): what he bought (0 when the market had nothing he could pay for or carry).
+        /// The food rule ends the trip on its next hour.
+        /// </summary>
+        public static void FoodTrip(int id, int bought, string why)
+        {
+            if (!ById.TryGetValue(id, out ToolInstance t) || !t.HasCurrent || t.Current.Verb != "buy") return;
+            t.MoveDone = true;
+            t.FoodBought = bought;
+            Diag.Event("tool", "food trip", new { id, tool = t.Def.Name, lord = t.Order.Lord, market = t.Current.Place, bought, why });
         }
 
         /// <summary>Back to the order after a detour: the state's own move again (or holding, if the tool had finished).</summary>
@@ -1796,6 +2191,8 @@ namespace BannerlordAgents.Tools
 
         private static void Tell(ToolInstance t, string text, World w)
         {
+            // 0.25.0 (item 26): an hour count with no road behind it is never said (129 notices read "about none hours to reach it")
+            if (text != null && text.IndexOf("none hours", StringComparison.Ordinal) >= 0) text = text.Replace("about none hours", "no road known").Replace("none hours", "no road known");
             Diag.Count("tool:call-backs");
             Brain.ToolNotice(text, t.Order.Party, w.Hours, t.Order.At, t.Owner?.Realm ?? t.Order.Realm ?? w.Realm);
             (t.Owner?.Channel ?? AgentChannel.For(w.Realm)).Event("tool: " + text);
@@ -1831,7 +2228,8 @@ namespace BannerlordAgents.Tools
             if (v is string id)
             {
                 string name = w.Name(id);
-                return name == id && NamesSeen.TryGetValue(id, out string known) ? known : name;
+                // 0.25.0 (item 29): a party gone from the realm's view by the last name it knew, with whether its lord is held
+                return name == id && NamesSeen.ContainsKey(id) ? PartyText(id, w) : name;
             }
             if (v is double d && !double.IsNaN(d)) return Math.Abs(d) >= 10 ? Text.N((int)Math.Round(d)) : Expr.Show(d);
             return Expr.Show(v);
@@ -1867,8 +2265,8 @@ namespace BannerlordAgents.Tools
                          : st?.About != null ? Template.Fill(st.About, scope, v => Show(v, w)) : (t.State ?? "starting");
             var what = new StringBuilder(t.Def.Name);
             if (t.Order.At != null) what.Append(" " + w.Name(t.Order.At) + " [" + t.Order.At + "]");
-            if (t.Order.Target != null) what.Append(" " + w.Name(t.Order.Target) + " [" + w.Tag(t.Order.Target) + "]");
-            if (t.Order.Lords.Count > 0) what.Append(" with " + string.Join(", ", t.Order.Lords.Select(p => w.Name(p) + " [" + w.Tag(p) + "]")));
+            if (t.Order.Target != null) what.Append(" " + PartyText(t.Order.Target, w));
+            if (t.Order.Lords.Count > 0) what.Append(" with " + string.Join(", ", t.Order.Lords.Select(p => PartyText(p, w))));
             List<string> changed = t.Settings.Where(kv => t.Def.Settings.TryGetValue(kv.Key, out SettingDef sd) && Math.Abs(sd.Default - kv.Value) > 1e-9)
                                              .Select(kv => kv.Key + " " + ToolDef.Num(kv.Value)).ToList();
             PartyRow me = w.Party(t.Order.Party);
@@ -1883,7 +2281,8 @@ namespace BannerlordAgents.Tools
         private static string ThenText(JObject then, World w)
         {
             string id = (string)then["at"] ?? (string)then["target"];
-            string shown = id == null ? "" : w.Holding(id) != null ? " " + w.Name(id) + " [" + id + "]" : " " + id;
+            // 0.25.0 (item 29): a party by its name, never its code alone
+            string shown = id == null ? "" : w.Holding(id) != null ? " " + w.Name(id) + " [" + id + "]" : w.Party(id) != null || NamesSeen.ContainsKey(id) ? " " + PartyText(id, w) : " " + id;
             return ((string)then["do"] ?? "?") + shown;
         }
 
@@ -2035,6 +2434,9 @@ namespace BannerlordAgents.Tools
                     // come out to join the relief once they and it together are more than 1.5 times the camp (the game's sally beside a relief)
                     bool camped = _w.CampStrength(camp.Id) > 0;
                     double ours0 = camped ? Num(Call("camp_strength", new object[] { camp.Id })) : Num(Call("side_strength", new object[] { camp.Id }));
+                    // 0.25.0 (item 3, run 20261125-2341-C2: on day 166 at Lasgalor only Val's 191 men had camped, and all 13 lords, 8,622 men, withdrew at "492% of your
+                    // side's 8,622"): while the camp forms, our side is the larger of the lords camped and this siege's lords within 6 of it, the figure the order prints
+                    if (camped) ours0 = Math.Max(ours0, Num(Call("mates_strength", new object[] { camp.Id, 6.0 })));
                     double sally = camped ? _w.SallyStrength(camp) : 0;
                     double With(double relief) => relief > 0 && relief + sally > World.SallyRatio * Math.Max(1, ours0) ? relief + sally : relief;
                     List<World.Comer> coming = _w.ReliefComing(camp.Id, near);
@@ -2281,10 +2683,29 @@ namespace BannerlordAgents.Tools
                     case "lords_near": { string x = Id(a[0]); double r = Expr.Number(a[1]); return (double)_t.Order.Lords.Count(p => _w.Party(p) != null && Close(p, x, r)); }
                     case "group_strength":
                         {
+                            // 0.25.0 (item 8): each army once, by its leader, and no lord falling back, sheltering, inside walls or in another fight
                             string x = Id(a[0]);
                             double r = Expr.Number(a[1]);
-                            double sum = me != null && Close(me.Id, x, r) ? World.StrengthOf(me) : 0;
-                            foreach (string p in _t.Order.Lords) { PartyRow lr = _w.Party(p); if (lr != null && lr.Faction == _w.Realm && Close(p, x, r)) sum += World.StrengthOf(lr); }
+                            var counted = new HashSet<string>(StringComparer.Ordinal);
+                            double sum = 0;
+                            if (me != null && Close(me.Id, x, r)) sum += GroupShare(me, x, counted);
+                            foreach (string p in _t.Order.Lords) { PartyRow lr = _w.Party(p); if (lr != null && lr.Faction == _w.Realm && Close(p, x, r)) sum += GroupShare(lr, x, counted); }
+                            return sum;
+                        }
+                    case "group_within":
+                        {
+                            // 0.25.0 (item 8): the same group counted by road: the lord and the order's lords (and this order's other lords at the same place) who can be at x within
+                            // so many hours by the march clock, each army once
+                            string x = Id(a[0]);
+                            double hours = Expr.Number(a[1]);
+                            if (me == null || x == null || double.IsNaN(hours) || !_w.Locate(x, out float gx, out float gy, out _, out _)) return 0.0;
+                            var counted = new HashSet<string>(StringComparer.Ordinal);
+                            double sum = 0;
+                            foreach (PartyRow lr in new[] { me }.Concat(Mates()))
+                            {
+                                if (lr == null || !_w.CanReachWithin(_w.SeenOf(lr), gx, gy, hours, out _)) continue;
+                                sum += GroupShare(lr, x, counted);
+                            }
                             return sum;
                         }
                     case "group_offers":
@@ -2301,6 +2722,16 @@ namespace BannerlordAgents.Tools
                             string h = Id(a[0]);
                             if (_w.Holding(h) == null) return null;
                             return _w.EnemiesNear(h, Expr.Number(a[1])).Where(e => _w.TowardOf(e.Id) == h).OrderByDescending(World.StrengthOf).FirstOrDefault()?.Id;
+                        }
+                    case "marched_on": return MarchedOn(_w, Id(a[0]), Expr.Number(a[1]));
+                    case "feed_gain":
+                        {
+                            // 0.25.0 (item 20): the days of a holding's eating a food trip of his would add, his spare food and the best market's together (World.FeedMarket)
+                            SettlementRow h = H(a[0]);
+                            if (me == null || h == null || h.Faction != _w.Realm || h.Food < 0) return null;
+                            double days = _t.Settings.TryGetValue("days", out double dd) ? dd : 10, keep = _t.Settings.TryGetValue("keep_days", out double kd) ? kd : 3;
+                            _w.FeedMarket(me, h, days, keep, out double gain);
+                            return Math.Round(gain, 2);
                         }
                     // ---------- 0.19: the battle facts, the game's quick reaction mirrored, a group on one order at one place, raids, a siege of yours ----------
                     case "in_battle_of": { bool? b = _w.InBattleOf(Id(a[0])); return b.HasValue ? (object)b.Value : null; }
@@ -2329,8 +2760,9 @@ namespace BannerlordAgents.Tools
                         {
                             string x = Id(a[0]);
                             double r = Expr.Number(a[1]);
-                            double sum = me != null && Close(me.Id, x, r) ? World.StrengthOf(me) : 0;
-                            foreach (PartyRow m in Mates()) if (Close(m.Id, x, r)) sum += World.StrengthOf(m);
+                            var counted = new HashSet<string>(StringComparer.Ordinal);
+                            double sum = me != null && Close(me.Id, x, r) ? GroupShare(me, x, counted) : 0;
+                            foreach (PartyRow m in Mates()) if (Close(m.Id, x, r)) sum += GroupShare(m, x, counted);
                             return sum;
                         }
                     case "could_reach": return _w.ReachWithin(Id(a[0]), Expr.Number(a[1]));
@@ -2393,6 +2825,29 @@ namespace BannerlordAgents.Tools
                     }
                 foreach (string p in _t.Order.Lords) Add(p);
                 return list;
+            }
+
+            /// <summary>
+            /// What one lord of a group adds to its count at x (0.25.0, item 8: the camp strike's count at Goblin Town put our side at 32,913-34,061 while the safety
+            /// rule was pulling nine of those lords away): his army's strength once, by its leader, whoever of it holds the order (counted keeps the leaders already
+            /// counted); nothing for a lord falling back or sheltering on his order, inside the walls of a castle or town, or fighting elsewhere than at x.
+            /// </summary>
+            private double GroupShare(PartyRow r, string x, HashSet<string> counted)
+            {
+                if (r == null) return 0;
+                PartyRow lead = _w.Lead(r) ?? r;
+                if (!counted.Add(lead.Id)) return 0;
+                SettlementRow inside = _w.Holding(lead.InSettlement);
+                if (inside != null && World.IsFort(inside)) return 0;
+                if (lead.InBattle && x != null)
+                {
+                    BattleRow b = _w.BattleOf(lead.Id);
+                    bool here = b != null && (b.Settlement == x || (_w.Where(x, out float bx, out float by) && (b.X - bx) * (b.X - bx) + (b.Y - by) * (b.Y - by) <= 9));
+                    if (!here) return 0;
+                }
+                foreach (ToolInstance o in ById.Values)
+                    if (o.Order.Party == lead.Id && !o.Finished && o.Shelter != null) return 0;
+                return World.StrengthOf(lead);
             }
 
             /// <summary>Two values the same (ids without regard to case), as the language's == has it.</summary>

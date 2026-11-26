@@ -126,6 +126,8 @@ namespace BannerlordAgents
                     r.OwnerClan = s.OwnerClan?.StringId;
                     r.OwnerClanName = s.OwnerClan?.Name?.ToString();
                 }
+                // 0.25.0 (items 1 and 20): the food its market has for sale, the game's own stored count (a field read, no allocation)
+                if ((s.IsTown || s.IsVillage) && s.ItemRoster != null) r.MarketFood = s.ItemRoster.TotalFood;
                 if (s.Village != null)
                 {
                     r.VillageState = s.Village.VillageState.ToString();

@@ -251,21 +251,24 @@ namespace BannerlordAgents.Runs
             return list;
         }
 
-        /// <summary>The lines within the run's wall-clock windows (by the line's own time field), or tagged with its id.</summary>
+        /// <summary>
+        /// The lines tagged with the run's id, and the untagged lines within its wall-clock windows (by the line's own time field), in file order;
+        /// a line tagged with another run is never taken. Until Runs 0.15.0 (Nov 26, tooling audit fault 40) a file holding any tagged line gave its
+        /// tagged lines only, which left out the chronicler's calls and a run's first calls (all untagged): 156 calls and 22% of the cost of run 20261125-2341-C2.
+        /// </summary>
         internal static List<string> SelectWall(string path, List<(DateTime From, DateTime To)> windows, string field, string runId = null)
         {
             string tag = runId != null ? "\"run\":\"" + runId + "\"" : null;
-            var byTag = new List<string>();
-            var byWall = new List<string>();
+            var list = new List<string>();
             foreach (string l in RawLines(path))
             {
-                if (tag != null && l.Contains(tag)) { byTag.Add(l); continue; }
-                if (byTag.Count > 0) continue;
+                if (tag != null && l.Contains(tag)) { list.Add(l); continue; }
+                if (tag != null && l.Contains("\"run\":\"")) continue;   // another run's line
                 JsonObject o = Parse(l);
                 DateTime t = o != null ? Wall(Str(o, field)) : DateTime.MinValue;
-                if (t != DateTime.MinValue && windows.Any(w => t >= w.From && t <= w.To)) byWall.Add(l);
+                if (t != DateTime.MinValue && windows.Any(w => t >= w.From && t <= w.To)) list.Add(l);
             }
-            return byTag.Count > 0 ? byTag : byWall;
+            return list;
         }
 
         /// <summary>The load a record line names ("load":"..."), without parsing the whole line; null when none.</summary>

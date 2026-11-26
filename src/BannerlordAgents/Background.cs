@@ -18,6 +18,8 @@ namespace BannerlordAgents
     /// - regular (Post): logs, records and the rest, first come first served, low priority in efficiency mode;
     /// - reporting (Publisher): the views, pokes, look-ups and dashboard of the newest hour only, one small step at a
     ///   time when nothing else waits, so an urgent job waits at most one step and old hours never pile up.
+    /// Since 0.25.0 a fourth, writes (Writer = Writes.Next): the war room's fresh snapshots and briefings, asked for in the urgent lane and written there whole until then
+    /// (run 20261125-2341-C2: up to 13.4 s each, the hourly order step up to 10.7 s late), now cut into steps, one taken after the urgent jobs and before each regular one.
     /// </summary>
     internal static class Background
     {
@@ -33,6 +35,12 @@ namespace BannerlordAgents
 
         /// <summary>The reporting lane's next step, or null when there is none (Brain.NextStep; set by the bridge, never by the smoke test).</summary>
         public static Func<Action> Publisher;
+
+        /// <summary>
+        /// The writes lane's next step (0.25.0, item 12: Writes.Next, the war room's fresh snapshots and briefings cut into steps), or null when none waits. One step is taken
+        /// after the urgent jobs and before each regular job, so the war room's snapshot comes soon while an order never waits for more than one step.
+        /// </summary>
+        public static Func<Action> Writer;
 
         // the hours, for how far behind the game the helper is (game's thread writes the first, the helper the others)
         private static long _postedHours = BitConverter.DoubleToInt64Bits(double.NaN), _decidedHours = BitConverter.DoubleToInt64Bits(double.NaN), _publishedHours = BitConverter.DoubleToInt64Bits(double.NaN);
@@ -195,11 +203,21 @@ namespace BannerlordAgents
             while (true)
             {
                 if (RunUrgent()) continue;
+                // 0.25.0 (item 12): one step of a big write, then the urgent jobs again
+                Action write = null;
+                try { write = Writer?.Invoke(); }
+                catch (Exception e) { Failed++; Diag.Error("choosing the next write step", e); }
+                if (write != null)
+                {
+                    RunJob(new Job { Name = "writes", Run = write });
+                    if (RunUrgent()) continue;
+                }
                 if (Jobs.TryTake(out Job queued))
                 {
                     if (queued.Run != Nothing) RunJob(queued);
                     continue;
                 }
+                if (write != null) continue;
                 Action step = null;
                 try { step = Publisher?.Invoke(); }
                 catch (Exception e) { Failed++; Diag.Error("choosing the next report step", e); }

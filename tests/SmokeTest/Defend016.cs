@@ -102,15 +102,21 @@ namespace SmokeTest
             Runner.Start(9963, Defend(ufthak));
             Hour(h2 + 1, ufthak);
             moves.Clear();
-            Hour(h2 + 2, ufthak, Host("hs1", 1000));
-            bool bracesIn = Moved(9963, "supply", "castle_orc") && StateOf(9963) == "brace";
+            // 0.25.0 (item 7): an enemy marches on the holding only once it has kept heading there for 2 hours
+            PartyRow hs1 = Host("hs1", 1000);
+            Hour(h2 + 2, ufthak, hs1);
+            bool notYet = !Moved(9963, "supply", "castle_orc") && StateOf(9963) != "brace";
+            Hour(h2 + 3, ufthak, hs1);
+            Hour(h2 + 4, ufthak, hs1);
+            bool bracesIn = notYet && Moved(9963, "supply", "castle_orc") && StateOf(9963) == "brace";
             var shagrat = Lord("lrn", "Shagrat", 400);
             double h3 = 63000;
             Hour(h3, shagrat);
             Runner.Start(9964, Defend(shagrat));
             Hour(h3 + 1, shagrat);
             moves.Clear();
-            Hour(h3 + 2, shagrat, Host("hs2", 5000));
+            PartyRow hs2 = Host("hs2", 5000);
+            for (int k = 2; k <= 4; k++) Hour(h3 + k, shagrat, hs2);
             bool runs = !Moved(9964, "supply") && moves.Any(m => m.Key == 9964 && m.Value.Verb == "enter" && m.Value.Place != "castle_orc") && StateOf(9964) == "shelter";
             var gorbag = Lord("lsi", "Gorbag", 400);
             double h4 = 64000;
@@ -120,10 +126,11 @@ namespace SmokeTest
             Runner.Start(9965, stay);
             Hour(h4 + 1, gorbag);
             moves.Clear();
-            Hour(h4 + 2, gorbag, Host("hs3", 5000));
+            PartyRow hs3 = Host("hs3", 5000);
+            for (int k = 2; k <= 4; k++) Hour(h4 + k, gorbag, hs3);
             bool staysIn = Moved(9965, "supply", "castle_orc");
             Check(bracesIn && runs && staysIn,
-                  "an army marching on the holding: the guards ride in with their food when its defenders, with them, would hold (1,000 against 1,000 behind level-1 walls); "
+                  "an army marching on the holding (seen heading there 2 hours running, not at once): the guards ride in with their food when its defenders, with them, would hold (1,000 against 1,000 behind level-1 walls); "
                   + "against 5,000 they shelter elsewhere rather than be taken with it; with stay_inside 1 they go in all the same (" + bracesIn + ", " + runs + ", " + staysIn + ")");
 
             // the stop check in the language: offers, offers_of, can_recruit

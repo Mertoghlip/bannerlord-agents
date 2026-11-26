@@ -250,6 +250,7 @@ namespace SmokeTest
             WakeTests(root);
             WatchTests(root);
             DefendTests(root, agentDir);
+            Fixes0250Tests(root);
             ZoneTests(root);
 
             // whole-file writes are swapped in
@@ -1178,21 +1179,23 @@ namespace SmokeTest
             Check(Notices().Contains("Ugluk has taken up the watch at Fornost"), "standing at a gate 3.3 from the centre, the watch begins");
             Runner.Ended(1203, "test over");
 
-            // a march that stops short: told once after 6 hours standing still, far from the place; the order is kept
+            // a march that stops short: told after 12 hours standing still (0.25.0; it was 6), far from the place, and again only after 24 more; the order is kept
             string Stuck() => System.Text.RegularExpressions.Regex.Matches(Notices(), "Lugdush has not moved for").Count.ToString();
             var lug = Orc("lug", "Lugdush", 120, 100);
             Brain.OnHour(Gated(7410, lug));
             Runner.Start(1204, new ToolOrder { Tool = "goto", Lord = "lord_lug", LordName = "Lugdush", Party = "p_lug", At = "castle_men" });
-            for (int h = 7411; h <= 7416; h++) Brain.OnHour(Gated(h, lug));
-            Check(Stuck() == "0", "five hours standing still is not yet a stall");
-            Brain.OnHour(Gated(7417, lug));
-            Check(Stuck() == "1" && Notices().Contains("Lugdush has not moved for 6 hours while going close to Fornost, still 48.2 from Fornost: he may be stuck on the map"),
-                  "a lord standing still for 6 hours, 48 from where he goes, is called back (" + Stuck() + ")");
-            for (int h = 7418; h <= 7421; h++) Brain.OnHour(Gated(h, lug));
-            Check(Stuck() == "1" && Runner.ForParty("p_lug") != null, "once: the same stand is not told again, and the order is kept");
+            for (int h = 7411; h <= 7422; h++) Brain.OnHour(Gated(h, lug));
+            Check(Stuck() == "0", "eleven hours standing still is not yet a stall");
+            Brain.OnHour(Gated(7423, lug));
+            Check(Stuck() == "1" && Notices().Contains("Lugdush has not moved for 12 hours, 48.2 from Fornost; he may be stuck. His order is kept."),
+                  "a lord standing still for 12 hours, 48 from where he goes, is told of in one line (" + Stuck() + ")");
+            for (int h = 7424; h <= 7446; h++) Brain.OnHour(Gated(h, lug));
+            Check(Stuck() == "1" && Runner.ForParty("p_lug") != null, "the same stand is not told again within 24 hours, and the order is kept");
+            Brain.OnHour(Gated(7447, lug));
+            Check(Stuck() == "2", "after another 24 hours it is told again (" + Stuck() + ")");
             lug.X = 130;
-            for (int h = 7422; h <= 7424; h++) Brain.OnHour(Gated(h, lug));
-            Check(Stuck() == "1", "moving on clears it (3 hours still since: not yet)");
+            for (int h = 7448; h <= 7450; h++) Brain.OnHour(Gated(h, lug));
+            Check(Stuck() == "2", "moving on clears it (3 hours still since: not yet)");
             Runner.Ended(1204, "test over");
 
             // a lord held up by a battle on his way is not stuck
@@ -2125,8 +2128,10 @@ namespace SmokeTest
             };
             Brain.OnHour(s);
             Files.FlushAll();
-            Check(File.Exists(Path.Combine(orcs, "warroom", "poke.txt")) && !File.Exists(Path.Combine(dg, "channel", "poke.txt")) && File.Exists(Path.Combine(Brain.Dir, "pokes_dg.jsonl")),
-                  "an agent that is off gets nothing in its channel, though its realm's pokes are still kept; one that is live gets its poke");
+            // 0.25.0 (item 37): a realm whose agent is off gets no wake report at all (run 20261125-2341-C2: 3,419 of them, 739 MB, for two realms with no agent)
+            Check(File.Exists(Path.Combine(orcs, "warroom", "poke.txt")) && !File.Exists(Path.Combine(dg, "channel", "poke.txt")) && !File.Exists(Path.Combine(Brain.Dir, "pokes_dg.jsonl"))
+                  && File.Exists(Path.Combine(Brain.Dir, "pokes_orcs.jsonl")),
+                  "an agent that is off gets nothing in its channel and no wake report is built for its realm; one that is live gets its poke");
 
             Runner.Start(961, new ToolOrder { Tool = "goto", Lord = "lord_khamul", LordName = "Khamul", Party = "p_khamul", At = "town_dg", Realm = "dg" });
             Check(Agents.Of("dg").Tools.ContainsKey(961) && !Agents.Of("orcs").Tools.ContainsKey(961), "a tool lives in its own agent's orders in force");
@@ -2174,6 +2179,7 @@ namespace SmokeTest
             Directory.CreateDirectory(orders);
             File.WriteAllText(Path.Combine(orders, Channel.BriefingRequest + "-test.json"), "{\"asked\":\"now\"}");
             ch.Scan();
+            Writes.Drain();   // 0.25.0: written in steps between the helper's other jobs
             Files.FlushAll();
         }
 
@@ -2286,6 +2292,9 @@ namespace SmokeTest
             public readonly List<double> OrdersMb = new List<double>(), ReportsMb = new List<double>();
             public readonly Dictionary<string, double> Parts = new Dictionary<string, double>();
             public long LookupsWritten, LookupsUnchanged;
+            /// <summary>0.25.0 (item 12): each hour's briefing and fresh book, written in steps: their whole time, their longest step, and how many steps.</summary>
+            public readonly List<double> WritesMs = new List<double>(), LongestStepMs = new List<double>();
+            public int WriteSteps;
         }
 
         /// <summary>
@@ -2350,11 +2359,23 @@ namespace SmokeTest
                                   + Median(r.ReportsMb).ToString("0.0", inv) + " MB, most " + r.OrdersMb.Zip(r.ReportsMb, (a, b) => a + b).Max().ToString("0", inv) + " MB; all hours " + (r.OrdersMb.Sum() + r.ReportsMb.Sum()).ToString("0", inv) + " MB");
             if (Brain.PartMb.Count > 0) Console.WriteLine("memory handed out by part, over all hours: " + string.Join("; ", Brain.PartMb.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value.ToString("0", inv) + " MB")));
             Console.WriteLine("look-up files written " + r.LookupsWritten + ", left alone unchanged " + r.LookupsUnchanged);
+            // 0.25.0 (item 12): a briefing and a fresh book asked every hour, written in steps between the helper's jobs: an hourly order step waits at most for the step running
+            bool writesOk = true;
+            if (r.LongestStepMs.Count > 0)
+            {
+                List<double> wait = r.Orders.Zip(r.LongestStepMs, (a, b) => a + b).OrderBy(x => x).ToList();
+                double w95 = wait[(int)Math.Min(wait.Count - 1, Math.Ceiling(wait.Count * 0.95) - 1)];
+                Console.WriteLine("a briefing and a fresh book every hour, in " + r.WriteSteps + " steps in all: their work median " + Median(r.WritesMs).ToString("0.0", inv) + " ms an hour, most "
+                                  + r.WritesMs.Max().ToString("0.0", inv) + " ms; the longest step median " + Median(r.LongestStepMs).ToString("0.0", inv) + " ms, most " + r.LongestStepMs.Max().ToString("0.0", inv) + " ms");
+                Console.WriteLine("the hourly order step with the longest write step it could wait for: median " + Median(wait).ToString("0.0", inv) + " ms, 95th of a hundred " + w95.ToString("0.0", inv)
+                                  + " ms, most " + wait.Max().ToString("0.0", inv) + " ms; budget " + budget.ToString("0", inv) + " ms");
+                writesOk = w95 <= budget;
+            }
             if (waysDir != null)
                 Console.WriteLine("game's ways: asked " + Ways.Asked + ", worked out " + Ways.Worked + " (" + Ways.WorkedMs.ToString("0", inv) + " ms, "
                                   + (Ways.Worked > 0 ? (Ways.WorkedMs / Ways.Worked).ToString("0.00", inv) : "0") + " ms each), the rest kept");
             if (check) Console.WriteLine("soonest lists checked against ordering them all: " + Facts.SoonestChecked + ", different " + Facts.SoonestDiffer);
-            bool ok = p95 <= budget;
+            bool ok = p95 <= budget && writesOk;
             Console.WriteLine(ok ? "WITHIN BUDGET" : "OVER BUDGET");
             Diag.EndLaunch("the speed test ended");
             return ok ? 0 : 1;
@@ -2388,6 +2409,7 @@ namespace SmokeTest
             var r = new PerfResult();
             long written0 = Diag.CountOf("files:look-ups written"), unchanged0 = Diag.CountOf("files:look-ups unchanged");
             if (ownTools > 0) StartOwnTools(hours[0], ownTools);
+            RealmAgent writer = placed ? Agents.All.FirstOrDefault(a => a.On && !a.Config.IsLieutenant) : null;
             void Work()
             {
                 if (placed) Cpu.MakeCurrentThreadBackground();
@@ -2403,6 +2425,25 @@ namespace SmokeTest
                     for (Action a = Brain.NextStep(); a != null; a = Brain.NextStep()) a();
                     Files.FlushAll();
                     long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    // 0.25.0 (item 12): the war room asks a fresh book and a briefing of the first realm agent every hour; their steps are timed one by one
+                    if (writer != null)
+                    {
+                        Brain.FreshBook(writer, "book-request-perf-" + r.Hours);
+                        Brain.Briefing(writer);
+                        double longest = 0, all = 0;
+                        for (Action a = Writes.Next(); a != null; a = Writes.Next())
+                        {
+                            long ws = System.Diagnostics.Stopwatch.GetTimestamp();
+                            a();
+                            double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - ws) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                            longest = Math.Max(longest, ms);
+                            all += ms;
+                            r.WriteSteps++;
+                        }
+                        Files.FlushAll();
+                        r.WritesMs.Add(all);
+                        r.LongestStepMs.Add(longest);
+                    }
                     long a2 = AppDomain.MonitoringIsEnabled ? AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize : 0;
                     if (AppDomain.MonitoringIsEnabled) { r.OrdersMb.Add((a1 - a0) / 1048576.0); r.ReportsMb.Add((a2 - a1) / 1048576.0); }
                     double orders = (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency, reports = (t2 - t1) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
