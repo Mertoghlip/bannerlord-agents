@@ -2476,6 +2476,12 @@ namespace BannerlordAgents.Tools
                 }
                 double ours = Num(Call("side_strength", new object[] { foe }));
                 if (relief) ours = Math.Max(ours, _w.ReliefStrength(sieged, World.StrengthOf(me), me.Id));
+                // 0.25.2 (Nov 27, run 20261126-1838-C2, day 106: lords sent at Lorgath's army in one answer each broke off within two hours, at 415-746% of
+                // himself; the agent wrote "engage weighs each lord ALONE" and took to "never break off, no caution"): the lords holding an order against the
+                // same foe count if they can be at him by the time this lord is there and the join hours on top, the window the foe's own joiners are counted in
+                // (to the battle's middle and end); before, only those within join_hours of him now counted
+                double group = GroupAt(foe, f, reach + JoinHours);
+                if (group > 0) ours = Math.Max(ours, World.StrengthOf(me) + group);
                 // 0.25.1 (Nov 26, run 20261126-1838-C2, day 32): a foe already fighting our side or an ally's: the lord comes into that very battle, so our side is
                 // the side fighting it now with him, and the foe's side is at least what fights for it now. Three small lords sent at Lorgath while 53 of ours fought
                 // his siege camp broke off at "1,164% of your side's 1,596" (and 3,775% and 6,610%): the strike lords' orders named Dûglarshun, not Lorgath, so
@@ -2494,6 +2500,36 @@ namespace BannerlordAgents.Tools
                 }
                 double e = Math.Max(At(reach), theirsNow), b = BattleHours(e, ours), m = Math.Max(At(reach + b / 2), theirsNow), last = Math.Max(At(reach + b), theirsNow);
                 return new Fight { Reach = reach, Hours = b, Mid = m, End = last, Ours = ours, Odds = Math.Max(m, last) / Math.Max(1, ours) };
+            }
+
+            /// <summary>
+            /// The strength of the realm's other lords whose orders are aimed at this foe (its target, or the party their current move goes at) and who can be at
+            /// him within so many hours (0.25.2): each army once, by its leader; not a lord sheltering, inside walls or in a fight of his own.
+            /// </summary>
+            private double GroupAt(string foe, PartyRow f, double hours)
+            {
+                PartyRow me = Me;
+                if (me == null || foe == null || double.IsNaN(hours)) return 0;
+                float fx, fy;
+                if (f != null) { fx = f.X; fy = f.Y; }
+                else if (!_w.Where(foe, out fx, out fy)) return 0;
+                string PartyOf(string id) => id == null ? null : _w.Party(id)?.Id ?? id;
+                double sum = 0;
+                var seen = new HashSet<string>(StringComparer.Ordinal) { me.Id };
+                foreach (ToolInstance o in ById.Values)
+                {
+                    if (o == _t || o.Finished || !o.HasCurrent || o.Shelter != null) continue;
+                    bool aimed = PartyOf(o.Order.Target) == foe || PartyOf(o.Current.Party) == foe
+                                 || (o.Memory.TryGetValue("target", out object mt) && PartyOf(mt as string) == foe);
+                    if (!aimed) continue;
+                    PartyRow r = _w.Party(o.Order.Party);
+                    if (r == null || r.Faction != _w.Realm || r.InSettlement != null || r.InBattle) continue;
+                    PartyRow lead = r.Attached ? _w.Lead(r) : r;
+                    if (lead == null || !seen.Add(lead.Id)) continue;
+                    if (!_w.CanReachWithin(_w.SeenOf(lead), fx, fy, hours, out _)) continue;
+                    sum += World.StrengthOf(lead);
+                }
+                return sum;
             }
 
             /// <summary>Is this side of a battle ours or an ally's (0.25.1): its realm, or one of its parties a lord of ours or an ally's.</summary>

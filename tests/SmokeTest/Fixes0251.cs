@@ -50,6 +50,43 @@ namespace SmokeTest
                   + "), not himself alone as when no battle is under way (" + ToolDef.Num(Math.Round(alone, 2)) + ")");
             Runner.Ended(9251, "test over");
             Runner.Reset();
+            EngageGroup0252Tests();
+        }
+
+        /// <summary>
+        /// Module 0.25.2 (Nov 27, run 20261126-1838-C2, day 106: lords sent at Lorgath's army in one answer each broke off within two hours, at 415-746% of
+        /// himself): a lord weighing a fight counts the realm's lords holding an order against the same foe who can be at him by the time he is, and the join
+        /// hours on top; a lord farther off than that does not count.
+        /// </summary>
+        private static void EngageGroup0252Tests()
+        {
+            Runner.Reset();
+            PartyRow Lord(string id, string name, float x) => new PartyRow { Id = "p_" + id, Leader = "lord_" + id, Name = name, Faction = "orcs", Kind = "lord", Men = 200,
+                                                                             Strength = 400, Speed = 5, FoodDays = 10, X = x, Y = 100, Doing = "Hold", Spottable = true };
+            var a = Lord("ga", "Feren", 100);      // 60 from the foe
+            var b = Lord("gb", "Náth", 99);        // 61: there about when Feren is
+            var c = Lord("gc", "Dáin", 10);        // 150: far beyond Feren's march and the join hours
+            var scout = Lord("gs", "Gaín", 157);   // no order: keeps the foe in view
+            var foe = new PartyRow { Id = "p_fx", Leader = "lord_fx", Name = "Lorgath", Faction = "player_k", Kind = "lord", Men = 500, Strength = 1000, Speed = 3,
+                                     X = 160, Y = 100, Doing = "Hold", Spottable = true };
+            Snapshot World(double h) => ToolWorld(h, a, b, c, scout, foe);
+            double h0 = 89000;
+            Diag.Hours = h0;
+            Brain.OnHour(World(h0));
+            ToolOrder Engage(string id, string name) => new ToolOrder { Tool = "engage", Lord = "lord_" + id, LordName = name, Party = "p_" + id, Target = "p_fx", Realm = "orcs" };
+            Runner.Start(9252, Engage("ga", "Feren"));
+            World w0 = Runner.WorldFor(World(h0));
+            double alone = Expr.Number(ScopeFor(9252, w0)?.Call("fight_odds", new object[] { "p_fx" }));
+            Runner.Start(9253, Engage("gb", "Náth"));
+            Runner.Start(9254, Engage("gc", "Dáin"));
+            Diag.Hours = h0 + 1;
+            World w1 = Runner.WorldFor(World(h0 + 1));
+            double group = Expr.Number(ScopeFor(9252, w1)?.Call("fight_odds", new object[] { "p_fx" }));
+            Check(alone > 2.3 && group > 1.1 && group < 1.4,
+                  "a lord sent at a foe counts the lords sent at him who can be there by the time he is, and not one far beyond (odds " + ToolDef.Num(Math.Round(group, 2))
+                  + " with Náth, against " + ToolDef.Num(Math.Round(alone, 2)) + " alone)");
+            foreach (int id in new[] { 9252, 9253, 9254 }) Runner.Ended(id, "test over");
+            Runner.Reset();
         }
     }
 }
