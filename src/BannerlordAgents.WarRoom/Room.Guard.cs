@@ -55,6 +55,8 @@ namespace BannerlordAgents.WarRoom
                 _busyKinds.Add(BusyKind(kind));
                 WriteBusy();
             }
+            // 0.22.1: a new call (the chronicler runs beside one, so not its) may wait for a fresh snapshot again
+            if (BusyKind(kind) != "chronicle") _freshMissed = false;
         }
 
         /// <summary>A call ended (also on an error): the mark goes when no other call runs.</summary>

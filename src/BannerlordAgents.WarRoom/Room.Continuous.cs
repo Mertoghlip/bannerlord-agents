@@ -292,6 +292,8 @@ namespace BannerlordAgents.WarRoom
         // the newest hour asked of the game before a question (FreshNow): the fresh book, and when it came
         private string _freshPath;
         private DateTime _freshAt = DateTime.MinValue;
+        /// <summary>The game missed a fresh snapshot in the call under way (0.22.1): cleared as each call (not the chronicler's) begins, in BusyEnter.</summary>
+        private volatile bool _freshMissed;
         private DateTime _reviewFailedAt = DateTime.MinValue, _gameLooked = DateTime.MinValue, _spareWord = DateTime.MinValue;
         private bool _gameSeen;
         /// <summary>The last message id a call of this wake or review reached (0.18.7), checkpointed at its end.</summary>
@@ -648,6 +650,9 @@ namespace BannerlordAgents.WarRoom
             // asking the game again: each request makes the game's one helper write several hundred thousand characters, in the lane that also moves the lords
             string same = SnapshotOfThisHour(book);
             if (same != null) { _freshPath = same; _freshAt = DateTime.Now; return same; }
+            // war room 0.22.1 (Nov 26, run 20261126-1838-C2): once the game has missed a snapshot in this call, the rest of the call answers from the book it began
+            // with; each later question no longer waits 8 s for another (one opening review waited 17 times, 2 1/4 minutes, about 20 in-game hours)
+            if (_freshMissed) return null;
             Directory.CreateDirectory(orders);
             string id = BookRequest + "-" + DateTime.UtcNow.ToString("HHmmssfff", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N").Substring(0, 6);
             string tmp = Path.Combine(_c.ChannelDir, id + ".json.part"), request = Path.Combine(orders, id + ".json");
@@ -668,7 +673,8 @@ namespace BannerlordAgents.WarRoom
                 Thread.Sleep(50);
             }
             Withdraw(request, id);
-            Say("Fresh book: the game did not answer within " + (int)FreshWait.TotalSeconds + " s; the question is answered from the book the call began with.");
+            _freshMissed = true;
+            Say("Fresh book: the game did not answer within " + (int)FreshWait.TotalSeconds + " s; this question and the rest of this call are answered from the book the call began with.");
             return null;
         }
 
