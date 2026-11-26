@@ -193,14 +193,23 @@ namespace BannerlordAgents.Runs
         /// </summary>
         internal static List<string> Select(string path, RunData r, List<(string Load, double From, double To)> segments, List<JsonObject> loads, List<(DateTime From, DateTime To)> windows, string offsetKey)
         {
-            var all = Raw(path);
-            if (all.Count == 0) return all;
-            bool tagged = all.Any(l => l.Contains("\"run\":"));
-            if (tagged)
+            // Runs 0.15.x (Nov 26): read line by line; a campaign's pokes files passed 2 GB (2.7 GB on Nov 26) and a whole-file read threw OutOfMemoryException,
+            // so no bundle was written for runs 20261125-1120-C0 and 20261125-2341-C2
+            if (!File.Exists(path)) return new List<string>();
+            string tag = "\"run\":\"" + r.Id + "\"";
+            // a line with no run tag that one of the run's own loads wrote belongs to it too: the first look of every run is written as the save loads, a moment
+            // before the run is armed, so it carries no tag (bundle of 20261125-2341-C2: "new_kingdom's poke #13039 ... not in its pokes file")
+            var runLoads = new HashSet<string>(segments.Select(s => s.Load).Where(x => x != null), StringComparer.Ordinal);
+            bool tagged = false;
+            var mine = new List<string>();
+            foreach (string l in RawLines(path))
             {
-                string tag = "\"run\":\"" + r.Id + "\"";
-                return all.Where(l => l.Contains(tag)).ToList();
+                if (l.Contains(tag)) { mine.Add(l); tagged = true; }
+                else if (l.Contains("\"run\":")) tagged = true;
+                else if (runLoads.Count > 0 && LoadOf(l) is string ld && runLoads.Contains(ld)) mine.Add(l);
             }
+            if (tagged) return mine;
+            mine.Clear();
             if (offsetKey != null && segments.Count > 0 && loads.Count > 0)
             {
                 var ranges = new List<(long From, long To, double H0, double H1)>();
@@ -215,7 +224,7 @@ namespace BannerlordAgents.Runs
                 if (ranges.Count > 0) return ByOffsets(path, ranges);
             }
             double h0 = segments.Count > 0 ? segments.Min(s => s.From) : double.MinValue, h1 = segments.Count > 0 ? segments.Max(s => s.To) : double.MaxValue;
-            return all.Where(l => { JsonObject o = Parse(l); double h = o != null ? Dbl(o, "hours") : 0; return o != null && h >= h0 - 1e-6 && h <= h1 + 1; }).ToList();
+            return RawLines(path).Where(l => { JsonObject o = Parse(l); double h = o != null ? Dbl(o, "hours") : 0; return o != null && h >= h0 - 1e-6 && h <= h1 + 1; }).ToList();
         }
 
         /// <summary>The lines within byte ranges, and within each range's hours.</summary>
@@ -245,20 +254,42 @@ namespace BannerlordAgents.Runs
         /// <summary>The lines within the run's wall-clock windows (by the line's own time field), or tagged with its id.</summary>
         internal static List<string> SelectWall(string path, List<(DateTime From, DateTime To)> windows, string field, string runId = null)
         {
-            var all = Raw(path);
-            if (runId != null && all.Any(l => l.Contains("\"run\":\"" + runId + "\""))) return all.Where(l => l.Contains("\"run\":\"" + runId + "\"")).ToList();
-            return all.Where(l =>
+            string tag = runId != null ? "\"run\":\"" + runId + "\"" : null;
+            var byTag = new List<string>();
+            var byWall = new List<string>();
+            foreach (string l in RawLines(path))
             {
+                if (tag != null && l.Contains(tag)) { byTag.Add(l); continue; }
+                if (byTag.Count > 0) continue;
                 JsonObject o = Parse(l);
                 DateTime t = o != null ? Wall(Str(o, field)) : DateTime.MinValue;
-                return t != DateTime.MinValue && windows.Any(w => t >= w.From && t <= w.To);
-            }).ToList();
+                if (t != DateTime.MinValue && windows.Any(w => t >= w.From && t <= w.To)) byWall.Add(l);
+            }
+            return byTag.Count > 0 ? byTag : byWall;
         }
 
-        private static List<string> Raw(string path)
+        /// <summary>The load a record line names ("load":"..."), without parsing the whole line; null when none.</summary>
+        private static string LoadOf(string line)
         {
-            if (!File.Exists(path)) return new List<string>();
-            return ReadShared(path).Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0).ToList();
+            int i = line.IndexOf("\"load\":\"", StringComparison.Ordinal);
+            if (i < 0) return null;
+            i += 8;
+            int j = line.IndexOf('"', i);
+            return j > i ? line.Substring(i, j - i) : null;
+        }
+
+        /// <summary>A file's non-empty lines, read one at a time (shared, so a file the game or a war room is writing can be read).</summary>
+        private static IEnumerable<string> RawLines(string path)
+        {
+            if (!File.Exists(path)) yield break;
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sr = new StreamReader(fs, Encoding.UTF8);
+            string line;
+            while ((line = sr.ReadLine()) != null)
+            {
+                line = line.TrimEnd('\r');
+                if (line.Trim().Length > 0) yield return line;
+            }
         }
 
         internal static JsonObject Parse(string line)
@@ -270,13 +301,24 @@ namespace BannerlordAgents.Runs
         private static void AddLines(ZipArchive zip, List<Entry> entries, List<string> lines, string source, string name, string kind)
         {
             if (lines.Count == 0) return;
-            string text = string.Join("\n", lines) + "\n";
-            PutText(zip, name, text);
-            byte[] bytes = Encoding.UTF8.GetBytes(text);
+            // written line by line, its fingerprint kept as it goes: the same bytes and fingerprint as the lines joined, without a copy of the whole in memory
+            var enc = new UTF8Encoding(false);
+            long length = 0;
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            ZipArchiveEntry z = zip.CreateEntry(name, CompressionLevel.Optimal);
+            using (Stream s = z.Open())
+                foreach (string l in lines)
+                {
+                    byte[] b = enc.GetBytes(l + "\n");
+                    s.Write(b, 0, b.Length);
+                    hash.AppendData(b);
+                    length += b.Length;
+                }
+            string sha = Convert.ToHexString(hash.GetHashAndReset()).Substring(0, 16).ToLowerInvariant();
             JsonObject first = Parse(lines[0]), last = Parse(lines[lines.Count - 1]);
             entries.Add(new Entry
             {
-                Name = name, Source = source, Kind = kind, Lines = lines.Count, Bytes = bytes.Length, Sha = Sha(bytes),
+                Name = name, Source = source, Kind = kind, Lines = lines.Count, Bytes = length, Sha = sha,
                 First = first != null ? (Str(first, "hours") ?? Str(first, "at") ?? Str(first, "wall")) : null, Last = last != null ? (Str(last, "hours") ?? Str(last, "at") ?? Str(last, "wall")) : null
             });
         }
