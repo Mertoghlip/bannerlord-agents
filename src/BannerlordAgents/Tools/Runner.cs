@@ -2922,8 +2922,16 @@ namespace BannerlordAgents.Tools
                 if (inside != null && World.IsFort(inside)) return 0;
                 if (lead.InBattle && x != null)
                 {
+                    // 0.25.3 (Nov 27, run 20261126-1838-C2, day 125 at Lasgalor): a fight at the order's own place or with its target is never "elsewhere". The agent's
+                    // camp strike weighs mates_strength(me, group_r), so x is the late lord himself, and the lords already fighting at the camp counted for nothing:
+                    // "the group read 4,032 against 6,589 near the fort, and the stragglers held back while their mates fought on alone" (and Silivren at Dûglarshun)
                     BattleRow b = _w.BattleOf(lead.Id);
-                    bool here = b != null && (b.Settlement == x || (_w.Where(x, out float bx, out float by) && (b.X - bx) * (b.X - bx) + (b.Y - by) * (b.Y - by) <= 9));
+                    bool At(string place) => place != null && b != null
+                                             && (b.Settlement == place || (_w.Where(place, out float bx, out float by) && (b.X - bx) * (b.X - bx) + (b.Y - by) * (b.Y - by) <= 9));
+                    string target = _t.Order.Target == null ? null : _w.Party(_t.Order.Target)?.Id ?? _t.Order.Target;
+                    bool here = At(x) || At(_t.Order.At) || (_t.HasCurrent && At(_t.Current.Place))
+                                || (b != null && target != null && World.SideIn(b, target) != null)
+                                || (b != null && _t.Order.At != null && _w.Holding(_t.Order.At)?.Besieger is string besieger && World.SideIn(b, besieger) != null);
                     if (!here) return 0;
                 }
                 foreach (ToolInstance o in ById.Values)

@@ -87,6 +87,46 @@ namespace SmokeTest
                   + " with Náth, against " + ToolDef.Num(Math.Round(alone, 2)) + " alone)");
             foreach (int id in new[] { 9252, 9253, 9254 }) Runner.Ended(id, "test over");
             Runner.Reset();
+            StrikeMates0253Tests();
+        }
+
+        /// <summary>
+        /// Module 0.25.3 (Nov 27, run 20261126-1838-C2, day 125 at Lasgalor): the agent's camp strike weighs mates_strength(me, group_r), and a late lord counted the
+        /// mates already fighting at the camp as nothing ("fighting elsewhere" than at himself), so the late lords called the strike off while their mates fought on.
+        /// A mate fighting at the order's own place counts.
+        /// </summary>
+        private static void StrikeMates0253Tests()
+        {
+            Runner.Reset();
+            var fighting = new PartyRow { Id = "p_mf", Leader = "lord_mf", Name = "Forim", Faction = "orcs", Kind = "lord", Men = 1500, Strength = 3000, Speed = 5, FoodDays = 10,
+                                          X = 102, Y = 100, Doing = "Hold", InBattle = true, Spottable = true };
+            var late = new PartyRow { Id = "p_ml", Leader = "lord_ml", Name = "Nár", Faction = "orcs", Kind = "lord", Men = 200, Strength = 400, Speed = 5, FoodDays = 10,
+                                      X = 130, Y = 100, Doing = "Hold", Spottable = true };
+            var camp = new PartyRow { Id = "p_mc", Leader = "lord_mc", Name = "Shelka", Faction = "player_k", Kind = "lord", Men = 1800, Strength = 3600, Speed = 4,
+                                      X = 102, Y = 100, Doing = "BesiegeSettlement", Besieging = "castle_orc", TargetSettlement = "castle_orc", InBattle = true, Spottable = true };
+            Snapshot World(double h)
+            {
+                Snapshot s = ToolWorld(h, fighting, late, camp);
+                s.Battles.Add(new BattleRow
+                {
+                    Key = "p_mc@" + (h - 3).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), Kind = "sally", Settlement = "castle_orc", X = 102, Y = 100, StartHours = h - 3,
+                    Attackers = new BattleSideRow { Leader = "p_mf", Faction = "orcs", Healthy = 1500, StartHealthy = 1600, Power = 2f, Advantage = 1f, Morale = 80f, Parties = { "p_mf" } },
+                    Defenders = new BattleSideRow { Leader = "p_mc", Faction = "player_k", Healthy = 1800, StartHealthy = 1900, Power = 2f, Advantage = 1f, Morale = 70f, Parties = { "p_mc" } }
+                });
+                return s;
+            }
+            double h0 = 90000;
+            Diag.Hours = h0;
+            Brain.OnHour(World(h0));
+            Runner.Start(9255, new ToolOrder { Tool = "defend", Lord = "lord_mf", LordName = "Forim", Party = "p_mf", At = "castle_orc", Realm = "orcs" });
+            Runner.Start(9256, new ToolOrder { Tool = "defend", Lord = "lord_ml", LordName = "Nár", Party = "p_ml", At = "castle_orc", Realm = "orcs" });
+            Diag.Hours = h0 + 1;
+            World w = Runner.WorldFor(World(h0 + 1));
+            double mates = Expr.Number(ScopeFor(9256, w)?.Call("mates_strength", new object[] { "p_ml", 45.0 }));
+            Check(mates > 3300 && mates < 3500,
+                  "a late lord's group count (mates_strength around himself) counts the mate already fighting at the order's own place (" + ToolDef.Num(mates) + ", his 400 and the 3,000 fighting)");
+            foreach (int id in new[] { 9255, 9256 }) Runner.Ended(id, "test over");
+            Runner.Reset();
         }
     }
 }
