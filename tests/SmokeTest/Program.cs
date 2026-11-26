@@ -251,6 +251,7 @@ namespace SmokeTest
             WatchTests(root);
             DefendTests(root, agentDir);
             Fixes0250Tests(root);
+            EngageJoin0251Tests();
             ZoneTests(root);
 
             // whole-file writes are swapped in
