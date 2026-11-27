@@ -116,6 +116,26 @@ namespace BannerlordAgents.WarRoom
             Check(so != null && so.StartsWith("BATTLE ODDS: Gorbag [lord_gor], Thalion [lord_thal] storming Edoras [castle_e]") && so.Contains("Gorbag is also fighting in a battle against Lorgath; ask about it by naming the enemy in theirs") && !so.Contains("already under way"),
                   "item 18: a storm question about a castle with nothing under way there answers that storm, the place in its first line, and names a lord's other fight: " + so?.Split('\n')[0] + " | " + so?.Replace("\n", " | "));
 
+            // war room 0.22.2 (Nov 27, run 20261126-1838-C2, Dale): storming an enemy castle, an enemy lord standing near it (not marching there) joins its defenders as he
+            // arrives, as the storm guard counts him; so does he in a battle under way at an enemy holding
+            string nearLord = "{\"id\":\"p_gh\",\"lord\":\"lord_gh\",\"name\":\"Ghash\",\"relation\":\"enemy\",\"kind\":\"lord\",\"faction_name\":\"Dol Guldur\",\"men\":4000,\"strength\":8000,\"x\":43,\"y\":25,"
+                              + "\"doing\":\"holding position\",\"seen_hours\":1000,\"march\":{\"base\":3.0}}";
+            string inLord = "{\"id\":\"p_in\",\"lord\":\"lord_in\",\"name\":\"Inner\",\"relation\":\"enemy\",\"kind\":\"lord\",\"faction_name\":\"Dol Guldur\",\"men\":3000,\"strength\":6000,\"x\":40,\"y\":25,"
+                            + "\"doing\":\"inside Edoras\",\"entrance\":\"castle_e\",\"seen_hours\":1000,\"march\":{\"base\":3.0}}";
+            string noUlfang = Regex.Replace(stormView, ",\\{\"id\":\"p_ul\"[^}]*\\}", "");   // Ulfang (12 hours off) would come too: left out here so the near lord alone turns it
+            string dView = noUlfang.Replace("\"seen\":[", "\"seen\":[" + nearLord + "," + inLord + ",");
+            string ds = AskTool(MapTool(data, "c22", dView), "battle_odds", "{\"ours\":[\"lord_thal\"],\"at\":\"castle_e\"}");
+            string dsAlone = AskTool(MapTool(data, "c22", noUlfang), "battle_odds", "{\"ours\":[\"lord_thal\"],\"at\":\"castle_e\"}");
+            Check(ds != null && ds.Contains("joining the defenders as each arrives") && ds.Contains("Ghash [lord_gh] (4,000 men, near it") && !ds.Contains("Inner [lord_in]")
+                  && ds.Contains("the defenders win") && dsAlone != null && dsAlone.Contains("the besiegers win"),
+                  "0.22.2: storming an enemy castle, an enemy lord standing near it joins its defenders and turns the forecast (one inside is its defenders already): " + ds?.Replace("\n", " | ") + " || alone: " + dsAlone?.Replace("\n", " | "));
+            string atEdoras = "{\"key\":\"b9\",\"kind\":\"siege_outside\",\"place\":\"castle_e\",\"place_name\":\"Edoras\",\"town\":false,\"x\":40,\"y\":25,\"started\":990,\"hours_in\":10,\"ours\":\"attackers\",\"walls_worth\":1,"
+                              + "\"us\":{\"healthy\":900,\"casualties\":100,\"power\":2,\"advantage\":1,\"morale\":80,\"led_by\":\"Thalion\",\"settlement_led\":false,\"parties\":[\"p_thal\"]},"
+                              + "\"them\":{\"healthy\":300,\"casualties\":100,\"power\":2,\"advantage\":1,\"led_by\":\"Edoras\",\"settlement_led\":true,\"parties\":[\"castle_e\"]}}";
+            string du = AskTool(MapTool(data, "c22", dView.Replace("\"battles\":[", "\"battles\":[" + atEdoras + ",")), "battle_odds", "{\"ours\":[\"lord_thal\"],\"at\":\"castle_e\"}");
+            Check(du != null && du.StartsWith("BATTLE ODDS: a battle already under way at Edoras [castle_e]") && du.Contains("Joining their side as they arrive: Ghash [lord_gh] (near it"),
+                  "0.22.2: a battle under way at an enemy holding counts an enemy lord standing near it among its joiners: " + du?.Replace("\n", " | "));
+
             // item 23: a relief due after the storm ends is named apart and is not among the fallen
             string lateView = "{\"hours\":1000,\"map\":\"test\",\"own\":[" + Own("p_far", "lord_far", "Riverlord", 57, 3, 800, 1600) + "],"
                               + "\"seen\":[{\"id\":\"p_lg\",\"lord\":\"lord_lg\",\"name\":\"Lorgath\",\"relation\":\"enemy\",\"faction_name\":\"Dol Guldur\",\"army_men\":6000,\"men\":6000,\"strength\":12000,\"x\":21,\"y\":29,\"doing\":\"besieging Orc Keep\",\"seen_hours\":1000}],"
