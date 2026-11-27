@@ -221,6 +221,14 @@ namespace BannerlordAgents.Tools
 
         public static ToolInstance ForParty(string partyId) => ById.Values.FirstOrDefault(t => t.Order.Party == partyId);
 
+        /// <summary>An order in force that is our guard (defend) or harass order (0.25.5: lords inside one holding with these orders count each other).</summary>
+        public static bool GuardOrHarass(ToolInstance t)
+        {
+            if (t == null || t.Finished) return false;
+            string name = t.Def?.Name ?? t.Order?.Tool;
+            return string.Equals(name, "defend", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "harass", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static List<ToolInstance> All() => ById.Values.ToList();
 
         // ---------- messages from the game's thread ----------
@@ -2470,7 +2478,8 @@ namespace BannerlordAgents.Tools
                 double company = Num(Call("company", new object[] { foe }));
                 double At(double t)
                 {
-                    if (bandit) return Num(Call("strength_of", new object[] { foe }));
+                    // 0.25.5: a band's fight draws no enemy lord (bandits are at war with every realm), only other bands that reach it while it lasts (World.BandsReaching)
+                    if (bandit) return Num(Call("strength_of", new object[] { foe })) + _w.BandsReaching(foe, Math.Max(0, t - reach));
                     double due = place == null ? 0 : _w.ReliefWithin(place, t, 5);
                     return relief ? Math.Max(company, Math.Max(_w.SiegeStrength(sieged) ?? 0, due)) : Math.Max(company, due);
                 }
@@ -2919,7 +2928,11 @@ namespace BannerlordAgents.Tools
                 PartyRow lead = _w.Lead(r) ?? r;
                 if (!counted.Add(lead.Id)) return 0;
                 SettlementRow inside = _w.Holding(lead.InSettlement);
-                if (inside != null && World.IsFort(inside)) return 0;
+                // 0.25.5 (Nov 27, run 20261127-0430-C1): a guard or harass group inside a castle or town together counts itself, the asking lord too, when he holds a
+                // guard or harass order inside the same holding and this lord holds one: harass's withdraw check, weighed while sheltering, counted neither the
+                // mates inside nor the lord himself, so after 12 hours inside any enemy that could reach its place sent the group home
+                bool together = inside != null && World.IsFort(inside) && Me != null && Me.InSettlement == lead.InSettlement && GuardOrHarass(_t) && GuardOrHarass(ForParty(lead.Id));
+                if (inside != null && World.IsFort(inside) && !together) return 0;
                 if (lead.InBattle && x != null)
                 {
                     // 0.25.3 (Nov 27, run 20261126-1838-C2, day 125 at Lasgalor): a fight at the order's own place or with its target is never "elsewhere". The agent's
@@ -2934,8 +2947,9 @@ namespace BannerlordAgents.Tools
                                 || (b != null && _t.Order.At != null && _w.Holding(_t.Order.At)?.Besieger is string besieger && World.SideIn(b, besieger) != null);
                     if (!here) return 0;
                 }
-                foreach (ToolInstance o in ById.Values)
-                    if (o.Order.Party == lead.Id && !o.Finished && o.Shelter != null) return 0;
+                if (!together)
+                    foreach (ToolInstance o in ById.Values)
+                        if (o.Order.Party == lead.Id && !o.Finished && o.Shelter != null) return 0;
                 return World.StrengthOf(lead);
             }
 

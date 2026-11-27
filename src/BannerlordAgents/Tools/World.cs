@@ -258,11 +258,13 @@ namespace BannerlordAgents.Tools
         private double Threat(string place, double r, ICollection<string> except, bool bandits, double joinHours)
         {
             if (!Where(place, out float px, out float py)) return 0;
-            List<PartyRow> near = bandits ? ThreatsInView(place, r) : EnemiesNear(place, r);
+            // 0.25.5: the enemy lords' fight and the bandits' fight are weighed apart and the larger stands (WorseFight); never their sum
+            List<PartyRow> near = EnemiesNear(place, r);
             var counted = new HashSet<string>(near.Select(e => e.Id));
             // an enemy the realm's ruler is attacking in person with the stronger force is his fight, not a threat (0.13.11)
             HashSet<string> hunted = RulerHunts();
             if (hunted.Count > 0) except = except == null ? hunted : new HashSet<string>(except.Concat(hunted));
+            double banditFight = bandits ? BanditFight(BanditsNear(px, py, r), px, py, b => except != null && except.Contains(b.Id)).Sum(StrengthOf) : 0;
             double sum = near.Where(e => except == null || !except.Contains(e.Id)).Sum(StrengthOf);
             if (joinHours > 0)
                 foreach (PartyRow m in Joiners(px, py, joinHours))
@@ -273,8 +275,59 @@ namespace BannerlordAgents.Tools
                 if ((except != null && except.Contains(kv.Key)) || counted.Contains(kv.Key) || v.Relation != "enemy" || Hours - v.SeenHours > RecentHours || InView(kv.Key) || Gone(kv.Key)) continue;
                 if (Math.Sqrt((v.X - px) * (v.X - px) + (v.Y - py) * (v.Y - py)) <= r) sum += v.Strength;
             }
+            return Math.Max(sum, banditFight);
+        }
+
+        // ---------- the bandits' fight (0.25.5) ----------
+
+        /// <summary>
+        /// How long a fight with a band of bandits lasts at most, for the bands that may join it (0.25.5, Nov 27, run 20261127-0430-C1). Read in the 1.4.8 source and
+        /// measured: bandits are at war with every realm and with none of their own kind (DefaultDiplomacyModel.GetShallowDiplomaticStance; TAOM leaves it), and a party
+        /// joins a side only when none there is at war with it and all on the other side are (MapEvent.CanPartyJoinBattle). So no realm's lord joins a band's fight
+        /// (3 of 21,643 fights in five runs, through a gap when a lord attacks someone already fighting), no band joins a fight between lords, and other bands may
+        /// join a band's fight: a band is at most 200 men, and in 6,266 fights against a lord the bands' side passed 300 in 2.3% (one band in 97.7%). A fight with
+        /// one band is over within an hour or two, so the bands that could reach it within this many hours count with it, those farther off do not.
+        /// The threat had added every band within reach to the enemy lords: guards sat inside for weeks at Caras Laerolin (about 49 bands, 8,600, no enemy lord
+        /// within 50) and Mount Gundabad (about 35 bands round two hideouts).
+        /// </summary>
+        public const double BanditFightHours = 2;
+
+        /// <summary>The bands of bandits in view within r of a point, nearest first.</summary>
+        private List<PartyRow> BanditsNear(float px, float py, double r) =>
+            _bandits.Where(b => Math.Sqrt((b.X - px) * (b.X - px) + (b.Y - py) * (b.Y - py)) <= r).OrderBy(b => (b.X - px) * (b.X - px) + (b.Y - py) * (b.Y - py)).ToList();
+
+        /// <summary>
+        /// The worst fight bandits could bring to a point (0.25.5): the strongest band among those near it, and every band in view that could reach the point within
+        /// BanditFightHours (the bands that may join its fight), each once; skip left out. Empty with no band near.
+        /// </summary>
+        private List<PartyRow> BanditFight(IEnumerable<PartyRow> nearBands, float x, float y, Func<PartyRow, bool> skip)
+        {
+            var list = new List<PartyRow>();
+            PartyRow strongest = nearBands.Where(b => !skip(b)).OrderByDescending(StrengthOf).FirstOrDefault();
+            if (strongest == null) return list;
+            var seen = new HashSet<string> { strongest.Id };
+            list.Add(strongest);
+            foreach (PartyRow b in _bandits)
+                if (!seen.Contains(b.Id) && !skip(b) && CanReachWithin(SeenOf(b), x, y, BanditFightHours, out _) && seen.Add(b.Id)) list.Add(b);
+            return list;
+        }
+
+        /// <summary>
+        /// The strength of the other bands of bandits in view that could reach a band's place within hours (0.25.5): those that may join a fight with it while it
+        /// lasts (a fight weighed against a band counts the band and these, never enemy lords). 0 for none, or no such band.
+        /// </summary>
+        public double BandsReaching(string band, double hours)
+        {
+            PartyRow b0 = Party(band);
+            if (b0 == null || !(hours > 0)) return 0;
+            double sum = 0;
+            foreach (PartyRow b in _bandits)
+                if (b.Id != b0.Id && CanReachWithin(SeenOf(b), b0.X, b0.Y, hours, out _)) sum += StrengthOf(b);
             return sum;
         }
+
+        /// <summary>The worse of two fights that never join (0.25.5): the enemy lords' and the bandits'; the lords' when they are even.</summary>
+        private static List<PartyRow> WorseFight(List<PartyRow> lords, List<PartyRow> bandits) => bandits.Sum(StrengthOf) > lords.Sum(StrengthOf) ? bandits : lords;
 
         /// <summary>
         /// The army a party marches with (0.12.2): the army it is in, or the one it is marching to join (Views.JoiningHead), else
@@ -457,9 +510,14 @@ namespace BannerlordAgents.Tools
         public List<PartyRow> Friends(PartyRow me, float x, float y, double joinHours, string besieging, ICollection<string> objectives)
         {
             var list = new List<PartyRow>();
+            // 0.25.5 (Nov 27, run 20261127-0430-C1): a lord holding a guard or harass order inside a castle or town counts the lords inside the same holding who hold a
+            // guard or harass order (a group that went in together). Lords inside a holding counted for nobody, so a guard group of four, which went in when the threat
+            // passed 1.2 times the four, could come out only once it fell below 72% of one of them: guards sat inside for weeks (125 stays of 5 days or more, the longest 50)
+            bool inMates = me != null && me.InSettlement != null && Runner.GuardOrHarass(Runner.ForParty(me.Id));
             foreach (PartyRow r in S.Parties)
             {
                 if (r.Kind != "lord" || r.Attached || (me != null && r.Id == me.Id) || !(Own(r) || (Ally(r.Faction) && Visible(r)))) continue;
+                if (inMates && r.InSettlement == me.InSettlement && Runner.GuardOrHarass(Runner.ForParty(r.Id))) { list.Add(r); continue; }
                 if (besieging != null && r.Besieging == besieging) { list.Add(r); continue; }
                 // since 0.19 a lord camped in another siege counts only for a fight at that camp (within CampReach of the place's gate): besiegers make no quick
                 // decisions and the relief rule never takes a lord from his camp, so he joins no fight in the field (harassers weighing a relief party some way off
@@ -592,15 +650,19 @@ namespace BannerlordAgents.Tools
         {
             var list = new List<PartyRow>();
             PartyRow lord = Party(me);
-            List<PartyRow> near = ThreatsInView(me, r);
-            if (lord == null || near.Count == 0) return list;
-            var seen = new HashSet<string>();
+            if (lord == null) return list;
             // an enemy the realm's ruler is attacking in person with the stronger force is no danger to flee (0.13.11)
             HashSet<string> hunted = RulerHunts();
-            foreach (PartyRow e in near) if (!spared(e) && !hunted.Contains(e.Id) && seen.Add(e.Id)) list.Add(e);
-            foreach (PartyRow m in Joiners(lord.X, lord.Y, joinHours))
-                if (m.Id != me && !spared(m) && !hunted.Contains(m.Id) && seen.Add(m.Id)) list.Add(m);
-            return list;
+            bool Skip(PartyRow e) => e.Id == me || spared(e) || hunted.Contains(e.Id);
+            // 0.25.5: the enemy lords' fight (those near and those who could join it) and the bandits' fight (BanditFight) never join: the worse stands
+            List<PartyRow> lordsNear = EnemiesNear(me, r);
+            var seen = new HashSet<string>();
+            foreach (PartyRow e in lordsNear) if (!Skip(e) && seen.Add(e.Id)) list.Add(e);
+            // those who could join a fight with any enemy lord near him count, a spared one's too (his own target: the army it marches to join is a danger)
+            if (lordsNear.Any(e => e.Id != me))
+                foreach (PartyRow m in Joiners(lord.X, lord.Y, joinHours))
+                    if (!Skip(m) && seen.Add(m.Id)) list.Add(m);
+            return WorseFight(list, BanditFight(BanditsNear(lord.X, lord.Y, r), lord.X, lord.Y, Skip));
         }
 
         /// <summary>
@@ -614,21 +676,25 @@ namespace BannerlordAgents.Tools
             var list = new List<PartyRow>();
             PartyRow lord = Party(me);
             if (lord == null) return list;
-            var near = new List<PartyRow>();
-            foreach (PartyRow e in _enemies.Concat(_bandits))
+            bool Near(PartyRow e)
             {
-                if (e.Id == me) continue;
+                if (e.Id == me) return false;
                 double d = Math.Sqrt((e.X - lord.X) * (e.X - lord.X) + (e.Y - lord.Y) * (e.Y - lord.Y));
-                if (d <= floor || (hours > 0 && CanReachWithin(SeenOf(e), lord.X, lord.Y, hours, out _))) near.Add(e);
+                return d <= floor || (hours > 0 && CanReachWithin(SeenOf(e), lord.X, lord.Y, hours, out _));
             }
-            if (near.Count == 0) return list;
-            var seen = new HashSet<string>();
+            double Sq(PartyRow e) => (e.X - lord.X) * (e.X - lord.X) + (e.Y - lord.Y) * (e.Y - lord.Y);
             HashSet<string> hunted = RulerHunts();
-            foreach (PartyRow e in near.OrderBy(e => (e.X - lord.X) * (e.X - lord.X) + (e.Y - lord.Y) * (e.Y - lord.Y)))
-                if (!spared(e) && !hunted.Contains(e.Id) && seen.Add(e.Id)) list.Add(e);
-            foreach (PartyRow m in Joiners(lord.X, lord.Y, joinHours))
-                if (m.Id != me && !spared(m) && !hunted.Contains(m.Id) && seen.Add(m.Id)) list.Add(m);
-            return list;
+            bool Skip(PartyRow e) => e.Id == me || spared(e) || hunted.Contains(e.Id);
+            // 0.25.5: the enemy lords' fight (those who could reach him and those who could join it) and the bandits' fight (BanditFight) never join: the worse stands
+            var seen = new HashSet<string>();
+            List<PartyRow> lordsNear = _enemies.Where(Near).OrderBy(Sq).ToList();
+            foreach (PartyRow e in lordsNear)
+                if (!Skip(e) && seen.Add(e.Id)) list.Add(e);
+            // those who could join a fight with any enemy lord near him count, a spared one's too (his own target: the army it marches to join is a danger)
+            if (lordsNear.Count > 0)
+                foreach (PartyRow m in Joiners(lord.X, lord.Y, joinHours))
+                    if (!Skip(m) && seen.Add(m.Id)) list.Add(m);
+            return WorseFight(list, BanditFight(_bandits.Where(Near).OrderBy(Sq).ToList(), lord.X, lord.Y, Skip));
         }
 
         /// <summary>

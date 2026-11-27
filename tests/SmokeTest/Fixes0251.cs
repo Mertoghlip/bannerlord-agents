@@ -127,6 +127,7 @@ namespace SmokeTest
                   "a late lord's group count (mates_strength around himself) counts the mate already fighting at the order's own place (" + ToolDef.Num(mates) + ", his 400 and the 3,000 fighting)");
             foreach (int id in new[] { 9255, 9256 }) Runner.Ended(id, "test over");
             Runner.Reset();
+            ShelterMates0255Tests();
         }
     }
 }
