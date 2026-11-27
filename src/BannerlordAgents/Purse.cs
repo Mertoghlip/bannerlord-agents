@@ -211,23 +211,45 @@ namespace BannerlordAgents
 
         /// <summary>
         /// A sell order given to a lord already inside the place (the game sells only on entering): his loot in a town, and his
-        /// prisoners in a castle or town, chosen as the game chooses them (soldiers, and lords at war with the place's realm).
+        /// prisoners in a castle or town, handed over as on entering (HandOver).
         /// </summary>
         public static void CashIn(MobileParty p, Settlement s)
         {
             if (p == null || s == null || FactionManager.IsAtWarAgainstFaction(p.MapFaction, s.MapFaction)) return;
             SellLoot(p, s);
             if (!s.IsFortification || p.PrisonRoster == null) return;
-            TroopRoster sell = TroopRoster.CreateDummyTroopRoster();
+            HandOver(p, s);
+        }
+
+        /// <summary>
+        /// A lord holding one of our orders hands his prisoners over at a castle or town of his realm or an ally in two goes (0.25.6, Nov 27): his soldiers
+        /// first, for their ransom, then the captured lords at war with the place's realm. The prisoners are the ones the game chooses (every soldier, and
+        /// the lords other than the player at war with the place's realm), but the game hands them over in one batch (PartiesSellPrisonerCampaignBehavior),
+        /// and SellPrisonersAction pays for nothing in a batch that gives a lord to a holding of the seller's own realm: the lord goes to its dungeon,
+        /// earning the clan influence, and the soldiers with him earn nothing. In run 20261127-1453-C2 that happened in 60 of the kingdom's 305
+        /// hand-overs, about 6,300 prisoners, in towns as in castles (a castle pays for soldiers as a town does: the price is the man's). Given apart,
+        /// the soldiers are paid and the lords still go to the dungeon for nothing (to an ally's holding, for their ransom), as the game rules.
+        /// </summary>
+        public static void HandOver(MobileParty p, Settlement s)
+        {
+            if (p?.PrisonRoster == null || s?.Party == null) return;
+            TroopRoster men = TroopRoster.CreateDummyTroopRoster(), lords = TroopRoster.CreateDummyTroopRoster();
             foreach (TroopRosterElement e in p.PrisonRoster.GetTroopRoster())
-                if (e.Character != null && (!e.Character.IsHero || (!e.Character.IsPlayerCharacter && e.Character.HeroObject.MapFaction.IsAtWarWith(s.MapFaction))))
-                    sell.Add(e);
-            if (sell.TotalManCount <= 0) return;
-            // in one hand-over, as the game's own lords make it on entering (with an enemy lord in it, to one's own realm's holding,
-            // the lord goes to the dungeon as a gift that earns the realm influence, and the game pays for none of it: 0.11.3 looked
-            // into run C1's 27 hand-overs paid 0 and keeps the game's rule)
+            {
+                if (e.Character == null) continue;
+                if (!e.Character.IsHero) men.Add(e);
+                else if (!e.Character.IsPlayerCharacter && e.Character.HeroObject?.MapFaction != null && e.Character.HeroObject.MapFaction.IsAtWarWith(s.MapFaction)) lords.Add(e);
+            }
+            Give(p, s, men);
+            Give(p, s, lords);
+        }
+
+        // one hand-over through the game's own action, measured
+        private static void Give(MobileParty p, Settlement s, TroopRoster batch)
+        {
+            if (batch.TotalManCount <= 0) return;
             int gold = p.PartyTradeGold, before = p.PrisonRoster.TotalManCount, lordsBefore = p.PrisonRoster.TotalHeroes;
-            SellPrisonersAction.ApplyForSelectedPrisoners(p.Party, s.Party, sell);
+            SellPrisonersAction.ApplyForSelectedPrisoners(p.Party, s.Party, batch);
             NoteRansom(p, s, p.PartyTradeGold - gold, before - p.PrisonRoster.TotalManCount, lordsBefore - p.PrisonRoster.TotalHeroes);
         }
 
@@ -401,30 +423,28 @@ namespace BannerlordAgents
         }
     }
 
-    /// <summary>The game's prisoner sale on entering a castle or town (PartiesSellPrisonerCampaignBehavior), measured for lords holding our orders.</summary>
+    /// <summary>
+    /// For a lord holding one of our orders, the game's prisoner sale on entering a castle or town (PartiesSellPrisonerCampaignBehavior.OnSettlementEntered:
+    /// all in one batch) is replaced by ours (0.25.6), which hands the soldiers over first and the captured lords after (Purse.HandOver), when and where
+    /// the game's would. Every other party keeps the game's.
+    /// </summary>
     internal static class PrisonerSalePatch
     {
-        internal sealed class Before
+        private static bool Prefix(MobileParty mobileParty, Settlement settlement)
         {
-            public int Gold, Prisoners, Lords;
-        }
-
-        private static void Prefix(MobileParty mobileParty, out Before __state)
-        {
-            __state = null;
             try
             {
-                if (mobileParty == null || !mobileParty.IsLordParty || mobileParty.IsMainParty || !Orders.Holds(mobileParty)) return;
-                __state = new Before { Gold = mobileParty.PartyTradeGold, Prisoners = mobileParty.PrisonRoster.TotalManCount, Lords = mobileParty.PrisonRoster.TotalHeroes };
+                if (mobileParty == null || settlement == null || !mobileParty.IsLordParty || mobileParty.IsMainParty || !Orders.Holds(mobileParty)) return true;
+                // the game's own conditions for a sale
+                if (settlement.IsFortification && mobileParty.MapFaction != null && !mobileParty.IsDisbanding && !mobileParty.MapFaction.IsAtWarWith(settlement.MapFaction))
+                    Purse.HandOver(mobileParty, settlement);
+                return false;
             }
-            catch (Exception e) { Diag.Swallowed("measuring a prisoner sale (before)", e); }
-        }
-
-        private static void Postfix(MobileParty mobileParty, Settlement settlement, Before __state)
-        {
-            if (__state == null) return;
-            try { Purse.NoteRansom(mobileParty, settlement, mobileParty.PartyTradeGold - __state.Gold, __state.Prisoners - mobileParty.PrisonRoster.TotalManCount, __state.Lords - mobileParty.PrisonRoster.TotalHeroes); }
-            catch (Exception e) { Diag.Swallowed("measuring a prisoner sale", e); }
+            catch (Exception e)
+            {
+                Diag.Swallowed("handing prisoners over in two goes", e);
+                return true;
+            }
         }
     }
 

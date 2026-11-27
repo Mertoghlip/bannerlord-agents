@@ -93,7 +93,7 @@ namespace BannerlordAgents.WarRoom
                 .FirstOrDefault(o => Eq(Str(o["id"]), at) || Eq(Str(o["lord"]), at));
             float px, py;
             string spotName;
-            if (spot != null && spot["x"] is JsonValue) { px = F(spot["x"]); py = F(spot["y"]); spotName = Str(spot["name"]) ?? at; }
+            if (spot != null && spot["x"] is JsonValue) { px = F(spot["x"]); py = F(spot["y"]); spotName = Str(spot["name"]) ?? at; GateOf(_root, (string)view["map"], at, ref px, ref py); }
             else
             {
                 // any castle, town or village on the map, as the way question knows them
@@ -271,8 +271,12 @@ namespace BannerlordAgents.WarRoom
             {
                 // war room 0.20.7: your named lords, gathered, attack the siege camp together: a battle outside the walls by the field rule (the game's SiegeOutside),
                 // the garrison and your lords inside coming out beside them once they and yours are more than 1.5 times the camp (the game's sally beside a relief)
-                double px = F(ownPlace["x"]), py = F(ownPlace["y"]);
-                var inside = ours.Where(f => Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) <= 1.5).ToList();
+                double cx = F(ownPlace["x"]), cy = F(ownPlace["y"]);
+                float gx = (float)cx, gy = (float)cy;
+                GateOf(_root, (string)view["map"], atQ, ref gx, ref gy);
+                double px = gx, py = gy;
+                // war room 0.22.3: a lord inside stands at its gate
+                var inside = ours.Where(f => Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py)) <= 1.5 || Math.Sqrt((f.X - cx) * (f.X - cx) + (f.Y - cy) * (f.Y - cy)) <= 1.5).ToList();
                 var strikers = ours.Except(inside).ToList();
                 if (strikers.Count == 0) return string.Join("\n", lines.Append("Name at least one lord of yours outside " + Str(ownPlace["name"]) + " to strike its siege camp."));
                 double gMen = Math.Max(0, I(ownPlace["garrison"])) + Math.Max(0, I(ownPlace["militia"])) + inside.Sum(f => f.Men);
@@ -333,11 +337,15 @@ namespace BannerlordAgents.WarRoom
                 var outside = new List<(Force F, double At, bool ByRoad)>();
                 if (!weStorm)
                 {
-                    double px = F(place["x"]), py = F(place["y"]);
+                    double cx = F(place["x"]), cy = F(place["y"]);
+                    float gx = (float)cx, gy = (float)cy;
+                    GateOf(_root, (string)view["map"], atQ, ref gx, ref gy);
+                    double px = gx, py = gy;
                     foreach (Force f in ours)
                     {
                         double d = Math.Sqrt((f.X - px) * (f.X - px) + (f.Y - py) * (f.Y - py));
-                        if (d <= 1.5) { inside.Add(f); continue; }
+                        // war room 0.22.3: a lord inside stands at its gate; a relief marches to the gate
+                        if (d <= 1.5 || Math.Sqrt((f.X - cx) * (f.X - cx) + (f.Y - cy) * (f.Y - cy)) <= 1.5) { inside.Add(f); continue; }
                         // war room 0.22.0 (item 5): a relief's hours by road at its pace
                         double h;
                         bool byRoad = false;
@@ -358,8 +366,9 @@ namespace BannerlordAgents.WarRoom
                 List<BattleJoiner> js = Joiners(view, atQ, now, weStorm, counted, out List<string> jsNames, skipEnemies: weStorm);
                 // war room 0.22.2 (Nov 27, Dale): storming an enemy holding, every enemy lord and army who could reach it before the storm ends joins its defenders as he
                 // arrives, seen marching there or not (DefendingComers), as the storm guard counts them
+                (float X, float Y) gate = PlaceGate(view, atQ, place);
                 if (weStorm)
-                    foreach (Comer c in DefendingComers(view, atQ, (float)F(place["x"]), (float)F(place["y"]), now, counted))
+                    foreach (Comer c in DefendingComers(view, atQ, gate.X, gate.Y, now, counted))
                     {
                         js.Add(new BattleJoiner { Attackers = false, Men = c.Men, At = c.At, Power = c.Men > 0 ? (float)(c.Strength / c.Men) : 0 });
                         jsNames.Add(c.Name + " [" + (c.Lord ?? c.Id) + "] (" + Words.N(c.Men) + " men, " + (c.Marching ? "seen marching to it" : "near it") + ", in about " + Words.N(Math.Max(1, Math.Round(c.At))) + " hours)");
@@ -530,6 +539,8 @@ namespace BannerlordAgents.WarRoom
             var inIt = ours.Where(f => (f.PartyId != null && parties.Any(p => Eq(p, f.PartyId))) || parties.Any(p => Eq(p, f.Id))).ToList();
             var coming = ours.Except(inIt).ToList();
             float bx = F(b["x"]), by = F(b["y"]);
+            // war room 0.22.3: those coming to a battle at a holding march to its gate
+            if (kind != "field") GateOf(_root, (string)view["map"], Str(b["place"]) ?? atQ, ref bx, ref by);
             var mine = new BattleSide { Men = I(us["healthy"]), Power = Math.Max(0.01f, (float)F(us["power"])), Advantage = Math.Max(0.1f, (float)F(us["advantage"])), Morale = (float)F(us["morale"]), Walls = !weAttack && ledByPlace && storm, LedByPlace = ledByPlace };
             var theirs = new BattleSide { Men = I(them["healthy"]), Power = Math.Max(0.01f, (float)F(them["power"])), Advantage = unseenEdge - (storm && !weAttack ? 0.1f : 0f), Morale = 100, LedByPlace = them["settlement_led"] is JsonValue && (bool)them["settlement_led"] };
             if (theirs.LedByPlace) { theirs.Advantage = 1f; theirs.Walls = storm && weAttack; }

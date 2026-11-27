@@ -71,6 +71,29 @@ namespace BannerlordAgents.WarRoom
         internal static double OwnRoadHours(string root, JsonObject view, JsonObject own, float tx, float ty, double cap, out bool byRoad) =>
             RoadHoursFrom(root, (string)view?["map"], F(own["x"]), F(own["y"]), OwnMarch(own), null, tx, ty, Num(view?["hours"]), cap, out byRoad);
 
+        /// <summary>
+        /// The point parties march to for a castle, town or village: its gate (the walk map's places, the game's GatePosition), else the point given, unchanged
+        /// (war room 0.22.3, Nov 27, run 20261127-1453-C2). The questions aimed at a holding's centre, which for 19 of the front's 64 holdings lies on the holding's
+        /// own faces of the walking mesh, which a marching party may not cross, so the copy of the game's way-finder found no way there for nearly every lord: the
+        /// muster at Goblin Town 69 of 70, at Nanduhirion 23 of 23, and those lords were left out of its totals; the battle question took lords inside such a
+        /// holding (who stand at its gate) for lords outside, and dropped reliefs and defending enemies there. A party inside a holding stands at its gate, so a
+        /// lord's own point needs nothing.
+        /// </summary>
+        internal static void GateOf(string root, string mapCrc, string placeId, ref float x, ref float y)
+        {
+            if (string.IsNullOrEmpty(placeId) || string.IsNullOrEmpty(mapCrc)) return;
+            Place p = MapFor(root, mapCrc)?.Places?.FirstOrDefault(q => Eq(q.Id, placeId));
+            if (p != null && (p.Gx != 0 || p.Gy != 0)) { x = p.Gx; y = p.Gy; }
+        }
+
+        /// <summary>A holding's gate from its line in the view file (GateOf).</summary>
+        private (float X, float Y) PlaceGate(JsonObject view, string id, JsonObject place)
+        {
+            float x = F(place?["x"]), y = F(place?["y"]);
+            GateOf(_root, (string)view?["map"], id, ref x, ref y);
+            return (x, y);
+        }
+
         /// <summary>An enemy's road hours to a point from where the realm saw it (the march clock when seen earlier).</summary>
         private double EnemyRoadHours(JsonObject view, JsonObject seen, float tx, float ty, double cap, out bool byRoad)
         {

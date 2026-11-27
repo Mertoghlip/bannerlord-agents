@@ -82,6 +82,13 @@ namespace BannerlordAgents.WarRoom
             Check(mu != null && mu.Contains("by the way the game would march") && far.Success && int.Parse(far.Groups[1].Value) > 12 && mu.Contains("Gathered within 12 hours: 1 lords and armies, 300 men")
                   && !mu.Contains("in a straight line"),
                   "item 5: the muster times each lord by road at his pace: a lord across the river from the place, 13 away in a straight line (8 hours at his pace), is in a later band than 12 hours (" + (far.Success ? far.Groups[1].Value : "?") + " hours by road): " + mu?.Replace("\n", " | "));
+            // war room 0.22.3 (Nov 27, run 20261127-1453-C2): a holding is reached at its gate, never its centre (which for 19 of the front's holdings lies on the
+            // holding's own faces, where the copy of the game's way-finder finds no way: the muster at Goblin Town had 69 of 70 lords with "no way over land")
+            float gx = 20, gy = 30, ux = 44, uy = 3;
+            RouteTool.GateOf(data, "test", "town_a", ref gx, ref gy);
+            RouteTool.GateOf(data, "test", "castle_r", ref ux, ref uy);
+            Check(gx == 20 && gy == 29 && ux == 44 && uy == 3,
+                  "0.22.3: a question about a holding aims at its gate (Aldburg's centre 20,30, gate " + gx + "," + gy + "); a place the map does not know keeps its point (" + ux + "," + uy + ")");
             string aq = Room.ArmyQuestion((JsonObject)JsonNode.Parse(riverView.Replace("\"seen\":[]", "\"seen\":[{\"id\":\"p_en\",\"lord\":\"lord_en\",\"name\":\"Gothmog\",\"relation\":\"enemy\",\"faction_name\":\"Mordor\",\"army_parties\":4,\"army_men\":2000,\"strength\":3000,\"x\":44,\"y\":3,\"doing\":\"besieging Rivermark\"}]")), data);
             Check(aq.Contains("You could gather where it stands (by road, at each one's pace): within 24 hours strength 400 (1 lords and armies)") && aq.Contains("within 72 hours 1,100 (2)"),
                   "item 5: the review's question times the gathering by road too: " + aq.Replace("\n", " | "));

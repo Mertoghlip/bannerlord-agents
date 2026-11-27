@@ -283,13 +283,12 @@ namespace BannerlordAgents
                     LootSaleInstalled = Ours(loot);
                     Parts["loot"] = "held lords sell loot only " + (LootSaleInstalled ? "attached" : "did not attach") + Others(loot);
                 }
-                if (prisoners == null) Parts["ransom"] = "prisoner sales: the game's was not found, so sales are not measured";
+                if (prisoners == null) Parts["ransom"] = "prisoner sales: the game's was not found, so held lords hand prisoners over in one batch as every computer lord does";
                 else
                 {
-                    h.Patch(prisoners, prefix: new HarmonyLib.HarmonyMethod(typeof(PrisonerSalePatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)),
-                            postfix: new HarmonyLib.HarmonyMethod(typeof(PrisonerSalePatch).GetMethod("Postfix", BindingFlags.Static | BindingFlags.NonPublic)));
+                    h.Patch(prisoners, prefix: new HarmonyLib.HarmonyMethod(typeof(PrisonerSalePatch).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)));
                     PrisonerSaleInstalled = Ours(prisoners);
-                    Parts["ransom"] = "prisoner sales measured " + (PrisonerSaleInstalled ? "attached" : "did not attach") + Others(prisoners);
+                    Parts["ransom"] = "held lords hand soldiers and captured lords over apart " + (PrisonerSaleInstalled ? "attached" : "did not attach") + Others(prisoners);
                 }
                 if (results == null) Parts["takings"] = "battle takings: the game's handing out of a battle's results was not found, so they are not recorded";
                 else
