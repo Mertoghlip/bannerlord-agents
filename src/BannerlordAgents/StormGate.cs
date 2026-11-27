@@ -28,8 +28,8 @@ namespace BannerlordAgents
 
         public bool Same(StormRule o) => o != null && o.Mode == Mode && o.Engines == Engines && Math.Abs(o.Ratio - Ratio) < 1e-4f && o.Now == Now && o.Hold == Hold && o.HoldWhy == HoldWhy;
 
-        public override string ToString() => Now ? "storm as soon as the camp may (a relief bar was met)" + (Hold ? "; held by the storm guard" : "")
-            : Mode == 1 ? "storm once ready" + (Engines > 0 ? ", " + Engines + (Engines == 1 ? " engine" : " engines") + " built" : "") + (Ratio > 0 ? ", the besiegers " + Ratio.ToString("0.#", Text.Inv) + " times the defenders" : "") + (Hold ? "; held by the storm guard" : "")
+        public override string ToString() => Now ? "storm as soon as the camp may (a relief bar was met)"
+            : Mode == 1 ? "storm once ready" + (Engines > 0 ? ", " + Engines + (Engines == 1 ? " engine" : " engines") + " built" : "") + (Ratio > 0 ? ", the besiegers " + Ratio.ToString("0.#", Text.Inv) + " times the defenders" : "")
             : Mode == 2 ? "do not storm"
             : Mode == 3 ? "storm once the walls are down (against the player in person under the siege drill: and his engines silenced, four fire onagers in place)" + (Hold ? "; held by the storm guard" : "")
             : "the game's own commander decides" + (Hold ? "; held by the storm guard" : "");
@@ -70,11 +70,8 @@ namespace BannerlordAgents
             if (r == null) return null;
             bool storm;
             string why;
-            // 0.25.4 (Nov 27, run 20261126-1838-C2, day 168 at Dale): the storm guard holds a storm whoever decides it, a relief bar's too (storm_guard 0 switches it off).
-            // A relief bar met at 151% let the camp storm an hour later with about 23,000 of the enemy within reach; they joined it, it became a battle outside the walls,
-            // and all 24 lords and 9,061 men were lost
-            if (r.Hold) { storm = false; why = "the storm guard holds it: " + (r.HoldWhy ?? "a relief could turn it"); }
-            else if (r.Now) { storm = true; why = "a relief bar was met"; }
+            if (r.Now) { storm = true; why = "a relief bar was met"; }
+            else if (r.Hold) { storm = false; why = "the storm guard holds it: " + (r.HoldWhy ?? "a relief could turn it"); }
             else if (r.Mode == 2) { storm = false; why = "your rule: do not storm"; }
             else if (r.Mode == 3)
             {
