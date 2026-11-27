@@ -66,6 +66,8 @@ The game's own rules that bear on a war, read in its code or measured in play. B
 - **Armies.** Separate lords march faster than the same men in one army, and cost no influence or cohesion; calling lords into an army costs influence for each of them.
 - **Raids.** A looted village gives its lord no taxes, its castle no food and its notables no recruits for one to two weeks. A raided village draws its realm's lords to it.
 - **Catching a party.** Only a faster party can catch one on the march; a slower one catches it only where it must stop.
+- **Defending a besieged place.** A realm's lords near a besieged castle or town of theirs go to defend it, whether or not they are seen marching there. Once a battle is fought there, a storm or a fight at the siege camp, every one of them who reaches it before it ends joins it as he arrives; the first to come from outside turns a storm into a battle outside the walls, where the walls count for nobody.
+- **Bandits.** Bandits are at war with every realm and with none of their own kind. No realm's lord joins a band's fight, and no band joins a fight between lords; other bands may join a band's fight if they reach it while it lasts. A band is at most 200 men; in 6,266 fights between a lord and bandits, one band fought alone in 97.7%.
 """)
 
 add('## Strategy reviews', """
@@ -115,6 +117,11 @@ add('## Look-ups', lu)
 
 aw = S['## Asking the way']
 aw = edit(aw, 'Each question costs a few seconds while the game runs, so ask only when the way matters to your decision.', 'Each question costs a few seconds while the game runs.')
+# Nov 27 (war room 0.22.2): the battle question at an enemy castle or town counts every enemy who could reach it before it ends
+aw = edit(aw, "or storming a castle or town (`at`), with how long the siege camp's preparations would take first",
+          "or storming a castle or town (`at`; every enemy lord and army your realm sees or saw in the last three days that could reach it before the storm ends joins its defenders as he arrives), with how long the siege camp's preparations would take first")
+aw = edit(aw, "then with the joiners: enemies seen marching to it and those you name in `theirs`",
+          "then with the joiners: enemies seen marching to it (at an enemy castle or town, every enemy lord and army your realm sees or saw in the last three days that could reach it before it ends) and those you name in `theirs`")
 aw = edit(aw, '; ask it before a hunt.', '.')
 aw = edit(aw, ", so set it from the engagement's answer when a fight would be long, or lower it when only those already close should count.",
           "; the engagement's answer says how long a fight would last.")
@@ -131,7 +138,10 @@ One enemy lord is commanded in person by a human player. The report names his pa
 - In the battles he fights in person he has done about as well as a side a quarter stronger than his own: at even strength he has won, and against a side a quarter stronger than his the fight could go either way. Battles of his realm's lords without him are fought by the game's rules like any others. `look_up` on `the_human_player` has every battle of his your realm saw (each side's men, strength, lords and troops, and the losses) and what your realm saw him do.
 """)
 
-add('## How battles are joined', S['## How battles are joined'])
+hb = S['## How battles are joined']
+hb = edit(hb, 'Lords of another realm count for neither side.', "Lords of another realm count for neither side, and bandits fight apart from every lord (What the game does).")
+hb = edit(hb, 'then strike.', 'then strike. A battle already fought at a besieged place of theirs they join as they arrive.')
+add('## How battles are joined', hb)
 
 add('## Time', """
 The game does not wait for you.
@@ -143,7 +153,7 @@ The game does not wait for you.
 
 ru = S['## Rules']
 ru = edit(ru, '- Lords holding your orders do not flee by themselves: keep caution on, unless you mean them to stand.',
-          "- Lords holding your orders do not flee by themselves; an order's caution setting makes them shelter from a stronger enemy (orders/common-settings).")
+          "- Lords holding your orders do not flee by themselves; an order's caution setting makes them shelter from a stronger enemy, weighed as the worse of two fights that never join: the enemy lords who could reach and join, or the bands of bandits who could. Inside a castle or town, your lords there holding a guard or harass order count together (orders/common-settings).")
 add('## Rules', ru)
 
 wa = S['## Watches']
