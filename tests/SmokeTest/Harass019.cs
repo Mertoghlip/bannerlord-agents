@@ -462,6 +462,23 @@ namespace SmokeTest
                 Check(held != null && held.Hold && (held.HoldWhy ?? "").Contains("could reach the camp") && free != null && !free.Hold && off != null && !off.Hold,
                       "the besiege order holds its storm while a relief could turn it, frees it once none could, and never holds with storm_guard 0 ("
                       + (held?.ToString() ?? "none") + " / " + (held?.HoldWhy ?? "") + "; " + (free?.Hold.ToString() ?? "none") + "; " + (off?.Hold.ToString() ?? "none") + ")");
+
+                // 0.25.4 (Nov 27, run 20261126-1838-C2, day 168 at Dale): a relief bar met (storm_on_relief) leaves the storm to the guard too, while that relief could turn it
+                // (the camp stormed an hour after its bar was met, with about 23,000 of the enemy within reach, and all 24 lords were lost)
+                Runner.Reset();
+                rules.Clear();
+                var o3 = new ToolOrder { Tool = "besiege", Lord = camp.Leader, LordName = camp.Name, Party = camp.Id, At = "castle_men", Realm = "orcs" };
+                o3.Settings["storm"] = 1;
+                o3.Settings["storm_engines"] = 0;
+                o3.Settings["storm_on_relief"] = 0.5;
+                Hour(h + 300);
+                Runner.Start(9972, o3);
+                Hour(h + 301, Man("sr9", 3000, 1500, 178, 103, 4));
+                Hour(h + 302, Man("sr9", 3000, 1500, 178, 103, 4));
+                Hour(h + 303, Man("sr9", 3000, 1500, 178, 103, 4));
+                StormRule barHeld = Last();
+                Check(barHeld != null && barHeld.Now && barHeld.Hold && barHeld.ToString().Contains("held by the storm guard") && (barHeld.HoldWhy ?? "").Contains("could reach the camp"),
+                      "a relief bar met (storm_on_relief) still leaves the storm to the guard while that relief could turn it (" + (barHeld?.ToString() ?? "none") + " / " + (barHeld?.HoldWhy ?? "") + ")");
             }
             finally { Runner.StormSink = keptSink; Runner.Reset(); }
         }

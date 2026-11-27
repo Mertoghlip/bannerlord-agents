@@ -720,11 +720,12 @@ namespace BannerlordAgents.Tools
             double Num(string k) => t.Settings.TryGetValue(k, out double v) ? v : 0;
             bool now = t.Memory.TryGetValue("storm_now", out object sn) && Expr.Truthy(sn) && Expr.Number(sn) > 0;
             var rule = new StormRule { Mode = (int)Math.Round(Num("storm")), Engines = (int)Math.Round(Num("storm_engines")), Ratio = (float)Num("storm_ratio"), Now = now };
-            // the storm guard (0.19.1, Nov 13: storm only when no force that could reach the camp before the storm ends would turn it): with storm 0 or 1, not over a relief bar
-            // the agent set to storm at once, the storm is held while a storm begun now, with that relief joining the defenders as each arrives, would be lost or keep fewer
-            // than storm_guard of the besiegers' men
+            // the storm guard (0.19.1, Nov 13: storm only when no force that could reach the camp before the storm ends would turn it): the storm is held while a storm begun
+            // now, with that relief joining the defenders as each arrives, would be lost or keep fewer than storm_guard of the besiegers' men.
+            // 0.25.4 (Nov 27, run 20261126-1838-C2, day 168 at Dale): over a relief bar met too (storm_on_relief: it was left out until now, though the order says the guard
+            // holds a storm whoever decides it); the camp stormed with about 23,000 of the enemy within reach, and they turned it. storm_guard 0 still switches it off.
             double guard = Num("storm_guard");
-            if (guard > 0 && !now && rule.Mode != 2 && w != null && t.Order.At != null)
+            if (guard > 0 && (now || rule.Mode != 2) && w != null && t.Order.At != null)
             {
                 // 0.25.0 (item 21, run 20261125-2341-C2: the storm guard at Lasgalor flipped three times in 12 minutes, 4 wakes): an order whose own rules keep the guard's
                 // hold ("held", our siege order, which keeps a hold or a clear for 2 hours unless a new force comes within reach) is held exactly while they hold it
