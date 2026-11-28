@@ -295,3 +295,6 @@ News replays (0.14): `SmokeTest --newspokes pokes_<realm>.jsonl <out dir> --numb
 ## Not available
 
 **Fast mode:** Claude Code reports it is off for this account ("extra usage" is disabled), so the war room does not use it.
+
+### An answer that never closes (since war room 0.22.4)
+Nov 28, run 20261127-1453-C2: from day 167 the facts-only agent wrote five answers carrying a tool of its own, each one closing bracket short deep inside; no object ever closed, so `Room.Extract` said only "there is no JSON object in it", and after four retries the agent wrote that answers carrying tools are lost and stopped writing tools. `Room.Unbalanced` now answers such a text: how many of each bracket open and close outside strings ("{ opens 92 times and } closes 91 (1 } missing)"), where the JSON reader stops, with the text around it marked <<HERE>>, and what to close; checked on the five real answers (each named the missing } before the tools list's ]).

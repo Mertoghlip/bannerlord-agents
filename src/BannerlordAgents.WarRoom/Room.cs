@@ -1449,7 +1449,7 @@ namespace BannerlordAgents.WarRoom
                 }
                 catch (JsonException e) { lastError = "it is not valid JSON (" + e.Message + ")"; }
             }
-            if (o == null) return lastError;
+            if (o == null) return lastError == "there is no JSON object in it" ? Unbalanced(text) ?? lastError : lastError;
             if (o["orders"] == null) o["orders"] = new JsonArray();
             if (o["orders"] is not JsonArray list) return "\"orders\" is not a list";
             int i = 0;
@@ -1462,6 +1462,63 @@ namespace BannerlordAgents.WarRoom
             o["poke"] = number;
             answer = o;
             return null;
+        }
+
+        /// <summary>
+        /// Why an answer that opens a JSON object never closes it, in words the agent can act on (war room 0.22.4, Nov 28, run 20261127-1453-C2: from day 167
+        /// five answers carrying a tool of the agent's own were each one closing bracket short deep inside, so no object ever closed; it was told only "there is
+        /// no JSON object in it", tried again four times, and wrote that answers carrying tools are lost, and stopped writing tools): how many of each bracket
+        /// open and close outside strings, and where the JSON reader stops, with the text around that place. Null when the text opens no object.
+        /// </summary>
+        internal static string Unbalanced(string text)
+        {
+            int first = text?.IndexOf('{') ?? -1;
+            if (first < 0) return null;
+            int last = text.LastIndexOf('}');
+            string span = last > first ? text.Substring(first, last - first + 1) : text.Substring(first);
+            int openC = 0, closeC = 0, openS = 0, closeS = 0;
+            bool inString = false, escape = false;
+            foreach (char c in span)
+            {
+                if (inString)
+                {
+                    if (escape) escape = false;
+                    else if (c == '\\') escape = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+                if (c == '"') inString = true;
+                else if (c == '{') openC++;
+                else if (c == '}') closeC++;
+                else if (c == '[') openS++;
+                else if (c == ']') closeS++;
+            }
+            var parts = new List<string>();
+            if (openC != closeC) parts.Add("{ opens " + openC + " times and } closes " + closeC + (openC > closeC ? " (" + (openC - closeC) + " } missing)" : " (" + (closeC - openC) + " } too many)"));
+            if (openS != closeS) parts.Add("[ opens " + openS + " times and ] closes " + closeS + (openS > closeS ? " (" + (openS - closeS) + " ] missing)" : " (" + (closeS - openS) + " ] too many)"));
+            string where = "";
+            try { JsonNode.Parse(EscapeBreaks(span)); }
+            catch (JsonException e)
+            {
+                // the reader's place: its line and the byte in that line, turned into the text around it
+                string[] lines = span.Split('\n');
+                long line = e.LineNumber ?? 0, bytePos = e.BytePositionInLine ?? 0;
+                if (line >= 0 && line < lines.Length)
+                {
+                    string l = lines[line];
+                    int ch = 0, bytes = 0;
+                    while (ch < l.Length && bytes < bytePos) { bytes += Encoding.UTF8.GetByteCount(l[ch].ToString()); ch++; }
+                    int at = 0;
+                    for (int i = 0; i < line; i++) at += lines[i].Length + 1;
+                    at = Math.Min(span.Length, at + ch);
+                    int from = Math.Max(0, at - 120), to = Math.Min(span.Length, at + 40);
+                    string before = span.Substring(from, at - from).Replace("\n", " "), after = span.Substring(at, to - at).Replace("\n", " ");
+                    where = "; the JSON reader stops at line " + (line + 1) + ", character " + (ch + 1) + " of it, here: \"" + (from > 0 ? "..." : "") + before + " <<HERE>> " + after + (to < span.Length ? "..." : "") + "\"";
+                }
+            }
+            if (parts.Count == 0 && where.Length == 0) return null;
+            return "it is not valid JSON: " + (parts.Count > 0 ? "its brackets do not balance (" + string.Join("; ", parts) + ")" : "it does not read") + where
+                   + ". Close every { and [ where it belongs (a state's rules, the states, the tool, the tools list) and send the whole answer again";
         }
 
         /// <summary>

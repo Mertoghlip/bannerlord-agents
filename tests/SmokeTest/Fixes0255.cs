@@ -87,6 +87,7 @@ namespace SmokeTest
                   "a fight weighed against a band counts the band beside it that reaches the fight while it lasts, not the enemy lord near him (odds " + ToolDef.Num(Math.Round(odds, 2)) + ": 400 against his 500; was 0.4)");
             Runner.Ended(9262, "test over");
             Runner.Reset();
+            Fixes0257Tests();
         }
     }
 }

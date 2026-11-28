@@ -1090,6 +1090,13 @@ namespace BannerlordAgents.Tools
             if (!t.HasPending) return;
             t.HasPending = false;
             Move m = t.Pending;
+            if (m.Verb == "engage" && StormJoinHeld(t, m, w))
+            {
+                // held while the storm is fought: the attack stays waiting and is tried again each hour, so it goes once the storm is over
+                t.Pending = m;
+                t.HasPending = true;
+                m = new Move { Verb = "hold" };
+            }
             if (t.HasCurrent && t.Current.Same(m) && !t.MoveDone) return;
             m.Step = IsStep(t);
             t.Current = m;
@@ -1097,6 +1104,42 @@ namespace BannerlordAgents.Tools
             t.MoveDone = false;
             t.MoveSince = w.Hours;
             MoveSink(t.Id, m);
+        }
+
+        // a storm held back from, told once a place and storm for the realm (key: realm|place, value: the hour told)
+        private static readonly Dictionary<string, double> StormJoinTold = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// A lord whose move would ride into a storm under way holds instead (0.25.7, Nov 28, run 20261127-1453-C2, day 160): the agent's own strike order sent
+        /// 17 lords at Goksun's camp after his storm of Shúrdmúl had begun. Arriving, they joined the defenders, which turned the storm into a battle outside the
+        /// walls led by the castle (MapEvent.AddInvolvedParty: SiegeOutside, the place's party leading their side: no leader's edge, none of the lords' own
+        /// captain's bonus, the walls counting for nobody), and all 17 were taken, where the battle question had reckoned a strike before the storm a win and
+        /// said a strike once it storms is another battle. True for the besiegers of a castle or town of the realm or an ally while their storm is fought and
+        /// the lord is outside it and in no battle; never for relieve, which rides into a storm by its design and says so. The agent is told once a storm.
+        /// </summary>
+        private static bool StormJoinHeld(ToolInstance t, Move m, World w)
+        {
+            if (string.Equals(t.Def?.Name, "relieve", StringComparison.OrdinalIgnoreCase)) return false;
+            PartyRow foe = w.Party(m.Party);
+            string place = foe?.Besieging;
+            if (place == null || !w.Storming(place)) return false;
+            SettlementRow h = w.Holding(place);
+            if (h == null || !(h.Faction == w.Realm || w.Ally(h.Faction))) return false;
+            PartyRow me = w.Party(t.Order.Party);
+            if (me == null || me.InBattle || me.InSettlement == place) return false;
+            string key = (t.Owner?.Realm ?? w.Realm) + "|" + place;
+            lock (StormJoinTold)
+            {
+                if (StormJoinTold.TryGetValue(key, out double told) && w.Hours - told < 24) return true;
+                StormJoinTold[key] = w.Hours;
+            }
+            string name = Show(place, w), camp = Show(foe.Id, w);
+            Tell(t, t.Order.LordName + " holds back from " + camp + "'s camp: it is storming " + name + " now, and a lord who rides in joins the defenders under the walls, "
+                    + "which turns the storm into a battle outside the walls that " + name + " leads (no leader's edge, none of your lords' own captain's bonus, the walls counting for nobody), "
+                    + "and nobody leaves it once in it. Every lord of yours whose order would ride in holds the same way while the storm lasts. battle_odds at " + name
+                    + " reckons that battle; to send them in, give them relieve, which rides into a storm by its design.", w);
+            Diag.Event("tool", "storm join held", new { id = t.Id, tool = t.Def?.Name, lord = t.Order.Lord, place, camp = foe.Id });
+            return true;
         }
 
         /// <summary>Does the tool's state have rules to leave it (0.17.4)? Then its move is one step of the tool, not the whole of it.</summary>
@@ -2447,14 +2490,20 @@ namespace BannerlordAgents.Tools
                     // side's 8,622"): while the camp forms, our side is the larger of the lords camped and this siege's lords within 6 of it, the figure the order prints
                     if (camped) ours0 = Math.Max(ours0, Num(Call("mates_strength", new object[] { camp.Id, 6.0 })));
                     double sally = camped ? _w.SallyStrength(camp) : 0;
-                    double With(double relief) => relief > 0 && relief + sally > World.SallyRatio * Math.Max(1, ours0) ? relief + sally : relief;
+                    double With(double relief, double ours) => relief > 0 && relief + sally > World.SallyRatio * Math.Max(1, ours) ? relief + sally : relief;
                     List<World.Comer> coming = _w.ReliefComing(camp.Id, near);
                     double first = coming.Where(c => !double.IsNaN(c.Eta)).Select(c => c.Eta).DefaultIfEmpty(double.NaN).Min();
                     if (coming.Count == 0 || double.IsNaN(first)) return new Fight { Ours = ours0, Odds = 0, Hours = 0, Reach = double.NaN };
-                    double e0 = With(_w.ReliefWithin(camp.Id, first + 0.01, near));
-                    double hours = BattleHours(e0, ours0);
-                    double mid = With(_w.ReliefWithin(camp.Id, first + hours / 2, near)), end = With(_w.ReliefWithin(camp.Id, first + hours, near));
-                    return new Fight { Reach = first, Hours = hours, Mid = mid, End = end, Ours = ours0, Odds = Math.Max(mid, end) / Math.Max(1, ours0) };
+                    // 0.25.7 (Nov 28, run 20261127-1453-C2, day 153: at Shúrdmúl only Kisha's 1.2k had camped when Goksun's relief of 4.3k came, while the siege's
+                    // 16 other lords, about 4.5k, were still on their way beyond 6, so the siege was lifted on Kisha alone): this siege's lords on their way count
+                    // too once they can reach the camp by the middle, or the end, of the battle the relief would bring, the window its own joiners are counted in
+                    double OursBy(double hrs) => camped ? ours0 + SiegeLordsComing(camp, hrs) : ours0;
+                    double o0 = OursBy(first + 0.01);
+                    double e0 = With(_w.ReliefWithin(camp.Id, first + 0.01, near), o0);
+                    double hours = BattleHours(e0, o0);
+                    double oMid = OursBy(first + hours / 2), oEnd = OursBy(first + hours);
+                    double mid = With(_w.ReliefWithin(camp.Id, first + hours / 2, near), oMid), end = With(_w.ReliefWithin(camp.Id, first + hours, near), oEnd);
+                    return new Fight { Reach = first, Hours = hours, Mid = mid, End = end, Ours = oMid, Odds = Math.Max(mid / Math.Max(1, oMid), end / Math.Max(1, oEnd)) };
                 }
                 PartyRow f = _w.Party(foe);
                 if (f == null && !(_w.KnownStrength(foe) > 0)) return null;
@@ -2516,6 +2565,29 @@ namespace BannerlordAgents.Tools
             /// The strength of the realm's other lords whose orders are aimed at this foe (its target, or the party their current move goes at) and who can be at
             /// him within so many hours (0.25.2): each army once, by its leader; not a lord sheltering, inside walls or in a fight of his own.
             /// </summary>
+            /// <summary>
+            /// The strength of this siege's lords still on their way to its camp (0.25.7): the lords holding the same order at the place and those it names,
+            /// beyond 6 of it (those within 6 count already, in mates_strength), in no battle, who can reach its gate within the hours given at their own pace;
+            /// an army once, by its leader.
+            /// </summary>
+            private double SiegeLordsComing(SettlementRow camp, double hours)
+            {
+                if (camp == null || double.IsNaN(hours)) return 0;
+                float gx = camp.Gx != 0 || camp.Gy != 0 ? camp.Gx : camp.X, gy = camp.Gx != 0 || camp.Gy != 0 ? camp.Gy : camp.Y;
+                double sum = 0;
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                if (Me != null) seen.Add(Me.Id);
+                foreach (PartyRow m in Mates())
+                {
+                    if (m.InBattle || m.Besieging == camp.Id || Close(m.Id, camp.Id, 6)) continue;
+                    PartyRow lead = m.Attached ? _w.Lead(m) : m;
+                    if (lead == null || lead.InBattle || !seen.Add(lead.Id) || Close(lead.Id, camp.Id, 6)) continue;
+                    if (!_w.CanReachWithin(_w.SeenOf(lead), gx, gy, hours, out _)) continue;
+                    sum += World.StrengthOf(lead);
+                }
+                return sum;
+            }
+
             private double GroupAt(string foe, PartyRow f, double hours)
             {
                 PartyRow me = Me;

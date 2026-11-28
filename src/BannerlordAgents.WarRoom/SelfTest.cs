@@ -131,6 +131,12 @@ namespace BannerlordAgents.WarRoom
             // an answer's notes come through the answer's checks
             string problem = Room.Extract("{\"poke\": 5, \"orders\": [], \"enemies\": {\"Aragorn\": \"x\"}}", 5, out JsonObject ans);
             Check(problem == null && ans?["enemies"] is JsonObject, "an answer with only notes and no orders is read");
+            // war room 0.22.4 (Nov 28): an answer one } short inside a tool says how many brackets are missing and where the reader stops
+            string shortOne = "{\"poke\": 5,\n \"tools\": [{\"name\": \"rally\", \"states\": {\"a\": {\"do\": \"hold\", \"when\": [{\"if\": \"x\", \"go\": \"b\", \"poke\": \"{at} is over.\"}]}, \"b\": {\"end\": \"free\"}}],\n \"orders\": []}";
+            string whyShort = Room.Extract(shortOne, 5, out JsonObject shortAns);
+            Check(shortAns == null && whyShort != null && whyShort.Contains("{ opens 6 times and } closes 5 (1 } missing)") && whyShort.Contains("<<HERE>>") && whyShort.Contains("line 2")
+                  && !whyShort.Contains("there is no JSON object"),
+                  "0.22.4: an answer one } short says how many are missing and where the reader stops, not \"there is no JSON object in it\": " + whyShort);
 
             // the council of war: when it sits, what its message holds, and the fast answers' orders winning over its older view
             var cw = new Config { AgentDir = root, Channel = "warroom", CouncilGapHours = 6, CouncilEveryHours = 24 };
